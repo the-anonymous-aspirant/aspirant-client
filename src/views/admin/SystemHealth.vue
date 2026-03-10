@@ -7,20 +7,19 @@
     <div v-if="error" class="error-text">{{ error }}</div>
 
     <!-- Disk Overview -->
-    <template v-if="disk">
+    <template v-if="disks.length > 0">
       <div class="health-card wide">
         <h3>Disk Usage</h3>
-        <div class="disk-bar-container">
-          <div class="disk-bar">
-            <div class="disk-bar-fill" :style="{ width: disk.percent_used + '%' }"></div>
+        <div v-for="d in disks" :key="d.mount" class="disk-bar-container">
+          <div class="disk-bar-header">
+            <span class="disk-bar-label">{{ d.label }}</span>
+            <span class="disk-label">{{ d.used_gb }} / {{ d.total_gb }} GB ({{ d.percent_used }}%)</span>
           </div>
-          <span class="disk-label">{{ disk.used_gb }} / {{ disk.total_gb }} GB ({{ disk.percent_used }}%)</span>
+          <div class="disk-bar">
+            <div class="disk-bar-fill" :style="{ width: d.percent_used + '%' }"></div>
+          </div>
         </div>
         <div class="disk-details">
-          <div class="disk-stat">
-            <span class="info-label">Free</span>
-            <span class="info-value">{{ disk.free_gb }} GB</span>
-          </div>
           <div class="disk-stat">
             <span class="info-label">Images</span>
             <span class="info-value">{{ images.total_count }} ({{ formatMB(images.total_size_mb) }})</span>
@@ -123,7 +122,7 @@ export default {
       loading: true,
       error: null,
       containers: [],
-      disk: null,
+      disks: [],
       volumes: [],
       images: { total_count: 0, total_size_mb: 0 },
       dbStats: null,
@@ -142,7 +141,7 @@ export default {
       return mb.toFixed(1) + ' MB';
     },
     async fetchAll() {
-      this.loading = !this.disk;
+      this.loading = this.disks.length === 0;
       this.error = null;
       try {
         const [containersRes, diskRes, dbRes] = await Promise.allSettled([
@@ -156,7 +155,7 @@ export default {
         }
 
         if (diskRes.status === 'fulfilled') {
-          this.disk = diskRes.value.data.disk;
+          this.disks = diskRes.value.data.disks || [];
           this.volumes = diskRes.value.data.volumes || [];
           this.images = diskRes.value.data.images || { total_count: 0, total_size_mb: 0 };
         }
@@ -239,6 +238,19 @@ export default {
 /* Disk bar */
 .disk-bar-container {
   margin-bottom: var(--space-md);
+}
+
+.disk-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--space-2xs);
+}
+
+.disk-bar-label {
+  color: var(--text-on-dark);
+  font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 .disk-bar {
