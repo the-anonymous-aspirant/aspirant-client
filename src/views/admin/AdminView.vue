@@ -151,6 +151,13 @@
         route="/admin/voice-commander"
         @card-click="navigateTo"
       />
+      <application-card
+        :image-url="appImages.default"
+        title="System Health"
+        description="Container metrics, disk usage, and database stats"
+        route="/admin/system-health"
+        @card-click="navigateTo"
+      />
     </div>
   </div>
 </template>
@@ -170,6 +177,7 @@
     { name: 'S3 Assets', url: '/api/s3-assets' },
     { name: 'Transcriber', url: '/api/transcriber/health' },
     { name: 'Commander', url: '/api/commander/health' },
+    { name: 'Monitor', url: '/api/system/health' },
   ];
 
   export default {
