@@ -27,6 +27,7 @@ import FilesManagerView from '../views/applications/FilesManager.vue';
 import SupportView from '../views/SupportView.vue';
 import ThirtyYearGiftView from '../views/trusted/ThirtyYearGift.vue';
 import Translator from '../views/trusted/Translator.vue';
+import Wikipedia from '../views/trusted/Wikipedia.vue';
 
 const routes = [
   { path: '/', component: HomeView },
@@ -65,6 +66,7 @@ const routes = [
   { path: '/trusted/message-board', component: MessageBoardView, meta: { roles: ['Trusted', 'Admin'] } },
   { path: '/trusted/30-year-gift', component: ThirtyYearGiftView, meta: { roles: ['Trusted', 'Admin'] } },
   { path: '/trusted/translator', component: Translator, meta: { roles: ['Trusted', 'Admin'] } },
+  { path: '/trusted/wikipedia', component: Wikipedia, meta: { roles: ['Trusted', 'Admin'] } },
 
   { path: '/support', component: SupportView },
 ];
