@@ -74,51 +74,53 @@
 
   .game-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: var(--space-xl);
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--space-lg);
     margin: var(--space-lg) auto;
     width: 100%;
-    max-width: 800px;
+    max-width: 900px;
     justify-content: center;
     padding: var(--space-sm);
   }
 
-  @media (min-width: 768px) {
-    .game-list {
-      grid-template-columns: repeat(2, 1fr);
-    }
+  .game-list :deep(.application-card) {
+    width: 100%;
+    height: 160px;
+  }
+
+  .game-list :deep(.app-image) {
+    height: 60px;
+    padding: var(--space-xs);
+    padding-top: var(--space-sm);
+  }
+
+  .game-list :deep(.card-content) {
+    padding: var(--space-sm);
+    gap: var(--space-2xs);
+  }
+
+  .game-list :deep(.card-content h2) {
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-2xs);
+  }
+
+  .game-list :deep(.card-content p) {
+    font-size: var(--text-xs);
   }
 
   @media (max-width: 767px) {
     .game-hub {
       padding: var(--space-md) var(--space-sm);
-      padding-top: 70px;
-    }
-
-    .game-hub h1 {
-      font-size: var(--text-2xl);
-      margin-bottom: var(--space-sm);
-    }
-
-    .game-hub h2 {
-      font-size: var(--text-base);
-      margin-bottom: var(--space-lg);
-      padding: 0 var(--space-sm);
     }
 
     .game-list {
-      grid-template-columns: 1fr;
-      gap: var(--space-lg);
-      margin: var(--space-sm) auto;
-      padding: 0 var(--space-2xs);
-      max-width: 100%;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-md);
     }
 
-    .application-card {
-      max-width: 400px;
-      margin-left: auto;
-      margin-right: auto;
-      width: 100%;
+    .game-list :deep(.application-card) {
+      max-width: none;
+      height: 160px;
     }
   }
 </style>

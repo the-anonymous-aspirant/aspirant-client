@@ -101,61 +101,53 @@
 
   .quiz-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: var(--space-xl);
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--space-lg);
     margin: var(--space-lg) auto;
     width: 100%;
-    max-width: 1000px;
+    max-width: 900px;
     justify-content: center;
     padding: var(--space-sm);
   }
 
-  @media (min-width: 1200px) {
-    .quiz-list {
-      grid-template-columns: repeat(5, 1fr);
-    }
+  .quiz-list :deep(.application-card) {
+    width: 100%;
+    height: 160px;
   }
 
-  @media (max-width: 1199px) and (min-width: 992px) {
-    .quiz-list {
-      grid-template-columns: repeat(3, 1fr);
-    }
+  .quiz-list :deep(.app-image) {
+    height: 60px;
+    padding: var(--space-xs);
+    padding-top: var(--space-sm);
   }
 
-  @media (max-width: 991px) and (min-width: 768px) {
-    .quiz-hub {
-      padding-top: var(--space-xl);
-    }
+  .quiz-list :deep(.card-content) {
+    padding: var(--space-sm);
+    gap: var(--space-2xs);
+  }
 
-    .quiz-list {
-      grid-template-columns: repeat(2, 1fr);
-      gap: var(--space-xl);
-    }
+  .quiz-list :deep(.card-content h2) {
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-2xs);
+  }
+
+  .quiz-list :deep(.card-content p) {
+    font-size: var(--text-xs);
   }
 
   @media (max-width: 767px) {
     .quiz-hub {
       padding: var(--space-md) var(--space-sm);
-      padding-top: 70px;
-    }
-
-    .quiz-hub h1 {
-      font-size: var(--text-2xl);
-      margin-bottom: var(--space-sm);
-    }
-
-    .quiz-hub h2 {
-      font-size: var(--text-base);
-      margin-bottom: var(--space-lg);
-      padding: 0 var(--space-sm);
     }
 
     .quiz-list {
-      grid-template-columns: 1fr;
-      gap: var(--space-lg);
-      margin: var(--space-sm) auto;
-      padding: 0 var(--space-2xs);
-      max-width: 100%;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-md);
+    }
+
+    .quiz-list :deep(.application-card) {
+      max-width: none;
+      height: 160px;
     }
   }
 
