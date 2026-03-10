@@ -74,8 +74,8 @@ src/
 
 ## Documentation
 
-- [Client Specification](docs/CLIENT_SPEC.md)
-- [Architecture](docs/CLIENT_ARCHITECTURE.md)
-- [Operations](docs/CLIENT_OPERATIONS.md)
+- [Client Specification](docs/SPEC.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Operations](docs/OPERATIONS.md)
 - [Changelog](docs/CHANGELOG.md)
 - [Decisions](docs/DECISIONS.md)
