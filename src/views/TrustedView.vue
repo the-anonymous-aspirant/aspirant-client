@@ -125,7 +125,7 @@
 
   .application-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: var(--space-lg);
     margin: var(--space-lg) auto;
     width: 100%;
