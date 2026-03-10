@@ -1,0 +1,20 @@
+{
+  "name": "The Aspirant",
+  "short_name": "Aspirant",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e4e4e4",
+  "theme_color": "#ffb300",
+  "icons": [
+    {
+      "src": "/api/fetch-object/b75d0a40c2e14902f69e47f6988b0aa4",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/api/fetch-object/b75d0a40c2e14902f69e47f6988b0aa4",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+:root {
+  font-family: var(--font-family-base);
+  line-height: 1.5;
+  font-weight: 400;
+  background-color: var(--surface-page);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: var(--brand-accent);
+  text-decoration: inherit;
+}
+a:hover {
+  color: var(--brand-primary);
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: var(--text-3xl);
+  line-height: 1.1;
+  color: var(--text-on-light);
+  margin-bottom: var(--space-md);
+}
+
+h2 {
+  font-size: var(--text-lg);
+  color: var(--text-on-light);
+  margin-bottom: var(--space-md);
+}
+
+/* Subtitle pattern — muted h2 used on most hub/page views */
+.page-subtitle {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+button {
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: var(--text-base);
+  font-weight: 500;
+  font-family: inherit;
+  background-color: var(--surface-card);
+  color: var(--text-on-dark);
+  cursor: pointer;
+  transition: border-color var(--transition-base);
+}
+button:hover {
+  border-color: var(--brand-primary);
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+.card {
+  padding: var(--space-xl);
+}
+
+#app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--space-xl);
+  text-align: center;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fade-in {
+  animation: fadeIn var(--transition-layout);
+}
