@@ -6,14 +6,14 @@
       <application-card
         :image-url="gameImages.wordweaver"
         title="WordWeaver"
-        description="Challenging both your language and tetris skills! Weave words while blocks fall!"
+        description="Weave words as tetris blocks fall"
         route="wordweaver"
         @card-click="goToGame"
       />
       <application-card
         :image-url="gameImages.flappyduo"
         title="Flappy Duo"
-        description="Teamwork makes the dreamwork! Control two birds in this cooperative challenge!"
+        description="Control two birds in a cooperative challenge"
         route="flappyduo"
         @card-click="goToGame"
       />
@@ -74,7 +74,7 @@
 
   .game-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: var(--space-lg);
     margin: var(--space-lg) auto;
     width: 100%;

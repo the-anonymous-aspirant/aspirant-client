@@ -13,14 +13,14 @@
       <application-card
         :image-url="appImages.quiz"
         title="Quiz Center"
-        description="Quizzes and personality tests. Some educational, some just dumb."
+        description="Quizzes and personality tests galore"
         route="quizzes"
         @card-click="goToApplication"
       />
       <application-card
         :image-url="appImages.games"
         title="Game Center"
-        description="Games. Some actually fun, others... well, they exist."
+        description="Fun and engaging games to pass the time"
         route="games"
         @card-click="goToApplication"
       />
@@ -34,7 +34,7 @@
       <application-card
         :image-url="appImages.remarkablePdfs"
         title="Remarkable PDFs"
-        description="Generate PDFs for your remarkable tablet. Planners and stuff."
+        description="Generate PDFs for your Remarkable tablet"
         route="remarkable-pdfs"
         @card-click="goToApplication"
       />
@@ -112,7 +112,7 @@
 
   .application-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: var(--space-lg);
     margin: var(--space-lg) auto;
     width: 100%;
