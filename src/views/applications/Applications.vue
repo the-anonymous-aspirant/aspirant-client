@@ -107,66 +107,58 @@
   }
 
   .applications h2 {
-    margin-bottom: var(--space-2xl);
+    margin-bottom: var(--space-xl);
   }
 
   .application-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: var(--space-2xl);
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--space-lg);
     margin: var(--space-lg) auto;
     width: 100%;
-    max-width: 1400px;
+    max-width: 900px;
     justify-content: center;
     padding: var(--space-sm);
   }
 
-  @media (min-width: 1400px) {
-    .application-list {
-      grid-template-columns: repeat(4, 1fr);
-    }
+  .application-list :deep(.application-card) {
+    width: 100%;
+    height: 160px;
   }
 
-  @media (max-width: 1399px) and (min-width: 992px) {
-    .application-list {
-      grid-template-columns: repeat(3, 1fr);
-    }
+  .application-list :deep(.app-image) {
+    height: 60px;
+    padding: var(--space-xs);
+    padding-top: var(--space-sm);
   }
 
-  @media (max-width: 991px) and (min-width: 768px) {
-    .applications {
-      padding-top: var(--space-2xl);
-    }
+  .application-list :deep(.card-content) {
+    padding: var(--space-sm);
+    gap: var(--space-2xs);
+  }
 
-    .application-list {
-      grid-template-columns: repeat(2, 1fr);
-      gap: var(--space-xl);
-    }
+  .application-list :deep(.card-content h2) {
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-2xs);
+  }
+
+  .application-list :deep(.card-content p) {
+    font-size: var(--text-xs);
   }
 
   @media (max-width: 767px) {
     .applications {
       padding: var(--space-md) var(--space-sm);
-      padding-top: 70px;
-    }
-
-    .applications h1 {
-      font-size: var(--text-2xl);
-      margin-bottom: var(--space-sm);
-    }
-
-    .applications h2 {
-      font-size: var(--text-base);
-      margin-bottom: var(--space-lg);
-      padding: 0 var(--space-sm);
     }
 
     .application-list {
-      grid-template-columns: 1fr;
-      gap: var(--space-lg);
-      margin: var(--space-sm) auto;
-      padding: 0 var(--space-2xs);
-      max-width: 100%;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-md);
+    }
+
+    .application-list :deep(.application-card) {
+      max-width: none;
+      height: 160px;
     }
   }
 </style>
