@@ -1,5 +1,5 @@
 <template>
-  <div class="wikipedia-view">
+  <div class="wikipedia-view" :style="viewStyle">
     <div v-if="!ready" class="loading-text">Loading Wikipedia...</div>
     <div v-if="error" class="error-text">{{ error }}</div>
     <iframe
@@ -12,6 +12,8 @@
 </template>
 
 <script>
+import { sidebarWidth } from '../../global_state_manager.js';
+
 export default {
   data() {
     return {
@@ -20,18 +22,23 @@ export default {
       iframeSrc: '',
     };
   },
+  computed: {
+    viewStyle() {
+      return {
+        left: sidebarWidth.value,
+      };
+    },
+  },
   methods: {
     onFrameLoad() {
       this.ready = true;
     },
   },
   mounted() {
-    // Ensure auth cookie is set before loading the iframe
     const token = localStorage.getItem('user_token');
     if (token) {
       document.cookie = `auth_token=${token}; path=/; SameSite=Strict; max-age=86400`;
     }
-    // Point directly to Wikipedia content, not the kiwix library page
     this.iframeSrc = '/api/wikipedia/content/wikipedia_en_all_maxi_2026-02';
     this.ready = true;
   },
@@ -40,13 +47,13 @@ export default {
 
 <style scoped>
 .wikipedia-view {
-  position: absolute;
+  position: fixed;
   top: 0;
-  left: 0;
   right: 0;
   bottom: 0;
   display: flex;
   flex-direction: column;
+  z-index: 1;
 }
 
 .loading-text {
