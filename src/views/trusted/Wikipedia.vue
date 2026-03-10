@@ -31,7 +31,8 @@ export default {
     if (token) {
       document.cookie = `auth_token=${token}; path=/; SameSite=Strict; max-age=86400`;
     }
-    this.iframeSrc = '/api/wikipedia/';
+    // Point directly to Wikipedia content, not the kiwix library page
+    this.iframeSrc = '/api/wikipedia/content/wikipedia_en_all_maxi_2026-02';
     this.ready = true;
   },
 };
@@ -39,8 +40,11 @@ export default {
 
 <style scoped>
 .wikipedia-view {
-  width: 100%;
-  height: 100vh;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
 }
