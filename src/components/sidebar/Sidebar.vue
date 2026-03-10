@@ -131,7 +131,7 @@
         :src="aspiringHandImageUrl"
         alt="The Aspirant"
         class="aspiring-hand-logo"
-        :class="{ collapsed: collapsed, 'rotate-180': collapsed }"
+        :class="{ collapsed: collapsed, 'rotate-side': !collapsed }"
         @click="toggleSidebar"
       />
     </div>
@@ -163,30 +163,18 @@
       >
     </div>
 
-    <div class="login-container">
-      <div v-if="!userToken">
-        <transition name="sidebar-login-transition" mode="out-in">
-          <div v-if="!collapsed" key="expanded">
-            <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="false" :collapsed="false"></Login>
-          </div>
-          <div v-else key="collapsed" class="collapsed-login-container">
-            <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="false" :collapsed="true"></Login>
-          </div>
-        </transition>
+    <transition name="sidebar-login-transition" mode="out-in">
+      <div v-if="!collapsed" class="auth-section">
+        <div v-if="!userToken">
+          <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="false" :collapsed="false"></Login>
+        </div>
+        <div v-else class="user-info">
+          <p class="user-detail">{{ username }}</p>
+          <p class="user-role">{{ userRole }}</p>
+          <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="true" :collapsed="false"></Login>
+        </div>
       </div>
-      <div v-else>
-        <transition name="sidebar-login-transition" mode="out-in">
-          <div v-if="!collapsed" key="expanded">
-            <p>User: {{ username }}</p>
-            <p>Access: {{ userRole }}</p>
-            <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="true" :collapsed="false"></Login>
-          </div>
-          <div v-else key="collapsed" class="collapsed-logout-container">
-            <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="true" :collapsed="true"></Login>
-          </div>
-        </transition>
-      </div>
-    </div>
+    </transition>
   </div>
 </template>
 
@@ -202,7 +190,7 @@
     transition: var(--transition-layout);
   }
 
-  .rotate-180 {
+  .rotate-side {
     transform: rotate(90deg);
   }
 
@@ -225,26 +213,33 @@
     background-color: var(--border-subtle);
   }
 
-  .login-container {
-    position: absolute;
-    bottom: var(--space-sm);
-    left: var(--space-sm);
-    right: var(--space-sm);
+  .auth-section {
     text-align: center;
-    background-color: var(--surface-card);
-    padding: var(--space-sm);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--brand-primary);
-    transition: all var(--transition-moderate);
+    padding: var(--space-sm) var(--space-sm) 0;
+    border-top: 1px solid var(--border-subtle);
+    margin-top: var(--space-2xl);
   }
 
-  .collapsed-login-container,
-  .collapsed-logout-container {
+  .user-info {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
-    padding: var(--space-2xs);
-    transition: all var(--transition-moderate);
+    gap: var(--space-2xs);
+  }
+
+  .user-detail {
+    color: var(--text-on-dark);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .user-role {
+    color: var(--brand-primary);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 0 var(--space-xs);
   }
 
   .nav-links {
@@ -253,7 +248,7 @@
     gap: var(--space-md);
     flex-grow: 1;
     overflow-y: auto;
-    padding-bottom: 120px;
+    padding-top: var(--space-md);
     scrollbar-width: thin;
     scrollbar-color: var(--brand-accent) var(--surface-card);
   }
@@ -282,7 +277,7 @@
     align-items: center;
     transition: all var(--transition-layout);
     padding-top: 30px;
-    padding-bottom: 25px;
+    padding-bottom: var(--space-md);
   }
 
   .aspiring-hand-logo {
@@ -296,7 +291,7 @@
   }
 
   .aspiring-hand-logo.collapsed {
-    width: 40px;
+    width: 45px;
     height: auto;
   }
 

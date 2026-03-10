@@ -6,35 +6,35 @@
       <application-card
         :image-url="quizImages.rbguesser"
         title="RGB Guesser"
-        description="Do you know your RGB values? Test your color perception skills!"
+        description="Test your color perception skills"
         route="rbguesser"
         @card-click="goToQuiz"
       />
       <application-card
         :image-url="quizImages.sql"
         title="Personality Test: SQL"
-        description="Ever wondered which SQL predicate you are? Find out your database personality!"
+        description="Find out which SQL predicate you are"
         route="sql"
         @card-click="goToQuiz"
       />
       <application-card
         :image-url="quizImages.timeline_tech"
         title="Innovation Quiz"
-        description="An educational game for learning some key innovations and when they took place"
+        description="Learn about key innovations in history"
         route="timeline-tech"
         @card-click="goToQuiz"
       />
       <application-card
         :image-url="quizImages.timeline_people"
         title="People Quiz"
-        description="An educational game for learning some key figures and when they were born"
+        description="Learn about key historical figures"
         route="timeline-people"
         @card-click="goToQuiz"
       />
       <application-card
         :image-url="quizImages.timeline_conflicts"
         title="Conflict Quiz"
-        description="An educational game for learning some key conflicts and when they took place"
+        description="Learn about key conflicts in history"
         route="timeline-conflicts"
         @card-click="goToQuiz"
       />
@@ -101,7 +101,7 @@
 
   .quiz-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: var(--space-lg);
     margin: var(--space-lg) auto;
     width: 100%;
