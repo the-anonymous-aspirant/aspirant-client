@@ -40,6 +40,13 @@
           route="translator"
           @card-click="goToApplication"
         />
+        <application-card
+          :image-url="appImages.wikipedia"
+          title="Wikipedia"
+          description="Browse the English Wikipedia offline"
+          route="wikipedia"
+          @card-click="goToApplication"
+        />
       </div>
     </div>
   </div>
@@ -61,6 +68,7 @@
           messageBoard: '',
           gift: '',
           translator: '',
+          wikipedia: '',
         },
       };
     },
@@ -75,6 +83,7 @@
           this.appImages.messageBoard = await AssetManager.getAsset('message_board_icon');
           this.appImages.gift = await AssetManager.getAsset('30year_gift_icon');
           this.appImages.translator = await AssetManager.getAsset('home_icon');
+          this.appImages.wikipedia = await AssetManager.getAsset('home_icon');
         } catch (error) {
           console.error('Failed to load trusted application images:', error);
         }

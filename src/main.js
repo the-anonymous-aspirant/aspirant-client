@@ -24,6 +24,8 @@ axios.interceptors.request.use(
     const token = localStorage.getItem('user_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      // Sync cookie for non-AJAX requests (e.g. iframe content)
+      document.cookie = `auth_token=${token}; path=/; SameSite=Strict; max-age=86400`;
     }
     return config;
   },
@@ -44,6 +46,7 @@ axios.interceptors.response.use(
       localStorage.removeItem('user_token');
       localStorage.removeItem('user_name');
       localStorage.removeItem('user_role');
+      document.cookie = 'auth_token=; path=/; max-age=0';
     }
     return Promise.reject(error);
   }
