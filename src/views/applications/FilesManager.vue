@@ -133,7 +133,7 @@
             <button
               v-if="activeTab === 'my' || (activeTab === 'shared' && isAdmin)"
               class="btn btn-delete"
-              @click="deleteFile(file.name)"
+              @click="deleteFile(file.name, file.is_dir)"
             >
               Delete
             </button>
@@ -158,7 +158,6 @@
         loading: false,
         error: '',
         success: '',
-        isAdmin: localStorage.getItem('user_role') === 'Admin',
         storageUsage: null,
         currentPath: '',
         newFolderName: '',
@@ -166,6 +165,9 @@
       };
     },
     computed: {
+      isAdmin() {
+        return (localStorage.getItem('user_role') || '').toLowerCase() === 'admin';
+      },
       pathSegments() {
         if (!this.currentPath) return [];
         return this.currentPath.split('/').filter(Boolean);
@@ -272,12 +274,19 @@
             this.error = 'Failed to download file';
           });
       },
-      async deleteFile(filename) {
+      async deleteFile(filename, isDir = false) {
         this.error = '';
         this.success = '';
+        if (isDir) {
+          if (!confirm(`Delete folder "${filename}" and all its contents? This cannot be undone.`)) {
+            return;
+          }
+        }
         try {
           const prefix = this.activeTab === 'shared' ? '/api/files/shared/delete/' : '/api/files/delete/';
-          await axios.delete(`${prefix}${encodeURIComponent(filename)}${this.pathParam()}`);
+          const pathQuery = this.pathParam();
+          const recursiveParam = isDir ? (pathQuery ? '&recursive=true' : '?recursive=true') : '';
+          await axios.delete(`${prefix}${encodeURIComponent(filename)}${pathQuery}${recursiveParam}`);
           this.success = 'Deleted successfully';
           await this.loadFiles();
           await this.loadStorageUsage();
