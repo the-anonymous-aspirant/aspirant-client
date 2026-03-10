@@ -21,6 +21,7 @@ import RemarkablePdfsView from '../views/applications/RemarkablePdfs.vue';
 import UserAdmin from '../views/admin/UserAdmin.vue';
 import S3Assets from '../views/admin/S3Assets.vue';
 import VoiceCommander from '../views/admin/VoiceCommander.vue';
+import SystemHealth from '../views/admin/SystemHealth.vue';
 import QrGeneratorView from '../views/applications/QrGenerator.vue';
 import FilesManagerView from '../views/applications/FilesManager.vue';
 import SupportView from '../views/SupportView.vue';
@@ -33,6 +34,7 @@ const routes = [
   { path: '/admin/users', component: UserAdmin, meta: { roles: ['Admin'] } },
   { path: '/admin/s3_assets', component: S3Assets, meta: { roles: ['Admin'] } },
   { path: '/admin/voice-commander', component: VoiceCommander, meta: { roles: ['Admin'] } },
+  { path: '/admin/system-health', component: SystemHealth, meta: { roles: ['Admin'] } },
 
   { path: '/about', component: AboutView },
 
