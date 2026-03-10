@@ -93,18 +93,54 @@
   }
 
   .application-cards {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: var(--space-lg);
+    margin: var(--space-lg) auto;
     width: 100%;
-    margin: var(--space-xl) 0;
+    justify-content: center;
+    padding: var(--space-sm);
+  }
+
+  .application-cards :deep(.application-card) {
+    width: 100%;
+    height: 160px;
+  }
+
+  .application-cards :deep(.app-image) {
+    height: 60px;
+    padding: var(--space-xs);
+    padding-top: var(--space-sm);
+  }
+
+  .application-cards :deep(.card-content) {
+    padding: var(--space-sm);
+    gap: var(--space-2xs);
+  }
+
+  .application-cards :deep(.card-content h2) {
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-2xs);
+  }
+
+  .application-cards :deep(.card-content p) {
+    font-size: var(--text-xs);
   }
 
   /* Mobile */
-  @media (max-width: 768px) {
+  @media (max-width: 767px) {
     .admin-view {
-      padding: var(--space-md);
+      padding: var(--space-md) var(--space-sm);
+    }
+
+    .application-cards {
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-md);
+    }
+
+    .application-cards :deep(.application-card) {
+      max-width: none;
+      height: 160px;
     }
   }
 </style>
