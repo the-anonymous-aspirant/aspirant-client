@@ -6,6 +6,48 @@
     <div v-if="loading" class="loading-text">Loading system data...</div>
     <div v-if="error" class="error-text">{{ error }}</div>
 
+    <!-- Overall Status Banner -->
+    <template v-if="health">
+      <div class="status-banner" :class="health.status">
+        <span class="status-dot" :class="health.status"></span>
+        <span class="status-label">{{ health.status.toUpperCase() }}</span>
+      </div>
+
+      <!-- Server + Memory Grid -->
+      <div class="health-grid">
+        <div class="health-card">
+          <h3>Server</h3>
+          <div class="info-rows">
+            <div class="info-row"><span class="info-label">Commit</span><span class="info-value mono">{{ health.commit }}</span></div>
+            <div class="info-row"><span class="info-label">Uptime</span><span class="info-value">{{ health.uptime }}</span></div>
+            <div class="info-row"><span class="info-label">Go Version</span><span class="info-value mono">{{ health.go_version }}</span></div>
+            <div class="info-row"><span class="info-label">Checked at</span><span class="info-value">{{ checkedAt }}</span></div>
+          </div>
+        </div>
+
+        <div class="health-card">
+          <h3>
+            Database
+            <span class="status-badge" :class="health.database?.status">{{ health.database?.status || 'unknown' }}</span>
+          </h3>
+          <div class="info-rows">
+            <div class="info-row" v-if="health.database?.error"><span class="info-label">Error</span><span class="info-value error-text">{{ health.database.error }}</span></div>
+          </div>
+        </div>
+
+        <div class="health-card">
+          <h3>Memory</h3>
+          <div class="info-rows">
+            <div class="info-row"><span class="info-label">Allocated</span><span class="info-value">{{ health.memory?.alloc_mb }} MB</span></div>
+            <div class="info-row"><span class="info-label">System</span><span class="info-value">{{ health.memory?.sys_mb }} MB</span></div>
+            <div class="info-row"><span class="info-label">Heap Objects</span><span class="info-value">{{ health.memory?.heap_objects?.toLocaleString() }}</span></div>
+            <div class="info-row"><span class="info-label">GC Cycles</span><span class="info-value">{{ health.memory?.gc_cycles }}</span></div>
+            <div class="info-row"><span class="info-label">Goroutines</span><span class="info-value">{{ health.memory?.goroutines }}</span></div>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <!-- Disk Overview -->
     <template v-if="disks.length > 0">
       <div class="health-card wide">
@@ -121,6 +163,8 @@ export default {
     return {
       loading: true,
       error: null,
+      health: null,
+      checkedAt: '',
       containers: [],
       disks: [],
       volumes: [],
@@ -144,11 +188,17 @@ export default {
       this.loading = this.disks.length === 0;
       this.error = null;
       try {
-        const [containersRes, diskRes, dbRes] = await Promise.allSettled([
+        const [healthRes, containersRes, diskRes, dbRes] = await Promise.allSettled([
+          axios.get('/api/health'),
           axios.get('/api/system/containers'),
           axios.get('/api/system/disk'),
           axios.get('/api/system/db-stats'),
         ]);
+
+        if (healthRes.status === 'fulfilled') {
+          this.health = healthRes.value.data.data;
+          this.checkedAt = new Date().toLocaleTimeString();
+        }
 
         if (containersRes.status === 'fulfilled') {
           this.containers = containersRes.value.data.containers || [];
@@ -165,7 +215,7 @@ export default {
         }
 
         // Show error only if all requests failed
-        const allFailed = [containersRes, diskRes, dbRes].every(r => r.status === 'rejected');
+        const allFailed = [healthRes, containersRes, diskRes, dbRes].every(r => r.status === 'rejected');
         if (allFailed) {
           this.error = 'Failed to reach system endpoints';
         }
@@ -215,6 +265,74 @@ export default {
   margin-bottom: var(--space-lg);
 }
 
+/* Status Banner */
+.status-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-xl);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-xl);
+  font-weight: 600;
+  font-size: var(--text-lg);
+}
+
+.status-banner.healthy {
+  background-color: var(--surface-elevated);
+  border: 2px solid var(--feedback-success);
+  color: var(--feedback-success);
+}
+
+.status-banner.degraded {
+  background-color: var(--surface-elevated);
+  border: 2px solid var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  display: inline-block;
+}
+
+.status-dot.healthy {
+  background-color: var(--feedback-success);
+}
+
+.status-dot.degraded {
+  background-color: var(--brand-primary);
+}
+
+/* Health Grid */
+.health-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+  width: 100%;
+  margin-bottom: var(--space-lg);
+}
+
+/* Status Badge */
+.status-badge {
+  font-size: var(--text-xs);
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.healthy {
+  background-color: var(--feedback-success);
+  color: var(--text-on-dark);
+}
+
+.status-badge.unhealthy,
+.status-badge.unavailable {
+  background-color: var(--feedback-error);
+  color: var(--text-on-dark);
+}
+
 /* Shared card styles */
 .health-card {
   background-color: var(--surface-card);
@@ -233,6 +351,9 @@ export default {
   color: var(--text-heading-card);
   font-size: var(--text-xl);
   margin: 0 0 var(--space-md) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
 }
 
 /* Disk bar */
@@ -486,6 +607,10 @@ export default {
 
 /* Mobile */
 @media (max-width: 768px) {
+  .health-grid {
+    grid-template-columns: 1fr;
+  }
+
   .container-grid {
     grid-template-columns: 1fr;
   }
