@@ -106,14 +106,17 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    height: 100vh;
+    justify-content: flex-start;
+    min-height: 100vh;
     color: var(--text-on-light);
     width: 100%;
+    padding: var(--space-lg);
   }
 
   .trusted-content {
     text-align: center;
+    width: 100%;
+    max-width: 900px;
   }
 
   .trusted-content h2 {
@@ -121,31 +124,54 @@
   }
 
   .application-list {
-    display: flex;
-    justify-content: flex-start;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: var(--space-lg);
     margin: var(--space-lg) auto;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding: var(--space-lg) var(--space-sm);
     width: 100%;
-    scrollbar-width: thin;
-    scrollbar-color: var(--brand-accent) var(--surface-card);
-    -webkit-overflow-scrolling: touch;
+    justify-content: center;
+    padding: var(--space-sm);
   }
 
-  .application-list::-webkit-scrollbar {
-    height: 8px;
+  .application-list :deep(.application-card) {
+    width: 100%;
+    height: 160px;
   }
 
-  .application-list::-webkit-scrollbar-track {
-    background: var(--surface-card);
-    border-radius: var(--radius-sm);
+  .application-list :deep(.app-image) {
+    height: 60px;
+    padding: var(--space-xs);
+    padding-top: var(--space-sm);
   }
 
-  .application-list::-webkit-scrollbar-thumb {
-    background-color: var(--brand-accent);
-    border-radius: var(--radius-sm);
+  .application-list :deep(.card-content) {
+    padding: var(--space-sm);
+    gap: var(--space-2xs);
+  }
+
+  .application-list :deep(.card-content h2) {
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-2xs);
+  }
+
+  .application-list :deep(.card-content p) {
+    font-size: var(--text-xs);
+  }
+
+  @media (max-width: 767px) {
+    .trusted {
+      padding: var(--space-md) var(--space-sm);
+    }
+
+    .application-list {
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-md);
+    }
+
+    .application-list :deep(.application-card) {
+      max-width: none;
+      height: 160px;
+    }
   }
 
 </style>
