@@ -4,6 +4,7 @@
       <h1>Support</h1>
     </div>
 
+    <div class="donation-grid">
     <div class="donation-card bmac-card">
       <h2>Buy Me a Coffee</h2>
       <div class="qr-section">
@@ -56,6 +57,7 @@
       </div>
 
     </div>
+    </div>
 
     <p class="support-footer">
       Every contribution, no matter the size, is appreciated. Thank you!
@@ -102,9 +104,13 @@ onMounted(async () => {
 
 <style scoped>
 .support {
-  max-width: 640px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: var(--space-xl) var(--space-lg);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
 }
 
 .support-header {
@@ -131,18 +137,33 @@ onMounted(async () => {
   margin-bottom: var(--space-xl);
 }
 
+.donation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(200px, 1fr));
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: 600px;
+  margin-bottom: var(--space-lg);
+}
+
 .donation-card {
   background-color: var(--surface-card);
-  border: 2px solid var(--border-card);
-  border-radius: var(--radius-xl);
-  padding: var(--space-xl);
-  margin-bottom: var(--space-xl);
+  border: 3px solid var(--border-card);
+  border-radius: var(--radius-pill);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-base);
+}
+
+.donation-card:hover {
+  border-color: var(--brand-accent);
+  box-shadow: var(--shadow-lg);
 }
 
 .donation-card h2 {
   color: var(--text-heading-card);
-  font-size: var(--text-xl);
-  margin: 0 0 var(--space-lg) 0;
+  font-size: var(--text-lg);
+  margin: 0 0 var(--space-md) 0;
   text-align: center;
 }
 
@@ -198,8 +219,8 @@ onMounted(async () => {
 }
 
 .qr-image {
-  width: 200px;
-  height: 200px;
+  width: 150px;
+  height: 150px;
   display: block;
   image-rendering: pixelated;
 }
@@ -272,18 +293,18 @@ onMounted(async () => {
   font-style: italic;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .support {
-    padding: var(--space-lg) var(--space-md);
+    padding: var(--space-md) var(--space-sm);
   }
 
-  .support-header h1 {
-    font-size: var(--text-xl);
+  .donation-grid {
+    grid-template-columns: 1fr;
   }
 
   .qr-image {
-    width: 160px;
-    height: 160px;
+    width: 130px;
+    height: 130px;
   }
 
   .address-box {
