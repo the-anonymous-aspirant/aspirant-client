@@ -39,7 +39,7 @@ export default {
     if (token) {
       document.cookie = `auth_token=${token}; path=/; SameSite=Strict; max-age=86400`;
     }
-    this.iframeSrc = '/api/wikipedia/content/wikipedia_en_all_maxi_2026-02';
+    this.iframeSrc = '/api/wikipedia/viewer#/content/wikipedia_en_all_maxi_2026-02';
     this.ready = true;
   },
 };
