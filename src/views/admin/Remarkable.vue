@@ -7,13 +7,8 @@
     <div class="status-card">
       <div class="status-header">
         <h3>Sync Status</h3>
-        <button class="btn-sync" @click="triggerSync" :disabled="syncing">
-          <span v-if="syncing">Syncing...</span>
-          <span v-else>Sync Now</span>
-        </button>
+        <span class="sync-mode-label">Device pushes daily at midnight</span>
       </div>
-      <div v-if="syncError" class="error-text">{{ syncError }}</div>
-      <div v-if="syncSuccess" class="success-text">{{ syncSuccess }}</div>
       <div v-if="statusLoading" class="loading-text">Loading status...</div>
       <div v-else-if="statusError" class="error-text">{{ statusError }}</div>
       <div v-else class="status-grid">
@@ -162,10 +157,6 @@ export default {
       statusLoading: true,
       statusError: null,
       nextSyncCountdown: '—',
-      syncing: false,
-      syncError: null,
-      syncSuccess: null,
-
       // Folder browser
       selectedDpi: 300,
       tree: [],
@@ -204,22 +195,6 @@ export default {
         this.statusError = 'Failed to load sync status: ' + (err.response?.data?.error?.message || err.message);
       }
       this.statusLoading = false;
-    },
-
-    async triggerSync() {
-      this.syncing = true;
-      this.syncError = null;
-      this.syncSuccess = null;
-      try {
-        const resp = await axios.post('/api/remarkable/sync');
-        this.syncSuccess = resp.data.message;
-        await this.fetchSyncStatus();
-        await this.fetchTree();
-        await this.fetchFolders();
-      } catch (err) {
-        this.syncError = err.response?.data?.error?.message || err.message;
-      }
-      this.syncing = false;
     },
 
     async fetchTree() {
@@ -465,26 +440,10 @@ export default {
   margin: 0;
 }
 
-.btn-sync {
-  background-color: var(--brand-primary);
-  color: var(--text-on-light);
-  font-weight: 600;
-  padding: var(--space-xs) var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: none;
-  cursor: pointer;
+.sync-mode-label {
   font-size: var(--text-sm);
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
-}
-
-.btn-sync:hover:not(:disabled) {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.btn-sync:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 .status-grid {
