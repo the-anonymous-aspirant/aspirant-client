@@ -82,16 +82,68 @@
 
         <!-- Documents -->
         <div v-if="currentDocuments.length" class="item-list">
-          <div v-for="doc in currentDocuments" :key="doc.id" class="item-row doc-row">
-            <span class="item-icon">&#128196;</span>
-            <span class="item-name">{{ doc.name }}</span>
-            <span class="item-meta">{{ doc.page_count }} pages</span>
-            <div class="item-actions">
-              <button class="btn-sm" @click="renderPage(doc.id, 0)" title="Render first page as PNG">PNG</button>
-              <button class="btn-sm" @click="exportNotebook(doc.id, 'pdf')" title="Export as PDF">PDF</button>
-              <button class="btn-sm" @click="exportNotebook(doc.id, 'png')" title="Export as ZIP of PNGs">ZIP</button>
+          <template v-for="doc in currentDocuments" :key="doc.id">
+            <div class="item-row doc-row" @click="toggleDocExpand(doc.id)">
+              <span class="item-icon">&#128196;</span>
+              <span class="item-name">{{ doc.name }}</span>
+              <span class="item-meta">{{ doc.page_count }} pages</span>
+              <span class="item-expand" v-html="expandedDoc === doc.id ? '&#9650;' : '&#9660;'"></span>
             </div>
-          </div>
+
+            <!-- Expanded page selector -->
+            <div v-if="expandedDoc === doc.id" class="page-panel">
+              <div class="page-controls">
+                <div class="page-input-group">
+                  <label>Page</label>
+                  <input
+                    type="number"
+                    v-model.number="selectedPage"
+                    :min="0"
+                    :max="doc.page_count - 1"
+                    class="page-input"
+                  />
+                  <span class="page-total">of {{ doc.page_count - 1 }}</span>
+                </div>
+                <div class="page-actions">
+                  <button class="btn-sm" @click.stop="renderPage(doc.id, selectedPage)" title="Render page as PNG">PNG</button>
+                  <button class="btn-sm" @click.stop="renderPagePdf(doc.id, selectedPage)" title="Render page as PDF">PDF</button>
+                  <button class="btn-sm btn-preview" @click.stop="loadPreview(doc.id, selectedPage)">
+                    {{ previewLoading ? 'Loading...' : 'Preview' }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="page-range-group">
+                <label>Export range</label>
+                <div class="range-inputs">
+                  <input
+                    type="number"
+                    v-model.number="exportPageFrom"
+                    :min="0"
+                    :max="doc.page_count - 1"
+                    class="page-input"
+                    placeholder="from"
+                  />
+                  <span class="range-sep">—</span>
+                  <input
+                    type="number"
+                    v-model.number="exportPageTo"
+                    :min="0"
+                    :max="doc.page_count - 1"
+                    class="page-input"
+                    placeholder="to"
+                  />
+                  <button class="btn-sm" @click.stop="exportRange(doc.id, 'pdf')" title="Export range as PDF">PDF</button>
+                  <button class="btn-sm" @click.stop="exportRange(doc.id, 'png')" title="Export range as ZIP">ZIP</button>
+                </div>
+              </div>
+
+              <!-- Thumbnail preview -->
+              <div v-if="previewUrl" class="preview-container">
+                <img :src="previewUrl" alt="Page preview" class="preview-img" />
+              </div>
+            </div>
+          </template>
         </div>
 
         <div v-if="!currentFolders.length && !currentDocuments.length" class="empty-text">
@@ -108,8 +160,13 @@
       <div class="upload-form">
         <div class="upload-row">
           <div class="upload-field">
-            <label for="upload-file">File</label>
-            <input id="upload-file" type="file" accept=".pdf,.epub" @change="onFileSelect" :disabled="uploading" />
+            <label>File</label>
+            <div class="file-input-wrapper">
+              <button class="btn-file" :disabled="uploading" @click="$refs.fileInput.click()">
+                {{ selectedFile ? selectedFile.name : 'Choose file...' }}
+              </button>
+              <input ref="fileInput" type="file" accept=".pdf,.epub" @change="onFileSelect" class="file-input-hidden" />
+            </div>
           </div>
           <div class="upload-field">
             <label for="upload-folder">Target Folder</label>
@@ -169,6 +226,16 @@ export default {
 
       // All folders (for upload selector)
       allFolders: [],
+
+      // Document expansion / page selector
+      expandedDoc: null,
+      selectedPage: 0,
+      exportPageFrom: 0,
+      exportPageTo: 0,
+
+      // Preview
+      previewUrl: null,
+      previewLoading: false,
 
       // Upload
       selectedFile: null,
@@ -255,6 +322,8 @@ export default {
 
     navigateTo(folderId) {
       this.currentFolderId = folderId;
+      this.expandedDoc = null;
+      this.previewUrl = null;
 
       // Rebuild breadcrumbs
       if (folderId === null) {
@@ -282,14 +351,55 @@ export default {
       this.updateBrowserView();
     },
 
+    toggleDocExpand(docId) {
+      if (this.expandedDoc === docId) {
+        this.expandedDoc = null;
+        this.previewUrl = null;
+      } else {
+        this.expandedDoc = docId;
+        this.selectedPage = 0;
+        const doc = this.currentDocuments.find(d => d.id === docId);
+        this.exportPageFrom = 0;
+        this.exportPageTo = doc ? doc.page_count - 1 : 0;
+        this.previewUrl = null;
+      }
+    },
+
     renderPage(notebookId, page) {
       const url = `/api/remarkable/notebooks/${notebookId}/pages/${page}/render?format=png&dpi=${this.selectedDpi}`;
       window.open(url, '_blank');
     },
 
-    exportNotebook(notebookId, format) {
-      const url = `/api/remarkable/notebooks/${notebookId}/export?format=${format}&dpi=${this.selectedDpi}`;
+    renderPagePdf(notebookId, page) {
+      const url = `/api/remarkable/notebooks/${notebookId}/pages/${page}/render?format=pdf&dpi=${this.selectedDpi}`;
       window.open(url, '_blank');
+    },
+
+    exportRange(notebookId, format) {
+      const from = Math.max(0, this.exportPageFrom);
+      const to = this.exportPageTo;
+      const pages = [];
+      for (let i = from; i <= to; i++) pages.push(i);
+      const url = `/api/remarkable/notebooks/${notebookId}/export?format=${format}&dpi=${this.selectedDpi}&pages=${pages.join(',')}`;
+      window.open(url, '_blank');
+    },
+
+    async loadPreview(notebookId, page) {
+      this.previewLoading = true;
+      if (this.previewUrl) {
+        URL.revokeObjectURL(this.previewUrl);
+        this.previewUrl = null;
+      }
+      try {
+        const resp = await axios.get(
+          `/api/remarkable/notebooks/${notebookId}/pages/${page}/render?format=png&dpi=150`,
+          { responseType: 'blob' }
+        );
+        this.previewUrl = URL.createObjectURL(resp.data);
+      } catch (err) {
+        console.error('Preview failed:', err);
+      }
+      this.previewLoading = false;
     },
 
     onFileSelect(event) {
@@ -318,9 +428,7 @@ export default {
         });
         this.uploadSuccess = `Uploaded "${resp.data.filename}" (${this.formatSize(resp.data.size)})`;
         this.selectedFile = null;
-        // Reset file input
-        const fileInput = document.getElementById('upload-file');
-        if (fileInput) fileInput.value = '';
+        this.$refs.fileInput.value = '';
         await this.fetchPending();
       } catch (err) {
         const errData = err.response?.data?.error;
@@ -373,6 +481,9 @@ export default {
   beforeUnmount() {
     if (this.countdownInterval) {
       clearInterval(this.countdownInterval);
+    }
+    if (this.previewUrl) {
+      URL.revokeObjectURL(this.previewUrl);
     }
   },
 };
@@ -570,6 +681,14 @@ export default {
   background-color: var(--surface-card-inner);
 }
 
+.doc-row {
+  cursor: pointer;
+}
+
+.doc-row:hover {
+  background-color: var(--surface-card-inner);
+}
+
 .item-icon {
   font-size: var(--text-lg);
   flex-shrink: 0;
@@ -585,6 +704,13 @@ export default {
   font-size: var(--text-xs);
   color: var(--text-muted);
   flex-shrink: 0;
+}
+
+.item-expand {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  padding: 0 var(--space-2xs);
 }
 
 .item-actions {
@@ -608,6 +734,106 @@ export default {
 .btn-sm:hover {
   color: var(--text-on-dark);
   border-color: var(--text-on-dark);
+}
+
+/* Page panel (expanded doc) */
+.page-panel {
+  background-color: var(--surface-card-inner);
+  border-radius: var(--radius-sm);
+  padding: var(--space-md);
+  margin-left: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.page-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.page-input-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.page-input-group label,
+.page-range-group label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.page-input {
+  width: 60px;
+  padding: var(--space-2xs) var(--space-xs);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-card);
+  background-color: var(--surface-card);
+  color: var(--text-on-dark);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.page-input::-webkit-inner-spin-button,
+.page-input::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
+.page-total {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.page-actions {
+  display: flex;
+  gap: var(--space-2xs);
+}
+
+.page-range-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.range-inputs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.range-sep {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Preview */
+.btn-preview {
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+.btn-preview:hover {
+  color: var(--text-on-dark);
+}
+
+.preview-container {
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  max-width: 300px;
+}
+
+.preview-img {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 /* Upload Card */
@@ -666,9 +892,42 @@ export default {
   font-weight: 600;
 }
 
-.upload-field input[type="file"] {
-  font-size: var(--text-sm);
+.file-input-wrapper {
+  position: relative;
+}
+
+.file-input-hidden {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.btn-file {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-card);
+  background-color: var(--surface-card-inner);
   color: var(--text-on-dark);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: border-color var(--transition-moderate);
+}
+
+.btn-file:hover:not(:disabled) {
+  border-color: var(--text-on-dark);
+}
+
+.btn-file:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .upload-field select {
@@ -762,6 +1021,10 @@ export default {
   .upload-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .page-panel {
+    margin-left: var(--space-sm);
   }
 }
 </style>
