@@ -39,6 +39,13 @@
         route="/admin/remarkable"
         @card-click="navigateTo"
       />
+      <application-card
+        :image-url="appImages.default"
+        title="Finance"
+        description="Track spending, upload bank CSVs, view reports"
+        route="/admin/finance"
+        @card-click="navigateTo"
+      />
     </div>
   </div>
 </template>
