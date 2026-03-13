@@ -43,16 +43,25 @@
     <div class="browser-card">
       <h3>Folder Browser</h3>
 
-      <!-- DPI selector + Breadcrumb row -->
+      <!-- DPI + Quality selector row -->
       <div class="browser-toolbar">
-        <div class="dpi-selector">
-          <label for="dpi-select">DPI</label>
-          <select id="dpi-select" v-model.number="selectedDpi">
-            <option :value="150">150</option>
-            <option :value="300">300</option>
-            <option :value="600">600</option>
-            <option :value="1200">1200</option>
-          </select>
+        <div class="toolbar-selectors">
+          <div class="toolbar-selector">
+            <label for="quality-select">Quality</label>
+            <select id="quality-select" v-model="selectedQuality">
+              <option value="fast">Fast</option>
+              <option value="fine">Fine</option>
+            </select>
+          </div>
+          <div class="toolbar-selector">
+            <label for="dpi-select">DPI</label>
+            <select id="dpi-select" v-model.number="selectedDpi">
+              <option :value="150">150</option>
+              <option :value="300">300</option>
+              <option :value="600">600</option>
+              <option :value="1200">1200</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -216,6 +225,7 @@ export default {
       statusError: null,
       nextSyncCountdown: '—',
       // Folder browser
+      selectedQuality: 'fast',
       selectedDpi: 300,
       tree: [],
       currentFolderId: null,
@@ -376,12 +386,12 @@ export default {
     },
 
     renderPage(notebookId, page) {
-      const url = `/api/remarkable/notebooks/${notebookId}/pages/${page}/render?format=png&dpi=${this.selectedDpi}`;
+      const url = `/api/remarkable/notebooks/${notebookId}/pages/${page}/render?format=png&dpi=${this.selectedDpi}&quality=${this.selectedQuality}`;
       window.open(url, '_blank');
     },
 
     renderPagePdf(notebookId, page) {
-      const url = `/api/remarkable/notebooks/${notebookId}/pages/${page}/render?format=pdf&dpi=${this.selectedDpi}`;
+      const url = `/api/remarkable/notebooks/${notebookId}/pages/${page}/render?format=pdf&dpi=${this.selectedDpi}&quality=${this.selectedQuality}`;
       window.open(url, '_blank');
     },
 
@@ -390,7 +400,7 @@ export default {
       const to = this.exportPageTo;
       const pages = [];
       for (let i = from; i <= to; i++) pages.push(i);
-      const url = `/api/remarkable/notebooks/${notebookId}/export?format=${format}&dpi=${this.selectedDpi}&pages=${pages.join(',')}`;
+      const url = `/api/remarkable/notebooks/${notebookId}/export?format=${format}&dpi=${this.selectedDpi}&quality=${this.selectedQuality}&pages=${pages.join(',')}`;
       window.open(url, '_blank');
     },
 
@@ -409,7 +419,7 @@ export default {
       this.previewAbort = controller;
       try {
         const resp = await axios.get(
-          `/api/remarkable/notebooks/${notebookId}/pages/${page}/render?format=png&dpi=150`,
+          `/api/remarkable/notebooks/${notebookId}/pages/${page}/render?format=png&dpi=150&quality=${this.selectedQuality}`,
           { responseType: 'blob', signal: controller.signal, timeout: 65000 }
         );
         this.previewUrl = URL.createObjectURL(resp.data);
@@ -640,13 +650,19 @@ export default {
   margin-bottom: var(--space-sm);
 }
 
-.dpi-selector {
+.toolbar-selectors {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.toolbar-selector {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
 }
 
-.dpi-selector label {
+.toolbar-selector label {
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -654,7 +670,7 @@ export default {
   font-weight: 600;
 }
 
-.dpi-selector select {
+.toolbar-selector select {
   padding: var(--space-2xs) var(--space-xs);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-card);
