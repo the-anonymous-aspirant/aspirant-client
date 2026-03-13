@@ -201,9 +201,24 @@
     <!-- Actions -->
     <div class="section">
       <h3>Actions</h3>
-      <button @click="reEnrich" :disabled="reEnriching" class="btn btn-secondary">
-        {{ reEnriching ? 'Re-enriching...' : 'Re-enrich All Transactions' }}
-      </button>
+      <div class="actions-row">
+        <button @click="importLocal" :disabled="importingLocal" class="btn btn-primary">
+          {{ importingLocal ? 'Importing...' : 'Import Local CSVs' }}
+        </button>
+        <button @click="reEnrich" :disabled="reEnriching" class="btn btn-secondary">
+          {{ reEnriching ? 'Re-enriching...' : 'Re-enrich All Transactions' }}
+        </button>
+      </div>
+      <div v-if="importLocalResult" class="action-result-block" :class="importLocalResult.error ? 'error' : 'success'">
+        <div>{{ importLocalResult.summary }}</div>
+        <ul v-if="importLocalResult.files && importLocalResult.files.length" class="import-file-list">
+          <li v-for="f in importLocalResult.files" :key="f.file">
+            <strong>{{ f.bank }}/{{ f.file }}</strong>:
+            <span v-if="f.error" class="text-error">{{ f.error }}</span>
+            <span v-else>+{{ f.new_rows }} new, {{ f.skipped_rows }} skipped</span>
+          </li>
+        </ul>
+      </div>
       <span v-if="reEnrichResult" class="action-result">{{ reEnrichResult }}</span>
     </div>
   </div>
@@ -238,6 +253,8 @@ export default {
       currentPage: 1,
       pageSize: 20,
       // Actions
+      importingLocal: false,
+      importLocalResult: null,
       reEnriching: false,
       reEnrichResult: '',
       // Chart
@@ -360,6 +377,30 @@ export default {
     },
 
     // --- Actions ---
+    async importLocal() {
+      this.importingLocal = true;
+      this.importLocalResult = null;
+      try {
+        const res = await axios.post('/api/finance/import-local', {}, { headers: this.authHeaders });
+        this.importLocalResult = {
+          error: false,
+          summary: `Imported ${res.data.total_new} new transactions (${res.data.total_skipped} duplicates skipped) from ${res.data.files.length} file(s).`,
+          files: res.data.files,
+        };
+        this.loadOverview();
+        this.loadSources();
+        this.loadTransactions();
+        this.loadMonthly();
+      } catch (err) {
+        this.importLocalResult = {
+          error: true,
+          summary: `Import failed: ${err.response?.data?.error?.message || err.message}`,
+          files: [],
+        };
+      } finally {
+        this.importingLocal = false;
+      }
+    },
     async reEnrich() {
       this.reEnriching = true;
       this.reEnrichResult = '';
@@ -887,9 +928,44 @@ td.expense { color: #dc3545; }
   color: var(--text-muted);
 }
 
+.actions-row {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+
 .action-result {
   margin-left: var(--space-md);
   font-size: 0.9rem;
+}
+
+.action-result-block {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  margin-bottom: var(--space-md);
+}
+
+.action-result-block.success {
+  background: #d4edda;
+  color: #155724;
+}
+
+.action-result-block.error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.import-file-list {
+  margin: var(--space-xs) 0 0 var(--space-md);
+  padding: 0;
+  list-style: disc;
+  font-size: 0.85rem;
+}
+
+.text-error {
+  color: #dc3545;
 }
 
 @media (max-width: 767px) {
