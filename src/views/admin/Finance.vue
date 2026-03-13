@@ -1,0 +1,990 @@
+<template>
+  <div class="finance-view">
+    <h1>Finance</h1>
+    <h2 class="page-subtitle">Personal finance tracker</h2>
+
+    <!-- Overview Cards -->
+    <div class="overview-cards" v-if="overview">
+      <div class="stat-card">
+        <div class="stat-value">{{ overview.total_transactions.toLocaleString() }}</div>
+        <div class="stat-label">Transactions</div>
+      </div>
+      <div class="stat-card income">
+        <div class="stat-value">{{ formatAmount(overview.total_income) }}</div>
+        <div class="stat-label">Total Income</div>
+      </div>
+      <div class="stat-card expense">
+        <div class="stat-value">{{ formatAmount(overview.total_expenses) }}</div>
+        <div class="stat-label">Total Expenses</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ overview.banks.length }}</div>
+        <div class="stat-label">Banks</div>
+      </div>
+    </div>
+
+    <!-- Sources — folder-per-source with drag-and-drop -->
+    <div class="section">
+      <h3>Bank Sources</h3>
+      <div class="sources-grid">
+        <div
+          v-for="s in sources"
+          :key="s.bank"
+          class="source-folder"
+          :class="{ 'drag-over': dragOverBank === s.bank, 'uploading': uploadingBank === s.bank }"
+          @dragover.prevent="onDragOver(s.bank)"
+          @dragleave.prevent="onDragLeave(s.bank)"
+          @drop.prevent="onDrop($event, s.bank)"
+        >
+          <div class="folder-header">
+            <div class="folder-icon">
+              <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
+                <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+              </svg>
+            </div>
+            <div class="folder-title">{{ s.name || s.bank.toUpperCase() }}</div>
+            <button class="btn-icon" @click="showSchema(s.bank)" title="View expected CSV schema">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="folder-stats">
+            <span class="folder-count">{{ s.transaction_count.toLocaleString() }} transactions</span>
+            <span class="folder-currency" v-if="s.currency">{{ s.currency }}</span>
+          </div>
+          <div class="folder-date" v-if="s.last_transaction_date">Last: {{ s.last_transaction_date }}</div>
+
+          <div class="drop-zone">
+            <div v-if="uploadingBank === s.bank" class="drop-label uploading-label">
+              Uploading...
+            </div>
+            <div v-else class="drop-label">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" class="upload-icon">
+                <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+              </svg>
+              Drop CSV here or <label class="file-link" :for="'file-' + s.bank">browse</label>
+            </div>
+            <input
+              type="file"
+              :id="'file-' + s.bank"
+              :ref="'fileInput-' + s.bank"
+              accept=".csv"
+              class="hidden-input"
+              @change="onFileSelect($event, s.bank)"
+            />
+          </div>
+
+          <div v-if="uploadResults[s.bank]" class="folder-result" :class="uploadResults[s.bank].error ? 'error' : 'success'">
+            {{ uploadResults[s.bank].message }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Schema Modal -->
+    <div class="modal-overlay" v-if="schemaModal" @click.self="schemaModal = null">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>{{ schemaModal.name }} — CSV Schema</h3>
+          <button class="btn-icon" @click="schemaModal = null">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="schema-meta">
+            <p v-if="schemaModal.description">{{ schemaModal.description }}</p>
+            <div class="schema-props">
+              <span><strong>Encoding:</strong> {{ schemaModal.encoding }}</span>
+              <span><strong>Delimiter:</strong> <code>{{ schemaModal.delimiter }}</code></span>
+              <span><strong>Currency:</strong> {{ schemaModal.currency }}</span>
+            </div>
+          </div>
+
+          <table class="schema-table">
+            <thead>
+              <tr>
+                <th>Column</th>
+                <th>Required</th>
+                <th>Description</th>
+                <th>Aliases</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="col in schemaModal.columns" :key="col.name">
+                <td><code>{{ col.name }}</code></td>
+                <td><span :class="col.required ? 'badge-required' : 'badge-optional'">{{ col.required ? 'Required' : 'Optional' }}</span></td>
+                <td>{{ col.description }}</td>
+                <td>
+                  <span v-if="col.aliases && col.aliases.length">
+                    <code v-for="(a, i) in col.aliases" :key="a">{{ a }}<span v-if="i < col.aliases.length - 1">, </span></code>
+                  </span>
+                  <span v-else class="text-muted">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div v-if="schemaModal.sample_row" class="schema-sample">
+            <strong>Example row:</strong>
+            <code class="sample-code">{{ schemaModal.sample_row }}</code>
+          </div>
+
+          <div v-if="schemaModal.notes" class="schema-notes">
+            <strong>Notes:</strong> {{ schemaModal.notes }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="section">
+      <h3>Transactions</h3>
+      <div class="filters-row">
+        <select v-model="filterBank" @change="resetAndLoad" class="select-input">
+          <option value="">All banks</option>
+          <option v-for="s in sources" :key="s.bank" :value="s.bank">{{ s.name || s.bank.toUpperCase() }}</option>
+        </select>
+        <select v-model="filterCategory" @change="resetAndLoad" class="select-input">
+          <option value="">All categories</option>
+          <option v-for="cat in availableCategories" :key="cat" :value="cat">{{ cat }}</option>
+        </select>
+        <input type="date" v-model="filterDateFrom" @change="resetAndLoad" class="date-input" />
+        <input type="date" v-model="filterDateTo" @change="resetAndLoad" class="date-input" />
+        <input type="text" v-model="filterSearch" @input="debounceSearch" placeholder="Search..." class="text-input" />
+      </div>
+
+      <!-- Transaction Table -->
+      <div class="table-container">
+        <table v-if="transactions.items.length">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Payee</th>
+              <th>Amount</th>
+              <th>Currency</th>
+              <th>Category</th>
+              <th>Bank</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="t in transactions.items" :key="t.id">
+              <td>{{ t.transaction_date }}</td>
+              <td>{{ t.normalized_payee || t.payee }}</td>
+              <td :class="t.flow_direction">{{ formatAmount(t.amount) }}</td>
+              <td>{{ t.currency }}</td>
+              <td><span class="category-tag">{{ t.category || 'other' }}</span></td>
+              <td>{{ t.source_bank.toUpperCase() }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else class="empty-state">No transactions found.</div>
+      </div>
+
+      <!-- Pagination -->
+      <div class="pagination" v-if="transactions.total > pageSize">
+        <button @click="prevPage" :disabled="currentPage <= 1" class="btn btn-sm">Previous</button>
+        <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
+        <button @click="nextPage" :disabled="currentPage >= totalPages" class="btn btn-sm">Next</button>
+      </div>
+    </div>
+
+    <!-- Monthly Chart -->
+    <div class="section" v-if="monthlyData.length">
+      <h3>Monthly Spending</h3>
+      <canvas ref="chartCanvas" height="300"></canvas>
+    </div>
+
+    <!-- Actions -->
+    <div class="section">
+      <h3>Actions</h3>
+      <div class="actions-row">
+        <button @click="importLocal" :disabled="importingLocal" class="btn btn-primary">
+          {{ importingLocal ? 'Importing...' : 'Import Local CSVs' }}
+        </button>
+        <button @click="reEnrich" :disabled="reEnriching" class="btn btn-secondary">
+          {{ reEnriching ? 'Re-enriching...' : 'Re-enrich All Transactions' }}
+        </button>
+      </div>
+      <div v-if="importLocalResult" class="action-result-block" :class="importLocalResult.error ? 'error' : 'success'">
+        <div>{{ importLocalResult.summary }}</div>
+        <ul v-if="importLocalResult.files && importLocalResult.files.length" class="import-file-list">
+          <li v-for="f in importLocalResult.files" :key="f.file">
+            <strong>{{ f.bank }}/{{ f.file }}</strong>:
+            <span v-if="f.error" class="text-error">{{ f.error }}</span>
+            <span v-else>+{{ f.new_rows }} new, {{ f.skipped_rows }} skipped</span>
+          </li>
+        </ul>
+      </div>
+      <span v-if="reEnrichResult" class="action-result">{{ reEnrichResult }}</span>
+    </div>
+  </div>
+</template>
+
+<script>
+import axios from 'axios';
+import { Chart, registerables } from 'chart.js';
+
+Chart.register(...registerables);
+
+export default {
+  data() {
+    return {
+      overview: null,
+      sources: [],
+      transactions: { items: [], total: 0, page: 1, page_size: 20 },
+      monthlyData: [],
+      availableCategories: [],
+      // Upload
+      uploadingBank: null,
+      uploadResults: {},
+      dragOverBank: null,
+      // Schema modal
+      schemaModal: null,
+      // Filters
+      filterBank: '',
+      filterCategory: '',
+      filterDateFrom: '',
+      filterDateTo: '',
+      filterSearch: '',
+      currentPage: 1,
+      pageSize: 20,
+      // Actions
+      importingLocal: false,
+      importLocalResult: null,
+      reEnriching: false,
+      reEnrichResult: '',
+      // Chart
+      chart: null,
+      searchTimeout: null,
+    };
+  },
+  computed: {
+    totalPages() {
+      return Math.ceil(this.transactions.total / this.pageSize);
+    },
+    authHeaders() {
+      const token = localStorage.getItem('user_token');
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    },
+  },
+  methods: {
+    async loadOverview() {
+      try {
+        const res = await axios.get('/api/finance/summary/overview', { headers: this.authHeaders });
+        this.overview = res.data;
+        this.availableCategories = res.data.categories || [];
+      } catch (err) {
+        console.error('Failed to load overview:', err);
+      }
+    },
+    async loadSources() {
+      try {
+        const res = await axios.get('/api/finance/sources', { headers: this.authHeaders });
+        this.sources = res.data;
+      } catch (err) {
+        console.error('Failed to load sources:', err);
+      }
+    },
+    async loadTransactions() {
+      try {
+        const params = new URLSearchParams();
+        params.set('page', this.currentPage);
+        params.set('page_size', this.pageSize);
+        if (this.filterBank) params.set('bank', this.filterBank);
+        if (this.filterCategory) params.set('category', this.filterCategory);
+        if (this.filterDateFrom) params.set('date_from', this.filterDateFrom);
+        if (this.filterDateTo) params.set('date_to', this.filterDateTo);
+        if (this.filterSearch) params.set('search', this.filterSearch);
+
+        const res = await axios.get(`/api/finance/transactions?${params}`, { headers: this.authHeaders });
+        this.transactions = res.data;
+      } catch (err) {
+        console.error('Failed to load transactions:', err);
+      }
+    },
+    async loadMonthly() {
+      try {
+        const res = await axios.get('/api/finance/summary/monthly', { headers: this.authHeaders });
+        this.monthlyData = res.data;
+        this.$nextTick(() => this.renderChart());
+      } catch (err) {
+        console.error('Failed to load monthly data:', err);
+      }
+    },
+
+    // --- Drag-and-drop + file select ---
+    onDragOver(bank) {
+      this.dragOverBank = bank;
+    },
+    onDragLeave(bank) {
+      if (this.dragOverBank === bank) this.dragOverBank = null;
+    },
+    onDrop(event, bank) {
+      this.dragOverBank = null;
+      const files = event.dataTransfer?.files;
+      if (files && files.length > 0) {
+        this.uploadFile(files[0], bank);
+      }
+    },
+    onFileSelect(event, bank) {
+      const files = event.target.files;
+      if (files && files.length > 0) {
+        this.uploadFile(files[0], bank);
+      }
+      event.target.value = '';
+    },
+    async uploadFile(file, bank) {
+      this.uploadingBank = bank;
+      delete this.uploadResults[bank];
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await axios.post(`/api/finance/sources/${bank}/upload`, formData, {
+          headers: { ...this.authHeaders, 'Content-Type': 'multipart/form-data' },
+        });
+        this.uploadResults[bank] = {
+          error: false,
+          message: `${res.data.new_rows} new, ${res.data.skipped_rows} skipped (${res.data.total_rows} total)`,
+        };
+        this.loadOverview();
+        this.loadSources();
+        this.loadTransactions();
+        this.loadMonthly();
+      } catch (err) {
+        this.uploadResults[bank] = {
+          error: true,
+          message: `Failed: ${err.response?.data?.error?.message || err.message}`,
+        };
+      } finally {
+        this.uploadingBank = null;
+      }
+    },
+
+    // --- Schema modal ---
+    async showSchema(bank) {
+      try {
+        const res = await axios.get(`/api/finance/sources/${bank}/schema`, { headers: this.authHeaders });
+        this.schemaModal = res.data;
+      } catch (err) {
+        console.error('Failed to load schema:', err);
+      }
+    },
+
+    // --- Actions ---
+    async importLocal() {
+      this.importingLocal = true;
+      this.importLocalResult = null;
+      try {
+        const res = await axios.post('/api/finance/import-local', {}, { headers: this.authHeaders });
+        this.importLocalResult = {
+          error: false,
+          summary: `Imported ${res.data.total_new} new transactions (${res.data.total_skipped} duplicates skipped) from ${res.data.files.length} file(s).`,
+          files: res.data.files,
+        };
+        this.loadOverview();
+        this.loadSources();
+        this.loadTransactions();
+        this.loadMonthly();
+      } catch (err) {
+        this.importLocalResult = {
+          error: true,
+          summary: `Import failed: ${err.response?.data?.error?.message || err.message}`,
+          files: [],
+        };
+      } finally {
+        this.importingLocal = false;
+      }
+    },
+    async reEnrich() {
+      this.reEnriching = true;
+      this.reEnrichResult = '';
+      try {
+        const res = await axios.post('/api/finance/re-enrich', {}, { headers: this.authHeaders });
+        this.reEnrichResult = `Updated ${res.data.updated} of ${res.data.total} transactions.`;
+        this.loadOverview();
+        this.loadTransactions();
+        this.loadMonthly();
+      } catch (err) {
+        this.reEnrichResult = `Failed: ${err.message}`;
+      } finally {
+        this.reEnriching = false;
+      }
+    },
+
+    // --- Helpers ---
+    formatAmount(val) {
+      if (val === null || val === undefined) return '-';
+      return Number(val).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+    resetAndLoad() {
+      this.currentPage = 1;
+      this.loadTransactions();
+    },
+    debounceSearch() {
+      clearTimeout(this.searchTimeout);
+      this.searchTimeout = setTimeout(() => {
+        this.currentPage = 1;
+        this.loadTransactions();
+      }, 400);
+    },
+    prevPage() {
+      if (this.currentPage > 1) {
+        this.currentPage--;
+        this.loadTransactions();
+      }
+    },
+    nextPage() {
+      if (this.currentPage < this.totalPages) {
+        this.currentPage++;
+        this.loadTransactions();
+      }
+    },
+    renderChart() {
+      if (!this.$refs.chartCanvas || !this.monthlyData.length) return;
+
+      if (this.chart) this.chart.destroy();
+
+      const monthMap = {};
+      for (const row of this.monthlyData) {
+        if (row.flow_direction === 'expense') {
+          monthMap[row.month] = (monthMap[row.month] || 0) + Number(row.total_absolute);
+        }
+      }
+
+      const months = Object.keys(monthMap).sort();
+      const values = months.map(m => monthMap[m]);
+
+      this.chart = new Chart(this.$refs.chartCanvas, {
+        type: 'bar',
+        data: {
+          labels: months,
+          datasets: [{
+            label: 'Monthly Expenses',
+            data: values,
+            backgroundColor: 'rgba(220, 53, 69, 0.6)',
+            borderColor: 'rgba(220, 53, 69, 1)',
+            borderWidth: 1,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+    },
+  },
+  mounted() {
+    this.loadOverview();
+    this.loadSources();
+    this.loadTransactions();
+    this.loadMonthly();
+  },
+  beforeUnmount() {
+    if (this.chart) this.chart.destroy();
+  },
+};
+</script>
+
+<style scoped>
+.finance-view {
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  color: var(--text-on-light);
+}
+
+.page-subtitle {
+  color: var(--text-muted);
+  font-weight: normal;
+  margin-bottom: var(--space-xl);
+}
+
+/* Overview cards */
+.overview-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-md);
+  width: 100%;
+  margin-bottom: var(--space-xl);
+}
+
+.stat-card {
+  background: var(--bg-card, #fff);
+  border-radius: 8px;
+  padding: var(--space-lg);
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: var(--space-xs);
+}
+
+.stat-label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.stat-card.income .stat-value { color: #28a745; }
+.stat-card.expense .stat-value { color: #dc3545; }
+
+/* Section layout */
+.section {
+  width: 100%;
+  margin-bottom: var(--space-xl);
+}
+
+.section h3 {
+  margin-bottom: var(--space-md);
+}
+
+/* Source folder cards */
+.sources-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-lg);
+}
+
+.source-folder {
+  background: var(--bg-card, #fff);
+  border: 2px solid var(--border-color, #e0e0e0);
+  border-radius: 10px;
+  padding: var(--space-lg);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.source-folder.drag-over {
+  border-color: var(--color-primary, #007bff);
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+  background: rgba(0, 123, 255, 0.03);
+}
+
+.source-folder.uploading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.folder-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.folder-icon {
+  color: var(--color-primary, #007bff);
+  flex-shrink: 0;
+}
+
+.folder-title {
+  font-weight: 700;
+  font-size: 1.1rem;
+  flex: 1;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  transition: color 0.15s, background 0.15s;
+}
+
+.btn-icon:hover {
+  color: var(--color-primary, #007bff);
+  background: rgba(0,123,255,0.08);
+}
+
+.folder-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: 2px;
+}
+
+.folder-count {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.folder-currency {
+  font-size: 0.75rem;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--bg-card, #e9ecef);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.folder-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+}
+
+.drop-zone {
+  border: 2px dashed var(--border-color, #ccc);
+  border-radius: 8px;
+  padding: var(--space-md);
+  text-align: center;
+  transition: border-color 0.2s;
+  margin-top: var(--space-sm);
+}
+
+.drag-over .drop-zone {
+  border-color: var(--color-primary, #007bff);
+}
+
+.drop-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.uploading-label {
+  color: var(--color-primary, #007bff);
+  font-weight: 600;
+}
+
+.upload-icon {
+  opacity: 0.5;
+}
+
+.file-link {
+  color: var(--color-primary, #007bff);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.folder-result {
+  margin-top: var(--space-sm);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.folder-result.success {
+  background: #d4edda;
+  color: #155724;
+}
+
+.folder-result.error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* Schema modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--bg-card, #fff);
+  border-radius: 12px;
+  max-width: 700px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg);
+  border-bottom: 1px solid var(--border-color, #eee);
+}
+
+.modal-header h3 {
+  margin: 0;
+}
+
+.modal-body {
+  padding: var(--space-lg);
+}
+
+.schema-meta {
+  margin-bottom: var(--space-lg);
+}
+
+.schema-meta p {
+  margin: 0 0 var(--space-sm) 0;
+  color: var(--text-muted);
+}
+
+.schema-props {
+  display: flex;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+
+.schema-props code {
+  background: var(--bg-card, #f0f0f0);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.schema-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin-bottom: var(--space-lg);
+}
+
+.schema-table th,
+.schema-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color, #eee);
+}
+
+.schema-table th {
+  font-weight: 600;
+  background: var(--bg-card, #f8f9fa);
+}
+
+.schema-table code {
+  background: var(--bg-card, #f0f0f0);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.85rem;
+}
+
+.badge-required {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: #dc3545;
+  color: #fff;
+  font-weight: 600;
+}
+
+.badge-optional {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: var(--bg-card, #e9ecef);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.schema-sample {
+  margin-bottom: var(--space-md);
+  font-size: 0.9rem;
+}
+
+.sample-code {
+  display: block;
+  margin-top: var(--space-xs);
+  padding: 8px 12px;
+  background: var(--bg-card, #f5f5f5);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.schema-notes {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: var(--space-sm) var(--space-md);
+  background: #fff3cd;
+  border-radius: 4px;
+}
+
+.text-muted {
+  color: var(--text-muted, #999);
+}
+
+/* Filters */
+.filters-row {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--space-md);
+}
+
+.select-input, .date-input, .text-input {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: var(--bg-input, #fff);
+  color: var(--text-on-light);
+}
+
+/* Buttons */
+.btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btn-primary {
+  background: var(--color-primary, #007bff);
+  color: #fff;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--color-secondary, #6c757d);
+  color: #fff;
+}
+
+.btn-sm {
+  padding: 4px 12px;
+  font-size: 0.85rem;
+  background: var(--bg-card, #f0f0f0);
+  border: 1px solid var(--border-color, #ccc);
+}
+
+/* Transaction table */
+.table-container {
+  overflow-x: auto;
+  width: 100%;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th, td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color, #eee);
+}
+
+th {
+  font-weight: 600;
+  background: var(--bg-card, #f8f9fa);
+}
+
+td.income { color: #28a745; }
+td.expense { color: #dc3545; }
+
+.category-tag {
+  background: var(--bg-card, #e9ecef);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: var(--space-xl);
+  color: var(--text-muted);
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-md);
+  margin-top: var(--space-md);
+}
+
+.page-info {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.actions-row {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+
+.action-result {
+  margin-left: var(--space-md);
+  font-size: 0.9rem;
+}
+
+.action-result-block {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  margin-bottom: var(--space-md);
+}
+
+.action-result-block.success {
+  background: #d4edda;
+  color: #155724;
+}
+
+.action-result-block.error {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.import-file-list {
+  margin: var(--space-xs) 0 0 var(--space-md);
+  padding: 0;
+  list-style: disc;
+  font-size: 0.85rem;
+}
+
+.text-error {
+  color: #dc3545;
+}
+
+@media (max-width: 767px) {
+  .finance-view {
+    padding: var(--space-md) var(--space-sm);
+  }
+  .overview-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .sources-grid {
+    grid-template-columns: 1fr;
+  }
+  .filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .schema-props {
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+}
+</style>
