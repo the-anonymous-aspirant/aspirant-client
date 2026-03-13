@@ -108,7 +108,7 @@
                   <button class="btn-sm" @click.stop="renderPage(doc.id, selectedPage)" title="Render page as PNG">PNG</button>
                   <button class="btn-sm" @click.stop="renderPagePdf(doc.id, selectedPage)" title="Render page as PDF">PDF</button>
                   <button class="btn-sm btn-preview" @click.stop="loadPreview(doc.id, selectedPage)">
-                    {{ previewLoading ? 'Loading...' : 'Preview' }}
+                    {{ previewLoading ? 'Rendering...' : 'Preview' }}
                   </button>
                 </div>
               </div>
@@ -139,6 +139,7 @@
               </div>
 
               <!-- Thumbnail preview -->
+              <div v-if="previewError" class="error-text">{{ previewError }}</div>
               <div v-if="previewUrl" class="preview-container">
                 <img :src="previewUrl" alt="Page preview" class="preview-img" />
               </div>
@@ -236,6 +237,8 @@ export default {
       // Preview
       previewUrl: null,
       previewLoading: false,
+      previewError: null,
+      previewAbort: null,
 
       // Upload
       selectedFile: null,
@@ -352,9 +355,15 @@ export default {
     },
 
     toggleDocExpand(docId) {
+      if (this.previewAbort) {
+        this.previewAbort.abort();
+        this.previewAbort = null;
+        this.previewLoading = false;
+      }
       if (this.expandedDoc === docId) {
         this.expandedDoc = null;
         this.previewUrl = null;
+        this.previewError = null;
       } else {
         this.expandedDoc = docId;
         this.selectedPage = 0;
@@ -362,6 +371,7 @@ export default {
         this.exportPageFrom = 0;
         this.exportPageTo = doc ? doc.page_count - 1 : 0;
         this.previewUrl = null;
+        this.previewError = null;
       }
     },
 
@@ -385,21 +395,44 @@ export default {
     },
 
     async loadPreview(notebookId, page) {
+      // Cancel any in-flight preview request
+      if (this.previewAbort) {
+        this.previewAbort.abort();
+      }
       this.previewLoading = true;
+      this.previewError = null;
       if (this.previewUrl) {
         URL.revokeObjectURL(this.previewUrl);
         this.previewUrl = null;
       }
+      const controller = new AbortController();
+      this.previewAbort = controller;
       try {
         const resp = await axios.get(
           `/api/remarkable/notebooks/${notebookId}/pages/${page}/render?format=png&dpi=150`,
-          { responseType: 'blob' }
+          { responseType: 'blob', signal: controller.signal, timeout: 65000 }
         );
         this.previewUrl = URL.createObjectURL(resp.data);
       } catch (err) {
-        console.error('Preview failed:', err);
+        if (axios.isCancel(err) || err.name === 'CanceledError') return;
+        const msg = err.response?.data;
+        if (msg instanceof Blob) {
+          try {
+            const text = await msg.text();
+            const parsed = JSON.parse(text);
+            this.previewError = parsed?.error?.message || 'Render failed';
+          } catch {
+            this.previewError = 'Render failed';
+          }
+        } else {
+          this.previewError = msg?.error?.message || err.message || 'Render failed';
+        }
+      } finally {
+        if (this.previewAbort === controller) {
+          this.previewLoading = false;
+          this.previewAbort = null;
+        }
       }
-      this.previewLoading = false;
     },
 
     onFileSelect(event) {
@@ -481,6 +514,9 @@ export default {
   beforeUnmount() {
     if (this.countdownInterval) {
       clearInterval(this.countdownInterval);
+    }
+    if (this.previewAbort) {
+      this.previewAbort.abort();
     }
     if (this.previewUrl) {
       URL.revokeObjectURL(this.previewUrl);
