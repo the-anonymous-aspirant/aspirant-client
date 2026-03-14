@@ -212,9 +212,14 @@
         <canvas ref="recentChartCanvas" height="300"></canvas>
       </div>
 
-      <h4>Year-over-Year Comparison</h4>
+      <h4>Year-over-Year Expenses</h4>
       <div class="chart-container">
-        <canvas ref="yoyChartCanvas" height="350"></canvas>
+        <canvas ref="yoyExpenseCanvas" height="350"></canvas>
+      </div>
+
+      <h4>Year-over-Year Income</h4>
+      <div class="chart-container">
+        <canvas ref="yoyIncomeCanvas" height="350"></canvas>
       </div>
     </div>
 
@@ -279,7 +284,8 @@ export default {
       reEnrichResult: '',
       // Charts
       recentChart: null,
-      yoyChart: null,
+      yoyExpenseChart: null,
+      yoyIncomeChart: null,
       chartCategory: '',
       excludeInternalTransfers: true,
       searchTimeout: null,
@@ -483,7 +489,8 @@ export default {
     },
     renderCharts() {
       this.renderRecentChart();
-      this.renderYoyChart();
+      this.renderYoyChart('expense');
+      this.renderYoyChart('income');
     },
     renderRecentChart() {
       if (!this.$refs.recentChartCanvas) return;
@@ -535,17 +542,20 @@ export default {
         },
       });
     },
-    renderYoyChart() {
-      if (!this.$refs.yoyChartCanvas) return;
-      if (this.yoyChart) this.yoyChart.destroy();
+    renderYoyChart(direction) {
+      const isExpense = direction === 'expense';
+      const canvasRef = isExpense ? 'yoyExpenseCanvas' : 'yoyIncomeCanvas';
+      const chartProp = isExpense ? 'yoyExpenseChart' : 'yoyIncomeChart';
+
+      if (!this.$refs[canvasRef]) return;
+      if (this[chartProp]) this[chartProp].destroy();
 
       const filtered = this.filterMonthlyData();
       if (!filtered.length) return;
 
-      // Group expenses by year and month number
       const yearData = {};
       for (const row of filtered) {
-        if (row.flow_direction !== 'expense') continue;
+        if (row.flow_direction !== direction) continue;
         const [year, monthNum] = row.month.split('-');
         if (!yearData[year]) yearData[year] = {};
         yearData[year][monthNum] = (yearData[year][monthNum] || 0) + Number(row.total_absolute);
@@ -566,7 +576,7 @@ export default {
         pointRadius: 3,
       }));
 
-      this.yoyChart = new Chart(this.$refs.yoyChartCanvas, {
+      this[chartProp] = new Chart(this.$refs[canvasRef], {
         type: 'line',
         data: { labels: monthLabels, datasets },
         options: {
@@ -586,7 +596,8 @@ export default {
   },
   beforeUnmount() {
     if (this.recentChart) this.recentChart.destroy();
-    if (this.yoyChart) this.yoyChart.destroy();
+    if (this.yoyExpenseChart) this.yoyExpenseChart.destroy();
+    if (this.yoyIncomeChart) this.yoyIncomeChart.destroy();
   },
 };
 </script>
