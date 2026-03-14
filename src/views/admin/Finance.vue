@@ -10,12 +10,12 @@
         <div class="stat-label">Transactions</div>
       </div>
       <div class="stat-card income">
-        <div class="stat-value">{{ formatAmount(overview.total_income) }}</div>
-        <div class="stat-label">Total Income</div>
+        <div class="stat-value">{{ formatAmount(overview.total_income) }} EUR</div>
+        <div class="stat-label">Income (excl. transfers)</div>
       </div>
       <div class="stat-card expense">
-        <div class="stat-value">{{ formatAmount(overview.total_expenses) }}</div>
-        <div class="stat-label">Total Expenses</div>
+        <div class="stat-value">{{ formatAmount(overview.total_expenses) }} EUR</div>
+        <div class="stat-label">Expenses (excl. transfers)</div>
       </div>
       <div class="stat-card">
         <div class="stat-value">{{ overview.banks.length }}</div>
@@ -164,8 +164,8 @@
             <tr>
               <th>Date</th>
               <th>Payee</th>
-              <th>Amount</th>
-              <th>Currency</th>
+              <th>Amount (EUR)</th>
+              <th>Original</th>
               <th>Category</th>
               <th>Bank</th>
             </tr>
@@ -174,8 +174,9 @@
             <tr v-for="t in transactions.items" :key="t.id">
               <td>{{ t.transaction_date }}</td>
               <td>{{ t.normalized_payee || t.payee }}</td>
-              <td :class="t.flow_direction">{{ formatAmount(t.amount) }}</td>
-              <td>{{ t.currency }}</td>
+              <td :class="t.flow_direction">{{ formatAmount(t.amount_eur || t.amount) }}</td>
+              <td v-if="t.currency !== 'EUR'" class="text-muted">{{ formatAmount(t.amount) }} {{ t.currency }}</td>
+              <td v-else></td>
               <td><span class="category-tag">{{ t.category || 'other' }}</span></td>
               <td>{{ t.source_bank.toUpperCase() }}</td>
             </tr>
