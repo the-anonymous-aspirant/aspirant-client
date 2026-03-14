@@ -192,10 +192,29 @@
       </div>
     </div>
 
-    <!-- Monthly Chart -->
+    <!-- Charts -->
     <div class="section" v-if="monthlyData.length">
-      <h3>Monthly Spending</h3>
-      <canvas ref="chartCanvas" height="300"></canvas>
+      <h3>Spending Analysis</h3>
+      <div class="chart-controls">
+        <select v-model="chartCategory" @change="renderCharts()" class="select-input">
+          <option value="">All Categories</option>
+          <option v-for="cat in chartableCategories" :key="cat" :value="cat">{{ cat }}</option>
+        </select>
+        <label class="toggle-label">
+          <input type="checkbox" v-model="excludeInternalTransfers" @change="renderCharts()" />
+          Exclude internal transfers
+        </label>
+      </div>
+
+      <h4>Last 12 Months</h4>
+      <div class="chart-container">
+        <canvas ref="recentChartCanvas" height="300"></canvas>
+      </div>
+
+      <h4>Year-over-Year Comparison</h4>
+      <div class="chart-container">
+        <canvas ref="yoyChartCanvas" height="350"></canvas>
+      </div>
     </div>
 
     <!-- Actions -->
@@ -257,8 +276,11 @@ export default {
       importLocalResult: null,
       reEnriching: false,
       reEnrichResult: '',
-      // Chart
-      chart: null,
+      // Charts
+      recentChart: null,
+      yoyChart: null,
+      chartCategory: '',
+      excludeInternalTransfers: true,
       searchTimeout: null,
     };
   },
@@ -269,6 +291,12 @@ export default {
     authHeaders() {
       const token = localStorage.getItem('user_token');
       return token ? { Authorization: `Bearer ${token}` } : {};
+    },
+    chartableCategories() {
+      return this.availableCategories.filter(c => c !== 'internal_transfer' && c !== 'transfers');
+    },
+    internalCategories() {
+      return ['internal_transfer', 'transfers'];
     },
   },
   methods: {
@@ -310,7 +338,7 @@ export default {
       try {
         const res = await axios.get('/api/finance/summary/monthly', { headers: this.authHeaders });
         this.monthlyData = res.data;
-        this.$nextTick(() => this.renderChart());
+        this.$nextTick(() => this.renderCharts());
       } catch (err) {
         console.error('Failed to load monthly data:', err);
       }
@@ -445,37 +473,106 @@ export default {
         this.loadTransactions();
       }
     },
-    renderChart() {
-      if (!this.$refs.chartCanvas || !this.monthlyData.length) return;
+    filterMonthlyData() {
+      return this.monthlyData.filter(row => {
+        if (this.excludeInternalTransfers && this.internalCategories.includes(row.category)) return false;
+        if (this.chartCategory && row.category !== this.chartCategory) return false;
+        return true;
+      });
+    },
+    renderCharts() {
+      this.renderRecentChart();
+      this.renderYoyChart();
+    },
+    renderRecentChart() {
+      if (!this.$refs.recentChartCanvas) return;
+      if (this.recentChart) this.recentChart.destroy();
 
-      if (this.chart) this.chart.destroy();
+      const filtered = this.filterMonthlyData();
+      if (!filtered.length) return;
 
-      const monthMap = {};
-      for (const row of this.monthlyData) {
-        if (row.flow_direction === 'expense') {
-          monthMap[row.month] = (monthMap[row.month] || 0) + Number(row.total_absolute);
+      // Aggregate income and expenses per month
+      const incomeMap = {};
+      const expenseMap = {};
+      for (const row of filtered) {
+        if (row.flow_direction === 'income') {
+          incomeMap[row.month] = (incomeMap[row.month] || 0) + Number(row.total_absolute);
+        } else if (row.flow_direction === 'expense') {
+          expenseMap[row.month] = (expenseMap[row.month] || 0) + Number(row.total_absolute);
         }
       }
 
-      const months = Object.keys(monthMap).sort();
-      const values = months.map(m => monthMap[m]);
+      // Get last 12 months sorted
+      const allMonths = [...new Set([...Object.keys(incomeMap), ...Object.keys(expenseMap)])].sort();
+      const recent = allMonths.slice(-12);
 
-      this.chart = new Chart(this.$refs.chartCanvas, {
+      this.recentChart = new Chart(this.$refs.recentChartCanvas, {
         type: 'bar',
         data: {
-          labels: months,
-          datasets: [{
-            label: 'Monthly Expenses',
-            data: values,
-            backgroundColor: 'rgba(220, 53, 69, 0.6)',
-            borderColor: 'rgba(220, 53, 69, 1)',
-            borderWidth: 1,
-          }],
+          labels: recent,
+          datasets: [
+            {
+              label: 'Income',
+              data: recent.map(m => incomeMap[m] || 0),
+              backgroundColor: 'rgba(40, 167, 69, 0.6)',
+              borderColor: 'rgba(40, 167, 69, 1)',
+              borderWidth: 1,
+            },
+            {
+              label: 'Expenses',
+              data: recent.map(m => expenseMap[m] || 0),
+              backgroundColor: 'rgba(220, 53, 69, 0.6)',
+              borderColor: 'rgba(220, 53, 69, 1)',
+              borderWidth: 1,
+            },
+          ],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           scales: { y: { beginAtZero: true } },
+        },
+      });
+    },
+    renderYoyChart() {
+      if (!this.$refs.yoyChartCanvas) return;
+      if (this.yoyChart) this.yoyChart.destroy();
+
+      const filtered = this.filterMonthlyData();
+      if (!filtered.length) return;
+
+      // Group expenses by year and month number
+      const yearData = {};
+      for (const row of filtered) {
+        if (row.flow_direction !== 'expense') continue;
+        const [year, monthNum] = row.month.split('-');
+        if (!yearData[year]) yearData[year] = {};
+        yearData[year][monthNum] = (yearData[year][monthNum] || 0) + Number(row.total_absolute);
+      }
+
+      const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthNums = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+      const years = Object.keys(yearData).sort();
+      const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#6f42c1', '#17a2b8'];
+
+      const datasets = years.map((year, i) => ({
+        label: year,
+        data: monthNums.map(m => yearData[year][m] || 0),
+        borderColor: colors[i % colors.length],
+        backgroundColor: colors[i % colors.length] + '20',
+        fill: false,
+        tension: 0.3,
+        pointRadius: 3,
+      }));
+
+      this.yoyChart = new Chart(this.$refs.yoyChartCanvas, {
+        type: 'line',
+        data: { labels: monthLabels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { y: { beginAtZero: true } },
+          interaction: { mode: 'index', intersect: false },
         },
       });
     },
@@ -487,7 +584,8 @@ export default {
     this.loadMonthly();
   },
   beforeUnmount() {
-    if (this.chart) this.chart.destroy();
+    if (this.recentChart) this.recentChart.destroy();
+    if (this.yoyChart) this.yoyChart.destroy();
   },
 };
 </script>
@@ -966,6 +1064,36 @@ td.expense { color: #dc3545; }
 
 .text-error {
   color: #dc3545;
+}
+
+/* Chart controls */
+.chart-controls {
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  margin-bottom: var(--space-lg);
+}
+
+.section h4 {
+  margin: var(--space-sm) 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
 }
 
 @media (max-width: 767px) {
