@@ -140,9 +140,11 @@
       </div>
     </div>
 
-    <!-- Active Filter Bar -->
+    <!-- Sticky Filter Bar -->
     <div class="filter-bar" v-if="hasActiveFilters">
-      <span class="filter-bar-label">Active filters:</span>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="filter-bar-icon">
+        <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+      </svg>
       <span v-if="chartFilter && chartFilter.type === 'year'" class="filter-chip" @click="clearChartFilter">
         Year: {{ chartFilter.value }} <span class="chip-x">&times;</span>
       </span>
@@ -450,7 +452,7 @@ export default {
       this.currentPage = 1;
       this.loadTransactions();
       this.loadOutliers();
-      this.$nextTick(() => this.renderCharts());
+      setTimeout(() => this.renderCharts(), 0);
     },
     clearChartFilter() {
       this.chartFilter = null;
@@ -460,7 +462,7 @@ export default {
       this.currentPage = 1;
       this.loadTransactions();
       this.loadOutliers();
-      this.$nextTick(() => this.renderCharts());
+      setTimeout(() => this.renderCharts(), 0);
     },
     removeFilter(type) {
       if (type === 'bank') {
@@ -471,7 +473,7 @@ export default {
       this.currentPage = 1;
       this.loadTransactions();
       this.loadOutliers();
-      this.$nextTick(() => this.renderCharts());
+      setTimeout(() => this.renderCharts(), 0);
     },
     clearAllFilters() {
       this.chartFilter = null;
@@ -483,13 +485,13 @@ export default {
       this.currentPage = 1;
       this.loadTransactions();
       this.loadOutliers();
-      this.$nextTick(() => this.renderCharts());
+      setTimeout(() => this.renderCharts(), 0);
     },
     async loadMonthly() {
       try {
         const res = await axios.get('/api/finance/summary/monthly', { headers: this.authHeaders });
         this.monthlyData = res.data;
-        this.$nextTick(() => this.renderCharts());
+        setTimeout(() => this.renderCharts(), 0);
       } catch (err) {
         console.error('Failed to load monthly data:', err);
       }
@@ -1408,63 +1410,78 @@ td.expense { color: #dc3545; }
   padding-top: 8px;
 }
 
-/* Filter bar */
+/* Sticky filter bar */
 .filter-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
   flex-wrap: wrap;
   width: 100%;
-  padding: 8px 14px;
+  padding: var(--space-xs) var(--space-md);
   margin-bottom: var(--space-lg);
-  background: #e3f2fd;
-  border: 1px solid #90caf9;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  color: #1565c0;
+  background: var(--surface-card, #424242);
+  border: 1px solid var(--border-card, #ffb300);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--text-on-dark, #fff);
+  box-shadow: var(--shadow-md);
 }
 
-.filter-bar-label {
-  font-weight: 600;
-  margin-right: 2px;
+.filter-bar-icon {
+  color: var(--brand-primary, #ffb300);
+  flex-shrink: 0;
 }
 
 .filter-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 10px;
-  background: #fff;
-  border: 1px solid #90caf9;
-  border-radius: 16px;
+  padding: 2px 10px;
+  background: var(--surface-card-inner, rgba(0,0,0,0.3));
+  border: 1px solid var(--brand-primary-alpha, rgba(255,179,0,0.5));
+  border-radius: var(--radius-pill);
+  color: var(--brand-primary, #ffb300);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
   user-select: none;
+  font-weight: 600;
+  font-size: var(--text-sm);
 }
 
 .filter-chip:hover {
-  background: #bbdefb;
+  background: rgba(255, 179, 0, 0.15);
+  border-color: var(--brand-primary, #ffb300);
 }
 
 .chip-x {
   font-size: 1.1em;
   font-weight: 700;
   line-height: 1;
+  opacity: 0.7;
+}
+
+.filter-chip:hover .chip-x {
+  opacity: 1;
 }
 
 .btn-clear-all {
   margin-left: auto;
   background: none;
-  border: 1px solid #90caf9;
-  border-radius: 4px;
-  padding: 3px 10px;
-  font-size: 0.8rem;
-  color: #1565c0;
+  border: 1px solid var(--border-subtle, #ccc);
+  border-radius: var(--radius-sm);
+  padding: 2px 10px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
   cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .btn-clear-all:hover {
-  background: #bbdefb;
+  color: var(--brand-primary, #ffb300);
+  border-color: var(--brand-primary, #ffb300);
 }
 
 /* Outliers */
