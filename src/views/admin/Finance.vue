@@ -230,7 +230,7 @@
         </label>
       </div>
 
-      <h4>Last 12 Months</h4>
+      <h4>{{ chartPeriodLabel }}</h4>
       <div class="chart-container">
         <canvas ref="recentChartCanvas" height="300"></canvas>
       </div>
@@ -245,7 +245,7 @@
         <canvas ref="yoyIncomeCanvas" height="350"></canvas>
       </div>
 
-      <h4>Expenses by Category (Last 12 Months)</h4>
+      <h4>Expenses by Category ({{ chartPeriodLabel }})</h4>
       <div class="chart-container pie-container">
         <canvas ref="categoryPieCanvas" height="350"></canvas>
       </div>
@@ -376,6 +376,12 @@ export default {
     hasActiveFilters() {
       return !!(this.chartFilter || this.filterBank || this.filterSearch);
     },
+    chartPeriodLabel() {
+      if (!this.chartFilter) return 'Last 12 Months';
+      if (this.chartFilter.type === 'year') return this.chartFilter.value;
+      if (this.chartFilter.type === 'month') return this.chartFilter.value;
+      return 'Last 12 Months';
+    },
   },
   methods: {
     async loadOverview() {
@@ -452,7 +458,7 @@ export default {
       this.currentPage = 1;
       this.loadTransactions();
       this.loadOutliers();
-      setTimeout(() => this.renderCharts(), 0);
+      this.scheduleRenderCharts();
     },
     clearChartFilter() {
       this.chartFilter = null;
@@ -462,7 +468,7 @@ export default {
       this.currentPage = 1;
       this.loadTransactions();
       this.loadOutliers();
-      setTimeout(() => this.renderCharts(), 0);
+      this.scheduleRenderCharts();
     },
     removeFilter(type) {
       if (type === 'bank') {
@@ -473,7 +479,7 @@ export default {
       this.currentPage = 1;
       this.loadTransactions();
       this.loadOutliers();
-      setTimeout(() => this.renderCharts(), 0);
+      this.scheduleRenderCharts();
     },
     clearAllFilters() {
       this.chartFilter = null;
@@ -485,13 +491,13 @@ export default {
       this.currentPage = 1;
       this.loadTransactions();
       this.loadOutliers();
-      setTimeout(() => this.renderCharts(), 0);
+      this.scheduleRenderCharts();
     },
     async loadMonthly() {
       try {
         const res = await axios.get('/api/finance/summary/monthly', { headers: this.authHeaders });
         this.monthlyData = res.data;
-        setTimeout(() => this.renderCharts(), 0);
+        this.scheduleRenderCharts();
       } catch (err) {
         console.error('Failed to load monthly data:', err);
       }
@@ -641,6 +647,13 @@ export default {
         }
         return true;
       });
+    },
+    scheduleRenderCharts() {
+      if (this._renderTimeout) clearTimeout(this._renderTimeout);
+      this._renderTimeout = setTimeout(() => {
+        this._renderTimeout = null;
+        this.renderCharts();
+      }, 60);
     },
     renderCharts() {
       this.renderRecentChart();
@@ -882,6 +895,7 @@ export default {
     this.loadOutliers();
   },
   beforeUnmount() {
+    if (this._renderTimeout) clearTimeout(this._renderTimeout);
     if (this.recentChart) this.recentChart.destroy();
     if (this.yoyExpenseChart) this.yoyExpenseChart.destroy();
     if (this.yoyIncomeChart) this.yoyIncomeChart.destroy();
