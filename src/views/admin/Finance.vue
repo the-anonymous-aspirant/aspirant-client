@@ -624,12 +624,12 @@ export default {
         this.loadTransactions();
       }
     },
-    filterMonthlyData(skipYearFilter = false) {
+    filterMonthlyData(skipFilterType = null) {
       return this.monthlyData.filter(row => {
         if (this.excludeInternalTransfers && this.internalCategories.includes(row.category)) return false;
         if (this.chartCategory && row.category !== this.chartCategory) return false;
-        if (this.chartFilter) {
-          if (this.chartFilter.type === 'year' && !skipYearFilter) {
+        if (this.chartFilter && this.chartFilter.type !== skipFilterType) {
+          if (this.chartFilter.type === 'year') {
             if (!row.month.startsWith(this.chartFilter.value)) return false;
           } else if (this.chartFilter.type === 'month') {
             if (row.month !== this.chartFilter.value) return false;
@@ -650,7 +650,8 @@ export default {
       if (!this.$refs.recentChartCanvas) return;
       if (this.recentChart) this.recentChart.destroy();
 
-      const filtered = this.filterMonthlyData();
+      // Skip month filter so bar chart always shows all months
+      const filtered = this.filterMonthlyData('month');
       if (!filtered.length) return;
 
       // Aggregate income and expenses per month
@@ -667,6 +668,7 @@ export default {
       // Get last 12 months sorted
       const allMonths = [...new Set([...Object.keys(incomeMap), ...Object.keys(expenseMap)])].sort();
       const recent = allMonths.slice(-12);
+      const selectedMonth = this.chartFilter?.type === 'month' ? this.chartFilter.value : null;
 
       const vm = this;
       this.recentChart = new Chart(this.$refs.recentChartCanvas, {
@@ -677,15 +679,23 @@ export default {
             {
               label: 'Income',
               data: recent.map(m => incomeMap[m] || 0),
-              backgroundColor: 'rgba(40, 167, 69, 0.6)',
-              borderColor: 'rgba(40, 167, 69, 1)',
+              backgroundColor: recent.map(m =>
+                selectedMonth && m !== selectedMonth ? 'rgba(40, 167, 69, 0.15)' : 'rgba(40, 167, 69, 0.6)'
+              ),
+              borderColor: recent.map(m =>
+                selectedMonth && m !== selectedMonth ? 'rgba(40, 167, 69, 0.3)' : 'rgba(40, 167, 69, 1)'
+              ),
               borderWidth: 1,
             },
             {
               label: 'Expenses',
               data: recent.map(m => expenseMap[m] || 0),
-              backgroundColor: 'rgba(220, 53, 69, 0.6)',
-              borderColor: 'rgba(220, 53, 69, 1)',
+              backgroundColor: recent.map(m =>
+                selectedMonth && m !== selectedMonth ? 'rgba(220, 53, 69, 0.15)' : 'rgba(220, 53, 69, 0.6)'
+              ),
+              borderColor: recent.map(m =>
+                selectedMonth && m !== selectedMonth ? 'rgba(220, 53, 69, 0.3)' : 'rgba(220, 53, 69, 1)'
+              ),
               borderWidth: 1,
             },
           ],
@@ -707,7 +717,8 @@ export default {
       if (!this.$refs.categoryPieCanvas) return;
       if (this.categoryPieChart) this.categoryPieChart.destroy();
 
-      const filtered = this.filterMonthlyData();
+      // Skip category filter so pie always shows full breakdown
+      const filtered = this.filterMonthlyData('category');
       if (!filtered.length) return;
 
       // Get last 12 months of expenses by category
@@ -725,6 +736,7 @@ export default {
       const sorted = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
       const labels = sorted.map(([cat]) => cat);
       const data = sorted.map(([, val]) => Math.round(val));
+      const selectedCategory = this.chartFilter?.type === 'category' ? this.chartFilter.value : null;
 
       const palette = [
         '#dc3545', '#007bff', '#28a745', '#ffc107', '#6f42c1', '#17a2b8',
@@ -739,15 +751,25 @@ export default {
           labels,
           datasets: [{
             data,
-            backgroundColor: labels.map((_, i) => palette[i % palette.length]),
-            borderWidth: 1,
+            backgroundColor: labels.map((cat, i) => {
+              const base = palette[i % palette.length];
+              if (selectedCategory && cat !== selectedCategory) return base + '30';
+              return base;
+            }),
+            borderWidth: labels.map(cat => selectedCategory && cat === selectedCategory ? 3 : 1),
           }],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { position: 'right', labels: { boxWidth: 14, font: { size: 12 } } },
+            legend: {
+              position: 'right',
+              labels: { boxWidth: 14, font: { size: 12 } },
+              onClick(e, legendItem) {
+                pieVm.applyChartFilter('category', labels[legendItem.index]);
+              },
+            },
           },
           onClick(event, elements) {
             if (elements.length > 0) {
@@ -767,7 +789,7 @@ export default {
       if (this[chartProp]) this[chartProp].destroy();
 
       // Skip year filter so YoY still shows all years
-      const filtered = this.filterMonthlyData(true);
+      const filtered = this.filterMonthlyData('year');
       if (!filtered.length) return;
 
       const yearData = {};
