@@ -356,7 +356,7 @@ export default {
     },
     chartFilterLabel() {
       if (!this.chartFilter) return '';
-      if (this.chartFilter.type === 'month') return this.chartFilter.value;
+      if (this.chartFilter.type === 'year') return `Year ${this.chartFilter.value}`;
       return this.chartFilter.value;
     },
   },
@@ -411,7 +411,6 @@ export default {
       }
       this.chartFilter = { type, value };
       if (type === 'month') {
-        // value is "YYYY-MM", set date range to that month
         const [y, m] = value.split('-');
         this.filterDateFrom = `${y}-${m}-01`;
         const lastDay = new Date(Number(y), Number(m), 0).getDate();
@@ -421,9 +420,14 @@ export default {
         this.filterCategory = value;
         this.filterDateFrom = '';
         this.filterDateTo = '';
+      } else if (type === 'year') {
+        this.filterDateFrom = `${value}-01-01`;
+        this.filterDateTo = `${value}-12-31`;
+        this.filterCategory = '';
       }
       this.currentPage = 1;
       this.loadTransactions();
+      this.renderCharts();
     },
     clearChartFilter() {
       this.chartFilter = null;
@@ -432,6 +436,7 @@ export default {
       this.filterCategory = '';
       this.currentPage = 1;
       this.loadTransactions();
+      this.renderCharts();
     },
     async loadMonthly() {
       try {
@@ -572,10 +577,19 @@ export default {
         this.loadTransactions();
       }
     },
-    filterMonthlyData() {
+    filterMonthlyData(skipYearFilter = false) {
       return this.monthlyData.filter(row => {
         if (this.excludeInternalTransfers && this.internalCategories.includes(row.category)) return false;
         if (this.chartCategory && row.category !== this.chartCategory) return false;
+        if (this.chartFilter) {
+          if (this.chartFilter.type === 'year' && !skipYearFilter) {
+            if (!row.month.startsWith(this.chartFilter.value)) return false;
+          } else if (this.chartFilter.type === 'month') {
+            if (row.month !== this.chartFilter.value) return false;
+          } else if (this.chartFilter.type === 'category') {
+            if (row.category !== this.chartFilter.value) return false;
+          }
+        }
         return true;
       });
     },
@@ -705,7 +719,8 @@ export default {
       if (!this.$refs[canvasRef]) return;
       if (this[chartProp]) this[chartProp].destroy();
 
-      const filtered = this.filterMonthlyData();
+      // Skip year filter so YoY still shows all years
+      const filtered = this.filterMonthlyData(true);
       if (!filtered.length) return;
 
       const yearData = {};
@@ -723,17 +738,20 @@ export default {
       const totalYears = years.length;
       const currentYear = String(new Date().getFullYear());
       const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
+      const selectedYear = this.chartFilter?.type === 'year' ? this.chartFilter.value : null;
 
+      const vm = this;
       const datasets = years.map((year, i) => {
         const age = totalYears - 1 - i;
-        const opacity = age === 0 ? 1.0 : Math.max(0.15, 0.6 - age * 0.12);
-        const lineWidth = age === 0 ? 3 : Math.max(1, 2 - age * 0.3);
-        const radius = age === 0 ? 4 : Math.max(1, 2.5 - age * 0.5);
+        const isSelected = selectedYear === year;
+        const isDimmed = selectedYear && !isSelected;
+        const opacity = isDimmed ? 0.1 : (age === 0 ? 1.0 : Math.max(0.15, 0.6 - age * 0.12));
+        const lineWidth = isSelected ? 3.5 : (isDimmed ? 1 : (age === 0 ? 3 : Math.max(1, 2 - age * 0.3)));
+        const radius = isSelected ? 5 : (isDimmed ? 0 : (age === 0 ? 4 : Math.max(1, 2.5 - age * 0.5)));
         const [r, g, b] = baseColor;
         return {
           label: year,
           data: monthNums.map(m => {
-            // For the current year, use null for months beyond the current month
             if (year === currentYear && m > currentMonth) return null;
             return yearData[year][m] || 0;
           }),
@@ -755,6 +773,12 @@ export default {
           maintainAspectRatio: false,
           scales: { y: { beginAtZero: true } },
           interaction: { mode: 'index', intersect: false },
+          onClick(event, elements) {
+            if (elements.length > 0) {
+              const dsIndex = elements[0].datasetIndex;
+              vm.applyChartFilter('year', years[dsIndex]);
+            }
+          },
         },
       });
     },
