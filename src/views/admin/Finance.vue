@@ -767,7 +767,21 @@ export default {
           plugins: {
             legend: {
               position: 'right',
-              labels: { boxWidth: 14, font: { size: 12 } },
+              labels: {
+                boxWidth: 14,
+                font: { size: 12 },
+                generateLabels(chart) {
+                  const ds = chart.data.datasets[0];
+                  return chart.data.labels.map((label, i) => ({
+                    text: `${label}  €${data[i].toLocaleString('de-DE')}`,
+                    fillStyle: ds.backgroundColor[i],
+                    strokeStyle: ds.backgroundColor[i],
+                    lineWidth: ds.borderWidth[i] || 1,
+                    index: i,
+                    hidden: false,
+                  }));
+                },
+              },
               onClick(e, legendItem) {
                 pieVm.applyChartFilter('category', labels[legendItem.index]);
               },
