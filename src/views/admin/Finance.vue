@@ -143,6 +143,10 @@
     <!-- Filters -->
     <div class="section">
       <h3>Transactions</h3>
+      <div v-if="chartFilter" class="chart-filter-banner">
+        Filtered by chart: <strong>{{ chartFilterLabel }}</strong>
+        <button class="btn-clear" @click="clearChartFilter">Clear</button>
+      </div>
       <div class="filters-row">
         <select v-model="filterBank" @change="resetAndLoad" class="select-input">
           <option value="">All banks</option>
@@ -225,6 +229,41 @@
       <h4>Expenses by Category (Last 12 Months)</h4>
       <div class="chart-container pie-container">
         <canvas ref="categoryPieCanvas" height="350"></canvas>
+      </div>
+    </div>
+
+    <!-- Top Outliers -->
+    <div class="section" v-if="outliers">
+      <h3>Notable Transactions</h3>
+      <div class="outliers-grid">
+        <div class="outlier-col" v-if="outliers.top_expenses.length">
+          <h4>Largest Expenses</h4>
+          <table class="recurring-table">
+            <thead><tr><th>Date</th><th>Payee</th><th>Amount (EUR)</th><th>Category</th></tr></thead>
+            <tbody>
+              <tr v-for="(t, i) in outliers.top_expenses" :key="'exp-' + i">
+                <td class="text-muted">{{ t.transaction_date }}</td>
+                <td>{{ t.payee }}</td>
+                <td class="expense">{{ formatAmount(Math.abs(t.amount_eur)) }}</td>
+                <td><span class="category-tag">{{ t.category || 'other' }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="outlier-col" v-if="outliers.top_income.length">
+          <h4>Largest Income</h4>
+          <table class="recurring-table">
+            <thead><tr><th>Date</th><th>Payee</th><th>Amount (EUR)</th><th>Category</th></tr></thead>
+            <tbody>
+              <tr v-for="(t, i) in outliers.top_income" :key="'inc-' + i">
+                <td class="text-muted">{{ t.transaction_date }}</td>
+                <td>{{ t.payee }}</td>
+                <td class="income">{{ formatAmount(t.amount_eur) }}</td>
+                <td><span class="category-tag">{{ t.category || 'other' }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -354,8 +393,11 @@ export default {
       importLocalResult: null,
       reEnriching: false,
       reEnrichResult: '',
-      // Recurring
+      // Recurring & outliers
       recurring: null,
+      outliers: null,
+      // Chart cross-filter
+      chartFilter: null, // { type: 'month'|'category', value: string }
       // Charts
       recentChart: null,
       yoyExpenseChart: null,
@@ -379,6 +421,11 @@ export default {
     },
     internalCategories() {
       return ['internal_transfer', 'transfers'];
+    },
+    chartFilterLabel() {
+      if (!this.chartFilter) return '';
+      if (this.chartFilter.type === 'month') return this.chartFilter.value;
+      return this.chartFilter.value;
     },
   },
   methods: {
@@ -415,6 +462,44 @@ export default {
       } catch (err) {
         console.error('Failed to load transactions:', err);
       }
+    },
+    async loadOutliers() {
+      try {
+        const res = await axios.get('/api/finance/summary/outliers', { headers: this.authHeaders });
+        this.outliers = res.data;
+      } catch (err) {
+        console.error('Failed to load outliers:', err);
+      }
+    },
+    applyChartFilter(type, value) {
+      // Toggle off if same filter clicked again
+      if (this.chartFilter && this.chartFilter.type === type && this.chartFilter.value === value) {
+        this.clearChartFilter();
+        return;
+      }
+      this.chartFilter = { type, value };
+      if (type === 'month') {
+        // value is "YYYY-MM", set date range to that month
+        const [y, m] = value.split('-');
+        this.filterDateFrom = `${y}-${m}-01`;
+        const lastDay = new Date(Number(y), Number(m), 0).getDate();
+        this.filterDateTo = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+        this.filterCategory = '';
+      } else if (type === 'category') {
+        this.filterCategory = value;
+        this.filterDateFrom = '';
+        this.filterDateTo = '';
+      }
+      this.currentPage = 1;
+      this.loadTransactions();
+    },
+    clearChartFilter() {
+      this.chartFilter = null;
+      this.filterDateFrom = '';
+      this.filterDateTo = '';
+      this.filterCategory = '';
+      this.currentPage = 1;
+      this.loadTransactions();
     },
     async loadRecurring() {
       try {
@@ -601,6 +686,7 @@ export default {
       const allMonths = [...new Set([...Object.keys(incomeMap), ...Object.keys(expenseMap)])].sort();
       const recent = allMonths.slice(-12);
 
+      const vm = this;
       this.recentChart = new Chart(this.$refs.recentChartCanvas, {
         type: 'bar',
         data: {
@@ -626,6 +712,12 @@ export default {
           responsive: true,
           maintainAspectRatio: false,
           scales: { y: { beginAtZero: true } },
+          onClick(event, elements) {
+            if (elements.length > 0) {
+              const idx = elements[0].index;
+              vm.applyChartFilter('month', recent[idx]);
+            }
+          },
         },
       });
     },
@@ -658,6 +750,7 @@ export default {
         '#795548', '#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff',
       ];
 
+      const pieVm = this;
       this.categoryPieChart = new Chart(this.$refs.categoryPieCanvas, {
         type: 'doughnut',
         data: {
@@ -673,6 +766,12 @@ export default {
           maintainAspectRatio: false,
           plugins: {
             legend: { position: 'right', labels: { boxWidth: 14, font: { size: 12 } } },
+          },
+          onClick(event, elements) {
+            if (elements.length > 0) {
+              const idx = elements[0].index;
+              pieVm.applyChartFilter('category', labels[idx]);
+            }
           },
         },
       });
@@ -738,6 +837,7 @@ export default {
     this.loadTransactions();
     this.loadMonthly();
     this.loadRecurring();
+    this.loadOutliers();
   },
   beforeUnmount() {
     if (this.recentChart) this.recentChart.destroy();
@@ -1286,6 +1386,46 @@ td.expense { color: #dc3545; }
   padding-top: 8px;
 }
 
+/* Chart filter banner */
+.chart-filter-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 6px 12px;
+  margin-bottom: var(--space-sm);
+  background: #e3f2fd;
+  border: 1px solid #90caf9;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #1565c0;
+}
+
+.btn-clear {
+  margin-left: auto;
+  background: none;
+  border: 1px solid #90caf9;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  color: #1565c0;
+  cursor: pointer;
+}
+
+.btn-clear:hover {
+  background: #bbdefb;
+}
+
+/* Outliers */
+.outliers-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+}
+
+.outlier-col h4 {
+  margin-bottom: var(--space-sm);
+}
+
 @media (max-width: 767px) {
   .finance-view {
     padding: var(--space-md) var(--space-sm);
@@ -1303,6 +1443,9 @@ td.expense { color: #dc3545; }
   .schema-props {
     flex-direction: column;
     gap: var(--space-xs);
+  }
+  .outliers-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
