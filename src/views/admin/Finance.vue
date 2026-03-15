@@ -221,6 +221,78 @@
       <div class="chart-container">
         <canvas ref="yoyIncomeCanvas" height="350"></canvas>
       </div>
+
+      <h4>Expenses by Category (Last 12 Months)</h4>
+      <div class="chart-container pie-container">
+        <canvas ref="categoryPieCanvas" height="350"></canvas>
+      </div>
+    </div>
+
+    <!-- Recurring Expenses -->
+    <div class="section" v-if="recurring">
+      <h3>Recurring Expenses</h3>
+
+      <div v-if="recurring.monthly.length" class="recurring-group">
+        <h4>Monthly</h4>
+        <table class="recurring-table">
+          <thead>
+            <tr><th>Payee</th><th>Category</th><th>Avg / Month (EUR)</th><th>Last</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in recurring.monthly" :key="'m-' + r.payee">
+              <td>{{ r.payee }}</td>
+              <td><span class="category-tag">{{ r.category || 'other' }}</span></td>
+              <td class="expense">{{ formatAmount(r.avg_amount_eur) }}</td>
+              <td class="text-muted">{{ r.last_date }}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr class="total-row">
+              <td colspan="2"><strong>Total monthly</strong></td>
+              <td class="expense"><strong>{{ formatAmount(sumRecurring(recurring.monthly)) }}</strong></td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div v-if="recurring.weekly.length" class="recurring-group">
+        <h4>Weekly</h4>
+        <table class="recurring-table">
+          <thead>
+            <tr><th>Payee</th><th>Category</th><th>Avg / Week (EUR)</th><th>Last</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in recurring.weekly" :key="'w-' + r.payee">
+              <td>{{ r.payee }}</td>
+              <td><span class="category-tag">{{ r.category || 'other' }}</span></td>
+              <td class="expense">{{ formatAmount(r.avg_amount_eur) }}</td>
+              <td class="text-muted">{{ r.last_date }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-if="recurring.yearly.length" class="recurring-group">
+        <h4>Yearly</h4>
+        <table class="recurring-table">
+          <thead>
+            <tr><th>Payee</th><th>Category</th><th>Avg / Year (EUR)</th><th>Last</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in recurring.yearly" :key="'y-' + r.payee">
+              <td>{{ r.payee }}</td>
+              <td><span class="category-tag">{{ r.category || 'other' }}</span></td>
+              <td class="expense">{{ formatAmount(r.avg_amount_eur) }}</td>
+              <td class="text-muted">{{ r.last_date }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-if="!recurring.monthly.length && !recurring.weekly.length && !recurring.yearly.length" class="empty-state">
+        No recurring expenses detected.
+      </div>
     </div>
 
     <!-- Actions -->
@@ -282,10 +354,13 @@ export default {
       importLocalResult: null,
       reEnriching: false,
       reEnrichResult: '',
+      // Recurring
+      recurring: null,
       // Charts
       recentChart: null,
       yoyExpenseChart: null,
       yoyIncomeChart: null,
+      categoryPieChart: null,
       chartCategory: '',
       excludeInternalTransfers: true,
       searchTimeout: null,
@@ -340,6 +415,17 @@ export default {
       } catch (err) {
         console.error('Failed to load transactions:', err);
       }
+    },
+    async loadRecurring() {
+      try {
+        const res = await axios.get('/api/finance/summary/recurring', { headers: this.authHeaders });
+        this.recurring = res.data;
+      } catch (err) {
+        console.error('Failed to load recurring:', err);
+      }
+    },
+    sumRecurring(items) {
+      return items.reduce((sum, r) => sum + Number(r.avg_amount_eur), 0);
     },
     async loadMonthly() {
       try {
@@ -491,6 +577,7 @@ export default {
       this.renderRecentChart();
       this.renderYoyChart('expense');
       this.renderYoyChart('income');
+      this.renderCategoryPie();
     },
     renderRecentChart() {
       if (!this.$refs.recentChartCanvas) return;
@@ -539,6 +626,54 @@ export default {
           responsive: true,
           maintainAspectRatio: false,
           scales: { y: { beginAtZero: true } },
+        },
+      });
+    },
+    renderCategoryPie() {
+      if (!this.$refs.categoryPieCanvas) return;
+      if (this.categoryPieChart) this.categoryPieChart.destroy();
+
+      const filtered = this.filterMonthlyData();
+      if (!filtered.length) return;
+
+      // Get last 12 months of expenses by category
+      const allMonths = [...new Set(filtered.map(r => r.month))].sort();
+      const recent12 = new Set(allMonths.slice(-12));
+
+      const catTotals = {};
+      for (const row of filtered) {
+        if (row.flow_direction !== 'expense') continue;
+        if (!recent12.has(row.month)) continue;
+        const cat = row.category || 'other';
+        catTotals[cat] = (catTotals[cat] || 0) + Number(row.total_absolute);
+      }
+
+      const sorted = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+      const labels = sorted.map(([cat]) => cat);
+      const data = sorted.map(([, val]) => Math.round(val));
+
+      const palette = [
+        '#dc3545', '#007bff', '#28a745', '#ffc107', '#6f42c1', '#17a2b8',
+        '#fd7e14', '#20c997', '#e83e8c', '#6610f2', '#343a40', '#adb5bd',
+        '#795548', '#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff',
+      ];
+
+      this.categoryPieChart = new Chart(this.$refs.categoryPieCanvas, {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: labels.map((_, i) => palette[i % palette.length]),
+            borderWidth: 1,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'right', labels: { boxWidth: 14, font: { size: 12 } } },
+          },
         },
       });
     },
@@ -602,11 +737,13 @@ export default {
     this.loadSources();
     this.loadTransactions();
     this.loadMonthly();
+    this.loadRecurring();
   },
   beforeUnmount() {
     if (this.recentChart) this.recentChart.destroy();
     if (this.yoyExpenseChart) this.yoyExpenseChart.destroy();
     if (this.yoyIncomeChart) this.yoyIncomeChart.destroy();
+    if (this.categoryPieChart) this.categoryPieChart.destroy();
   },
 };
 </script>
@@ -1115,6 +1252,38 @@ td.expense { color: #dc3545; }
   margin: var(--space-sm) 0;
   color: var(--text-muted);
   font-size: 0.95rem;
+}
+
+.pie-container {
+  max-width: 600px;
+}
+
+/* Recurring expenses */
+.recurring-group {
+  margin-bottom: var(--space-lg);
+}
+
+.recurring-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.recurring-table th,
+.recurring-table td {
+  padding: 6px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color, #eee);
+}
+
+.recurring-table th {
+  font-weight: 600;
+  background: var(--bg-card, #f8f9fa);
+}
+
+.total-row td {
+  border-top: 2px solid var(--border-color, #ccc);
+  padding-top: 8px;
 }
 
 @media (max-width: 767px) {
