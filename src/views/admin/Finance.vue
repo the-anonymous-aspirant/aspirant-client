@@ -773,10 +773,16 @@ export default {
           maintainAspectRatio: false,
           scales: { y: { beginAtZero: true } },
           interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              onClick(e, legendItem) {
+                vm.applyChartFilter('year', years[legendItem.datasetIndex]);
+              },
+            },
+          },
           onClick(event, elements) {
             if (elements.length > 0) {
-              const dsIndex = elements[0].datasetIndex;
-              vm.applyChartFilter('year', years[dsIndex]);
+              vm.applyChartFilter('year', years[elements[0].datasetIndex]);
             }
           },
         },
