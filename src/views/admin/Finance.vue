@@ -140,13 +140,30 @@
       </div>
     </div>
 
+    <!-- Active Filter Bar -->
+    <div class="filter-bar" v-if="hasActiveFilters">
+      <span class="filter-bar-label">Active filters:</span>
+      <span v-if="chartFilter && chartFilter.type === 'year'" class="filter-chip" @click="clearChartFilter">
+        Year: {{ chartFilter.value }} <span class="chip-x">&times;</span>
+      </span>
+      <span v-if="chartFilter && chartFilter.type === 'month'" class="filter-chip" @click="clearChartFilter">
+        Month: {{ chartFilter.value }} <span class="chip-x">&times;</span>
+      </span>
+      <span v-if="chartFilter && chartFilter.type === 'category'" class="filter-chip" @click="clearChartFilter">
+        Category: {{ chartFilter.value }} <span class="chip-x">&times;</span>
+      </span>
+      <span v-if="filterBank" class="filter-chip" @click="removeFilter('bank')">
+        Bank: {{ filterBank.toUpperCase() }} <span class="chip-x">&times;</span>
+      </span>
+      <span v-if="filterSearch" class="filter-chip" @click="removeFilter('search')">
+        Search: "{{ filterSearch }}" <span class="chip-x">&times;</span>
+      </span>
+      <button class="btn-clear-all" @click="clearAllFilters">Clear all</button>
+    </div>
+
     <!-- Filters -->
     <div class="section">
       <h3>Transactions</h3>
-      <div v-if="chartFilter" class="chart-filter-banner">
-        Filtered by chart: <strong>{{ chartFilterLabel }}</strong>
-        <button class="btn-clear" @click="clearChartFilter">Clear</button>
-      </div>
       <div class="filters-row">
         <select v-model="filterBank" @change="resetAndLoad" class="select-input">
           <option value="">All banks</option>
@@ -354,10 +371,8 @@ export default {
     internalCategories() {
       return ['internal_transfer', 'transfers'];
     },
-    chartFilterLabel() {
-      if (!this.chartFilter) return '';
-      if (this.chartFilter.type === 'year') return `Year ${this.chartFilter.value}`;
-      return this.chartFilter.value;
+    hasActiveFilters() {
+      return !!(this.chartFilter || this.filterBank || this.filterSearch);
     },
   },
   methods: {
@@ -397,7 +412,14 @@ export default {
     },
     async loadOutliers() {
       try {
-        const res = await axios.get('/api/finance/summary/outliers', { headers: this.authHeaders });
+        const params = new URLSearchParams();
+        if (this.filterBank) params.set('bank', this.filterBank);
+        if (this.filterCategory) params.set('category', this.filterCategory);
+        if (this.filterDateFrom) params.set('date_from', this.filterDateFrom);
+        if (this.filterDateTo) params.set('date_to', this.filterDateTo);
+        const qs = params.toString();
+        const url = qs ? `/api/finance/summary/outliers?${qs}` : '/api/finance/summary/outliers';
+        const res = await axios.get(url, { headers: this.authHeaders });
         this.outliers = res.data;
       } catch (err) {
         console.error('Failed to load outliers:', err);
@@ -427,7 +449,8 @@ export default {
       }
       this.currentPage = 1;
       this.loadTransactions();
-      this.renderCharts();
+      this.loadOutliers();
+      this.$nextTick(() => this.renderCharts());
     },
     clearChartFilter() {
       this.chartFilter = null;
@@ -436,7 +459,31 @@ export default {
       this.filterCategory = '';
       this.currentPage = 1;
       this.loadTransactions();
-      this.renderCharts();
+      this.loadOutliers();
+      this.$nextTick(() => this.renderCharts());
+    },
+    removeFilter(type) {
+      if (type === 'bank') {
+        this.filterBank = '';
+      } else if (type === 'search') {
+        this.filterSearch = '';
+      }
+      this.currentPage = 1;
+      this.loadTransactions();
+      this.loadOutliers();
+      this.$nextTick(() => this.renderCharts());
+    },
+    clearAllFilters() {
+      this.chartFilter = null;
+      this.filterBank = '';
+      this.filterCategory = '';
+      this.filterDateFrom = '';
+      this.filterDateTo = '';
+      this.filterSearch = '';
+      this.currentPage = 1;
+      this.loadTransactions();
+      this.loadOutliers();
+      this.$nextTick(() => this.renderCharts());
     },
     async loadMonthly() {
       try {
@@ -1339,32 +1386,62 @@ td.expense { color: #dc3545; }
   padding-top: 8px;
 }
 
-/* Chart filter banner */
-.chart-filter-banner {
+/* Filter bar */
+.filter-bar {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: 6px 12px;
-  margin-bottom: var(--space-sm);
+  flex-wrap: wrap;
+  width: 100%;
+  padding: 8px 14px;
+  margin-bottom: var(--space-lg);
   background: #e3f2fd;
   border: 1px solid #90caf9;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.85rem;
   color: #1565c0;
 }
 
-.btn-clear {
+.filter-bar-label {
+  font-weight: 600;
+  margin-right: 2px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: #fff;
+  border: 1px solid #90caf9;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.filter-chip:hover {
+  background: #bbdefb;
+}
+
+.chip-x {
+  font-size: 1.1em;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.btn-clear-all {
   margin-left: auto;
   background: none;
   border: 1px solid #90caf9;
   border-radius: 4px;
-  padding: 2px 8px;
+  padding: 3px 10px;
   font-size: 0.8rem;
   color: #1565c0;
   cursor: pointer;
 }
 
-.btn-clear:hover {
+.btn-clear-all:hover {
   background: #bbdefb;
 }
 
