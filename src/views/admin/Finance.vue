@@ -653,7 +653,7 @@ export default {
       this._renderTimeout = setTimeout(() => {
         this._renderTimeout = null;
         this.renderCharts();
-      }, 60);
+      }, 0);
     },
     renderCharts() {
       this.renderRecentChart();
