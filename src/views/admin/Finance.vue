@@ -564,17 +564,26 @@ export default {
       const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const monthNums = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
       const years = Object.keys(yearData).sort();
-      const colors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#6f42c1', '#17a2b8'];
+      const baseColor = isExpense ? [220, 53, 69] : [40, 167, 69];
+      const totalYears = years.length;
 
-      const datasets = years.map((year, i) => ({
-        label: year,
-        data: monthNums.map(m => yearData[year][m] || 0),
-        borderColor: colors[i % colors.length],
-        backgroundColor: colors[i % colors.length] + '20',
-        fill: false,
-        tension: 0.3,
-        pointRadius: 3,
-      }));
+      const datasets = years.map((year, i) => {
+        const age = totalYears - 1 - i; // 0 = most recent, higher = older
+        const opacity = age === 0 ? 1.0 : Math.max(0.15, 0.6 - age * 0.12);
+        const lineWidth = age === 0 ? 3 : Math.max(1, 2 - age * 0.3);
+        const radius = age === 0 ? 4 : Math.max(1, 2.5 - age * 0.5);
+        const [r, g, b] = baseColor;
+        return {
+          label: year,
+          data: monthNums.map(m => yearData[year][m] || 0),
+          borderColor: `rgba(${r}, ${g}, ${b}, ${opacity})`,
+          backgroundColor: `rgba(${r}, ${g}, ${b}, ${opacity * 0.1})`,
+          fill: false,
+          tension: 0.3,
+          borderWidth: lineWidth,
+          pointRadius: radius,
+        };
+      });
 
       this[chartProp] = new Chart(this.$refs[canvasRef], {
         type: 'line',
