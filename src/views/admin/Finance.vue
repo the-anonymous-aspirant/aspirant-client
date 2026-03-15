@@ -267,73 +267,6 @@
       </div>
     </div>
 
-    <!-- Recurring Expenses -->
-    <div class="section" v-if="recurring">
-      <h3>Recurring Expenses</h3>
-
-      <div v-if="recurring.monthly.length" class="recurring-group">
-        <h4>Monthly</h4>
-        <table class="recurring-table">
-          <thead>
-            <tr><th>Payee</th><th>Category</th><th>Avg / Month (EUR)</th><th>Last</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="r in recurring.monthly" :key="'m-' + r.payee">
-              <td>{{ r.payee }}</td>
-              <td><span class="category-tag">{{ r.category || 'other' }}</span></td>
-              <td class="expense">{{ formatAmount(r.avg_amount_eur) }}</td>
-              <td class="text-muted">{{ r.last_date }}</td>
-            </tr>
-          </tbody>
-          <tfoot>
-            <tr class="total-row">
-              <td colspan="2"><strong>Total monthly</strong></td>
-              <td class="expense"><strong>{{ formatAmount(sumRecurring(recurring.monthly)) }}</strong></td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      <div v-if="recurring.weekly.length" class="recurring-group">
-        <h4>Weekly</h4>
-        <table class="recurring-table">
-          <thead>
-            <tr><th>Payee</th><th>Category</th><th>Avg / Week (EUR)</th><th>Last</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="r in recurring.weekly" :key="'w-' + r.payee">
-              <td>{{ r.payee }}</td>
-              <td><span class="category-tag">{{ r.category || 'other' }}</span></td>
-              <td class="expense">{{ formatAmount(r.avg_amount_eur) }}</td>
-              <td class="text-muted">{{ r.last_date }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div v-if="recurring.yearly.length" class="recurring-group">
-        <h4>Yearly</h4>
-        <table class="recurring-table">
-          <thead>
-            <tr><th>Payee</th><th>Category</th><th>Avg / Year (EUR)</th><th>Last</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="r in recurring.yearly" :key="'y-' + r.payee">
-              <td>{{ r.payee }}</td>
-              <td><span class="category-tag">{{ r.category || 'other' }}</span></td>
-              <td class="expense">{{ formatAmount(r.avg_amount_eur) }}</td>
-              <td class="text-muted">{{ r.last_date }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div v-if="!recurring.monthly.length && !recurring.weekly.length && !recurring.yearly.length" class="empty-state">
-        No recurring expenses detected.
-      </div>
-    </div>
-
     <!-- Actions -->
     <div class="section">
       <h3>Actions</h3>
@@ -393,8 +326,7 @@ export default {
       importLocalResult: null,
       reEnriching: false,
       reEnrichResult: '',
-      // Recurring & outliers
-      recurring: null,
+      // Outliers
       outliers: null,
       // Chart cross-filter
       chartFilter: null, // { type: 'month'|'category', value: string }
@@ -500,17 +432,6 @@ export default {
       this.filterCategory = '';
       this.currentPage = 1;
       this.loadTransactions();
-    },
-    async loadRecurring() {
-      try {
-        const res = await axios.get('/api/finance/summary/recurring', { headers: this.authHeaders });
-        this.recurring = res.data;
-      } catch (err) {
-        console.error('Failed to load recurring:', err);
-      }
-    },
-    sumRecurring(items) {
-      return items.reduce((sum, r) => sum + Number(r.avg_amount_eur), 0);
     },
     async loadMonthly() {
       try {
@@ -800,22 +721,29 @@ export default {
       const years = Object.keys(yearData).sort();
       const baseColor = isExpense ? [220, 53, 69] : [40, 167, 69];
       const totalYears = years.length;
+      const currentYear = String(new Date().getFullYear());
+      const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
 
       const datasets = years.map((year, i) => {
-        const age = totalYears - 1 - i; // 0 = most recent, higher = older
+        const age = totalYears - 1 - i;
         const opacity = age === 0 ? 1.0 : Math.max(0.15, 0.6 - age * 0.12);
         const lineWidth = age === 0 ? 3 : Math.max(1, 2 - age * 0.3);
         const radius = age === 0 ? 4 : Math.max(1, 2.5 - age * 0.5);
         const [r, g, b] = baseColor;
         return {
           label: year,
-          data: monthNums.map(m => yearData[year][m] || 0),
+          data: monthNums.map(m => {
+            // For the current year, use null for months beyond the current month
+            if (year === currentYear && m > currentMonth) return null;
+            return yearData[year][m] || 0;
+          }),
           borderColor: `rgba(${r}, ${g}, ${b}, ${opacity})`,
           backgroundColor: `rgba(${r}, ${g}, ${b}, ${opacity * 0.1})`,
           fill: false,
           tension: 0.3,
           borderWidth: lineWidth,
           pointRadius: radius,
+          spanGaps: false,
         };
       });
 
@@ -836,7 +764,6 @@ export default {
     this.loadSources();
     this.loadTransactions();
     this.loadMonthly();
-    this.loadRecurring();
     this.loadOutliers();
   },
   beforeUnmount() {
@@ -1358,11 +1285,7 @@ td.expense { color: #dc3545; }
   max-width: 600px;
 }
 
-/* Recurring expenses */
-.recurring-group {
-  margin-bottom: var(--space-lg);
-}
-
+/* Outlier tables */
 .recurring-table {
   width: 100%;
   border-collapse: collapse;
