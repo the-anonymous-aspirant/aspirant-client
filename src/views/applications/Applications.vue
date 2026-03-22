@@ -76,17 +76,24 @@
         this.$router.push({ path: `/applications/${application.toLowerCase()}` });
       },
       async loadImages() {
-        try {
-          this.appImages.quiz = await AssetManager.getAsset('quiz_center_icon');
-          this.appImages.games = await AssetManager.getAsset('game_center_icon');
-          this.appImages.emotionalExcellence = await AssetManager.getAsset('emotion_tracker_icon');
-          this.appImages.transparencymapper = await AssetManager.getAsset('transparency_icon');
-          this.appImages.remarkablePdfs = await AssetManager.getAsset('home_icon');
-          this.appImages.qrGenerator = await AssetManager.getAsset('qr_code_icon');
-          this.appImages.home_icon = await AssetManager.getAsset('home_icon');
-        } catch (error) {
-          console.error('Failed to load application images:', error);
-        }
+        const assets = {
+          quiz: 'quiz_center_icon',
+          games: 'game_center_icon',
+          emotionalExcellence: 'emotion_tracker_icon',
+          transparencymapper: 'transparency_icon',
+          remarkablePdfs: 'home_icon',
+          qrGenerator: 'qr_code_icon',
+          home_icon: 'home_icon',
+        };
+        await Promise.all(
+          Object.entries(assets).map(async ([key, assetName]) => {
+            try {
+              this.appImages[key] = await AssetManager.getAsset(assetName);
+            } catch (error) {
+              console.error(`Failed to load ${assetName}:`, error);
+            }
+          })
+        );
       },
     },
     mounted() {

@@ -1,6 +1,7 @@
 <template>
   <div class="application-card" @click="$emit('card-click', route)">
-    <img :src="imageUrl" :alt="title" class="app-image" />
+    <img v-if="imageUrl" :src="imageUrl" :alt="title" class="app-image" />
+    <div v-else class="app-image app-image-placeholder"></div>
     <div class="card-content">
       <h2>{{ title }}</h2>
       <p>

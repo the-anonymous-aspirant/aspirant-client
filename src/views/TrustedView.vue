@@ -77,16 +77,23 @@
         this.$router.push({ path: `/trusted/${application}` });
       },
       async loadImages() {
-        try {
-          this.appImages.ludde = await AssetManager.getAsset('ludde_meal_tracker_icon');
-          this.appImages.files = await AssetManager.getAsset('home_icon');
-          this.appImages.messageBoard = await AssetManager.getAsset('message_board_icon');
-          this.appImages.gift = await AssetManager.getAsset('30year_gift_icon');
-          this.appImages.translator = await AssetManager.getAsset('home_icon');
-          this.appImages.wikipedia = await AssetManager.getAsset('home_icon');
-        } catch (error) {
-          console.error('Failed to load trusted application images:', error);
-        }
+        const assets = {
+          ludde: 'ludde_meal_tracker_icon',
+          files: 'home_icon',
+          messageBoard: 'message_board_icon',
+          gift: '30year_gift_icon',
+          translator: 'home_icon',
+          wikipedia: 'home_icon',
+        };
+        await Promise.all(
+          Object.entries(assets).map(async ([key, assetName]) => {
+            try {
+              this.appImages[key] = await AssetManager.getAsset(assetName);
+            } catch (error) {
+              console.error(`Failed to load ${assetName}:`, error);
+            }
+          })
+        );
       },
     },
     mounted() {
