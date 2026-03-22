@@ -253,8 +253,9 @@
         );
       },
       async playSound() {
+        if (!this.luddeSoundUrl) return;
         const audio = new Audio(this.luddeSoundUrl);
-        audio.play();
+        audio.play().catch(() => {});
       },
       toggleView() {
         this.currentView = this.currentView === 'enterData' ? 'showData' : 'enterData';
@@ -268,9 +269,13 @@
       async fetchLuddeAssets() {
         try {
           this.luddeImageUrl = await assetManager.getAsset('ludde');
+        } catch (error) {
+          console.error('Error loading ludde image:', error);
+        }
+        try {
           this.luddeSoundUrl = await assetManager.getAsset('ludde-sound');
         } catch (error) {
-          console.error('Error fetching Ludde assets:', error);
+          console.error('Error loading ludde sound:', error);
         }
       },
     },

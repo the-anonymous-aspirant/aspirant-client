@@ -152,21 +152,34 @@ export default {
     },
   },
   async mounted() {
-    try {
-      const order = shuffleIndices();
-      const tilePromises = order.map((id) =>
+    const order = shuffleIndices();
+    const tileResults = await Promise.allSettled(
+      order.map((id) =>
         AssetManager.getAsset(`gift-tile-${id + 1}`).then((url) => ({
           id,
           label: id + 1,
           image: url,
         }))
-      );
-      this.tiles = await Promise.all(tilePromises);
+      )
+    );
+    this.tiles = tileResults
+      .filter((r) => r.status === 'fulfilled')
+      .map((r) => r.value);
+
+    try {
       this.qrImageUrl = await AssetManager.getAsset('qr-30-year-gift');
+    } catch (error) {
+      console.error('Failed to load QR image:', error);
+    }
+    try {
       this.swapSoundUrl = await AssetManager.getAsset('ludde-sound');
+    } catch (error) {
+      console.error('Failed to load swap sound:', error);
+    }
+    try {
       this.fanfareUrl = await AssetManager.getAsset('birthday-fanfare');
     } catch (error) {
-      console.error('Failed to load assets:', error);
+      console.error('Failed to load fanfare:', error);
     }
   },
 };
