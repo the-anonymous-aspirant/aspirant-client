@@ -30,6 +30,7 @@ import SupportView from '../views/SupportView.vue';
 import ThirtyYearGiftView from '../views/trusted/ThirtyYearGift.vue';
 import Translator from '../views/trusted/Translator.vue';
 import Wikipedia from '../views/trusted/Wikipedia.vue';
+import Advisor from '../views/trusted/Advisor.vue';
 
 const routes = [
   { path: '/', component: HomeView },
@@ -71,6 +72,7 @@ const routes = [
   { path: '/trusted/30-year-gift', component: ThirtyYearGiftView, meta: { roles: ['Trusted', 'Admin'] } },
   { path: '/trusted/translator', component: Translator, meta: { roles: ['Trusted', 'Admin'] } },
   { path: '/trusted/wikipedia', component: Wikipedia, meta: { roles: ['Trusted', 'Admin'] } },
+  { path: '/trusted/advisor', component: Advisor, meta: { roles: ['Trusted', 'Admin'] } },
 
   { path: '/support', component: SupportView },
 ];
