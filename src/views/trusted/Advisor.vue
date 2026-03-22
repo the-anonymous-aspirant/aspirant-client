@@ -53,9 +53,9 @@
                 :key="ci"
                 class="citation"
               >
-                <span class="cite-doc">{{ cite.document }}</span>
-                <span v-if="cite.section" class="cite-section">{{ cite.section }}</span>
-                <span v-if="cite.page" class="cite-page">p. {{ cite.page }}</span>
+                <span class="cite-doc">{{ cite.document_title }}</span>
+                <span v-if="cite.section_title" class="cite-section">{{ cite.section_title }}</span>
+                <span v-if="cite.page_number" class="cite-page">p. {{ cite.page_number }}</span>
               </div>
             </div>
             <div v-if="msg.chunks_used !== undefined" class="message-meta">
@@ -120,22 +120,23 @@
             </div>
           </div>
           <div class="form-group">
-            <label>File (PDF, DOCX, TXT)</label>
+            <label>Files (PDF, DOCX, TXT)</label>
             <input
               type="file"
               ref="fileInput"
               accept=".pdf,.docx,.txt"
               :disabled="uploading"
-              @change="onFileSelected"
+              multiple
+              @change="onFilesSelected"
             />
           </div>
           <button
             class="btn-upload"
-            @click="uploadDocument"
-            :disabled="uploading || !selectedFile || !uploadDomain"
+            @click="uploadDocuments"
+            :disabled="uploading || selectedFiles.length === 0 || !uploadDomain"
           >
-            <span v-if="uploading">Uploading & Processing...</span>
-            <span v-else>Upload</span>
+            <span v-if="uploading">Uploading {{ uploadProgress }}...</span>
+            <span v-else>Upload{{ selectedFiles.length > 1 ? ` (${selectedFiles.length} files)` : '' }}</span>
           </button>
           <div v-if="uploadMessage" class="upload-message" :class="uploadMessageClass">
             {{ uploadMessage }}
@@ -190,9 +191,10 @@ export default {
       uploading: false,
       uploadDomain: '',
       uploadAccess: 'admin',
-      selectedFile: null,
+      selectedFiles: [],
       uploadMessage: null,
       uploadMessageClass: '',
+      uploadProgress: '',
       deleting: null,
 
       domainIcons: {
@@ -232,7 +234,7 @@ export default {
       if (!this.isAdmin) return;
       try {
         const resp = await axios.get('/api/advisor/documents');
-        this.documents = resp.data;
+        this.documents = resp.data.items || resp.data;
       } catch (err) {
         console.error('Failed to load documents:', err);
       }
@@ -263,10 +265,9 @@ export default {
           chunks_used: resp.data.chunks_used,
         });
       } catch (err) {
-        const detail = err.response?.data?.detail || err.message;
         this.messages.push({
           role: 'assistant',
-          text: 'Sorry, I encountered an error: ' + detail,
+          text: 'Sorry, I encountered an error: ' + this.formatError(err),
         });
       }
 
@@ -289,34 +290,63 @@ export default {
       if (el) el.scrollTop = el.scrollHeight;
     },
 
-    onFileSelected(event) {
-      this.selectedFile = event.target.files[0] || null;
+    onFilesSelected(event) {
+      this.selectedFiles = Array.from(event.target.files || []);
     },
 
-    async uploadDocument() {
-      if (!this.selectedFile || !this.uploadDomain) return;
+    formatError(err) {
+      const detail = err.response?.data?.detail;
+      if (!detail) return err.message;
+      if (typeof detail === 'string') return detail;
+      if (Array.isArray(detail)) {
+        return detail.map(d => d.msg || JSON.stringify(d)).join('; ');
+      }
+      return JSON.stringify(detail);
+    },
+
+    async uploadDocuments() {
+      if (this.selectedFiles.length === 0 || !this.uploadDomain) return;
       this.uploading = true;
       this.uploadMessage = null;
 
-      const formData = new FormData();
-      formData.append('file', this.selectedFile);
-      formData.append('domain', this.uploadDomain);
-      formData.append('access_level', this.uploadAccess);
+      const results = [];
+      const errors = [];
 
-      try {
-        const resp = await axios.post('/api/advisor/documents', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 120000,
-        });
-        this.uploadMessage = `Uploaded: ${resp.data.filename} (${resp.data.chunk_count} chunks)`;
+      for (let i = 0; i < this.selectedFiles.length; i++) {
+        const file = this.selectedFiles[i];
+        this.uploadProgress = `(${i + 1}/${this.selectedFiles.length}) ${file.name}`;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('domain', this.uploadDomain);
+        formData.append('access_level', this.uploadAccess);
+
+        try {
+          const resp = await axios.post('/api/advisor/documents', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 120000,
+          });
+          results.push(`${resp.data.filename} (${resp.data.chunk_count} chunks)`);
+        } catch (err) {
+          errors.push(`${file.name}: ${this.formatError(err)}`);
+        }
+      }
+
+      if (errors.length === 0) {
+        this.uploadMessage = `Uploaded: ${results.join(', ')}`;
         this.uploadMessageClass = 'success';
-        this.selectedFile = null;
-        if (this.$refs.fileInput) this.$refs.fileInput.value = '';
-        await Promise.all([this.fetchSources(), this.fetchDocuments()]);
-      } catch (err) {
-        this.uploadMessage = 'Upload failed: ' + (err.response?.data?.detail || err.message);
+      } else if (results.length > 0) {
+        this.uploadMessage = `Uploaded: ${results.join(', ')}. Errors: ${errors.join('; ')}`;
+        this.uploadMessageClass = 'error';
+      } else {
+        this.uploadMessage = `Upload failed: ${errors.join('; ')}`;
         this.uploadMessageClass = 'error';
       }
+
+      this.selectedFiles = [];
+      this.uploadProgress = '';
+      if (this.$refs.fileInput) this.$refs.fileInput.value = '';
+      await Promise.all([this.fetchSources(), this.fetchDocuments()]);
       this.uploading = false;
     },
 
