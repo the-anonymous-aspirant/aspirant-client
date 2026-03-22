@@ -18,13 +18,26 @@
           <div
             v-for="domain in sources.domains"
             :key="domain.name"
-            class="domain-badge"
-            :class="{ empty: !domain.has_content, active: domain.has_content }"
-            :title="domain.description"
+            class="domain-wrapper"
           >
-            <span class="domain-icon">{{ domainIcons[domain.icon] || '&#128196;' }}</span>
-            <span class="domain-name">{{ domain.display_name }}</span>
-            <span class="domain-count">{{ domain.document_count }}</span>
+            <div
+              class="domain-badge"
+              :class="{ empty: !domain.has_content, active: domain.has_content, expanded: expandedDomain === domain.name }"
+              :title="domain.description"
+              @click="domain.has_content && toggleDomain(domain.name)"
+              :style="{ cursor: domain.has_content ? 'pointer' : 'default' }"
+            >
+              <span class="domain-icon">{{ domainIcons[domain.icon] || '&#128196;' }}</span>
+              <span class="domain-name">{{ domain.display_name }}</span>
+              <span class="domain-count">{{ domain.document_count }}</span>
+              <span v-if="domain.has_content" class="domain-chevron">{{ expandedDomain === domain.name ? '\u25B2' : '\u25BC' }}</span>
+            </div>
+            <div v-if="expandedDomain === domain.name && domain.documents" class="domain-docs-dropdown">
+              <div v-for="doc in domain.documents" :key="doc.id" class="domain-doc-item">
+                <span class="domain-doc-title">{{ doc.title }}</span>
+                <span class="domain-doc-meta">{{ doc.doc_type }} &middot; {{ doc.chunk_count }} chunks</span>
+              </div>
+            </div>
           </div>
         </div>
       </template>
@@ -179,6 +192,7 @@ export default {
       sources: null,
       sourcesLoading: true,
       sourcesError: null,
+      expandedDomain: null,
 
       // Chat
       messages: [],
@@ -219,6 +233,10 @@ export default {
     },
   },
   methods: {
+    toggleDomain(name) {
+      this.expandedDomain = this.expandedDomain === name ? null : name;
+    },
+
     async fetchSources() {
       try {
         const resp = await axios.get('/api/advisor/sources');
@@ -472,6 +490,59 @@ export default {
   padding: 0 var(--space-2xs);
   border-radius: var(--radius-sm);
   font-size: 0.65rem;
+}
+
+.domain-chevron {
+  font-size: 0.5rem;
+  margin-left: var(--space-2xs);
+  opacity: 0.6;
+}
+
+.domain-badge.expanded {
+  border-color: var(--brand-accent);
+}
+
+.domain-wrapper {
+  position: relative;
+}
+
+.domain-docs-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  margin-top: var(--space-2xs);
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs);
+  min-width: 250px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.domain-doc-item {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+}
+
+.domain-doc-item:hover {
+  background-color: var(--surface-card-inner);
+}
+
+.domain-doc-title {
+  font-size: var(--text-xs);
+  color: var(--text-on-dark);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.domain-doc-meta {
+  font-size: 0.65rem;
+  color: var(--text-muted);
 }
 
 /* Chat Card */
