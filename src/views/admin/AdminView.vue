@@ -6,9 +6,9 @@
     <div class="application-cards">
       <application-card
         :image-url="appImages.default"
-        title="S3 Assets"
+        title="Assets"
         description="Image files and stuff"
-        route="/admin/s3_assets"
+        route="/admin/assets"
         @card-click="navigateTo"
       />
       <application-card
