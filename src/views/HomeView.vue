@@ -16,31 +16,31 @@
   };
 
   onMounted(async () => {
+    // Load aspiring hand image independently of health check
     try {
+      aspiringHandImageUrl.value = await assetManager.getAsset('aspiring_hand');
+    } catch (error) {
+      console.error('Error loading aspiring hand image:', error);
+    }
+
+    try {
+      const response = await axios.get('/api/health');
+      status.value = response.data.status;
+      version.value = response.data.commit;
+      source.value = 'Production';
+    } catch (error) {
+      console.error('Error with server, trying localhost', error);
       try {
-        const response = await axios.get('/api/health');
-        status.value = response.data.status;
-        version.value = response.data.commit;
-        source.value = 'Production';
-      } catch (error) {
-        console.error('Error with server, trying localhost', error);
         const response = await axios.get('http://localhost:8081/health');
         status.value = response.data.status;
-        version.value = response.data.commit.substringData(0, 7);
+        version.value = response.data.commit.substring(0, 7);
         source.value = 'Development';
+      } catch (localhostError) {
+        console.error('Error with localhost', localhostError);
+        status.value = 'Error';
+        version.value = 'Error';
+        source.value = 'None';
       }
-
-      // Load aspiring hand image using the asset manager
-      try {
-        aspiringHandImageUrl.value = await assetManager.getAsset('aspiring_hand');
-      } catch (error) {
-        console.error('Error loading aspiring hand image:', error);
-      }
-    } catch (error) {
-      console.error('Error with localhost', error);
-      status.value = 'Error';
-      version.value = 'Error';
-      source.value = 'None';
     }
   });
 
