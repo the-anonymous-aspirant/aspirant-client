@@ -59,22 +59,24 @@
 
     <div class="upload-section">
       <label class="btn btn-upload" for="file-input">
-        Choose File
+        Choose Files
       </label>
       <input
         id="file-input"
         type="file"
+        multiple
         class="file-input-hidden"
         @change="onFileSelected"
       />
-      <span v-if="selectedFile" class="selected-filename">{{ selectedFile.name }}</span>
+      <span v-if="selectedFiles.length === 1" class="selected-filename">{{ selectedFiles[0].name }}</span>
+      <span v-else-if="selectedFiles.length > 1" class="selected-filename">{{ selectedFiles.length }} files selected</span>
       <button
-        v-if="selectedFile"
+        v-if="selectedFiles.length > 0"
         class="btn btn-confirm"
         :disabled="uploading"
-        @click="uploadFile"
+        @click="uploadFiles"
       >
-        {{ uploading ? 'Uploading...' : 'Upload' }}
+        {{ uploading ? `Uploading (${uploadProgress}/${selectedFiles.length})...` : 'Upload' }}
       </button>
       <button class="btn btn-folder" @click="showNewFolderInput = !showNewFolderInput">
         New Folder
@@ -153,7 +155,8 @@
       return {
         activeTab: 'my',
         files: [],
-        selectedFile: null,
+        selectedFiles: [],
+        uploadProgress: 0,
         uploading: false,
         loading: false,
         error: '',
@@ -221,32 +224,41 @@
         return this.storageUsage.max_per_user;
       },
       onFileSelected(event) {
-        this.selectedFile = event.target.files[0] || null;
+        this.selectedFiles = Array.from(event.target.files);
         this.error = '';
         this.success = '';
       },
-      async uploadFile() {
-        if (!this.selectedFile) return;
+      async uploadFiles() {
+        if (this.selectedFiles.length === 0) return;
         this.uploading = true;
+        this.uploadProgress = 0;
         this.error = '';
         this.success = '';
-        try {
-          const formData = new FormData();
-          formData.append('file', this.selectedFile);
-          const base = this.activeTab === 'my' ? '/api/files/upload' : '/api/files/shared/upload';
-          await axios.post(base + this.pathParam(), formData);
-          this.success = 'File uploaded successfully';
-          this.selectedFile = null;
-          const input = document.getElementById('file-input');
-          if (input) input.value = '';
-          await this.loadFiles();
-          await this.loadStorageUsage();
-        } catch (err) {
-          const msg = err.response?.data?.error;
-          this.error = msg || 'Failed to upload file';
-        } finally {
-          this.uploading = false;
+        const base = this.activeTab === 'my' ? '/api/files/upload' : '/api/files/shared/upload';
+        let failed = 0;
+        for (const file of this.selectedFiles) {
+          this.uploadProgress++;
+          try {
+            const formData = new FormData();
+            formData.append('file', file);
+            await axios.post(base + this.pathParam(), formData);
+          } catch (err) {
+            failed++;
+          }
         }
+        if (failed === 0) {
+          this.success = this.selectedFiles.length === 1
+            ? 'File uploaded successfully'
+            : `${this.selectedFiles.length} files uploaded successfully`;
+        } else {
+          this.error = `${failed} of ${this.selectedFiles.length} uploads failed`;
+        }
+        this.selectedFiles = [];
+        const input = document.getElementById('file-input');
+        if (input) input.value = '';
+        this.uploading = false;
+        await this.loadFiles();
+        await this.loadStorageUsage();
       },
       downloadFile(filename) {
         const prefix = this.activeTab === 'my' ? '/api/files/download/' : '/api/files/shared/download/';
