@@ -66,9 +66,12 @@
                 :key="ci"
                 class="citation"
               >
-                <span class="cite-doc">{{ cite.document_title }}</span>
-                <span v-if="cite.section_title" class="cite-section">{{ cite.section_title }}</span>
-                <span v-if="cite.page_number" class="cite-page">p. {{ cite.page_number }}</span>
+                <div class="cite-header">
+                  <span class="cite-doc">{{ cite.document_title }}</span>
+                  <span v-if="cite.section_title" class="cite-section">{{ cite.section_title }}</span>
+                  <span v-if="cite.page_number" class="cite-page">p. {{ cite.page_number }}</span>
+                </div>
+                <div v-if="cite.text" class="cite-quote">{{ truncateQuote(cite.text) }}</div>
               </div>
             </div>
             <div v-if="msg.chunks_used !== undefined" class="message-meta">
@@ -233,6 +236,12 @@ export default {
     },
   },
   methods: {
+    truncateQuote(text) {
+      if (!text) return '';
+      const max = 200;
+      return text.length > max ? text.slice(0, max) + '...' : text;
+    },
+
     toggleDomain(name) {
       this.expandedDomain = this.expandedDomain === name ? null : name;
     },
@@ -629,10 +638,26 @@ export default {
 
 .citation {
   font-size: var(--text-xs);
-  padding: var(--space-2xs) 0;
+  padding: var(--space-xs) var(--space-sm);
+  margin-bottom: var(--space-xs);
+  background-color: rgba(255, 255, 255, 0.03);
+  border-left: 2px solid var(--brand-primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.cite-header {
   display: flex;
   gap: var(--space-xs);
   flex-wrap: wrap;
+  margin-bottom: var(--space-2xs);
+}
+
+.cite-quote {
+  font-style: italic;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  opacity: 0.8;
 }
 
 .cite-doc {
