@@ -1,44 +1,40 @@
 <template>
-  <div class="s3-assets-view">
-    <h1>S3 Assets</h1>
-    <h2 class="page-subtitle">Files stored in the S3 bucket</h2>
+  <div class="assets-view">
+    <h1>Assets</h1>
+    <h2 class="page-subtitle">Files stored in asset storage</h2>
 
     <div class="table-wrapper">
       <table>
         <thead>
           <tr>
-            <th @click="sortTable('Key')" class="sortable">
-              Filename {{ sortIndicator('Key') }}
+            <th @click="sortTable('key')" class="sortable">
+              Filename {{ sortIndicator('key') }}
             </th>
-            <th @click="sortTable('Key')" class="sortable">
-              Path {{ sortIndicator('Key') }}
+            <th @click="sortTable('key')" class="sortable">
+              Path {{ sortIndicator('key') }}
             </th>
-            <th @click="sortTable('ETag')" class="sortable">
-              ETag {{ sortIndicator('ETag') }}
+            <th @click="sortTable('etag')" class="sortable">
+              Hash {{ sortIndicator('etag') }}
             </th>
-            <th @click="sortTable('LastModified')" class="sortable">
-              Date Uploaded {{ sortIndicator('LastModified') }}
+            <th @click="sortTable('last_modified')" class="sortable">
+              Date Modified {{ sortIndicator('last_modified') }}
             </th>
-            <th @click="sortTable('Size')" class="sortable">
-              Size {{ sortIndicator('Size') }}
+            <th @click="sortTable('size')" class="sortable">
+              Size {{ sortIndicator('size') }}
             </th>
-            <th @click="sortTable('StorageClass')" class="sortable">
-              Storage Class {{ sortIndicator('StorageClass') }}
-            </th>
-            <th @click="sortTable('FileType')" class="sortable">
-              Filetype {{ sortIndicator('FileType') }}
+            <th @click="sortTable('content_type')" class="sortable">
+              Content Type {{ sortIndicator('content_type') }}
             </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="asset in sortedAssets" :key="asset.ETag">
-            <td>{{ asset.Key.split('/').pop() }}</td>
-            <td class="mono">{{ asset.Key }}</td>
-            <td class="mono">{{ asset.ETag }}</td>
-            <td>{{ formatDate(asset.LastModified) }}</td>
-            <td>{{ formatSize(asset.Size) }}</td>
-            <td>{{ asset.StorageClass }}</td>
-            <td>{{ getFileType(asset.Key) }}</td>
+          <tr v-for="asset in sortedAssets" :key="asset.etag">
+            <td>{{ asset.key.split('/').pop() }}</td>
+            <td class="mono">{{ asset.key }}</td>
+            <td class="mono">{{ asset.etag }}</td>
+            <td>{{ formatDate(asset.last_modified) }}</td>
+            <td>{{ formatSize(asset.size) }}</td>
+            <td class="mono">{{ asset.content_type }}</td>
           </tr>
         </tbody>
       </table>
@@ -53,7 +49,7 @@
     data() {
       return {
         assets: [],
-        sortKey: 'LastModified',
+        sortKey: 'last_modified',
         sortOrder: 'desc',
       };
     },
@@ -65,10 +61,6 @@
         return [...this.assets].sort((a, b) => {
           let valA = a[this.sortKey];
           let valB = b[this.sortKey];
-          if (this.sortKey === 'FileType') {
-            valA = this.getFileType(a.Key);
-            valB = this.getFileType(b.Key);
-          }
           let result = 0;
           if (valA < valB) result = -1;
           else if (valA > valB) result = 1;
@@ -79,21 +71,11 @@
     methods: {
       async fetchAssets() {
         try {
-          const response = await axios.get('/api/s3-assets');
+          const response = await axios.get('/api/assets');
           this.assets = response.data.assets;
         } catch (error) {
-          console.error('Failed to fetch S3 assets:', error);
+          console.error('Failed to fetch assets:', error);
         }
-      },
-      getFileType(key) {
-        const ext = key.split('.').pop().toLowerCase();
-        const types = {
-          jpg: 'Image', jpeg: 'Image', png: 'Image', gif: 'Image',
-          mp3: 'Audio', wav: 'Audio',
-          mp4: 'Video', mov: 'Video',
-          pdf: 'Document', doc: 'Document', docx: 'Document',
-        };
-        return types[ext] || 'Other';
       },
       sortTable(key) {
         if (this.sortKey === key) {
@@ -120,7 +102,7 @@
 </script>
 
 <style scoped>
-  .s3-assets-view {
+  .assets-view {
     padding: var(--space-lg);
     display: flex;
     flex-direction: column;
@@ -180,7 +162,7 @@
   }
 
   @media (max-width: 768px) {
-    .s3-assets-view {
+    .assets-view {
       padding: var(--space-md);
     }
   }
