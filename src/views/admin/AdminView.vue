@@ -69,13 +69,15 @@
     },
     methods: {
       async loadImages() {
-        try {
-          for (const key of Object.keys(this.appImages)) {
-            this.appImages[key] = await AssetManager.getAsset(key);
-          }
-        } catch (error) {
-          console.error('Failed to load application images:', error);
-        }
+        await Promise.all(
+          Object.keys(this.appImages).map(async (key) => {
+            try {
+              this.appImages[key] = await AssetManager.getAsset(key);
+            } catch (error) {
+              console.error(`Failed to load ${key}:`, error);
+            }
+          })
+        );
       },
       navigateTo(route) {
         this.$router.push(route);
