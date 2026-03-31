@@ -24,6 +24,7 @@ import VoiceCommander from '../views/admin/VoiceCommander.vue';
 import SystemHealth from '../views/admin/SystemHealth.vue';
 import Remarkable from '../views/admin/Remarkable.vue';
 import Finance from '../views/admin/Finance.vue';
+import EasterHuntView from '../views/applications/EasterHuntView.vue';
 import QrGeneratorView from '../views/applications/QrGenerator.vue';
 import FilesManagerView from '../views/applications/FilesManager.vue';
 import SupportView from '../views/SupportView.vue';
@@ -64,6 +65,7 @@ const routes = [
   { path: '/games', component: GameHubView },
   { path: '/games/wordweaver', component: GameWordWeaverView },
   { path: '/games/flappyduo', component: GameFlappyDuoView },
+  { path: '/games/easter-hunt', component: EasterHuntView },
 
   { path: '/trusted', component: TrustedView, meta: { roles: ['Trusted', 'Admin'] } },
   { path: '/trusted/ludde-analytics', component: LuddeAnalytics, meta: { roles: ['Trusted', 'Admin'] } },
