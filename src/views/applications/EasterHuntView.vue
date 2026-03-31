@@ -22,11 +22,14 @@
         ></canvas>
       </div>
 
-      <div class="side-panels">
+      <div class="bottom-panels">
         <!-- Cooldown status -->
         <div class="panel">
           <div v-if="!isLoggedIn" class="cooldown-status muted">
             Log in to play
+          </div>
+          <div v-else-if="isAdmin" class="cooldown-status ready">
+            Admin: no cooldown
           </div>
           <div v-else-if="cooldownRemaining > 0" class="cooldown-status waiting">
             Next click in <strong>{{ cooldownText }}</strong>
@@ -58,8 +61,8 @@
         </div>
 
         <!-- Egg progress -->
-        <div class="panel" v-if="visibleEggs.length > 0">
-          <h3>Eggs Found</h3>
+        <div class="panel">
+          <h3>Eggs</h3>
           <div class="egg-grid">
             <div
               v-for="egg in visibleEggs"
@@ -98,22 +101,22 @@
 import axios from 'axios';
 
 const BOARD_SIZE = 32;
-const CELL_SIZE = 20;
+const CELL_SIZE = 40;
 const CANVAS_PX = BOARD_SIZE * CELL_SIZE;
 
-// Overlay palette — earthy greens that complement the golden brand
+// Overlay palette — dark grays with subtle variation for texture
 const OVERLAY = {
-  canopy:    '#2D5F3F',
-  bush:      '#3D7A54',
-  grass:     '#4A9465',
-  meadow:    '#6DB380',
-  trunk:     '#5C3D1E',
-  flowerA:   '#D4A843',  // warm gold flowers
-  flowerB:   '#C87D5A',  // terracotta flowers
+  canopy:    '#2a2a2a',
+  bush:      '#333333',
+  grass:     '#3d3d3d',
+  meadow:    '#474747',
+  trunk:     '#242424',
+  flowerA:   '#3a3a3a',
+  flowerB:   '#404040',
 };
 
-// Revealed empty square — dark surface to match cards
-const EMPTY_FILL = '#3A3A3A';
+// Revealed empty square — transparent (shows page background)
+const EMPTY_FILL = null;
 const GRID_LINE = 'rgba(255, 255, 255, 0.04)';
 const GRID_LINE_OVERLAY = 'rgba(0, 0, 0, 0.10)';
 
@@ -345,14 +348,15 @@ export default {
           const key = `${x},${y}`;
 
           if (this.revealedSet.has(key)) {
-            // Draw the revealed content (egg color or empty)
+            // Draw the revealed content (egg color or transparent)
             const sq = this.revealedMap[key];
             if (sq && sq.egg_id >= 0 && eggColorMap[sq.egg_id]) {
               ctx.fillStyle = eggColorMap[sq.egg_id];
+              ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
             } else {
-              ctx.fillStyle = EMPTY_FILL;
+              ctx.fillStyle = '#e4e4e4';
+              ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
             }
-            ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
 
             ctx.strokeStyle = GRID_LINE;
             ctx.lineWidth = 0.5;
@@ -515,15 +519,13 @@ export default {
 }
 
 /* ================================================
-   Game layout — board + panels centered
+   Game layout — board centered, panels below
    ================================================ */
 .game-layout {
   display: flex;
-  gap: var(--space-xl);
-  align-items: flex-start;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   width: 100%;
-  max-width: 1100px;
 }
 
 .board-panel {
@@ -536,8 +538,8 @@ canvas {
   border: 3px solid var(--border-card);
   box-shadow: var(--shadow-lg);
   image-rendering: pixelated;
-  width: 640px;
-  height: 640px;
+  width: min(1280px, calc(100vh - 160px));
+  height: min(1280px, calc(100vh - 160px));
   background: var(--surface-card);
 }
 
@@ -552,13 +554,14 @@ canvas.locked {
 }
 
 /* ================================================
-   Side panels — dark cards with golden accents
+   Bottom panels — dark cards with golden accents
    ================================================ */
-.side-panels {
-  flex: 1;
-  min-width: 220px;
-  display: flex;
-  flex-direction: column;
+.bottom-panels {
+  margin-top: var(--space-lg);
+  width: 100%;
+  max-width: min(1280px, calc(100vh - 160px));
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--space-md);
 }
 
@@ -787,21 +790,16 @@ canvas.locked {
    Responsive — 768px breakpoint
    ================================================ */
 @media (max-width: 768px) {
-  .game-layout {
-    flex-direction: column;
-    align-items: center;
-  }
-
   canvas {
     width: 100%;
-    max-width: 640px;
+    max-width: 100%;
     height: auto;
     aspect-ratio: 1;
   }
 
-  .side-panels {
-    width: 100%;
-    max-width: 640px;
+  .bottom-panels {
+    grid-template-columns: 1fr;
+    max-width: 100%;
   }
 }
 

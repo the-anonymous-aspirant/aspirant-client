@@ -65,7 +65,7 @@ const routes = [
   { path: '/games', component: GameHubView },
   { path: '/games/wordweaver', component: GameWordWeaverView },
   { path: '/games/flappyduo', component: GameFlappyDuoView },
-  { path: '/games/easter-hunt', component: EasterHuntView },
+  { path: '/games/easter-hunt', component: EasterHuntView, meta: { roles: ['Trusted', 'Admin'] } },
 
   { path: '/trusted', component: TrustedView, meta: { roles: ['Trusted', 'Admin'] } },
   { path: '/trusted/ludde-analytics', component: LuddeAnalytics, meta: { roles: ['Trusted', 'Admin'] } },
