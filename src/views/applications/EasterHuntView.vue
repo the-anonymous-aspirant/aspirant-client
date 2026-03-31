@@ -120,6 +120,64 @@ const EMPTY_FILL = null;
 const GRID_LINE = 'rgba(255, 255, 255, 0.04)';
 const GRID_LINE_OVERLAY = 'rgba(0, 0, 0, 0.10)';
 
+// ── Web Audio API sound effects ──────────────────
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playMissSound() {
+  const ctx = getAudioCtx();
+  const noise = ctx.createBufferSource();
+  const buf = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+  noise.buffer = buf;
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 600;
+  filter.Q.value = 1.5;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.15, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+  noise.connect(filter).connect(gain).connect(ctx.destination);
+  noise.start();
+  noise.stop(ctx.currentTime + 0.08);
+}
+
+function playEggClickSound() {
+  const ctx = getAudioCtx();
+  const osc = ctx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(880, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.06);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.2, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.12);
+}
+
+function playEggCompleteSound() {
+  const ctx = getAudioCtx();
+  const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+  notes.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    osc.type = 'triangle';
+    const t = ctx.currentTime + i * 0.09;
+    osc.frequency.setValueAtTime(freq, t);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.18, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.25);
+  });
+}
+
 // Seeded PRNG (mulberry32)
 function mulberry32(seed) {
   return function () {
@@ -298,10 +356,13 @@ export default {
         this.cooldownRemaining = data.next_click_seconds;
 
         if (data.egg_completed) {
+          playEggCompleteSound();
           this.showToast('You completed an egg! +1 point', 'success');
         } else if (data.egg_id >= 0) {
+          playEggClickSound();
           this.showToast('Part of an egg revealed!', 'info');
         } else {
+          playMissSound();
           this.showToast('Empty square', 'info');
         }
 
