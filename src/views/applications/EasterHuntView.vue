@@ -415,10 +415,16 @@ export default {
 
           if (this.revealedSet.has(key)) {
             const sq = this.revealedMap[key];
-            ctx.fillStyle = (sq && sq.egg_id >= 0 && eggColorMap[sq.egg_id])
-              ? eggColorMap[sq.egg_id]
-              : '#e4e4e4';
+            const isEgg = sq && sq.egg_id >= 0 && eggColorMap[sq.egg_id];
+            ctx.fillStyle = isEgg ? eggColorMap[sq.egg_id] : '#e4e4e4';
             ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+            if (isEgg) {
+              ctx.fillStyle = '#e67e22';
+              ctx.fillRect(px, py, CELL_SIZE, 1);
+              ctx.fillRect(px, py + CELL_SIZE - 1, CELL_SIZE, 1);
+              ctx.fillRect(px, py, 1, CELL_SIZE);
+              ctx.fillRect(px + CELL_SIZE - 1, py, 1, CELL_SIZE);
+            }
 
             // Fade-out animation for newly revealed tiles
             const anim = this.animatingTiles.get(key);
