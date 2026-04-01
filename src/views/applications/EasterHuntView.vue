@@ -131,21 +131,20 @@ function getAudioCtx() {
 
 function playMissSound() {
   const ctx = getAudioCtx();
-  const noise = ctx.createBufferSource();
-  const buf = ctx.createBuffer(1, ctx.sampleRate * 0.08, ctx.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
-  noise.buffer = buf;
-  const filter = ctx.createBiquadFilter();
-  filter.type = 'bandpass';
-  filter.frequency.value = 600;
-  filter.Q.value = 1.5;
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.15, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-  noise.connect(filter).connect(gain).connect(ctx.destination);
-  noise.start();
-  noise.stop(ctx.currentTime + 0.08);
+  // Sad descending minor third: E4 → C4
+  const notes = [329.63, 261.63];
+  notes.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    const t = ctx.currentTime + i * 0.12;
+    osc.frequency.setValueAtTime(freq, t);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.1, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.18);
+  });
 }
 
 function playEggClickSound() {
@@ -335,6 +334,7 @@ export default {
         return;
       }
       if (!this.gameState) return;
+      if (this.clickPending) return;
 
       const rect = this.$refs.canvas.getBoundingClientRect();
       const scale = CANVAS_PX / rect.width;
