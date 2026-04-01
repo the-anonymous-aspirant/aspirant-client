@@ -12,18 +12,25 @@
     </h2>
 
     <div v-if="gameState" class="game-layout">
-      <div class="board-panel">
-        <canvas
-          ref="canvas"
-          :width="canvasSize"
-          :height="canvasSize"
-          @click="handleCanvasClick"
-          :class="{ locked: isLocked, clickable: canClick }"
-        ></canvas>
-      </div>
+      <!-- Left panel: Eggs + Cooldown -->
+      <div class="side-panel left-panel">
+        <div class="panel">
+          <h3>Eggs</h3>
+          <div class="egg-grid">
+            <div
+              v-for="egg in visibleEggs"
+              :key="egg.egg_id"
+              class="egg-pill"
+              :class="{ completed: egg.completed }"
+              :style="{ '--egg-color': egg.color }"
+            >
+              <span class="egg-swatch" :style="{ backgroundColor: egg.color }"></span>
+              {{ Math.round(egg.revealed / egg.squares * 100) }}%
+              <span v-if="egg.completed" class="egg-check">&#10003;</span>
+            </div>
+          </div>
+        </div>
 
-      <div class="bottom-panels">
-        <!-- Cooldown status -->
         <div class="panel">
           <div v-if="!isLoggedIn" class="cooldown-status muted">
             Log in to play
@@ -39,7 +46,31 @@
           </div>
         </div>
 
-        <!-- Scoreboard -->
+        <!-- Admin controls -->
+        <div class="panel admin-panel" v-if="isAdmin">
+          <h3>Admin</h3>
+          <div class="admin-buttons">
+            <button @click="resetGame" class="btn btn-danger">Reset Game</button>
+            <button @click="toggleReveal" class="btn">
+              {{ showReveal ? 'Hide Eggs' : 'Reveal All Eggs' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center: Board -->
+      <div class="board-panel">
+        <canvas
+          ref="canvas"
+          :width="canvasSize"
+          :height="canvasSize"
+          @click="handleCanvasClick"
+          :class="{ locked: isLocked, clickable: canClick }"
+        ></canvas>
+      </div>
+
+      <!-- Right panel: Scoreboard -->
+      <div class="side-panel right-panel">
         <div class="panel">
           <h3>Scoreboard</h3>
           <div v-if="gameState.scores.length === 0" class="empty-state">
@@ -59,35 +90,6 @@
             </tbody>
           </table>
         </div>
-
-        <!-- Egg progress -->
-        <div class="panel">
-          <h3>Eggs</h3>
-          <div class="egg-grid">
-            <div
-              v-for="egg in visibleEggs"
-              :key="egg.egg_id"
-              class="egg-pill"
-              :class="{ completed: egg.completed }"
-              :style="{ '--egg-color': egg.color }"
-            >
-              <span class="egg-swatch" :style="{ backgroundColor: egg.color }"></span>
-              {{ egg.revealed }}/{{ egg.squares }}
-              <span v-if="egg.completed" class="egg-check">&#10003;</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Admin controls -->
-        <div class="panel admin-panel" v-if="isAdmin">
-          <h3>Admin</h3>
-          <div class="admin-buttons">
-            <button @click="resetGame" class="btn btn-danger">Reset Game</button>
-            <button @click="toggleReveal" class="btn">
-              {{ showReveal ? 'Hide Eggs' : 'Reveal All Eggs' }}
-            </button>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -100,8 +102,8 @@
 <script>
 import axios from 'axios';
 
-const BOARD_SIZE = 32;
-const CELL_SIZE = 40;
+const BOARD_SIZE = 128;
+const CELL_SIZE = 10;
 const CANVAS_PX = BOARD_SIZE * CELL_SIZE;
 
 // Overlay palette — dark grays with subtle variation for texture
@@ -196,7 +198,7 @@ function generateOverlay(seed) {
   // Place trees (trunk + canopy pairs)
   for (let x = 0; x < BOARD_SIZE; x++) {
     for (let y = 1; y < BOARD_SIZE; y++) {
-      if (rng() < 0.06 && !tiles[x][y] && !tiles[x][y - 1]) {
+      if (rng() < 0.015 && !tiles[x][y] && !tiles[x][y - 1]) {
         tiles[x][y] = OVERLAY.trunk;
         tiles[x][y - 1] = OVERLAY.canopy;
       }
@@ -340,10 +342,6 @@ export default {
       const y = Math.floor((e.clientY - rect.top) * scale / CELL_SIZE);
 
       if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) return;
-      if (this.revealedSet.has(`${x},${y}`)) {
-        this.showToast('Already revealed', 'info');
-        return;
-      }
 
       this.submitClick(x, y);
     },
@@ -355,19 +353,26 @@ export default {
         const data = res.data.data;
         this.cooldownRemaining = data.next_click_seconds;
 
-        if (data.egg_completed) {
+        const completed = data.eggs_completed_count || 0;
+        const hasEggCells = (data.revealed || []).some(c => c.egg_id >= 0);
+
+        if (completed > 0) {
           playEggCompleteSound();
-          this.showToast('You completed an egg! +1 point', 'success');
-        } else if (data.egg_id >= 0) {
+          const msg = completed === 1 ? 'Egg completed! +1 point' : `${completed} eggs completed! +${completed} points`;
+          this.showToast(msg, 'success');
+        } else if (hasEggCells) {
           playEggClickSound();
-          this.showToast('Part of an egg revealed!', 'info');
+          this.showToast(`${data.revealed_count} squares revealed`, 'info');
         } else {
           playMissSound();
-          this.showToast('Empty square', 'info');
+          this.showToast(`${data.revealed_count} squares revealed`, 'info');
         }
 
-        // Start reveal animation for this tile before refreshing state
-        this.animatingTiles.set(`${x},${y}`, { x, y, start: performance.now() });
+        // Animate all newly revealed tiles
+        const now = performance.now();
+        for (const cell of data.revealed || []) {
+          this.animatingTiles.set(`${cell.x},${cell.y}`, { x: cell.x, y: cell.y, start: now });
+        }
         this.startAnimation();
 
         await this.fetchState();
@@ -378,7 +383,7 @@ export default {
           this.showToast(errData?.message || 'On cooldown', 'warn');
           await this.fetchCooldown();
         } else if (status === 409) {
-          this.showToast('Already revealed — refreshing', 'warn');
+          this.showToast('Area already revealed — refreshing', 'warn');
           await this.fetchState();
         } else if (status === 403) {
           this.showToast('The hunt has ended!', 'warn');
@@ -409,32 +414,20 @@ export default {
           const key = `${x},${y}`;
 
           if (this.revealedSet.has(key)) {
-            // Draw the revealed content (egg color or transparent)
             const sq = this.revealedMap[key];
-            if (sq && sq.egg_id >= 0 && eggColorMap[sq.egg_id]) {
-              ctx.fillStyle = eggColorMap[sq.egg_id];
-              ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
-            } else {
-              ctx.fillStyle = '#e4e4e4';
-              ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
-            }
+            ctx.fillStyle = (sq && sq.egg_id >= 0 && eggColorMap[sq.egg_id])
+              ? eggColorMap[sq.egg_id]
+              : '#e4e4e4';
+            ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
 
-            ctx.strokeStyle = GRID_LINE;
-            ctx.lineWidth = 0.5;
-            ctx.strokeRect(px + 0.5, py + 0.5, CELL_SIZE - 1, CELL_SIZE - 1);
-
-            // If this tile is animating, draw fading overlay on top
+            // Fade-out animation for newly revealed tiles
             const anim = this.animatingTiles.get(key);
             if (anim && now) {
-              const elapsed = now - anim.start;
-              const opacity = Math.max(0, 1 - elapsed / 300);
+              const opacity = Math.max(0, 1 - (now - anim.start) / 300);
               if (opacity > 0) {
                 ctx.globalAlpha = opacity;
                 ctx.fillStyle = this.overlay ? this.overlay[x][y] : OVERLAY.grass;
                 ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
-                ctx.strokeStyle = GRID_LINE_OVERLAY;
-                ctx.lineWidth = 0.5;
-                ctx.strokeRect(px + 0.5, py + 0.5, CELL_SIZE - 1, CELL_SIZE - 1);
                 ctx.globalAlpha = 1;
               } else {
                 this.animatingTiles.delete(key);
@@ -443,30 +436,21 @@ export default {
           } else {
             ctx.fillStyle = this.overlay ? this.overlay[x][y] : OVERLAY.grass;
             ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
-
-            ctx.strokeStyle = GRID_LINE_OVERLAY;
-            ctx.lineWidth = 0.5;
-            ctx.strokeRect(px + 0.5, py + 0.5, CELL_SIZE - 1, CELL_SIZE - 1);
           }
         }
       }
 
-      // Admin reveal overlay
+      // Admin reveal overlay — outline each egg's cells
       if (this.showReveal && this.adminEggs) {
-        ctx.setLineDash([3, 3]);
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1;
         for (const egg of this.adminEggs) {
-          ctx.strokeStyle = egg.color;
+          ctx.fillStyle = egg.color;
+          ctx.globalAlpha = 0.45;
           for (const sq of egg.squares) {
-            ctx.strokeRect(
-              sq.x * CELL_SIZE + 1,
-              sq.y * CELL_SIZE + 1,
-              CELL_SIZE - 2,
-              CELL_SIZE - 2
-            );
+            ctx.fillRect(sq.x * CELL_SIZE, sq.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
           }
+          ctx.globalAlpha = 1;
         }
-        ctx.setLineDash([]);
       }
     },
 
@@ -580,17 +564,27 @@ export default {
 }
 
 /* ================================================
-   Game layout — board centered, panels below
+   Game layout — three columns: eggs | board | scoreboard
    ================================================ */
 .game-layout {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-md);
   width: 100%;
 }
 
 .board-panel {
   flex-shrink: 0;
+}
+
+.side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 200px;
+  max-width: 260px;
+  flex: 1;
 }
 
 canvas {
@@ -612,18 +606,6 @@ canvas.locked {
   cursor: not-allowed;
   opacity: 0.7;
   border-color: var(--text-muted);
-}
-
-/* ================================================
-   Bottom panels — dark cards with golden accents
-   ================================================ */
-.bottom-panels {
-  margin-top: var(--space-lg);
-  width: 100%;
-  max-width: min(1280px, calc(100vh - 160px));
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--space-md);
 }
 
 .panel {
@@ -848,19 +830,37 @@ canvas.locked {
 }
 
 /* ================================================
-   Responsive — 768px breakpoint
+   Responsive — stack on narrow screens
    ================================================ */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
+  .game-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .side-panel {
+    max-width: 100%;
+    min-width: unset;
+    width: 100%;
+  }
+
+  .left-panel {
+    order: 2;
+  }
+
+  .board-panel {
+    order: 1;
+  }
+
+  .right-panel {
+    order: 3;
+  }
+
   canvas {
     width: 100%;
     max-width: 100%;
     height: auto;
     aspect-ratio: 1;
-  }
-
-  .bottom-panels {
-    grid-template-columns: 1fr;
-    max-width: 100%;
   }
 }
 
