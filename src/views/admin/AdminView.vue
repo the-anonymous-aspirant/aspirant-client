@@ -3,7 +3,7 @@
     <h1>Admin</h1>
     <h2 class="page-subtitle">Admin stuff. Don't break anything.</h2>
 
-    <div class="application-cards">
+    <div class="application-list">
       <application-card
         :image-url="appImages.default"
         title="Assets"
@@ -91,70 +91,66 @@
 
 <style scoped>
   .admin-view {
+    text-align: center;
     padding: var(--space-lg);
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: flex-start;
     min-height: 100vh;
-    width: 100%;
-    max-width: 900px;
-    margin: 0 auto;
-    color: var(--text-on-light);
   }
 
-  .page-subtitle {
-    color: var(--text-muted);
-    font-weight: normal;
+  .admin-view h2 {
     margin-bottom: var(--space-xl);
   }
 
-  .application-cards {
+  .application-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: var(--space-lg);
     margin: var(--space-lg) auto;
     width: 100%;
+    max-width: 900px;
     justify-content: center;
     padding: var(--space-sm);
   }
 
-  .application-cards :deep(.application-card) {
+  .application-list :deep(.application-card) {
     width: 100%;
     height: 160px;
   }
 
-  .application-cards :deep(.app-image) {
+  .application-list :deep(.app-image) {
     height: 60px;
     padding: var(--space-xs);
     padding-top: var(--space-sm);
   }
 
-  .application-cards :deep(.card-content) {
+  .application-list :deep(.card-content) {
     padding: var(--space-sm);
     gap: var(--space-2xs);
   }
 
-  .application-cards :deep(.card-content h2) {
+  .application-list :deep(.card-content h2) {
     font-size: var(--text-sm);
     margin: 0 0 var(--space-2xs);
   }
 
-  .application-cards :deep(.card-content p) {
+  .application-list :deep(.card-content p) {
     font-size: var(--text-xs);
   }
 
-  /* Mobile */
   @media (max-width: 767px) {
     .admin-view {
       padding: var(--space-md) var(--space-sm);
     }
 
-    .application-cards {
+    .application-list {
       grid-template-columns: repeat(2, 1fr);
       gap: var(--space-md);
     }
 
-    .application-cards :deep(.application-card) {
+    .application-list :deep(.application-card) {
       max-width: none;
       height: 160px;
     }
