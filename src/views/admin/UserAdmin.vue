@@ -70,7 +70,7 @@
       async fetchUsers() {
         try {
           const response = await axios.get('/api/data_models/users');
-          this.users = response.data.data;
+          this.users = response.data.items || response.data.data;
         } catch (error) {
           console.error('Error fetching users:', error);
         }
