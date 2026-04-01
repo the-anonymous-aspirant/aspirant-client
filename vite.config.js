@@ -12,7 +12,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8081',
+        target: `http://localhost:${process.env.API_PORT || '8081'}`,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },

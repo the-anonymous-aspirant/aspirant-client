@@ -17,6 +17,12 @@
         route="flappyduo"
         @card-click="goToGame"
       />
+      <application-card
+        title="Easter Egg Hunt"
+        description="Reveal squares to find hidden eggs"
+        route="easter-hunt"
+        @card-click="goToGame"
+      />
     </div>
   </div>
 </template>
