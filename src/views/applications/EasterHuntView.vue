@@ -122,6 +122,17 @@ const EMPTY_FILL = null;
 const GRID_LINE = 'rgba(255, 255, 255, 0.04)';
 const GRID_LINE_OVERLAY = 'rgba(0, 0, 0, 0.10)';
 
+// Player color palette — 12 distinct hues for overlay tinting
+const PLAYER_COLORS = [
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
+  '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
+  '#BB8FCE', '#85C1E9', '#F0B27A', '#82E0AA',
+];
+
+function playerColor(userId) {
+  return PLAYER_COLORS[userId % PLAYER_COLORS.length];
+}
+
 // ── Web Audio API sound effects ──────────────────
 let audioCtx = null;
 function getAudioCtx() {
@@ -445,6 +456,18 @@ export default {
           }
         }
       }
+
+      // Player color overlay — thin tint showing who revealed each cell
+      ctx.globalAlpha = 0.18;
+      for (const sq of board.revealed) {
+        if (sq.user_id) {
+          ctx.fillStyle = playerColor(sq.user_id);
+          const px = sq.x * CELL_SIZE;
+          const py = sq.y * CELL_SIZE;
+          ctx.fillRect(px, py, CELL_SIZE, CELL_SIZE);
+        }
+      }
+      ctx.globalAlpha = 1;
 
       // Admin reveal overlay — outline each egg's cells
       if (this.showReveal && this.adminEggs) {
