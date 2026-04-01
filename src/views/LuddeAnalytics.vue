@@ -174,7 +174,7 @@
       async fetchFeedingTimes() {
         try {
           const response = await axios.get('/api/data_models/ludde_feeding_times');
-          this.feedingTimes = response.data.data.reverse(); // Access data within response
+          this.feedingTimes = (response.data.items || response.data.data).reverse();
           console.log('feedingTimes fetched successfully');
         } catch (error) {
           console.error('Error fetching feedingTimes:', error);
