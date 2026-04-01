@@ -119,20 +119,13 @@
 
 <style scoped>
   .trusted {
+    text-align: center;
+    padding: var(--space-lg);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
     min-height: 100vh;
-    color: var(--text-on-light);
-    width: 100%;
-    padding: var(--space-lg);
-  }
-
-  .trusted-content {
-    text-align: center;
-    width: 100%;
-    max-width: 900px;
   }
 
   .trusted-content h2 {
@@ -145,6 +138,7 @@
     gap: var(--space-lg);
     margin: var(--space-lg) auto;
     width: 100%;
+    max-width: 900px;
     justify-content: center;
     padding: var(--space-sm);
   }
