@@ -36,13 +36,15 @@
             Log in to play
           </div>
           <div v-else-if="isAdmin" class="cooldown-status ready">
-            Admin: no cooldown
+            Admin: unlimited clicks
           </div>
-          <div v-else-if="cooldownRemaining > 0" class="cooldown-status waiting">
-            Next click in <strong>{{ cooldownText }}</strong>
+          <div v-else-if="clicksRemaining > 0" class="cooldown-status ready">
+            <strong>{{ clicksRemaining }}</strong> click{{ clicksRemaining === 1 ? '' : 's' }} remaining
+            <div class="refill-hint">+1 in {{ refillText }}</div>
           </div>
-          <div v-else class="cooldown-status ready">
-            Ready to click!
+          <div v-else class="cooldown-status waiting">
+            No clicks left
+            <div class="refill-hint">+1 in {{ refillText }}</div>
           </div>
         </div>
 
@@ -239,8 +241,9 @@ export default {
       overlay: null,
       revealedSet: new Set(),
       revealedMap: {},
-      cooldownRemaining: 0,
-      cooldownTimer: null,
+      clicksRemaining: 0,
+      refillSeconds: 0,
+      refillTimer: null,
       pollTimer: null,
       countdownTimer: null,
       timeLeft: 0,
@@ -265,11 +268,11 @@ export default {
       return this.gameState?.is_locked || false;
     },
     canClick() {
-      return this.isLoggedIn && !this.isLocked && this.cooldownRemaining <= 0 && !this.clickPending;
+      return this.isLoggedIn && !this.isLocked && this.clicksRemaining > 0 && !this.clickPending;
     },
-    cooldownText() {
-      const m = Math.floor(this.cooldownRemaining / 60);
-      const s = this.cooldownRemaining % 60;
+    refillText() {
+      const m = Math.floor(this.refillSeconds / 60);
+      const s = this.refillSeconds % 60;
       return `${m}:${String(s).padStart(2, '0')}`;
     },
     timeLeftText() {
@@ -320,15 +323,24 @@ export default {
       this.timeLeft = Math.max(0, Math.floor((lockAt - Date.now()) / 1000));
     },
 
-    async fetchCooldown() {
+    async fetchBudget() {
       if (!this.isLoggedIn) return;
       try {
         const res = await axios.get('/api/games/easter-hunt/cooldown');
         const data = res.data.data;
-        this.cooldownRemaining = data.on_cooldown ? data.remaining_seconds : 0;
+        this.clicksRemaining = data.clicks_remaining;
+        this.refillSeconds = data.next_refill_seconds || 0;
+        if (this.clicksRemaining > 0) {
+          this.computeRefillCountdown(data.next_refill_at);
+        }
       } catch (e) {
         // Synced on next click
       }
+    },
+
+    computeRefillCountdown(nextRefillAt) {
+      const refillTime = new Date(nextRefillAt).getTime();
+      this.refillSeconds = Math.max(0, Math.floor((refillTime - Date.now()) / 1000));
     },
 
     handleCanvasClick(e) {
@@ -340,8 +352,8 @@ export default {
         this.showToast('The hunt has ended!', 'warn');
         return;
       }
-      if (this.cooldownRemaining > 0) {
-        this.showToast(`Wait ${this.cooldownText} before clicking`, 'warn');
+      if (this.clicksRemaining <= 0) {
+        this.showToast(`No clicks left — next in ${this.refillText}`, 'warn');
         return;
       }
       if (!this.gameState) return;
@@ -362,7 +374,10 @@ export default {
       try {
         const res = await axios.post('/api/games/easter-hunt/clicks', { x, y });
         const data = res.data.data;
-        this.cooldownRemaining = data.next_click_seconds;
+        this.clicksRemaining = data.clicks_remaining;
+        if (data.next_refill_at) {
+          this.computeRefillCountdown(data.next_refill_at);
+        }
 
         const completed = data.eggs_completed_count || 0;
         const hasEggCells = (data.revealed || []).some(c => c.egg_id >= 0);
@@ -391,8 +406,8 @@ export default {
         const status = e.response?.status;
         const errData = e.response?.data?.error;
         if (status === 429) {
-          this.showToast(errData?.message || 'On cooldown', 'warn');
-          await this.fetchCooldown();
+          this.showToast(errData?.message || 'No clicks remaining', 'warn');
+          await this.fetchBudget();
         } else if (status === 409) {
           this.showToast('Area already revealed — refreshing', 'warn');
           await this.fetchState();
@@ -534,8 +549,13 @@ export default {
 
     startTimers() {
       this.pollTimer = setInterval(() => this.fetchState(), 10000);
-      this.cooldownTimer = setInterval(() => {
-        if (this.cooldownRemaining > 0) this.cooldownRemaining--;
+      this.refillTimer = setInterval(() => {
+        if (this.refillSeconds > 0) {
+          this.refillSeconds--;
+          if (this.refillSeconds <= 0 && this.clicksRemaining <= 0) {
+            this.fetchBudget();
+          }
+        }
       }, 1000);
       this.countdownTimer = setInterval(() => this.updateTimeLeft(), 1000);
     },
@@ -543,13 +563,13 @@ export default {
 
   async mounted() {
     await this.fetchState();
-    await this.fetchCooldown();
+    await this.fetchBudget();
     this.startTimers();
   },
 
   beforeUnmount() {
     clearInterval(this.pollTimer);
-    clearInterval(this.cooldownTimer);
+    clearInterval(this.refillTimer);
     clearInterval(this.countdownTimer);
     clearTimeout(this.toastTimer);
     if (this.animationFrame) cancelAnimationFrame(this.animationFrame);
@@ -672,6 +692,13 @@ canvas.locked {
 
 .cooldown-status.ready {
   color: var(--feedback-success);
+}
+
+.refill-hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: normal;
+  margin-top: 2px;
 }
 
 /* ================================================
