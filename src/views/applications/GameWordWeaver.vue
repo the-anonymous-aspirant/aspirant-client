@@ -629,7 +629,7 @@
           const response = await axios.get(
             `/api/games/scores?game=word_weaver&mode=${this.seed}&limit=10`
           );
-          this.scores = response.data.data || [];
+          this.scores = response.data.items || response.data.data || [];
         } catch (error) {
           console.error('Error fetching scores:', error);
         }
