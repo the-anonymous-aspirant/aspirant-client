@@ -59,7 +59,7 @@
         try {
           const response = await axios.get('/api/data_models/roles');
           if (response.status === 200) {
-            this.roles = response.data.data;
+            this.roles = response.data.items || response.data.data;
             console.log('Roles fetched successfully');
           } else {
             console.error('Failed to fetch roles');

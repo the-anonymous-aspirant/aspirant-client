@@ -47,7 +47,7 @@
       const fetchAllUsers = async () => {
         try {
           const response = await axios.get('/api/data_models/users');
-          const users = response.data.data || [];
+          const users = response.data.items || response.data.data || [];
 
           // Create a map of users by ID for easy lookup
           users.forEach((user) => {
@@ -65,7 +65,7 @@
       const fetchMessages = async () => {
         try {
           const response = await axios.get('/api/data_models/message');
-          messages.value = response.data.data;
+          messages.value = response.data.items || response.data.data;
         } catch (error) {
           console.error('Error fetching messages:', error);
         }
