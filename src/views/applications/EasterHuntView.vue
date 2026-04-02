@@ -29,28 +29,16 @@
     <div v-if="activeTab === 'rules'" class="rules-content">
       <div class="panel rules-panel">
         <h3>How to Play</h3>
-        <div class="rules-list">
-          <div class="rule-item">
-            <span class="rule-icon">&#127807;</span>
-            <p>Hidden beneath the overgrowth are <strong>24 colourful eggs</strong>. Click any square on the board to reveal a 3&times;3 area.</p>
-          </div>
-          <div class="rule-item">
-            <span class="rule-icon">&#9203;</span>
-            <p>You have a limited number of clicks that <strong>refill over time</strong> &mdash; spend them wisely!</p>
-          </div>
-          <div class="rule-item">
-            <span class="rule-icon">&#127942;</span>
-            <p>When every cell of an egg is uncovered, you <strong>score a point</strong>. The player who reveals the final cell claims it.</p>
-          </div>
-          <div class="rule-item">
-            <span class="rule-icon">&#129309;</span>
-            <p>This is a <strong>shared board</strong> &mdash; everyone sees the same grid. Coordinate or compete!</p>
-          </div>
-          <div class="rule-item">
-            <span class="rule-icon">&#128276;</span>
-            <p>The hunt ends when the timer runs out. Highest score wins.</p>
-          </div>
-        </div>
+        <ul class="rules-list">
+          <li>Somewhere on the board, <strong>24 colourful eggs</strong> are hiding under the dark squares. Click anywhere on the board to reveal a <strong>5&times;5 area</strong>.</li>
+          <li>You have a limited number of clicks that <strong>refill over time</strong> &mdash; spend them wisely!</li>
+          <li>When every cell of an egg is uncovered, you <strong>score a point</strong>. The player who reveals the final cell claims it.</li>
+          <li>This is a <strong>shared board</strong> &mdash; everyone sees the same grid. Coordinate or compete!</li>
+          <li>The hunt ends when the timer runs out. At the end, every competitor gets to <strong>pick presents from a basket</strong>, in the order of how many eggs they collected.</li>
+        </ul>
+        <h3>Competitors</h3>
+        <p class="competitors">aspirant_admin, alex, jenny, maria, robert, vinoly</p>
+        <p class="encouragement">Ready alex, jenny, maria, robert, vinoly? Let's go!</p>
       </div>
     </div>
 
@@ -711,28 +699,30 @@ export default {
 }
 
 .rules-list {
+  margin: 0 0 var(--space-md);
+  padding-left: var(--space-lg);
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
-}
-
-.rule-item {
-  display: flex;
-  align-items: flex-start;
   gap: var(--space-sm);
 }
 
-.rule-icon {
-  font-size: var(--text-xl);
-  flex-shrink: 0;
-  line-height: 1.4;
-}
-
-.rule-item p {
-  margin: 0;
+.rules-list li {
   color: var(--text-on-dark);
   font-size: var(--text-sm);
   line-height: 1.6;
+}
+
+.competitors {
+  color: var(--text-on-dark);
+  font-size: var(--text-sm);
+  margin: var(--space-xs) 0 var(--space-md);
+}
+
+.encouragement {
+  color: var(--brand-primary);
+  font-weight: 600;
+  font-size: var(--text-md);
+  margin: 0;
 }
 
 /* ================================================
