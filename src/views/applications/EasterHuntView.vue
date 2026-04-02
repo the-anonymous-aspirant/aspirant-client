@@ -36,8 +36,6 @@
           <li>This is a <strong>shared board</strong> &mdash; everyone sees the same grid. Coordinate or compete!</li>
           <li>The hunt ends when the timer runs out. At the end, every competitor gets to <strong>pick presents from a basket</strong>, in the order of how many eggs they collected.</li>
         </ul>
-        <h3>Competitors</h3>
-        <p class="competitors">aspirant_admin, alex, jenny, maria, robert, vinoly</p>
         <p class="encouragement">Ready alex, jenny, maria, robert, vinoly? Let's go!</p>
       </div>
     </div>
@@ -710,12 +708,6 @@ export default {
   color: var(--text-on-dark);
   font-size: var(--text-sm);
   line-height: 1.6;
-}
-
-.competitors {
-  color: var(--text-on-dark);
-  font-size: var(--text-sm);
-  margin: var(--space-xs) 0 var(--space-md);
 }
 
 .encouragement {
