@@ -18,6 +18,7 @@
         @card-click="goToGame"
       />
       <application-card
+        :image-url="gameImages.easterhunt"
         title="Easter Egg Hunt"
         description="Reveal squares to find hidden eggs"
         route="easter-hunt"
@@ -41,6 +42,7 @@
         gameImages: {
           wordweaver: '',
           flappyduo: '',
+          easterhunt: '',
         },
       };
     },
@@ -52,6 +54,7 @@
         try {
           this.gameImages.wordweaver = await AssetManager.getAsset('wordweaver_icon');
           this.gameImages.flappyduo = await AssetManager.getAsset('flappyduo_icon');
+          this.gameImages.easterhunt = await AssetManager.getAsset('easter_hunt_icon');
         } catch (error) {
           console.error('Failed to load game images:', error);
         }
