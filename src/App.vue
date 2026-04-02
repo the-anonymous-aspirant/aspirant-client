@@ -19,7 +19,7 @@
         ></div>
         
         <Sidebar></Sidebar>
-        <div :style="{ 'margin-left': isMobile ? '0px' : sidebarWidth }">
+        <div :style="{ 'margin-left': isMobile ? '0px' : sidebarWidth, flex: '1', 'min-width': '0' }">
           <router-view :key="$route.path" class="fade-in"> </router-view>
         </div>
         
