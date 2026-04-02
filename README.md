@@ -36,7 +36,7 @@ docker run -p 80:80 aspirant-client
 ### Admin Section
 - System health monitoring with API status cards
 - User management (CRUD)
-- S3 asset management
+- Asset management
 - Voice commander (transcription + command parsing)
 
 ## Tech Stack
@@ -66,7 +66,7 @@ src/
   App.vue                   -- Root layout with sidebar
   router/router.js          -- Routes and role guards
   global_state_manager.js   -- Sidebar, mobile, debug state
-  asset_manager.js          -- S3 asset caching
+  asset_manager.js          -- Asset caching
   components/               -- Reusable components
   views/                    -- Page views organized by section
   resources/games/          -- Game data and quiz content
