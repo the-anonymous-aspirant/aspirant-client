@@ -27,6 +27,7 @@ const assetMap = {
   sql_icon: { hash: '7739ebf38046c3faf17fcfbd22958a82', type: AssetType.IMAGE },
   wordweaver_icon: { hash: '77977afb5c2fe33b8098bc54d2e3a569', type: AssetType.IMAGE },
   flappyduo_icon: { hash: '346984b835ca32c12449b78cd3665901', type: AssetType.IMAGE },
+  easter_hunt_icon: { hash: 'edda268a0bcda395182e32cd35700765', type: AssetType.IMAGE },
   timeline_tech_icon: { hash: 'd23d0c2094e6621ea7b34cc65b793b18', type: AssetType.IMAGE },
   timeline_icon: { hash: '81a49b7a9f6c94b771d96f2f83edf4d7', type: AssetType.IMAGE },
   transparency_icon: { hash: '2c267c4b8ca0de90847cb4fcb7ffb1e3', type: AssetType.IMAGE },
