@@ -624,16 +624,18 @@ export default {
 }
 
 .board-panel {
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
 }
 
 .side-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  min-width: 200px;
-  max-width: 260px;
-  flex: 1;
+  width: 240px;
+  flex-shrink: 0;
 }
 
 canvas {
@@ -895,9 +897,8 @@ canvas.locked {
   }
 
   .side-panel {
-    max-width: 100%;
-    min-width: unset;
     width: 100%;
+    flex-shrink: 1;
   }
 
   .left-panel {
