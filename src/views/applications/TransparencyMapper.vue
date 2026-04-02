@@ -144,12 +144,8 @@
         reader.readAsDataURL(file);
       },
       processImage(imageData = null) {
-        if (this.tolerance === 0) {
-          return;
-        }
-
         const imagesToProcess = imageData ? [imageData] : this.images;
-        
+
         imagesToProcess.forEach(imgData => {
           const img = new Image();
           img.src = imgData.originalSrc;
@@ -159,19 +155,21 @@
             canvas.width = img.width;
             canvas.height = img.height;
             ctx.drawImage(img, 0, 0);
-            const imageData = ctx.getImageData(0, 0, img.width, img.height);
-            const data = imageData.data;
-            const [r, g, b] = this.hexToRgb(this.selectedColor);
-            for (let i = 0; i < data.length; i += 4) {
-              if (
-                this.isWithinTolerance(data[i], r) &&
-                this.isWithinTolerance(data[i + 1], g) &&
-                this.isWithinTolerance(data[i + 2], b)
-              ) {
-                data[i + 3] = 0; // Set alpha to 0
+            if (this.tolerance > 0) {
+              const imageData = ctx.getImageData(0, 0, img.width, img.height);
+              const data = imageData.data;
+              const [r, g, b] = this.hexToRgb(this.selectedColor);
+              for (let i = 0; i < data.length; i += 4) {
+                if (
+                  this.isWithinTolerance(data[i], r) &&
+                  this.isWithinTolerance(data[i + 1], g) &&
+                  this.isWithinTolerance(data[i + 2], b)
+                ) {
+                  data[i + 3] = 0; // Set alpha to 0
+                }
               }
+              ctx.putImageData(imageData, 0, 0);
             }
-            ctx.putImageData(imageData, 0, 0);
             imgData.processedSrc = canvas.toDataURL('image/png');
           };
         });
