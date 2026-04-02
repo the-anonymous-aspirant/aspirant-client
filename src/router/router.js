@@ -19,7 +19,7 @@ import GameTimelineConflictsView from '../views/applications/GameTimelineConflic
 import TransparencyMapperView from '../views/applications/TransparencyMapper.vue';
 import RemarkablePdfsView from '../views/applications/RemarkablePdfs.vue';
 import UserAdmin from '../views/admin/UserAdmin.vue';
-import Assets from '../views/admin/S3Assets.vue';
+import Assets from '../views/admin/Assets.vue';
 import VoiceCommander from '../views/admin/VoiceCommander.vue';
 import SystemHealth from '../views/admin/SystemHealth.vue';
 import Remarkable from '../views/admin/Remarkable.vue';
