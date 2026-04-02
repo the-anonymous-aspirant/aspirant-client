@@ -42,7 +42,7 @@
       <!-- Batch Actions -->
       <div v-if="images.length > 1" class="batch-actions">
         <button @click="downloadAllImages" class="action-button">Download All</button>
-        <button @click="uploadAllImages" class="action-button">Upload All to S3</button>
+        <button @click="uploadAllImages" class="action-button">Upload All</button>
       </div>
 
       <!-- Individual Images -->
@@ -67,7 +67,7 @@
           </div>
           <div class="button-group">
             <button @click="downloadImageById(imageData)" class="action-button">Download</button>
-            <button @click="uploadImageById(imageData)" class="action-button">Upload to S3</button>
+            <button @click="uploadImageById(imageData)" class="action-button">Upload</button>
           </div>
         </div>
       </div>
