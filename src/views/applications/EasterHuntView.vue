@@ -11,7 +11,51 @@
       <em>No active game right now</em>
     </h2>
 
-    <div v-if="gameState" class="game-layout">
+    <!-- Tabs -->
+    <div class="tab-bar">
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'rules' }"
+        @click="activeTab = 'rules'"
+      >Rules</button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'game' }"
+        @click="activeTab = 'game'"
+      >Game</button>
+    </div>
+
+    <!-- Rules tab -->
+    <div v-if="activeTab === 'rules'" class="rules-content">
+      <div class="panel rules-panel">
+        <h3>How to Play</h3>
+        <div class="rules-list">
+          <div class="rule-item">
+            <span class="rule-icon">&#127807;</span>
+            <p>Hidden beneath the overgrowth are <strong>24 colourful eggs</strong>. Click any square on the board to reveal a 3&times;3 area.</p>
+          </div>
+          <div class="rule-item">
+            <span class="rule-icon">&#9203;</span>
+            <p>You have a limited number of clicks that <strong>refill over time</strong> &mdash; spend them wisely!</p>
+          </div>
+          <div class="rule-item">
+            <span class="rule-icon">&#127942;</span>
+            <p>When every cell of an egg is uncovered, you <strong>score a point</strong>. The player who reveals the final cell claims it.</p>
+          </div>
+          <div class="rule-item">
+            <span class="rule-icon">&#129309;</span>
+            <p>This is a <strong>shared board</strong> &mdash; everyone sees the same grid. Coordinate or compete!</p>
+          </div>
+          <div class="rule-item">
+            <span class="rule-icon">&#128276;</span>
+            <p>The hunt ends when the timer runs out. Highest score wins.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game tab -->
+    <div v-if="activeTab === 'game' && gameState" class="game-layout">
       <!-- Left panel: Eggs + Cooldown -->
       <div class="side-panel left-panel">
         <div class="panel">
@@ -247,6 +291,7 @@ export default {
       pollTimer: null,
       countdownTimer: null,
       timeLeft: 0,
+      activeTab: 'rules',
       toast: null,
       toastTimer: null,
       showReveal: false,
@@ -579,6 +624,11 @@ export default {
     gameState() {
       this.$nextTick(() => this.draw());
     },
+    activeTab(val) {
+      if (val === 'game') {
+        this.$nextTick(() => this.draw());
+      }
+    },
   },
 };
 </script>
@@ -610,6 +660,79 @@ export default {
 .page-subtitle.ended {
   color: var(--feedback-error);
   font-weight: bold;
+}
+
+/* ================================================
+   Tabs
+   ================================================ */
+.tab-bar {
+  display: flex;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-lg);
+}
+
+.tab-btn {
+  padding: var(--space-xs) var(--space-lg);
+  border: 2px solid var(--border-card);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-family: var(--font-family-base);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-base),
+    color var(--transition-base),
+    border-color var(--transition-base);
+}
+
+.tab-btn:hover {
+  border-color: var(--brand-primary);
+  color: var(--text-on-dark);
+}
+
+.tab-btn.active {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: #1a1a1a;
+}
+
+/* ================================================
+   Rules content
+   ================================================ */
+.rules-content {
+  max-width: 640px;
+  width: 100%;
+}
+
+.rules-panel {
+  text-align: left;
+}
+
+.rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.rule-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.rule-icon {
+  font-size: var(--text-xl);
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+.rule-item p {
+  margin: 0;
+  color: var(--text-on-dark);
+  font-size: var(--text-sm);
+  line-height: 1.6;
 }
 
 /* ================================================
