@@ -202,7 +202,7 @@
         const link = document.createElement('a');
         link.href = imageData.processedSrc;
         const filename = imageData.fileName.trim() || 'modified-image';
-        link.download = `${filename}.${imageData.fileType}`;
+        link.download = `${filename}.png`;
         link.click();
       },
       downloadAllImages() {
@@ -259,14 +259,13 @@
 
         const dataUrl = imageData.processedSrc;
         const blob = await (await fetch(dataUrl)).blob();
-        const extension = imageData.fileType;
-        const newFile = new File([blob], filename, { type: `image/${extension}` });
+        const newFile = new File([blob], filename, { type: 'image/png' });
 
         const formData = new FormData();
         formData.append('image', newFile);
         formData.append(
           'path',
-          `aspirant-website/images/transparencyApp/${filename}.${extension}`
+          `aspirant-website/images/transparencyApp/${filename}.png`
         );
 
         try {
