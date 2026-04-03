@@ -157,6 +157,7 @@
     box-sizing: border-box;
     transition: border-color var(--transition-moderate);
     font-size: var(--text-base);
+    direction: ltr;
   }
 
   .form-group input:focus {
