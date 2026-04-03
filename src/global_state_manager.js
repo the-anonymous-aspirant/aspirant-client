@@ -23,10 +23,21 @@ export const collapsed = ref(false);
 export const isMobile = ref(false);
 export const sidebarHidden = ref(false);
 
-// Check if device is mobile
+// Track last known width to distinguish keyboard resize (height-only) from real resize
+let lastKnownWidth = window.innerWidth;
+
+// Check if device is mobile — only react to actual width changes
 export const checkMobile = () => {
-  isMobile.value = window.innerWidth <= 768;
-  if (isMobile.value) {
+  const currentWidth = window.innerWidth;
+  const widthChanged = currentWidth !== lastKnownWidth;
+  lastKnownWidth = currentWidth;
+
+  const wasMobile = isMobile.value;
+  isMobile.value = currentWidth <= 768;
+
+  // Only hide sidebar when transitioning to mobile via a real width change,
+  // not when the keyboard opens (height-only resize)
+  if (isMobile.value && !wasMobile && widthChanged) {
     sidebarHidden.value = true;
   }
 };
