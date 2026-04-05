@@ -47,13 +47,6 @@
           route="wikipedia"
           @card-click="goToApplication"
         />
-        <application-card
-          :image-url="appImages.advisor"
-          title="Advisor"
-          description="Ask about contracts, insurance, and legal documents"
-          route="advisor"
-          @card-click="goToApplication"
-        />
       </div>
     </div>
   </div>
@@ -76,7 +69,6 @@
           gift: '',
           translator: '',
           wikipedia: '',
-          advisor: '',
         },
       };
     },
@@ -92,7 +84,6 @@
           gift: '30year_gift_icon',
           translator: 'home_icon',
           wikipedia: 'home_icon',
-          advisor: 'home_icon',
         };
         await Promise.all(
           Object.entries(assets).map(async ([key, assetName]) => {
