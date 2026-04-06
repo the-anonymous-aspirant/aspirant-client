@@ -803,14 +803,16 @@
           ) || window.innerWidth <= 768;
       },
 
-      // Set responsive cell size based on screen width
+      // Set responsive cell size based on actual container width
       setResponsiveCellSize() {
-        const containerWidth = Math.min(window.innerWidth * 0.9, 600); // 90% of window width, max 600px
+        const el = document.getElementById('wordweaver');
+        const containerWidth = el ? Math.min(el.getBoundingClientRect().width, 600) : Math.min(window.innerWidth * 0.9, 600);
         const isMobileWidth = window.innerWidth <= 768;
         const boardPadding = isMobileWidth ? 24 : 48; // 2 * 12px on mobile, 2 * 24px on desktop
+        const boardBorder = isMobileWidth ? 4 : 6; // 2 * 2px on mobile, 2 * 3px on desktop
         const gapSize = isMobileWidth ? 4 : 8;
-        const totalGaps = (BOARD_CONFIG.COLS - 1) * gapSize; // gaps between cells
-        const cellSize = Math.max(28, Math.floor((containerWidth - boardPadding - totalGaps) / BOARD_CONFIG.COLS));
+        const totalGaps = (BOARD_CONFIG.COLS - 1) * gapSize;
+        const cellSize = Math.max(28, Math.floor((containerWidth - boardPadding - boardBorder - totalGaps) / BOARD_CONFIG.COLS));
         document.documentElement.style.setProperty('--cell-size', cellSize + 'px');
 
         // Adjust font size for cells based on cell size
