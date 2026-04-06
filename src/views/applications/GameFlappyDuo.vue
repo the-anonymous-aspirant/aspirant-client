@@ -2,14 +2,14 @@
   <div class="flappy-duo-container">
     <h1>Flappy Duo</h1>
     <div class="game-instructions" v-if="!isPlaying && !gameOver">
-      <p>
-        <strong>Player 1 :</strong> Press <kbd>W</kbd> to flap or tap <strong>left side</strong> of
-        screen
-      </p>
-      <p>
-        <strong>Player 2 :</strong> Press <kbd>↑</kbd> (Up Arrow) to flap or tap
-        <strong>right side</strong> of screen
-      </p>
+      <template v-if="isMobileDevice">
+        <p>Tap <strong>left side</strong> to flap Player 1</p>
+        <p>Tap <strong>right side</strong> to flap Player 2</p>
+      </template>
+      <template v-else>
+        <p><strong>Player 1:</strong> Press <kbd>W</kbd> to flap</p>
+        <p><strong>Player 2:</strong> Press <kbd>↑</kbd> (Up Arrow) to flap</p>
+      </template>
       <p>Survive as long as possible to set a high score!</p>
       <button class="start-button" @click="startGame">Start Game</button>
     </div>
@@ -38,7 +38,7 @@
       <div
         class="bird player1"
         :class="{ dead: player1.isDead }"
-        :style="{ top: player1.y + 'px', transform: `rotate(${player1.rotation}deg)` }"
+        :style="{ top: player1.y + 'px', left: player1.x + 'px', transform: `rotate(${player1.rotation}deg)` }"
       >
         <div class="bird-face"></div>
         <div class="bird-wing" :class="{ flap: player1.isFlapping }"></div>
@@ -46,7 +46,7 @@
       <div
         class="bird player2"
         :class="{ dead: player2.isDead }"
-        :style="{ top: player2.y + 'px', transform: `rotate(${player2.rotation}deg)` }"
+        :style="{ top: player2.y + 'px', left: player2.x + 'px', transform: `rotate(${player2.rotation}deg)` }"
       >
         <div class="bird-face"></div>
         <div class="bird-wing" :class="{ flap: player2.isFlapping }"></div>
@@ -55,7 +55,7 @@
         v-for="(pipe, index) in pipes"
         :key="index"
         class="pipe-container"
-        :style="{ left: pipe.x + 'px' }"
+        :style="{ left: pipe.x + 'px', width: pipeWidth + 'px' }"
       >
         <div class="pipe top" :style="{ height: pipe.topHeight + 'px' }"></div>
         <div class="pipe bottom" :style="{ height: pipe.bottomHeight + 'px' }"></div>
@@ -88,14 +88,14 @@
     name: 'GameFlappyDuo',
     data() {
       return {
-        gameWidth: 800, // Increased from 1000 for a much wider game area
-        gameHeight: 1000,
+        gameWidth: 1200,
+        gameHeight: 700,
         gravity: 0.3,
         isPlaying: false,
         gameOver: false,
         gameLoop: null,
         player1: {
-          x: 250, // Adjusted position for wider viewport
+          x: 240,
           y: 300,
           width: 30,
           height: 24,
@@ -107,7 +107,7 @@
           isFlapping: false,
         },
         player2: {
-          x: 400, // Adjusted position for wider viewport
+          x: 420,
           y: 300,
           width: 30,
           height: 24,
@@ -120,9 +120,9 @@
         },
         pipes: [],
         pipeWidth: 80,
-        pipeGap: 400,
-        pipeDistance: 600, // Increased distance between pipes for wider game
-        pipeSpeed: 0, // Slightly increased for better challenge in wider game
+        pipeGap: 300,
+        pipeDistance: 600,
+        pipeSpeed: 0,
         lastPipePosition: 0,
         groundHeight: 25,
         bgMusicUrl: '', // URL for background music
@@ -158,15 +158,7 @@
       window.addEventListener('keydown', this.handleKeyDown);
       window.addEventListener('keyup', this.handleKeyUp);
 
-      // Force the game area width using the ref
-      if (this.$refs.gameArea) {
-        // Set a fixed width on desktop, but allow it to be responsive on mobile
-        if (window.innerWidth > 768) {
-          this.$refs.gameArea.style.width = '1200px';
-        }
-        // Then read dimensions from the now properly sized element
-        this.gameHeight = this.$refs.gameArea.clientHeight;
-      }
+      // Initialize game dimensions via resize handler (called below)
 
       // Detect device type for controls
       this.isMobileDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -288,28 +280,31 @@
         }
       },
       resetPlayers() {
-        // Calculate initial Y position based on percentage of game height
-        const initialY = this.gameHeight * 0.4; // Position at 40% from the top
+        const initialY = this.gameHeight * 0.4;
+        const p1x = Math.round(this.gameWidth * 0.2);
+        const p2x = Math.round(this.gameWidth * 0.35);
+        const birdSize = this.isMobileLayout ? 24 : 30;
+        const birdHeight = this.isMobileLayout ? 18 : 24;
 
         this.player1 = {
-          x: 250, // Match the updated x position
+          x: p1x,
           y: initialY,
-          width: 30,
-          height: 24,
+          width: birdSize,
+          height: birdHeight,
           velocity: 0,
-          jumpForce: this.isMobileLayout ? -5.5 : -6.5, // Reduce jump force on mobile
+          jumpForce: this.isMobileLayout ? -5 : -6.5,
           score: 0,
           isDead: false,
           rotation: 0,
           isFlapping: false,
         };
         this.player2 = {
-          x: 400, // Match the updated x position
+          x: p2x,
           y: initialY,
-          width: 30,
-          height: 24,
+          width: birdSize,
+          height: birdHeight,
           velocity: 0,
-          jumpForce: this.isMobileLayout ? -5.5 : -6.5, // Reduce jump force on mobile
+          jumpForce: this.isMobileLayout ? -5 : -6.5,
           score: 0,
           isDead: false,
           rotation: 0,
@@ -574,47 +569,44 @@
 
       handleResize() {
         this.screenWidth = window.innerWidth;
-
-        // Set mobile layout flag
         this.isMobileLayout = this.screenWidth <= 768;
 
-        // Adjust game area dimensions for mobile
-        if (this.$refs.gameArea) {
-          if (this.isMobileLayout) {
-            // On mobile, set height to 80% of viewport height, but no more than 500px
-            const adjustedHeight = Math.min(window.innerHeight * 0.8, 500);
-            this.$refs.gameArea.style.height = `${adjustedHeight}px`;
-            this.gameHeight = adjustedHeight;
+        if (!this.$refs.gameArea) return;
 
-            // Adjust the pipe gap to be easier on mobile
-            this.initialPipeGap = 320; // Slightly easier gap on mobile
+        if (this.isMobileLayout) {
+          // Mobile: fit game area to screen
+          const adjustedHeight = Math.min(window.innerHeight * 0.7, 500);
+          this.$refs.gameArea.style.height = `${adjustedHeight}px`;
+          this.$refs.gameArea.style.width = '100%';
+          this.gameHeight = adjustedHeight;
+          this.gameWidth = this.$refs.gameArea.clientWidth;
 
-            // Reset pipe gap if game is active
-            if (this.isPlaying && !this.gameOver) {
-              this.pipeGap = this.initialPipeGap;
-            }
+          this.initialPipeGap = 280;
+          this.pipeWidth = Math.max(40, this.gameWidth * 0.08);
+          this.pipeDistance = Math.max(200, this.gameWidth * 0.5);
+          this.gravity = 0.22;
 
-            // Adjust gravity for mobile
-            this.gravity = 0.25; // Slightly lower gravity on mobile
-          } else {
-            // On desktop, use original values
-            this.$refs.gameArea.style.height = '700px';
-            this.gameHeight = this.$refs.gameArea.clientHeight;
-            this.initialPipeGap = 300; // Original pipe gap
-            this.gravity = 0.3; // Original gravity
-          }
-
-          // If game is running, make sure players are positioned correctly
           if (this.isPlaying && !this.gameOver) {
-            // Only adjust position if it's too low (near the bottom)
-            const safeAreaY = this.gameHeight * 0.6; // Consider bottom 40% as unsafe
-            if (this.player1.y > safeAreaY) {
-              this.player1.y = this.gameHeight * 0.4;
-            }
-            if (this.player2.y > safeAreaY) {
-              this.player2.y = this.gameHeight * 0.4;
-            }
+            this.pipeGap = Math.max(this.pipeGap, this.initialPipeGap);
           }
+        } else {
+          // Desktop: fixed dimensions
+          this.$refs.gameArea.style.height = '700px';
+          this.$refs.gameArea.style.width = '1200px';
+          this.gameHeight = this.$refs.gameArea.clientHeight;
+          this.gameWidth = 1200;
+
+          this.initialPipeGap = 300;
+          this.pipeWidth = 80;
+          this.pipeDistance = 600;
+          this.gravity = 0.3;
+        }
+
+        // Keep players in bounds during resize
+        if (this.isPlaying && !this.gameOver) {
+          const safeAreaY = this.gameHeight * 0.6;
+          if (this.player1.y > safeAreaY) this.player1.y = this.gameHeight * 0.4;
+          if (this.player2.y > safeAreaY) this.player2.y = this.gameHeight * 0.4;
         }
       },
 
@@ -632,77 +624,54 @@
   }
 
   @keyframes flashBorder {
-    0%,
-    100% {
-      border-color: var(--surface-card);
-      border-width: 4px;
-    }
-    25%,
-    75% {
-      border-color: var(--brand-primary);
-      border-width: 8px; /* Make border thicker during flash */
-    }
-    50% {
-      border-color: var(--text-on-dark);
-      border-width: 12px; /* Peak thickness */
-    }
+    0%, 100% { border-color: var(--surface-card); border-width: 4px; }
+    25%, 75% { border-color: var(--brand-primary); border-width: 8px; }
+    50% { border-color: var(--text-on-dark); border-width: 12px; }
   }
 
-  /* Full-screen difficulty flash overlay */
   .difficulty-flash-overlay {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(255, 143, 0, 0.2); /* Semi-transparent orange */
+    background-color: rgba(255, 143, 0, 0.2);
     z-index: 40;
     animation: flashOverlay 2s ease-in-out;
     display: flex;
     justify-content: center;
     align-items: center;
-    pointer-events: none; /* Allow clicks to pass through */
+    pointer-events: none;
   }
 
   @keyframes flashOverlay {
-    0%,
-    100% {
-      background-color: rgba(255, 143, 0, 0.1);
-    }
-    50% {
-      background-color: rgba(255, 143, 0, 0.3);
-    }
+    0%, 100% { background-color: rgba(255, 143, 0, 0.1); }
+    50% { background-color: rgba(255, 143, 0, 0.3); }
   }
 
-  /* Enhanced difficulty message */
   .difficulty-message {
-    background-color: rgba(255, 143, 0, 0.8); /* Semi-transparent background */
+    background-color: rgba(255, 143, 0, 0.8);
     color: var(--text-on-dark);
-    padding: var(--space-sm) var(--space-xl); /* Reduced padding */
+    padding: var(--space-sm) var(--space-xl);
     border-radius: var(--radius-lg);
-    font-size: var(--text-lg); /* Reduced font size */
+    font-size: var(--text-lg);
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
     box-shadow: 0 0 30px rgba(255, 255, 255, 0.7);
     border: 3px solid var(--text-on-dark);
     animation: pulsate 2s infinite;
-    transform: scale(0.9); /* Reduced scale */
+    transform: scale(0.9);
   }
 
   @keyframes pulsate {
-    0%,
-    100% {
-      transform: scale(0.9); /* Reduced from 1.2 */
-    }
-    50% {
-      transform: scale(1); /* Reduced from 1.3 */
-    }
+    0%, 100% { transform: scale(0.9); }
+    50% { transform: scale(1); }
   }
 
   .flappy-duo-container {
     font-family: 'Press Start 2P', 'Courier New', monospace;
     text-align: center;
     width: 100%;
-    max-width: 1600px; /* Increased from 1000px for a much wider game */
+    max-width: 1300px;
     margin: 0 auto;
     padding: var(--space-lg);
     box-sizing: border-box;
@@ -717,9 +686,9 @@
 
   .game-area {
     position: relative;
-    width: 1600px; /* Set fixed width here */
-    max-width: 100%; /* Allow scaling down for smaller screens */
-    height: 700px; /* Increased from 500px */
+    width: 1200px;
+    max-width: 100%;
+    height: 700px;
     background-color: var(--brand-accent);
     overflow: hidden;
     margin: 0 auto;
@@ -739,14 +708,12 @@
 
   .player1 {
     background-color: var(--brand-primary);
-    border: 2px solid #e65100; /* Darker shade of primary */
-    left: 250px; /* Adjusted to match data */
+    border: 2px solid #e65100;
   }
 
   .player2 {
     background-color: var(--text-on-dark);
     border: 2px solid #bdbdbd;
-    left: 400px; /* Adjusted to match data */
   }
 
   .bird-face {
@@ -781,7 +748,7 @@
 
   .pipe-container {
     position: absolute;
-    width: 80px; /* Slightly wider pipes for larger viewport */
+    width: 80px;
     height: 100%;
   }
 
@@ -789,7 +756,7 @@
     position: absolute;
     width: 100%;
     background-color: var(--brand-primary);
-    border: 4px solid #e65100; /* Darker shade of primary */
+    border: 4px solid #e65100;
   }
 
   .pipe.top {
@@ -808,9 +775,9 @@
     position: absolute;
     bottom: 0;
     width: 100%;
-    height: 25px; /* Slightly taller ground */
+    height: 25px;
     background-color: var(--surface-card);
-    border-top: 4px solid #212121; /* Darker shade of gray */
+    border-top: 4px solid #212121;
     z-index: 9;
   }
 
@@ -837,7 +804,6 @@
     font-family: 'Press Start 2P', 'Courier New', monospace;
   }
 
-  /* High scores panel */
   .high-scores-panel {
     position: absolute;
     top: 100px;
@@ -892,7 +858,7 @@
     padding: var(--space-lg);
     border-radius: var(--radius-md);
     margin: var(--space-lg) auto;
-    max-width: 600px; /* Increased from 500px */
+    max-width: 600px;
     border: 4px solid var(--text-on-light);
   }
 
@@ -913,12 +879,11 @@
     padding: 12px 24px;
     font-size: var(--text-base);
     background-color: var(--brand-primary);
-    border: none;
+    border: 2px solid #e65100;
     border-radius: 4px;
     color: var(--text-on-dark);
     cursor: pointer;
     font-family: 'Press Start 2P', 'Courier New', monospace;
-    border: 2px solid #e65100;
     transition: filter var(--transition-moderate), transform var(--transition-moderate);
   }
 
@@ -927,7 +892,6 @@
     transform: translateY(-1px);
   }
 
-  /* Add some clouds for decoration */
   .game-area::after {
     content: '';
     position: absolute;
@@ -943,161 +907,16 @@
       350px -10px 0 15px rgba(255, 255, 255, 0.7),
       500px 20px 0 20px rgba(255, 255, 255, 0.6),
       700px -15px 0 18px rgba(255, 255, 255, 0.7),
-      900px 5px 0 15px rgba(255, 255, 255, 0.6),
-      1200px -10px 0 20px rgba(255, 255, 255, 0.7); /* Added more clouds for wider area */
-    animation: moveClouds 80s linear infinite; /* Slower animation for wider area */
+      900px 5px 0 15px rgba(255, 255, 255, 0.6);
+    animation: moveClouds 80s linear infinite;
   }
 
   @keyframes moveClouds {
-    0% {
-      transform: translateX(0);
-    }
-    100% {
-      transform: translateX(-100%);
-    }
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
   }
 
-  @media (max-width: 1650px) {
-    .flappy-duo-container {
-      max-width: 100%; /* Make it fully responsive on smaller screens */
-      padding: var(--space-sm);
-    }
-
-    .game-area {
-      width: 100%; /* Scale down proportionally */
-    }
-  }
-
-  @media (max-width: 600px) {
-    .flappy-duo-container {
-      padding: var(--space-sm);
-    }
-
-    .game-area {
-      height: 500px; /* Keep a reasonable height on mobile */
-    }
-
-    .score-display {
-      font-size: var(--text-sm);
-    }
-  }
-
-  /* Apply pixelated rendering for better retro look */
-  * {
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
-  }
-
-  /* Add mobile-specific styles */
-  .touch-controls {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    z-index: 5; /* Below birds but above background */
-    pointer-events: none; /* Don't block clicks to game elements */
-  }
-
-  .touch-area {
-    flex: 1;
-    height: 100%;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    pointer-events: auto; /* Enable touch events on these areas */
-  }
-
-  .touch-indicator {
-    background-color: rgba(66, 66, 66, 0.6);
-    color: var(--text-on-dark);
-    padding: var(--space-2xs) var(--space-sm);
-    border-radius: var(--radius-sm);
-    margin-bottom: var(--space-lg);
-    font-size: var(--text-xs);
-    opacity: 0.8;
-  }
-
-  /* Adjust responsive styles */
-  @media (max-width: 768px) {
-    .flappy-duo-container {
-      padding: var(--space-2xs);
-    }
-
-    h1 {
-      font-size: var(--text-xl);
-      margin-bottom: var(--space-sm);
-    }
-
-    .game-area {
-      height: 500px;
-      border-width: 2px;
-    }
-
-    .time-display {
-      font-size: var(--text-lg);
-      padding: var(--space-2xs) var(--space-sm);
-    }
-
-    .game-instructions,
-    .game-over {
-      padding: var(--space-sm);
-      max-width: 90%;
-      font-size: var(--text-sm);
-    }
-
-    .difficulty-message {
-      font-size: var(--text-base);
-      padding: var(--space-sm) var(--space-md);
-    }
-
-    .high-scores-panel {
-      top: 60px;
-      right: 10px;
-      padding: var(--space-sm);
-      width: 120px;
-    }
-
-    .high-scores-panel h3 {
-      font-size: var(--text-sm);
-    }
-
-    .high-score-item {
-      font-size: var(--text-xs);
-    }
-
-    .pipe-container {
-      width: 60px; /* Narrower pipes on mobile */
-    }
-
-    .bird {
-      width: 28px; /* Slightly smaller birds on mobile */
-      height: 20px;
-    }
-
-    /* Show touch controls more prominently on smaller screens */
-    .touch-indicator {
-      margin-bottom: 50px;
-      padding: var(--space-sm) var(--space-md);
-      font-size: var(--text-base);
-      opacity: 0.9;
-    }
-  }
-
-  /* Add this to ensure the game fills mobile screens properly */
-  @media (max-height: 700px) {
-    .game-area {
-      height: 60vh;
-    }
-
-    .flappy-duo-container {
-      margin-top: 0;
-      padding-top: var(--space-2xs);
-    }
-  }
-
-  /* Improved touch control styling */
+  /* Touch controls */
   .touch-controls {
     position: absolute;
     top: 0;
@@ -1126,7 +945,7 @@
     font-size: var(--text-xs);
     opacity: 0.8;
     position: absolute;
-    bottom: 20px;
+    bottom: 40px;
   }
 
   .player1-area .touch-indicator {
@@ -1139,66 +958,126 @@
     border-left: 3px solid var(--text-on-dark);
   }
 
-  /* Adjust responsive styles */
-  @media (max-width: 768px) {
-    /* ...existing media query styles... */
-
-    /* Improve game visibility on mobile */
-    .game-area {
-      height: 80vh; /* Use viewport height for better scaling */
-      max-height: 500px;
-      min-height: 350px; /* Ensure minimum height */
-      border-width: 2px;
-    }
-
-    /* Position birds better on mobile */
-    .player1 {
-      left: 20%; /* Position at 20% from left */
-    }
-
-    .player2 {
-      left: 40%; /* Position at 40% from left */
-    }
-
-    /* Make touch areas clearer */
-    .touch-indicator {
-      position: absolute;
-      bottom: 50px;
-      padding: var(--space-sm) 12px;
-      font-size: var(--text-sm);
-      opacity: 0.95;
-      background-color: rgba(66, 66, 66, 0.8);
-      border-radius: var(--radius-md);
-    }
-
-    /* Fit high scores panel better */
-    .high-scores-panel {
-      top: 10px;
-      right: 10px;
-      padding: var(--space-2xs);
-      width: 100px;
+  /* Tablet and below */
+  @media (max-width: 1300px) {
+    .flappy-duo-container {
+      max-width: 100%;
+      padding: var(--space-sm);
     }
   }
 
-  /* Ensure game is playable on very small screens */
-  @media (max-width: 400px) {
+  /* Mobile */
+  @media (max-width: 768px) {
+    .flappy-duo-container {
+      padding: var(--space-2xs);
+    }
+
+    h1 {
+      font-size: var(--text-xl);
+      margin-bottom: var(--space-sm);
+    }
+
+    .game-area {
+      width: 100%;
+      height: 70vh;
+      max-height: 500px;
+      min-height: 300px;
+      border-width: 2px;
+    }
+
     .bird {
-      width: 24px; /* Even smaller birds on very small screens */
+      width: 24px;
       height: 18px;
     }
 
-    .pipe-container {
-      width: 50px; /* Narrower pipes on very small screens */
+    .bird-face {
+      width: 6px;
+      height: 6px;
+      top: 4px;
+      right: 4px;
     }
 
-    .touch-indicator {
-      font-size: var(--text-xs);
+    .time-display {
+      top: 10px;
+      font-size: var(--text-sm);
       padding: var(--space-2xs) var(--space-sm);
     }
 
-    /* Hide or minimize non-essential elements */
+    .game-instructions,
+    .game-over {
+      padding: var(--space-md);
+      max-width: 95%;
+      font-size: var(--text-sm);
+      border-width: 2px;
+    }
+
+    .start-button {
+      padding: 10px 20px;
+      font-size: var(--text-sm);
+    }
+
+    .difficulty-message {
+      font-size: var(--text-sm);
+      padding: var(--space-xs) var(--space-md);
+    }
+
     .high-scores-panel {
-      display: none; /* Hide high scores on very small screens */
+      top: 10px;
+      right: 10px;
+      padding: var(--space-xs);
+      width: 110px;
+      border-width: 2px;
+    }
+
+    .high-scores-panel h3 {
+      font-size: var(--text-xs);
+      margin-bottom: var(--space-2xs);
+    }
+
+    .high-score-item {
+      font-size: 0.6rem;
+    }
+
+    .touch-indicator {
+      bottom: 40px;
+      padding: var(--space-xs) var(--space-sm);
+      font-size: var(--text-xs);
+      opacity: 0.9;
+    }
+  }
+
+  /* Short viewports */
+  @media (max-height: 700px) {
+    .game-area {
+      height: 60vh;
+    }
+
+    .flappy-duo-container {
+      padding-top: var(--space-2xs);
+    }
+  }
+
+  /* Very small screens */
+  @media (max-width: 400px) {
+    .bird {
+      width: 20px;
+      height: 16px;
+    }
+
+    .bird-face {
+      width: 5px;
+      height: 5px;
+      top: 3px;
+      right: 3px;
+      border-width: 1px;
+    }
+
+    .high-scores-panel {
+      display: none;
+    }
+
+    .touch-indicator {
+      font-size: 0.6rem;
     }
   }
 </style>
