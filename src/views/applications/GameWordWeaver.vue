@@ -969,6 +969,10 @@
       display: none;
     }
 
+    .sound-toggle {
+      display: none;
+    }
+
     .board {
       gap: 4px;
       padding: var(--space-sm);
