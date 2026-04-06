@@ -31,7 +31,7 @@ import SupportView from '../views/SupportView.vue';
 import ThirtyYearGiftView from '../views/trusted/ThirtyYearGift.vue';
 import Translator from '../views/trusted/Translator.vue';
 import Wikipedia from '../views/trusted/Wikipedia.vue';
-import Advisor from '../views/trusted/Advisor.vue';
+import Advisor from '../views/admin/Advisor.vue';
 
 const routes = [
   { path: '/', component: HomeView },
@@ -42,6 +42,7 @@ const routes = [
   { path: '/admin/system-health', component: SystemHealth, meta: { roles: ['Admin'] } },
   { path: '/admin/remarkable', component: Remarkable, meta: { roles: ['Admin'] } },
   { path: '/admin/finance', component: Finance, meta: { roles: ['Admin'] } },
+  { path: '/admin/advisor', component: Advisor, meta: { roles: ['Admin'] } },
 
   { path: '/about', component: AboutView },
 
@@ -74,7 +75,6 @@ const routes = [
   { path: '/trusted/30-year-gift', component: ThirtyYearGiftView, meta: { roles: ['Trusted', 'Admin'] } },
   { path: '/trusted/translator', component: Translator, meta: { roles: ['Trusted', 'Admin'] } },
   { path: '/trusted/wikipedia', component: Wikipedia, meta: { roles: ['Trusted', 'Admin'] } },
-  { path: '/trusted/advisor', component: Advisor, meta: { roles: ['Trusted', 'Admin'] } },
 
   { path: '/support', component: SupportView },
 ];

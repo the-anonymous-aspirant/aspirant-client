@@ -46,6 +46,13 @@
         route="/admin/finance"
         @card-click="navigateTo"
       />
+      <application-card
+        :image-url="appImages.default"
+        title="Advisor"
+        description="Ask about contracts, insurance, and legal documents"
+        route="/admin/advisor"
+        @card-click="navigateTo"
+      />
     </div>
   </div>
 </template>
