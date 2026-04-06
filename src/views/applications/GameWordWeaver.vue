@@ -1,14 +1,16 @@
 <template>
   <div id="wordweaver">
     <h1>WordWeaver</h1>
-    <p><em>25 letters will fall in a pre-determined sequence</em></p>
-    <p>
-      <em
-        >Navigate with the arrow keys to create the longest words possible on both the horizontal
-        and vertical axes</em
-      >
-    </p>
-    <p><em>See if you can get to the top on the highscore tab... and have fun!</em></p>
+    <div class="intro-text">
+      <p><em>25 letters will fall in a pre-determined sequence</em></p>
+      <p>
+        <em
+          >Navigate with the arrow keys to create the longest words possible on both the horizontal
+          and vertical axes</em
+        >
+      </p>
+      <p><em>See if you can get to the top on the highscore tab... and have fun!</em></p>
+    </div>
     <div class="controls">
       <button @click="toggleGame" :class="isPlaying ? 'stop-button' : 'start-button'">
         {{ isPlaying ? 'Stop Game' : 'Start Game' }}
@@ -67,7 +69,8 @@
 
     <div v-if="activeTab === 'foundWords'" class="winning-words">
       <h2>Valid Words</h2>
-      <table class="styled-table">
+      <!-- Desktop table -->
+      <table class="styled-table desktop-only">
         <thead>
           <tr>
             <th>Word</th>
@@ -102,6 +105,28 @@
           </tr>
         </tbody>
       </table>
+      <!-- Mobile card layout -->
+      <div class="word-cards mobile-only">
+        <div v-for="word in winningWords" :key="word.text" class="word-card">
+          <div class="word-card-header">
+            <span class="word-card-word">{{ word.text }}</span>
+            <span class="word-card-meta">{{ word.points }} pts &middot; {{ word.location }}</span>
+          </div>
+          <div class="word-card-definition">
+            <div
+              v-for="(definitions, partOfSpeech) in groupDefinitionsByPartOfSpeech(
+                word.definition
+              )"
+              :key="partOfSpeech"
+            >
+              <div v-if="partOfSpeech !== 'Example'">
+                <strong>{{ partOfSpeech }}:</strong>
+                {{ definitions[0].definition }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <div v-if="activeTab === 'scores'" class="scores">
       <h2>Todays Highscores</h2>
@@ -750,8 +775,10 @@
       // Set responsive cell size based on screen width
       setResponsiveCellSize() {
         const containerWidth = Math.min(window.innerWidth * 0.9, 600); // 90% of window width, max 600px
-        const boardPadding = 48; // 2 * 24px (--space-lg)
-        const totalGaps = (BOARD_CONFIG.COLS - 1) * 8; // gaps between cells
+        const isMobileWidth = window.innerWidth <= 768;
+        const boardPadding = isMobileWidth ? 24 : 48; // 2 * 12px on mobile, 2 * 24px on desktop
+        const gapSize = isMobileWidth ? 4 : 8;
+        const totalGaps = (BOARD_CONFIG.COLS - 1) * gapSize; // gaps between cells
         const cellSize = Math.max(28, Math.floor((containerWidth - boardPadding - totalGaps) / BOARD_CONFIG.COLS));
         document.documentElement.style.setProperty('--cell-size', cellSize + 'px');
 
@@ -782,6 +809,10 @@
 
   #wordweaver h1 {
     font-family: var(--font-family-base);
+  }
+
+  .controls {
+    margin-bottom: var(--space-md);
   }
 
   .board {
@@ -856,6 +887,23 @@
   }
 
   @media (max-width: 768px) {
+    #wordweaver {
+      margin-top: var(--space-sm);
+    }
+
+    #wordweaver h1 {
+      margin-bottom: var(--space-2xs);
+    }
+
+    .intro-text {
+      display: none;
+    }
+
+    .board {
+      gap: 4px;
+      padding: var(--space-sm);
+    }
+
     .tabs {
       flex-wrap: wrap;
     }
@@ -865,8 +913,8 @@
       font-size: var(--text-sm);
     }
 
-    .styled-table {
-      width: 95%;
+    .desktop-only {
+      display: none;
     }
 
     .about {
@@ -1116,5 +1164,53 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
     background-color: var(--surface-elevated);
+  }
+
+  .mobile-only {
+    display: none;
+  }
+
+  @media (max-width: 768px) {
+    .mobile-only {
+      display: block;
+    }
+  }
+
+  .word-cards {
+    width: 95%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .word-card {
+    background-color: var(--surface-elevated);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    text-align: left;
+  }
+
+  .word-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: var(--space-xs);
+  }
+
+  .word-card-word {
+    font-size: var(--text-lg);
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  .word-card-meta {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+  }
+
+  .word-card-definition {
+    font-size: var(--text-sm);
+    line-height: 1.5;
   }
 </style>
