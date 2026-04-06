@@ -285,9 +285,9 @@
         randomState: null, // Initialize random state as null
         lettersSequence: [], // Initialize letters sequence
         userRole: localStorage.getItem('user_role'), // Retrieve user role from localStorage
-        bgMusicUrl: '/api/fetch-object/e28e2772033f9c1fa18782262cd72257',
-        scoreSoundUrl: '/api/fetch-object/ec814d3d0379654c14299be95b6338a8',
-        fanfareSoundUrl: '/api/fetch-object/4d1d8275aa5c4c3dc3fcc58a1fda3c81',
+        bgMusicUrl: '/api/fetch-object/07ba67e86c21edb47a67728cfb6aa4ad',
+        scoreSoundUrl: '/api/fetch-object/93da53623e880afed235e170f55894ab',
+        fanfareSoundUrl: '/api/fetch-object/60c112c8f24954a645593514ec1fdad6',
         isMobile: false,
         isMuted: false,
       };
@@ -729,13 +729,13 @@
         try {
           const cache = await caches.open('game-assets');
           const cachedBgMusic = await cache.match(
-            '/api/fetch-object/e28e2772033f9c1fa18782262cd72257'
+            '/api/fetch-object/07ba67e86c21edb47a67728cfb6aa4ad'
           );
           const cachedScoreSound = await cache.match(
-            '/api/fetch-object/ec814d3d0379654c14299be95b6338a8'
+            '/api/fetch-object/93da53623e880afed235e170f55894ab'
           );
           const cachedFanfareSound = await cache.match(
-            '/api/fetch-object/4d1d8275aa5c4c3dc3fcc58a1fda3c81'
+            '/api/fetch-object/60c112c8f24954a645593514ec1fdad6'
           );
 
           if (cachedBgMusic && cachedScoreSound && cachedFanfareSound) {
@@ -744,32 +744,32 @@
             this.fanfareSoundUrl = URL.createObjectURL(await cachedFanfareSound.blob());
           } else {
             const bgMusicResponse = await axios.get(
-              '/api/fetch-object/e28e2772033f9c1fa18782262cd72257',
+              '/api/fetch-object/07ba67e86c21edb47a67728cfb6aa4ad',
               { responseType: 'blob' }
             );
             this.bgMusicUrl = URL.createObjectURL(bgMusicResponse.data);
             cache.put(
-              '/api/fetch-object/e28e2772033f9c1fa18782262cd72257',
+              '/api/fetch-object/07ba67e86c21edb47a67728cfb6aa4ad',
               new Response(bgMusicResponse.data)
             );
 
             const scoreSoundResponse = await axios.get(
-              '/api/fetch-object/ec814d3d0379654c14299be95b6338a8',
+              '/api/fetch-object/93da53623e880afed235e170f55894ab',
               { responseType: 'blob' }
             );
             this.scoreSoundUrl = URL.createObjectURL(scoreSoundResponse.data);
             cache.put(
-              '/api/fetch-object/ec814d3d0379654c14299be95b6338a8',
+              '/api/fetch-object/93da53623e880afed235e170f55894ab',
               new Response(scoreSoundResponse.data)
             );
 
             const fanfareSoundResponse = await axios.get(
-              '/api/fetch-object/4d1d8275aa5c4c3dc3fcc58a1fda3c81',
+              '/api/fetch-object/60c112c8f24954a645593514ec1fdad6',
               { responseType: 'blob' }
             );
             this.fanfareSoundUrl = URL.createObjectURL(fanfareSoundResponse.data);
             cache.put(
-              '/api/fetch-object/4d1d8275aa5c4c3dc3fcc58a1fda3c81',
+              '/api/fetch-object/60c112c8f24954a645593514ec1fdad6',
               new Response(fanfareSoundResponse.data)
             );
           }
@@ -977,7 +977,7 @@
       gap: 4px;
       padding: var(--space-sm);
       border-width: 2px;
-      max-width: calc(100vw - var(--space-lg));
+      max-width: 100%;
     }
 
     .tabs {
