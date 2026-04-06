@@ -15,6 +15,18 @@
       <button @click="toggleGame" :class="isPlaying ? 'stop-button' : 'start-button'">
         {{ isPlaying ? 'Stop Game' : 'Start Game' }}
       </button>
+      <button class="sound-toggle" @click="toggleMute" :title="isMuted ? 'Unmute' : 'Mute'">
+        <svg v-if="!isMuted" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+        </svg>
+        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+          <line x1="23" y1="9" x2="17" y2="15" />
+          <line x1="17" y1="9" x2="23" y2="15" />
+        </svg>
+      </button>
     </div>
     <audio ref="bgMusic" :src="bgMusicUrl" loop></audio>
     <audio ref="scoreSound" :src="scoreSoundUrl"></audio>
@@ -277,6 +289,7 @@
         scoreSoundUrl: '',
         fanfareSoundUrl: '',
         isMobile: false,
+        isMuted: false,
       };
     },
     mounted() {
@@ -764,6 +777,18 @@
           console.error('Error fetching audio files:', error);
         }
       },
+      toggleMute() {
+        this.isMuted = !this.isMuted;
+        if (this.$refs.bgMusic) {
+          this.$refs.bgMusic.muted = this.isMuted;
+        }
+        if (this.$refs.scoreSound) {
+          this.$refs.scoreSound.muted = this.isMuted;
+        }
+        if (this.$refs.fanfareSound) {
+          this.$refs.fanfareSound.muted = this.isMuted;
+        }
+      },
       // Check if device is mobile
       checkDeviceType() {
         this.isMobile =
@@ -798,34 +823,69 @@
 
 <style scoped>
   #wordweaver {
-    font-family: Avenir, Helvetica, Arial, sans-serif;
+    font-family: var(--font-family-base);
     text-align: center;
     margin-top: var(--space-lg);
     display: flex;
     flex-direction: column;
     align-items: center;
     padding: 0 var(--space-sm);
+    color: var(--text-on-light);
   }
 
   #wordweaver h1 {
-    font-family: var(--font-family-base);
+    color: var(--text-heading-card);
+    margin-bottom: var(--space-xs);
+  }
+
+  .intro-text {
+    color: var(--text-muted);
+    margin-bottom: var(--space-sm);
+    max-width: 600px;
+  }
+
+  .intro-text p {
+    margin: var(--space-2xs) 0;
   }
 
   .controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
     margin-bottom: var(--space-md);
   }
 
+  .sound-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: var(--surface-card);
+    border: 2px solid var(--border-card);
+    border-radius: var(--radius-md);
+    color: var(--brand-primary);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+  }
+
+  .sound-toggle:hover {
+    filter: brightness(1.15);
+  }
+
   .board {
-    display: inline-grid;
+    display: grid;
     grid-template-rows: repeat(var(--rows), var(--cell-size));
     grid-template-columns: repeat(var(--cols), var(--cell-size));
     gap: 8px;
-    background-color: #eee;
+    background-color: var(--surface-card);
+    border: 3px solid var(--border-card);
     padding: var(--space-lg);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     margin: 0 auto;
-    max-width: 100%;
-    overflow-x: auto;
+    width: fit-content;
+    max-width: calc(100vw - var(--space-lg));
+    box-shadow: var(--shadow-lg);
   }
 
   .row {
@@ -835,7 +895,7 @@
   .cell {
     width: var(--cell-size);
     height: var(--cell-size);
-    border: 1px solid var(--border-subtle);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -843,11 +903,11 @@
     justify-content: center;
     font-weight: bold;
     font-size: var(--cell-font-size, 14px);
-    font-family: 'Arial', sans-serif;
-    transition: background-color var(--transition-moderate) ease;
+    font-family: var(--font-family-base);
+    transition: background-color var(--transition-moderate);
     line-height: 1;
     padding: 2px;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sm);
   }
 
   /* Mobile controls */
@@ -870,29 +930,33 @@
     width: 60px;
     height: 60px;
     font-size: var(--text-xl);
-    background-color: #4caf50;
-    color: var(--text-on-dark);
-    border: none;
+    background-color: var(--surface-card);
+    color: var(--brand-primary);
+    border: 2px solid var(--brand-primary);
     border-radius: var(--radius-full);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-sm);
+    transition: background-color var(--transition-fast), transform var(--transition-fast);
   }
 
   .control-btn:active {
-    background-color: #2e7d32;
+    background-color: var(--brand-primary);
+    color: var(--text-on-light);
     transform: scale(0.95);
   }
 
   @media (max-width: 768px) {
     #wordweaver {
       margin-top: var(--space-sm);
+      padding: 0 var(--space-xs);
     }
 
     #wordweaver h1 {
       margin-bottom: var(--space-2xs);
+      font-size: var(--text-xl);
     }
 
     .intro-text {
@@ -902,14 +966,17 @@
     .board {
       gap: 4px;
       padding: var(--space-sm);
+      border-width: 2px;
+      max-width: calc(100vw - var(--space-md));
     }
 
     .tabs {
       flex-wrap: wrap;
+      gap: var(--space-2xs);
     }
 
     .tabs button {
-      padding: var(--space-sm) 12px;
+      padding: var(--space-xs) var(--space-sm);
       font-size: var(--text-sm);
     }
 
@@ -917,17 +984,19 @@
       display: none;
     }
 
-    .about {
+    .about,
+    .score,
+    .fanfare-message {
       width: 95%;
       padding: var(--space-sm);
     }
 
-    .score {
-      width: 95%;
-    }
-
     .score-display {
       font-size: 36px;
+    }
+
+    .styled-table {
+      width: 95%;
     }
   }
 
@@ -939,25 +1008,31 @@
   }
 
   .empty {
-    background-color: var(--text-on-dark);
-    color: var(--text-on-light);
+    background-color: rgba(255, 255, 255, 0.06);
+    color: transparent;
   }
 
   .active {
-    background-color: var(--text-on-dark);
-    color: var(--text-on-light);
-    border: 3px solid #0066cc;
+    background-color: rgba(255, 255, 255, 0.06);
+    color: var(--text-on-dark);
+    border: 2px solid var(--brand-primary);
   }
 
   .locked {
-    background-color: var(--surface-card);
+    background-color: rgba(255, 255, 255, 0.15);
     color: var(--text-on-dark);
   }
 
   .highlighted {
     background-color: var(--brand-primary);
-    color: #000;
-    animation: highlight 0.5s ease-in-out;
+    color: var(--surface-card);
+    animation: highlight-pulse 0.5s ease-in-out;
+  }
+
+  @keyframes highlight-pulse {
+    0% { transform: scale(1); box-shadow: none; }
+    50% { transform: scale(1.08); box-shadow: 0 0 12px var(--brand-primary-alpha); }
+    100% { transform: scale(1); box-shadow: none; }
   }
 
   .letter-info {
@@ -974,40 +1049,44 @@
     margin: var(--space-2xs) 0;
   }
 
-  .start-button {
-    background-color: var(--brand-primary);
-    font-weight: bold;
-    color: var(--text-on-dark);
-  }
-
-  .start-button:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
-  }
-
+  .start-button,
   .stop-button {
-    font-weight: bold;
     background-color: var(--brand-primary);
-    color: var(--text-on-dark);
+    font-weight: bold;
+    color: var(--surface-card);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-xl);
+    font-size: var(--text-base);
+    cursor: pointer;
+    transition: filter var(--transition-fast), transform var(--transition-fast);
   }
 
+  .start-button:hover,
   .stop-button:hover {
     filter: brightness(1.15);
     transform: translateY(-1px);
   }
 
-  .tabs button.active {
-    background-color: var(--brand-accent);
+  .stop-button {
+    background-color: var(--feedback-error);
     color: var(--text-on-dark);
   }
 
   .score {
     margin-top: var(--space-lg);
     text-align: center;
-    background-color: var(--surface-elevated);
-    padding: var(--space-sm);
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    background-color: var(--surface-card);
+    border: 2px solid var(--border-card);
+    padding: var(--space-md);
+    box-shadow: var(--shadow-md);
+    border-radius: var(--radius-lg);
     width: 82%;
+  }
+
+  .score h2 {
+    color: var(--text-heading-card);
+    margin-top: 0;
   }
 
   .score-display {
@@ -1018,24 +1097,27 @@
 
   .tabs {
     display: flex;
-    gap: var(--space-sm);
+    gap: var(--space-xs);
     justify-content: center;
-    margin-bottom: var(--space-sm);
+    margin-bottom: var(--space-md);
   }
 
   .tabs button {
     padding: var(--space-sm) var(--space-lg);
-    border: none;
+    border: 2px solid var(--border-card);
     background-color: var(--surface-card);
     color: var(--text-on-dark);
     font-weight: bold;
     cursor: pointer;
     font-size: var(--text-base);
+    border-radius: var(--radius-md);
+    transition: background-color var(--transition-fast), transform var(--transition-fast);
   }
 
   .tabs button.active {
     background-color: var(--brand-primary);
-    color: var(--text-on-dark);
+    color: var(--surface-card);
+    border-color: var(--brand-primary);
   }
 
   .tabs button:not(.active):hover {
@@ -1043,11 +1125,16 @@
     transform: translateY(-1px);
   }
 
+  .winning-words h2,
+  .scores h2 {
+    color: var(--text-heading-card);
+  }
+
   .styled-table {
     margin: 0 auto;
     border-collapse: collapse;
     width: 80%;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-md);
     border-radius: var(--radius-lg);
     overflow: hidden;
     background-color: var(--surface-elevated);
@@ -1057,8 +1144,13 @@
   .styled-table th,
   .styled-table td {
     border: 1px solid var(--border-subtle);
-    padding: 12px;
+    padding: var(--space-sm);
     text-align: center;
+  }
+
+  .styled-table th {
+    background-color: var(--surface-card);
+    color: var(--text-heading-card);
   }
 
   .styled-table th:nth-child(1),
@@ -1083,7 +1175,7 @@
   }
 
   .styled-table tr:nth-child(even) {
-    background-color: #f2f2f2;
+    background-color: rgba(0, 0, 0, 0.03);
   }
 
   .styled-table tr:hover {
@@ -1112,9 +1204,11 @@
     margin-top: var(--space-lg);
     text-align: center;
     padding: var(--space-lg);
-    background-color: var(--surface-elevated);
+    background-color: var(--surface-card);
+    border: 2px solid var(--border-card);
     border-radius: var(--radius-lg);
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-md);
+    color: var(--text-on-dark);
     line-height: 1.6;
     width: 80%;
     margin-left: auto;
@@ -1132,6 +1226,7 @@
 
   .about h2 {
     margin-top: 0;
+    color: var(--text-heading-card);
   }
 
   .about p {
@@ -1142,13 +1237,19 @@
     margin-bottom: 0;
   }
 
+  .about a {
+    color: var(--brand-accent);
+  }
+
   .fanfare-message {
     margin-top: var(--space-lg);
     text-align: center;
     padding: var(--space-lg);
-    background-color: var(--surface-elevated);
+    background-color: var(--surface-card);
+    border: 3px solid var(--brand-primary);
     border-radius: var(--radius-lg);
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 0 20px var(--brand-primary-alpha);
+    color: var(--brand-primary);
     line-height: 1.6;
     width: 80%;
     margin-left: auto;
@@ -1184,11 +1285,13 @@
   }
 
   .word-card {
-    background-color: var(--surface-elevated);
+    background-color: var(--surface-card);
+    border: 1px solid var(--border-card);
     border-radius: var(--radius-md);
     padding: var(--space-md);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-sm);
     text-align: left;
+    color: var(--text-on-dark);
   }
 
   .word-card-header {
@@ -1202,11 +1305,12 @@
     font-size: var(--text-lg);
     font-weight: bold;
     text-transform: uppercase;
+    color: var(--brand-primary);
   }
 
   .word-card-meta {
     font-size: var(--text-sm);
-    color: var(--text-muted);
+    color: var(--text-hint);
   }
 
   .word-card-definition {
