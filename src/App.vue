@@ -20,7 +20,7 @@
         
         <Sidebar></Sidebar>
         <div :style="{ 'margin-left': isMobile ? '0px' : sidebarWidth, flex: '1', 'min-width': '0' }">
-          <router-view :key="$route.path" class="fade-in"> </router-view>
+          <router-view :key="$route.path + '-' + authVersion" class="fade-in"> </router-view>
         </div>
         
         <!-- Persistent Back Button -->
@@ -33,7 +33,7 @@
 <script>
   import Sidebar from './components/sidebar/Sidebar.vue';
   import BackButton from './components/BackButton.vue';
-  import { sidebarWidth, collapsed, isMobile, sidebarHidden, toggleSidebar, checkMobile } from './global_state_manager.js';
+  import { sidebarWidth, collapsed, isMobile, sidebarHidden, toggleSidebar, checkMobile, authVersion } from './global_state_manager.js';
   import HomeView from './views/HomeView.vue';
   import { onMounted, onBeforeUnmount } from 'vue';
 
@@ -63,6 +63,7 @@
         isMobile,
         sidebarHidden,
         toggleSidebar,
+        authVersion,
       };
     },
   };

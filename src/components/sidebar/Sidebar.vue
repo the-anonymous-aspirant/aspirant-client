@@ -8,6 +8,7 @@
     sidebarWidth,
     isMobile,
     sidebarHidden,
+    bumpAuthVersion,
   } from '../../global_state_manager.js';
   import SidebarLink from './SidebarLink.vue';
   import Login from './Login.vue';
@@ -39,6 +40,7 @@
         username.value = localStorage.getItem('user_name');
         userRole.value = localStorage.getItem('user_role');
         userToken.value = localStorage.getItem('user_token');
+        bumpAuthVersion();
       };
 
       // Pre-load assets before mounting to ensure they're ready
