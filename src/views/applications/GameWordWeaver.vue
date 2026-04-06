@@ -16,12 +16,12 @@
         {{ isPlaying ? 'Stop Game' : 'Start Game' }}
       </button>
       <button class="sound-toggle" @click="toggleMute" :title="isMuted ? 'Unmute' : 'Mute'">
-        <svg v-if="!isMuted" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg v-if="!isMuted" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
           <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
           <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
         </svg>
-        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
           <line x1="23" y1="9" x2="17" y2="15" />
           <line x1="17" y1="9" x2="23" y2="15" />
@@ -285,9 +285,9 @@
         randomState: null, // Initialize random state as null
         lettersSequence: [], // Initialize letters sequence
         userRole: localStorage.getItem('user_role'), // Retrieve user role from localStorage
-        bgMusicUrl: '',
-        scoreSoundUrl: '',
-        fanfareSoundUrl: '',
+        bgMusicUrl: '/api/fetch-object/e28e2772033f9c1fa18782262cd72257',
+        scoreSoundUrl: '/api/fetch-object/ec814d3d0379654c14299be95b6338a8',
+        fanfareSoundUrl: '/api/fetch-object/4d1d8275aa5c4c3dc3fcc58a1fda3c81',
         isMobile: false,
         isMuted: false,
       };
@@ -363,7 +363,7 @@
         }
         this.spawnPiece();
         this.intervalId = setInterval(this.gameLoop, GAME_CONFIG.INITIAL_DROP_SPEED);
-        this.$refs.bgMusic.play();
+        this.safePlay('bgMusic');
       },
       stopGame() {
         this.isPlaying = false;
@@ -441,10 +441,10 @@
             this.scores[1].score != rowPoints + colPoints
           ) {
             this.showFanfare = true;
-            this.$refs.fanfareSound.play(); // Play fanfare sound
+            this.safePlay('fanfareSound');
           } else if (this.scores.length == 1 && this.scores[0].score == rowPoints + colPoints) {
             this.showFanfare = true;
-            this.$refs.fanfareSound.play(); // Play fanfare sound
+            this.safePlay('fanfareSound');
           }
         } catch (error) {
           console.error('Error sending final game state:', error);
@@ -476,7 +476,7 @@
                     this.board[rowIndex][startIndex + i].highlighted = true;
                   }
                   this.$refs.scoreSound.currentTime = 0; // Reset playback position
-                  this.$refs.scoreSound.play(); // Play score sound
+                  this.safePlay('scoreSound');
                   this.score += word.length; // Update score
                   await this.sleep(1000); // Delay to highlight each word
                   for (let i = 0; i < word.length; i++) {
@@ -512,7 +512,7 @@
                     this.board[startIndex + i][colIndex].highlighted = true;
                   }
                   this.$refs.scoreSound.currentTime = 0; // Reset playback position
-                  this.$refs.scoreSound.play(); // Play score sound
+                  this.safePlay('scoreSound');
                   this.score += word.length; // Update score
                   await this.sleep(1000); // Delay to highlight each word
                   for (let i = 0; i < word.length; i++) {
@@ -777,6 +777,12 @@
           console.error('Error fetching audio files:', error);
         }
       },
+      safePlay(ref) {
+        const el = this.$refs[ref];
+        if (!el || !el.src) return;
+        const p = el.play();
+        if (p) p.catch(() => {});
+      },
       toggleMute() {
         this.isMuted = !this.isMuted;
         if (this.$refs.bgMusic) {
@@ -859,10 +865,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 42px;
+    height: 42px;
     background: var(--surface-card);
-    border: 2px solid var(--border-card);
+    border: 2px solid var(--brand-primary);
     border-radius: var(--radius-md);
     color: var(--brand-primary);
     cursor: pointer;
@@ -967,12 +973,13 @@
       gap: 4px;
       padding: var(--space-sm);
       border-width: 2px;
-      max-width: calc(100vw - var(--space-md));
+      max-width: calc(100vw - var(--space-lg));
     }
 
     .tabs {
       flex-wrap: wrap;
       gap: var(--space-2xs);
+      width: 100%;
     }
 
     .tabs button {
@@ -985,9 +992,15 @@
     }
 
     .about,
-    .score,
     .fanfare-message {
       width: 95%;
+      padding: var(--space-sm);
+    }
+
+    .score {
+      min-width: 0;
+      width: 95%;
+      box-sizing: border-box;
       padding: var(--space-sm);
     }
 
@@ -1078,10 +1091,11 @@
     text-align: center;
     background-color: var(--surface-card);
     border: 2px solid var(--border-card);
-    padding: var(--space-md);
+    padding: var(--space-md) var(--space-xl);
     box-shadow: var(--shadow-md);
     border-radius: var(--radius-lg);
-    width: 82%;
+    width: fit-content;
+    min-width: 280px;
   }
 
   .score h2 {
@@ -1296,8 +1310,8 @@
 
   .word-card-header {
     display: flex;
-    justify-content: space-between;
     align-items: baseline;
+    gap: var(--space-sm);
     margin-bottom: var(--space-xs);
   }
 
