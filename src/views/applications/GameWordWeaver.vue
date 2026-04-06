@@ -750,7 +750,9 @@
       // Set responsive cell size based on screen width
       setResponsiveCellSize() {
         const containerWidth = Math.min(window.innerWidth * 0.9, 600); // 90% of window width, max 600px
-        const cellSize = Math.floor(containerWidth / BOARD_CONFIG.COLS) - 8; // Subtract gap size
+        const boardPadding = 48; // 2 * 24px (--space-lg)
+        const totalGaps = (BOARD_CONFIG.COLS - 1) * 8; // gaps between cells
+        const cellSize = Math.max(28, Math.floor((containerWidth - boardPadding - totalGaps) / BOARD_CONFIG.COLS));
         document.documentElement.style.setProperty('--cell-size', cellSize + 'px');
 
         // Adjust font size for cells based on cell size
