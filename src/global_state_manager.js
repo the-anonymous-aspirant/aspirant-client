@@ -19,6 +19,10 @@ import { ref, computed } from 'vue';
 export const debugMode = ref(false);
 export const toggleDebugMode = () => (debugMode.value = !debugMode.value);
 
+// Incremented on login/logout to force router-view remount
+export const authVersion = ref(0);
+export const bumpAuthVersion = () => authVersion.value++;
+
 export const collapsed = ref(false);
 export const isMobile = ref(false);
 export const sidebarHidden = ref(false);
