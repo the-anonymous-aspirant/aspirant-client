@@ -806,7 +806,9 @@
       // Set responsive cell size based on actual container width
       setResponsiveCellSize() {
         const el = document.getElementById('wordweaver');
-        const containerWidth = el ? Math.min(el.getBoundingClientRect().width, 600) : Math.min(window.innerWidth * 0.9, 600);
+        const elStyle = el ? getComputedStyle(el) : null;
+        const elContentWidth = el ? el.getBoundingClientRect().width - parseFloat(elStyle.paddingLeft) - parseFloat(elStyle.paddingRight) : window.innerWidth * 0.9;
+        const containerWidth = Math.min(elContentWidth, 600);
         const isMobileWidth = window.innerWidth <= 768;
         const boardPadding = isMobileWidth ? 24 : 48; // 2 * 12px on mobile, 2 * 24px on desktop
         const boardBorder = isMobileWidth ? 4 : 6; // 2 * 2px on mobile, 2 * 3px on desktop
