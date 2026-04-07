@@ -962,21 +962,7 @@
   }
 
   .sound-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 42px;
-    height: 42px;
-    background: var(--surface-card);
-    border: 2px solid var(--brand-primary);
-    border-radius: var(--radius-md);
-    color: var(--brand-primary);
-    cursor: pointer;
-    transition: background-color var(--transition-fast);
-  }
-
-  .sound-toggle:hover {
-    filter: brightness(1.15);
+    display: none;
   }
 
   .board {
@@ -1242,6 +1228,13 @@
   .tabs button:not(.active):hover {
     filter: brightness(1.15);
     transform: translateY(-1px);
+  }
+
+  .winning-words,
+  .scores {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
 
   .winning-words h2,
