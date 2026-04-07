@@ -12,6 +12,18 @@
       <p><em>See if you can get to the top on the highscore tab... and have fun!</em></p>
     </div>
     <div class="controls">
+      <div class="language-selector">
+        <button
+          v-for="lang in languages"
+          :key="lang.code"
+          :class="['lang-btn', { active: language === lang.code }]"
+          @click="setLanguage(lang.code)"
+          :disabled="isPlaying"
+          :title="lang.name"
+        >
+          {{ lang.label }}
+        </button>
+      </div>
       <button @click="toggleGame" :class="isPlaying ? 'stop-button' : 'start-button'">
         {{ isPlaying ? 'Stop Game' : 'Start Game' }}
       </button>
@@ -224,13 +236,109 @@
     MAX_LETTERS: 25, // Maximum amount of letters that will fall
   };
 
-  // Remove the SEED constant
-  // const SEED = parseInt(new Date().toISOString().slice(0, 10).replace(/-/g, ''));
-
   function seededRandom(seed) {
     const x = Math.sin(seed) * 10000;
     return x - Math.floor(x);
   }
+
+  // Letter frequency distributions per language
+  // Sources: letter frequency analysis of natural text corpora
+  // Swedish: Swedish Language Council frequency data (includes Å, Ä, Ö as distinct letters)
+  // Portuguese: Corpus do Português frequency data (includes Ã, Ç, Õ)
+  const LETTER_FREQUENCIES = {
+    en: [
+      { letter: 'E', probability: 0.110 },
+      { letter: 'T', probability: 0.090 },
+      { letter: 'A', probability: 0.080 },
+      { letter: 'O', probability: 0.075 },
+      { letter: 'I', probability: 0.075 },
+      { letter: 'N', probability: 0.070 },
+      { letter: 'S', probability: 0.063 },
+      { letter: 'H', probability: 0.061 },
+      { letter: 'R', probability: 0.060 },
+      { letter: 'D', probability: 0.043 },
+      { letter: 'L', probability: 0.040 },
+      { letter: 'C', probability: 0.028 },
+      { letter: 'U', probability: 0.028 },
+      { letter: 'M', probability: 0.024 },
+      { letter: 'W', probability: 0.024 },
+      { letter: 'F', probability: 0.022 },
+      { letter: 'G', probability: 0.020 },
+      { letter: 'Y', probability: 0.020 },
+      { letter: 'P', probability: 0.019 },
+      { letter: 'B', probability: 0.015 },
+      { letter: 'V', probability: 0.0098 },
+      { letter: 'K', probability: 0.0077 },
+      { letter: 'J', probability: 0.0015 },
+      { letter: 'X', probability: 0.0015 },
+      { letter: 'Q', probability: 0.00095 },
+      { letter: 'Z', probability: 0.00074 },
+    ],
+    sv: [
+      { letter: 'E', probability: 0.100 },
+      { letter: 'A', probability: 0.094 },
+      { letter: 'N', probability: 0.088 },
+      { letter: 'R', probability: 0.083 },
+      { letter: 'T', probability: 0.076 },
+      { letter: 'S', probability: 0.063 },
+      { letter: 'L', probability: 0.052 },
+      { letter: 'I', probability: 0.051 },
+      { letter: 'D', probability: 0.045 },
+      { letter: 'O', probability: 0.041 },
+      { letter: 'M', probability: 0.035 },
+      { letter: 'G', probability: 0.033 },
+      { letter: 'K', probability: 0.032 },
+      { letter: 'V', probability: 0.024 },
+      { letter: 'H', probability: 0.021 },
+      { letter: 'F', probability: 0.020 },
+      { letter: 'U', probability: 0.019 },
+      { letter: 'Ä', probability: 0.018 },
+      { letter: 'P', probability: 0.017 },
+      { letter: 'B', probability: 0.015 },
+      { letter: 'Å', probability: 0.014 },
+      { letter: 'Ö', probability: 0.014 },
+      { letter: 'C', probability: 0.013 },
+      { letter: 'J', probability: 0.007 },
+      { letter: 'Y', probability: 0.006 },
+      { letter: 'X', probability: 0.001 },
+      { letter: 'W', probability: 0.001 },
+      { letter: 'Z', probability: 0.001 },
+    ],
+    pt: [
+      { letter: 'A', probability: 0.121 },
+      { letter: 'E', probability: 0.115 },
+      { letter: 'O', probability: 0.098 },
+      { letter: 'S', probability: 0.072 },
+      { letter: 'R', probability: 0.063 },
+      { letter: 'I', probability: 0.060 },
+      { letter: 'N', probability: 0.048 },
+      { letter: 'D', probability: 0.046 },
+      { letter: 'M', probability: 0.044 },
+      { letter: 'U', probability: 0.042 },
+      { letter: 'T', probability: 0.040 },
+      { letter: 'C', probability: 0.036 },
+      { letter: 'L', probability: 0.028 },
+      { letter: 'P', probability: 0.025 },
+      { letter: 'Ã', probability: 0.020 },
+      { letter: 'V', probability: 0.016 },
+      { letter: 'G', probability: 0.013 },
+      { letter: 'Q', probability: 0.012 },
+      { letter: 'B', probability: 0.011 },
+      { letter: 'F', probability: 0.010 },
+      { letter: 'H', probability: 0.008 },
+      { letter: 'Ç', probability: 0.008 },
+      { letter: 'Õ', probability: 0.006 },
+      { letter: 'J', probability: 0.005 },
+      { letter: 'Z', probability: 0.005 },
+      { letter: 'X', probability: 0.003 },
+    ],
+  };
+
+  const LANGUAGES = [
+    { code: 'en', label: 'EN', name: 'English' },
+    { code: 'sv', label: 'SV', name: 'Svenska' },
+    { code: 'pt', label: 'PT', name: 'Português' },
+  ];
 
   export default {
     name: 'WordWeaver',
@@ -247,44 +355,19 @@
         gameOver: false,
         isPlaying: false,
         score: 0,
-        pieces: [
-          { shape: [[1]], letter: 'E', probability: 0.11 },
-          { shape: [[1]], letter: 'T', probability: 0.09 },
-          { shape: [[1]], letter: 'A', probability: 0.08 },
-          { shape: [[1]], letter: 'O', probability: 0.075 },
-          { shape: [[1]], letter: 'I', probability: 0.075 },
-          { shape: [[1]], letter: 'N', probability: 0.07 },
-          { shape: [[1]], letter: 'S', probability: 0.063 },
-          { shape: [[1]], letter: 'H', probability: 0.061 },
-          { shape: [[1]], letter: 'R', probability: 0.06 },
-          { shape: [[1]], letter: 'D', probability: 0.043 },
-          { shape: [[1]], letter: 'L', probability: 0.04 },
-          { shape: [[1]], letter: 'C', probability: 0.028 },
-          { shape: [[1]], letter: 'U', probability: 0.028 },
-          { shape: [[1]], letter: 'M', probability: 0.024 },
-          { shape: [[1]], letter: 'W', probability: 0.024 },
-          { shape: [[1]], letter: 'F', probability: 0.022 },
-          { shape: [[1]], letter: 'G', probability: 0.02 },
-          { shape: [[1]], letter: 'Y', probability: 0.02 },
-          { shape: [[1]], letter: 'P', probability: 0.019 },
-          { shape: [[1]], letter: 'B', probability: 0.015 },
-          { shape: [[1]], letter: 'V', probability: 0.0098 },
-          { shape: [[1]], letter: 'K', probability: 0.0077 },
-          { shape: [[1]], letter: 'J', probability: 0.0015 },
-          { shape: [[1]], letter: 'X', probability: 0.0015 },
-          { shape: [[1]], letter: 'Q', probability: 0.00095 },
-          { shape: [[1]], letter: 'Z', probability: 0.00074 },
-        ],
-        lettersFallen: 0, // Track the number of letters that have fallen
-        winningWords: [], // Store the winning words with their points
-        activeTab: 'game', // Track the active tab
-        colWords: [], // Initialize colWords
-        seed: null, // Initialize seed as null
-        scores: [], // Initialize scores
-        showFanfare: false, // Track if fanfare should be shown
-        randomState: null, // Initialize random state as null
-        lettersSequence: [], // Initialize letters sequence
-        userRole: localStorage.getItem('user_role'), // Retrieve user role from localStorage
+        language: localStorage.getItem('wordweaver_language') || 'en',
+        languages: LANGUAGES,
+        pieces: [],
+        lettersFallen: 0,
+        winningWords: [],
+        activeTab: 'game',
+        colWords: [],
+        seed: null,
+        scores: [],
+        showFanfare: false,
+        randomState: null,
+        lettersSequence: [],
+        userRole: localStorage.getItem('user_role'),
         bgMusicUrl: '/api/fetch-object/07ba67e86c21edb47a67728cfb6aa4ad',
         scoreSoundUrl: '/api/fetch-object/93da53623e880afed235e170f55894ab',
         fanfareSoundUrl: '/api/fetch-object/60c112c8f24954a645593514ec1fdad6',
@@ -304,7 +387,8 @@
       // Add resize listener for responsive layout
       window.addEventListener('resize', this.handleResize);
 
-      this.updateSeed(); // Call updateSeed method to set the seed and random state
+      this.updatePiecesForLanguage();
+      this.updateSeed();
       this.fetchAudioFiles();
     },
     beforeDestroy() {
@@ -316,6 +400,22 @@
       this.$refs.bgMusic.pause();
     },
     methods: {
+      setLanguage(lang) {
+        if (this.isPlaying) return;
+        this.language = lang;
+        localStorage.setItem('wordweaver_language', lang);
+        this.updatePiecesForLanguage();
+        this.updateSeed();
+        this.fetchScores();
+      },
+      updatePiecesForLanguage() {
+        const freq = LETTER_FREQUENCIES[this.language] || LETTER_FREQUENCIES.en;
+        this.pieces = freq.map((f) => ({
+          shape: [[1]],
+          letter: f.letter,
+          probability: f.probability,
+        }));
+      },
       updateSeed(newSeed) {
         this.seed = newSeed || parseInt(new Date().toISOString().slice(0, 10).replace(/-/g, ''));
         this.randomState = this.seed;
@@ -390,7 +490,10 @@
       async sendFinalGameState() {
         try {
           const finalState = this.board.map((row) => row.map((cell) => cell.letter));
-          const response = await axios.post('/api/games/word_weaver', { board: finalState });
+          const response = await axios.post('/api/games/word_weaver', {
+            board: finalState,
+            language: this.language,
+          });
           const data = response.data.data; // Extract data from response
           console.log('Final game state:', data);
 
@@ -425,12 +528,13 @@
 
           this.highlightWords();
 
-          // Save the score via universal scoring endpoint
+          // Save the score via universal scoring endpoint (mode includes language for separate leaderboards)
+          const scoreMode = this.language === 'en' ? String(this.seed) : `${this.seed}_${this.language}`;
           await axios.post('/api/games/scores', {
             game: 'word_weaver',
-            mode: String(this.seed),
+            mode: scoreMode,
             score: rowPoints + colPoints,
-            metadata: { board: finalState },
+            metadata: { board: finalState, language: this.language },
           });
 
           // Fetch the updated scores and check if the player achieved the top score
@@ -664,8 +768,9 @@
       },
       async fetchScores() {
         try {
+          const scoreMode = this.language === 'en' ? String(this.seed) : `${this.seed}_${this.language}`;
           const response = await axios.get(
-            `/api/games/scores?game=word_weaver&mode=${this.seed}&limit=10`
+            `/api/games/scores?game=word_weaver&mode=${scoreMode}&limit=10`
           );
           this.scores = response.data.items || response.data.data || [];
         } catch (error) {
@@ -863,6 +968,42 @@
     align-items: center;
     gap: var(--space-sm);
     margin-bottom: var(--space-md);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .language-selector {
+    display: flex;
+    gap: 2px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 2px solid var(--border-card);
+  }
+
+  .lang-btn {
+    padding: var(--space-xs) var(--space-sm);
+    background-color: var(--surface-card);
+    color: var(--text-on-dark);
+    border: none;
+    font-weight: bold;
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+    min-width: 36px;
+  }
+
+  .lang-btn.active {
+    background-color: var(--brand-primary);
+    color: var(--surface-card);
+  }
+
+  .lang-btn:not(.active):hover:not(:disabled) {
+    filter: brightness(1.15);
+  }
+
+  .lang-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .sound-toggle {
