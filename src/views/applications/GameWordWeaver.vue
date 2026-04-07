@@ -117,26 +117,18 @@
     </div>
     <div v-if="activeTab === 'scores'" class="scores">
       <h2>Todays Highscores</h2>
-      <table class="styled-table">
-        <thead>
-          <tr>
-            <th>Rank</th>
-            <th>Score</th>
-            <th>User Name</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="(score, index) in scores"
-            :key="index"
-            :class="{ 'rank-1': index === 0, 'rank-2': index === 1, 'rank-3': index === 2 }"
-          >
-            <td>{{ index + 1 }}</td>
-            <td>{{ score.score }}</td>
-            <td>{{ score.username }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="score-cards">
+        <div
+          v-for="(score, index) in scores"
+          :key="index"
+          class="score-card"
+          :class="{ 'rank-1': index === 0, 'rank-2': index === 1, 'rank-3': index === 2 }"
+        >
+          <span class="score-card-rank">#{{ index + 1 }}</span>
+          <span class="score-card-name">{{ score.username }}</span>
+          <span class="score-card-points">{{ score.score }} pts</span>
+        </div>
+      </div>
     </div>
     <div v-if="activeTab === 'about'" class="about">
       <div>
@@ -1099,7 +1091,8 @@
       font-size: var(--text-sm);
     }
 
-    .word-cards {
+    .word-cards,
+    .score-cards {
       width: 95%;
     }
 
@@ -1256,74 +1249,56 @@
     color: var(--text-heading-card);
   }
 
-  .styled-table {
-    margin: 0 auto;
-    border-collapse: collapse;
+  .score-cards {
     width: 80%;
-    box-shadow: var(--shadow-md);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    background-color: var(--surface-elevated);
-    table-layout: fixed;
+    max-width: 600px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
   }
 
-  .styled-table th,
-  .styled-table td {
-    border: 1px solid var(--border-subtle);
-    padding: var(--space-sm);
-    text-align: center;
-  }
-
-  .styled-table th {
+  .score-card {
     background-color: var(--surface-card);
-    color: var(--text-heading-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-md);
+    padding: var(--space-md);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+    color: var(--text-on-dark);
   }
 
-  .styled-table th:nth-child(1),
-  .styled-table td:nth-child(1) {
-    width: 20%;
+  .score-card.rank-1 {
+    border-color: #ffd900;
+    box-shadow: 0 0 8px rgba(255, 217, 0, 0.3);
   }
 
-  .styled-table th:nth-child(2),
-  .styled-table td:nth-child(2) {
-    width: 10%;
+  .score-card.rank-2 {
+    border-color: #c0c0c0;
+    box-shadow: 0 0 8px rgba(192, 192, 192, 0.3);
   }
 
-  .styled-table th:nth-child(3),
-  .styled-table td:nth-child(3) {
-    width: 15%;
+  .score-card.rank-3 {
+    border-color: #cd7f32;
+    box-shadow: 0 0 8px rgba(205, 127, 50, 0.3);
   }
 
-  .styled-table th:nth-child(4),
-  .styled-table td:nth-child(4) {
-    width: 55%;
-    text-align: left;
+  .score-card-rank {
+    font-size: var(--text-lg);
+    font-weight: bold;
+    color: var(--brand-primary);
+    min-width: 2em;
   }
 
-  .styled-table tr:nth-child(even) {
-    background-color: rgba(0, 0, 0, 0.03);
+  .score-card-name {
+    flex: 1;
+    font-size: var(--text-base);
   }
 
-  .styled-table tr:hover {
-    background-color: var(--border-subtle);
-  }
-
-  .definition-cell {
-    white-space: normal;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-  }
-
-  .styled-table tr.rank-1 {
-    background-color: rgba(255, 217, 0, 0.497);
-  }
-
-  .styled-table tr.rank-2 {
-    background-color: rgba(192, 192, 192, 0.477);
-  }
-
-  .styled-table tr.rank-3 {
-    background-color: #cd80323d;
+  .score-card-points {
+    font-size: var(--text-sm);
+    color: var(--text-hint);
   }
 
   .about {
