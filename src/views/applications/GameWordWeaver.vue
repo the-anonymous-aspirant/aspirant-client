@@ -143,15 +143,7 @@
           the classic Tetris. Inspired by her appreciation for these games, I designed WordWeaver as
           a fusion of the two in the hope that she —and others— will enjoy the concept.
         </p>
-        <p>
-          Credit for the dictionary goes to
-          <a href="https://github.com/dolph/" target="_blank">dolph</a>, with
-          <a href="https://github.com/meetDeveloper/freeDictionaryAPI" target="_blank"
-            >DictionaryAPI</a
-          >
-          providing the word definitions.
-        </p>
-        <p><em>- Veni Vidi</em></p>
+        <p><em>'Veni Vidi'</em> — by The Aspirant</p>
       </div>
     </div>
     <div v-if="activeTab === 'game'" class="score">
