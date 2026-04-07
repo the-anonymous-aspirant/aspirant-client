@@ -93,44 +93,7 @@
 
     <div v-if="activeTab === 'foundWords'" class="winning-words">
       <h2>Valid Words</h2>
-      <!-- Desktop table -->
-      <table class="styled-table desktop-only">
-        <thead>
-          <tr>
-            <th>Word</th>
-            <th>Points</th>
-            <th>Location</th>
-            <th>Definition</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="word in winningWords" :key="word.text">
-            <td>{{ word.text }}</td>
-            <td>{{ word.points }}</td>
-            <td>{{ word.location }}</td>
-            <td class="definition-cell">
-              <div
-                v-for="(definitions, partOfSpeech) in groupDefinitionsByPartOfSpeech(
-                  word.definition
-                )"
-                :key="partOfSpeech"
-              >
-                <details v-if="partOfSpeech !== 'Example'">
-                  <summary>
-                    <strong>{{ partOfSpeech }}</strong>
-                  </summary>
-                  <div v-for="(definition, index) in definitions" :key="index">
-                    {{ definition.definition }}
-                    <div v-if="definition.example"><em>Example:</em> {{ definition.example }}</div>
-                  </div>
-                </details>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <!-- Mobile card layout -->
-      <div class="word-cards mobile-only">
+      <div class="word-cards">
         <div v-for="word in winningWords" :key="word.text" class="word-card">
           <div class="word-card-header">
             <span class="word-card-word">{{ word.text }}</span>
@@ -1136,8 +1099,8 @@
       font-size: var(--text-sm);
     }
 
-    .desktop-only {
-      display: none;
+    .word-cards {
+      width: 95%;
     }
 
     .about,
@@ -1417,9 +1380,10 @@
     width: 80%;
     margin-left: auto;
     margin-right: auto;
-    min-height: 0;
-    height: auto;
-    display: block;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
   }
 
   .admin-visualization {
@@ -1430,18 +1394,9 @@
     background-color: var(--surface-elevated);
   }
 
-  .mobile-only {
-    display: none;
-  }
-
-  @media (max-width: 768px) {
-    .mobile-only {
-      display: block;
-    }
-  }
-
   .word-cards {
-    width: 95%;
+    width: 80%;
+    max-width: 600px;
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);
