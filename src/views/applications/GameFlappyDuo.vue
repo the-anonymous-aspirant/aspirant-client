@@ -64,8 +64,8 @@
       <div class="time-display" v-if="isPlaying || gameOver">
         <div class="time-counter">Time: {{ formatTime(elapsedTime) }}</div>
       </div>
-      <!-- High Score Panel -->
-      <div class="high-scores-panel" v-if="!isPlaying">
+      <!-- High Score Panel (inside game area on desktop) -->
+      <div class="high-scores-panel high-scores-overlay" v-if="!isPlaying && !isMobileLayout">
         <h3>High Scores</h3>
         <div class="high-scores-list">
           <div v-for="(score, index) in highScores" :key="index" class="high-score-item">
@@ -75,6 +75,19 @@
           <div v-if="highScores.length === 0" class="no-scores">
             No scores yet. Play to set a record!
           </div>
+        </div>
+      </div>
+    </div>
+    <!-- High Score Panel (below game area on mobile) -->
+    <div class="high-scores-panel high-scores-below" v-if="!isPlaying && isMobileLayout">
+      <h3>High Scores</h3>
+      <div class="high-scores-list">
+        <div v-for="(score, index) in highScores" :key="index" class="high-score-item">
+          <span class="high-score-rank">{{ index + 1 }}.</span>
+          <span class="high-score-time">{{ formatTime(score) }}</span>
+        </div>
+        <div v-if="highScores.length === 0" class="no-scores">
+          No scores yet. Play to set a record!
         </div>
       </div>
     </div>
@@ -574,14 +587,13 @@
         if (!this.$refs.gameArea) return;
 
         if (this.isMobileLayout) {
-          // Mobile: fit game area to screen
-          const adjustedHeight = Math.min(window.innerHeight * 0.7, 500);
-          this.$refs.gameArea.style.height = `${adjustedHeight}px`;
+          // Mobile: fit game area to screen, use CSS-driven dimensions
           this.$refs.gameArea.style.width = '100%';
-          this.gameHeight = adjustedHeight;
+          this.gameHeight = this.$refs.gameArea.clientHeight;
           this.gameWidth = this.$refs.gameArea.clientWidth;
 
-          this.initialPipeGap = 280;
+          // Scale pipe gap to ~40% of game height (playable on any screen size)
+          this.initialPipeGap = Math.max(120, Math.round(this.gameHeight * 0.4));
           this.pipeWidth = Math.max(40, this.gameWidth * 0.08);
           this.pipeDistance = Math.max(200, this.gameWidth * 0.5);
           this.gravity = 0.22;
@@ -590,11 +602,10 @@
             this.pipeGap = Math.max(this.pipeGap, this.initialPipeGap);
           }
         } else {
-          // Desktop: fixed dimensions
-          this.$refs.gameArea.style.height = '700px';
-          this.$refs.gameArea.style.width = '1200px';
+          // Desktop: fixed dimensions (set by CSS)
+          this.$refs.gameArea.style.width = '';
           this.gameHeight = this.$refs.gameArea.clientHeight;
-          this.gameWidth = 1200;
+          this.gameWidth = this.$refs.gameArea.clientWidth;
 
           this.initialPipeGap = 300;
           this.pipeWidth = 80;
@@ -805,15 +816,35 @@
   }
 
   .high-scores-panel {
-    position: absolute;
-    top: 100px;
-    right: 20px;
     background-color: rgba(66, 66, 66, 0.8);
     border: 3px solid var(--brand-primary);
     border-radius: var(--radius-lg);
     padding: var(--space-md);
-    width: 180px;
     z-index: 25;
+  }
+
+  .high-scores-overlay {
+    position: absolute;
+    top: 100px;
+    right: 20px;
+    width: 180px;
+  }
+
+  .high-scores-below {
+    width: 100%;
+    max-width: 400px;
+    margin: var(--space-sm) auto 0;
+  }
+
+  .high-scores-below .high-scores-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs) var(--space-md);
+    justify-content: center;
+  }
+
+  .high-scores-below .high-score-item {
+    margin-bottom: 0;
   }
 
   .high-scores-panel h3 {
@@ -970,6 +1001,9 @@
   @media (max-width: 768px) {
     .flappy-duo-container {
       padding: var(--space-2xs);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
 
     h1 {
@@ -979,10 +1013,14 @@
 
     .game-area {
       width: 100%;
-      height: 70vh;
-      max-height: 500px;
-      min-height: 300px;
+      height: 60vh;
+      min-height: 280px;
       border-width: 2px;
+    }
+
+    /* Hide cloud decorations on mobile to prevent overflow */
+    .game-area::after {
+      display: none;
     }
 
     .bird {
@@ -998,7 +1036,7 @@
     }
 
     .time-display {
-      top: 10px;
+      top: 8px;
       font-size: var(--text-sm);
       padding: var(--space-2xs) var(--space-sm);
     }
@@ -1021,16 +1059,13 @@
       padding: var(--space-xs) var(--space-md);
     }
 
-    .high-scores-panel {
-      top: 10px;
-      right: 10px;
-      padding: var(--space-xs);
-      width: 110px;
+    .high-scores-below {
       border-width: 2px;
+      padding: var(--space-xs) var(--space-sm);
     }
 
-    .high-scores-panel h3 {
-      font-size: var(--text-xs);
+    .high-scores-below h3 {
+      font-size: var(--text-sm);
       margin-bottom: var(--space-2xs);
     }
 
@@ -1072,12 +1107,19 @@
       border-width: 1px;
     }
 
-    .high-scores-panel {
-      display: none;
-    }
-
     .touch-indicator {
       font-size: 0.6rem;
+    }
+
+    .game-instructions,
+    .game-over {
+      padding: var(--space-sm);
+      font-size: var(--text-xs);
+    }
+
+    .start-button {
+      padding: 8px 16px;
+      font-size: var(--text-xs);
     }
   }
 </style>
