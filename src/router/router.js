@@ -32,6 +32,7 @@ import ThirtyYearGiftView from '../views/trusted/ThirtyYearGift.vue';
 import Translator from '../views/trusted/Translator.vue';
 import Wikipedia from '../views/trusted/Wikipedia.vue';
 import Goals from '../views/trusted/Goals.vue';
+import GoalTreeCanvas from '../views/trusted/GoalTreeCanvas.vue';
 import Advisor from '../views/admin/Advisor.vue';
 import KvittoMaker from '../views/admin/tools/KvittoMaker.vue';
 
@@ -79,7 +80,7 @@ const routes = [
   { path: '/trusted/translator', component: Translator, meta: { roles: ['Trusted', 'Admin'] } },
   { path: '/trusted/wikipedia', component: Wikipedia, meta: { roles: ['Trusted', 'Admin'] } },
   { path: '/trusted/goals', component: Goals, meta: { roles: ['Trusted', 'Admin'] } },
-  { path: '/trusted/goals/:id', component: Goals, meta: { roles: ['Trusted', 'Admin'] } },
+  { path: '/trusted/goals/:id', component: GoalTreeCanvas, meta: { roles: ['Trusted', 'Admin'] } },
 
   { path: '/support', component: SupportView },
 ];
