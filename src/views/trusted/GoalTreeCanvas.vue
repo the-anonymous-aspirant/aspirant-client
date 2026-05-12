@@ -23,6 +23,14 @@
       />
     </div>
 
+    <!-- Node detail panel -->
+    <NodeDetailPanel
+      :node="selectedNode"
+      :treeId="treeId"
+      @close="selectedNode = null"
+      @node-updated="onNodeUpdated"
+    />
+
     <!-- Node creation dialog -->
     <div v-if="showCreateNode" class="dialog-overlay" @click.self="showCreateNode = false">
       <div class="dialog dialog-wide">
@@ -96,6 +104,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import Canvas from '../../components/goals/Canvas.vue';
 import TreeSwitcher from '../../components/goals/TreeSwitcher.vue';
+import NodeDetailPanel from '../../components/goals/NodeDetailPanel.vue';
 import { useGoalNodes } from '../../composables/goals/useGoalNodes.js';
 
 const NODE_TEMPLATES = {
@@ -107,7 +116,7 @@ const NODE_TEMPLATES = {
 const MAX_RECOMMENDED_DEPTH = 5;
 
 export default {
-  components: { Canvas, TreeSwitcher },
+  components: { Canvas, TreeSwitcher, NodeDetailPanel },
   setup() {
     const route = useRoute();
     const router = useRouter();
@@ -115,6 +124,8 @@ export default {
 
     const { nodes, edges, loading, error, fetchNodes, createNode: apiCreateNode, updateSortOrder } =
       useGoalNodes(treeId);
+
+    const selectedNode = ref(null);
 
     const showCreateNode = ref(false);
     const creating = ref(false);
@@ -209,7 +220,17 @@ export default {
     }
 
     function selectNode(nodeId) {
-      // Future: open detail panel
+      const found = nodes.value.find((n) => n.id === nodeId);
+      selectedNode.value = found || null;
+    }
+
+    function onNodeUpdated() {
+      fetchNodes().then(() => {
+        if (selectedNode.value) {
+          const refreshed = nodes.value.find((n) => n.id === selectedNode.value.id);
+          selectedNode.value = refreshed || null;
+        }
+      });
     }
 
     function onNodeRepositioned({ nodeId, position }) {
@@ -243,6 +264,7 @@ export default {
       edges,
       loading,
       error,
+      selectedNode,
       showCreateNode,
       creating,
       createError,
@@ -255,6 +277,7 @@ export default {
       onNodeContext,
       createNode,
       selectNode,
+      onNodeUpdated,
       onNodeRepositioned,
       onTreeRenamed,
       onTreeSwitched,
