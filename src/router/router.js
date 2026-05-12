@@ -32,6 +32,7 @@ import ThirtyYearGiftView from '../views/trusted/ThirtyYearGift.vue';
 import Translator from '../views/trusted/Translator.vue';
 import Wikipedia from '../views/trusted/Wikipedia.vue';
 import Advisor from '../views/admin/Advisor.vue';
+import KvittoMaker from '../views/admin/tools/KvittoMaker.vue';
 
 const routes = [
   { path: '/', component: HomeView },
@@ -43,6 +44,7 @@ const routes = [
   { path: '/admin/remarkable', component: Remarkable, meta: { roles: ['Admin'] } },
   { path: '/admin/finance', component: Finance, meta: { roles: ['Admin'] } },
   { path: '/admin/advisor', component: Advisor, meta: { roles: ['Admin'] } },
+  { path: '/admin/tools/kvitto', component: KvittoMaker, meta: { roles: ['Admin'] } },
 
   { path: '/about', component: AboutView },
 
