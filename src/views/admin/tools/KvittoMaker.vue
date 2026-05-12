@@ -50,7 +50,7 @@
         form: {
           year: new Date().getFullYear(),
           address: '',
-          amount: 3000,
+          amount: 3500,
           recipient: '',
           payer: '',
         },
