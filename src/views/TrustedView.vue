@@ -47,6 +47,13 @@
           route="wikipedia"
           @card-click="goToApplication"
         />
+        <application-card
+          :image-url="appImages.goals"
+          title="Goal Trees"
+          description="Plan and track your goals"
+          route="goals"
+          @card-click="goToApplication"
+        />
       </div>
     </div>
   </div>
@@ -69,6 +76,7 @@
           gift: '',
           translator: '',
           wikipedia: '',
+          goals: '',
         },
       };
     },
@@ -84,6 +92,7 @@
           gift: '30year_gift_icon',
           translator: 'home_icon',
           wikipedia: 'home_icon',
+          goals: 'home_icon',
         };
         await Promise.all(
           Object.entries(assets).map(async ([key, assetName]) => {
