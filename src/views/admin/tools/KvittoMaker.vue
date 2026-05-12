@@ -50,7 +50,7 @@
         form: {
           year: new Date().getFullYear(),
           address: 'Skalegårdsvägen 3 Onsala',
-          amount: 3000,
+          amount: 3500,
           recipient: 'Martin Janson',
           payer: 'Jonas Wester',
         },
