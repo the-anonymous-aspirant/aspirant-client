@@ -2,7 +2,12 @@
   <div class="canvas-view">
     <div class="canvas-toolbar">
       <button class="btn-back" @click="goBack">&#8592; Trees</button>
-      <h2 v-if="treeName" class="tree-title">{{ treeName }}</h2>
+      <TreeSwitcher
+        :activeTreeId="treeId"
+        @tree-renamed="onTreeRenamed"
+        @tree-switched="onTreeSwitched"
+      />
+      <div class="toolbar-spacer"></div>
       <button class="btn-add-node" @click="showCreateNode = true">+ Add Node</button>
     </div>
 
@@ -69,17 +74,16 @@
 <script>
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import axios from 'axios';
 import Canvas from '../../components/goals/Canvas.vue';
+import TreeSwitcher from '../../components/goals/TreeSwitcher.vue';
 import { useGoalNodes } from '../../composables/goals/useGoalNodes.js';
 
 export default {
-  components: { Canvas },
+  components: { Canvas, TreeSwitcher },
   setup() {
     const route = useRoute();
     const router = useRouter();
     const treeId = computed(() => route.params.id);
-    const treeName = ref('');
 
     const { nodes, edges, loading, error, fetchNodes, createNode: apiCreateNode, updateSortOrder } =
       useGoalNodes(treeId);
@@ -95,13 +99,12 @@ export default {
       color: '#ffb300',
     });
 
-    async function loadTree() {
-      try {
-        const resp = await axios.get(`/api/goals/trees/${treeId.value}`);
-        treeName.value = resp.data.name;
-      } catch (err) {
-        treeName.value = '';
-      }
+    function onTreeRenamed() {
+      // TreeSwitcher handles name display; no action needed
+    }
+
+    function onTreeSwitched() {
+      // Route change triggers watcher which reloads nodes
     }
 
     async function createNode() {
@@ -142,21 +145,18 @@ export default {
 
     onMounted(() => {
       if (treeId.value) {
-        loadTree();
         fetchNodes();
       }
     });
 
     watch(treeId, (val) => {
       if (val) {
-        loadTree();
         fetchNodes();
       }
     });
 
     return {
       treeId,
-      treeName,
       nodes,
       edges,
       loading,
@@ -169,6 +169,8 @@ export default {
       createNode,
       selectNode,
       onNodeRepositioned,
+      onTreeRenamed,
+      onTreeSwitched,
       goBack,
     };
   },
@@ -207,11 +209,8 @@ export default {
   border-color: var(--text-on-light);
 }
 
-.tree-title {
+.toolbar-spacer {
   flex: 1;
-  color: var(--text-on-light);
-  font-size: var(--text-xl);
-  margin: 0;
 }
 
 .btn-add-node {
