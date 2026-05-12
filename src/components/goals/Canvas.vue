@@ -13,6 +13,7 @@
       :zoom-on-scroll="true"
       @node-drag-stop="onNodeDragStop"
       @node-click="onNodeClick"
+      @node-context-menu="onNodeContextMenu"
     >
       <template #node-goalNode="nodeProps">
         <CanvasNode :data="nodeProps.data" />
@@ -43,7 +44,7 @@ export default {
     nodes: { type: Array, default: () => [] },
     edges: { type: Array, default: () => [] },
   },
-  emits: ['node-click', 'node-repositioned'],
+  emits: ['node-click', 'node-repositioned', 'node-context'],
   setup(props, { emit }) {
     const { zoomIn, zoomOut, fitView, setViewport } = useVueFlow({ id: 'goal-canvas' });
     const { computeLayout } = useCanvasLayout();
@@ -92,6 +93,11 @@ export default {
       emit('node-click', event.node.id);
     }
 
+    function onNodeContextMenu(event) {
+      event.event.preventDefault();
+      emit('node-context', event.node.id);
+    }
+
     return {
       flowEdges,
       layoutedNodes,
@@ -101,6 +107,7 @@ export default {
       resetView,
       onNodeDragStop,
       onNodeClick,
+      onNodeContextMenu,
     };
   },
 };
