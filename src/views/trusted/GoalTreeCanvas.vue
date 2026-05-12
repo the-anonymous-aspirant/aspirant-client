@@ -8,7 +8,7 @@
         @tree-switched="onTreeSwitched"
       />
       <div class="toolbar-spacer"></div>
-      <button class="btn-add-node" @click="showCreateNode = true">+ Add Node</button>
+      <button class="btn-add-node" @click="openCreateDialog(null)">+ Add Node</button>
     </div>
 
     <div v-if="loading" class="loading-text">Loading tree...</div>
@@ -19,24 +19,24 @@
         :edges="edges"
         @node-click="selectNode"
         @node-repositioned="onNodeRepositioned"
+        @node-context="onNodeContext"
       />
     </div>
 
     <!-- Node creation dialog -->
     <div v-if="showCreateNode" class="dialog-overlay" @click.self="showCreateNode = false">
-      <div class="dialog">
+      <div class="dialog dialog-wide">
         <h3>Add Node</h3>
         <input
           v-model="newNode.name"
           placeholder="Node name"
-          @keyup.enter="createNode"
           @keyup.escape="showCreateNode = false"
           maxlength="255"
           ref="createNodeInput"
         />
         <div class="form-row">
           <label>Type</label>
-          <select v-model="newNode.type">
+          <select v-model="newNode.type" @change="onTypeChange">
             <option value="goal">Goal</option>
             <option value="milestone">Milestone</option>
             <option value="step">Step</option>
@@ -44,7 +44,7 @@
         </div>
         <div class="form-row">
           <label>Parent</label>
-          <select v-model="newNode.parent_id">
+          <select v-model="newNode.parent_id" @change="onParentChange">
             <option :value="null">None (root)</option>
             <option v-for="node in nodes" :key="node.id" :value="node.id">
               {{ node.name }}
@@ -52,8 +52,28 @@
           </select>
         </div>
         <div class="form-row">
+          <label>Planned start</label>
+          <input type="date" v-model="newNode.planned_start" />
+        </div>
+        <div class="form-row">
+          <label>Planned end</label>
+          <input type="date" v-model="newNode.planned_end" />
+        </div>
+        <div class="form-row">
           <label>Color</label>
           <input type="color" v-model="newNode.color" />
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea
+            v-model="newNode.description"
+            rows="8"
+            class="description-textarea"
+            placeholder="Markdown description..."
+          ></textarea>
+        </div>
+        <div v-if="depthWarning" class="warning-banner">
+          &#9888; Recommended depth reached. Adding further nesting may reduce clarity.
         </div>
         <div v-if="createError" class="error-text">{{ createError }}</div>
         <div class="dialog-actions">
@@ -78,6 +98,14 @@ import Canvas from '../../components/goals/Canvas.vue';
 import TreeSwitcher from '../../components/goals/TreeSwitcher.vue';
 import { useGoalNodes } from '../../composables/goals/useGoalNodes.js';
 
+const NODE_TEMPLATES = {
+  goal: `## Outcome\n\nWhat does success look like when this goal is achieved?\n\n## Motivation\n\nWhy does this goal matter? What changes if it's completed?\n\n## Key Results\n\n- [ ] \n- [ ] \n- [ ] \n`,
+  milestone: `## Definition\n\nWhat marks this milestone as reached?\n\n## Dependencies\n\nWhat must be true before this milestone can be achieved?\n\n## Evidence\n\nHow will completion be verified?\n`,
+  step: `## Action\n\nWhat concrete action does this step represent?\n\n## Done When\n\nHow do you know this step is complete?\n`,
+};
+
+const MAX_RECOMMENDED_DEPTH = 5;
+
 export default {
   components: { Canvas, TreeSwitcher },
   setup() {
@@ -92,36 +120,90 @@ export default {
     const creating = ref(false);
     const createError = ref(null);
     const createNodeInput = ref(null);
-    const newNode = ref({
-      name: '',
-      type: 'step',
-      parent_id: null,
-      color: '#ffb300',
+    const newNode = ref(defaultNodeState());
+
+    function defaultNodeState() {
+      return {
+        name: '',
+        type: 'step',
+        parent_id: null,
+        color: '#ffb300',
+        planned_start: '',
+        planned_end: '',
+        description: NODE_TEMPLATES.step,
+      };
+    }
+
+    function getNodeDepth(nodeId) {
+      if (!nodeId) return 0;
+      let depth = 0;
+      let current = nodeId;
+      const edgeList = edges.value;
+      while (current) {
+        const parentEdge = edgeList.find((e) => e.to_id === current);
+        if (!parentEdge) break;
+        current = parentEdge.from_id;
+        depth++;
+      }
+      return depth;
+    }
+
+    const depthWarning = computed(() => {
+      const parentDepth = getNodeDepth(newNode.value.parent_id);
+      return parentDepth + 1 >= MAX_RECOMMENDED_DEPTH;
     });
 
-    function onTreeRenamed() {
-      // TreeSwitcher handles name display; no action needed
+    function openCreateDialog(parentId) {
+      newNode.value = defaultNodeState();
+      if (parentId) {
+        newNode.value.parent_id = parentId;
+      }
+      createError.value = null;
+      showCreateNode.value = true;
     }
 
-    function onTreeSwitched() {
-      // Route change triggers watcher which reloads nodes
+    function onTypeChange() {
+      newNode.value.description = NODE_TEMPLATES[newNode.value.type] || '';
     }
+
+    function onParentChange() {
+      // Recalculate depth warning reactively via computed
+    }
+
+    function onNodeContext(nodeId) {
+      openCreateDialog(nodeId);
+    }
+
+    function onTreeRenamed() {}
+
+    function onTreeSwitched() {}
 
     async function createNode() {
       if (!newNode.value.name.trim()) return;
       creating.value = true;
       createError.value = null;
       try {
-        await apiCreateNode({
+        const payload = {
           name: newNode.value.name.trim(),
           type: newNode.value.type,
           parent_id: newNode.value.parent_id,
           color: newNode.value.color,
-        });
+          description: newNode.value.description || '',
+        };
+        if (newNode.value.planned_start) payload.planned_start = newNode.value.planned_start;
+        if (newNode.value.planned_end) payload.planned_end = newNode.value.planned_end;
+
+        await apiCreateNode(payload);
         showCreateNode.value = false;
-        newNode.value = { name: '', type: 'step', parent_id: null, color: '#ffb300' };
+        newNode.value = defaultNodeState();
       } catch (err) {
-        createError.value = err.response?.data?.error?.message || err.message;
+        const status = err.response?.status;
+        const data = err.response?.data;
+        if (status === 422) {
+          createError.value = data?.error?.message || data?.detail || 'Validation failed: maximum nesting depth exceeded.';
+        } else {
+          createError.value = data?.error?.message || err.message;
+        }
       }
       creating.value = false;
     }
@@ -166,6 +248,11 @@ export default {
       createError,
       createNodeInput,
       newNode,
+      depthWarning,
+      openCreateDialog,
+      onTypeChange,
+      onParentChange,
+      onNodeContext,
       createNode,
       selectNode,
       onNodeRepositioned,
@@ -267,6 +354,12 @@ export default {
   padding: var(--space-xl);
   width: 90%;
   max-width: 400px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.dialog.dialog-wide {
+  max-width: 540px;
 }
 
 .dialog h3 {
@@ -276,7 +369,7 @@ export default {
 }
 
 .dialog input[type="text"],
-.dialog input:not([type]) {
+.dialog input:not([type="color"]):not([type="date"]) {
   width: 100%;
   padding: var(--space-sm);
   border-radius: var(--radius-sm);
@@ -297,10 +390,20 @@ export default {
 .form-row label {
   color: var(--text-muted);
   font-size: var(--text-sm);
-  min-width: 60px;
+  min-width: 90px;
 }
 
 .form-row select {
+  flex: 1;
+  padding: var(--space-xs);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-card);
+  background-color: var(--surface-card-inner);
+  color: var(--text-on-dark);
+  font-size: var(--text-sm);
+}
+
+.form-row input[type="date"] {
   flex: 1;
   padding: var(--space-xs);
   border-radius: var(--radius-sm);
@@ -317,6 +420,41 @@ export default {
   border-radius: var(--radius-sm);
   cursor: pointer;
   padding: 0;
+}
+
+.form-group {
+  margin-top: var(--space-md);
+}
+
+.form-group label {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.description-textarea {
+  width: 100%;
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-card);
+  background-color: var(--surface-card-inner);
+  color: var(--text-on-dark);
+  font-size: var(--text-sm);
+  font-family: monospace;
+  resize: vertical;
+  box-sizing: border-box;
+  line-height: 1.5;
+}
+
+.warning-banner {
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--feedback-warning, #f5a623);
+  background-color: rgba(245, 166, 35, 0.1);
+  color: var(--feedback-warning, #f5a623);
+  font-size: var(--text-sm);
 }
 
 .dialog-actions {
