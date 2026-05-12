@@ -54,6 +54,17 @@
         @card-click="navigateTo"
       />
     </div>
+
+    <h2 class="section-title">Tools</h2>
+    <div class="application-list">
+      <application-card
+        :image-url="appImages.default"
+        title="Kvitto Maker"
+        description="Generate 12-month rent receipt PDFs"
+        route="/admin/tools/kvitto"
+        @card-click="navigateTo"
+      />
+    </div>
   </div>
 </template>
 
@@ -109,6 +120,10 @@
 
   .admin-view h2 {
     margin-bottom: var(--space-xl);
+  }
+
+  .section-title {
+    margin-top: var(--space-xl);
   }
 
   .application-list {
