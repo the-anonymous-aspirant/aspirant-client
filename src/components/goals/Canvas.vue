@@ -60,9 +60,9 @@ export default {
 
     const flowEdges = computed(() =>
       props.edges.map((edge) => ({
-        id: edge.id,
-        source: edge.from_id,
-        target: edge.to_id,
+        id: `e${edge.from_id}-${edge.to_id}`,
+        source: String(edge.from_id),
+        target: String(edge.to_id),
         type: 'smoothstep',
         animated: false,
         style: { stroke: nodeColorMap.value[edge.from_id] || '#ffb300', strokeWidth: 2 },
@@ -71,7 +71,7 @@ export default {
 
     const flowNodes = computed(() =>
       props.nodes.map((node) => ({
-        id: node.id,
+        id: String(node.id),
         type: 'goalNode',
         data: { ...node, dimmed: props.dimmedNodeIds.has(node.id) },
         position: { x: 0, y: 0 },
