@@ -27,6 +27,9 @@ export default {
   props: {
     data: { type: Object, required: true },
   },
+  data() {
+    return { Position };
+  },
   computed: {
     resolvedColor() {
       return this.data.resolved_color || this.data.color || '#ffb300';
