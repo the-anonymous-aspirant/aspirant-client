@@ -12,13 +12,20 @@
 
         <div class="panel-body">
           <!-- Color picker -->
-          <div class="field-row">
+          <div class="field-row color-row">
             <label>Color</label>
             <input
               type="color"
-              :value="node.color || node.resolved_color || '#ffb300'"
+              :value="displayColor"
               @change="onColorChange"
             />
+            <span v-if="!node.color" class="inherited-badge">inherited</span>
+            <button
+              v-if="node.color"
+              class="btn-clear-color"
+              @click="clearColor"
+              title="Revert to inherited color"
+            >&times;</button>
           </div>
 
           <!-- Planned dates -->
@@ -177,6 +184,10 @@ export default {
       return labels[props.node?.type] || props.node?.type || '';
     });
 
+    const displayColor = computed(() => {
+      return props.node?.color || props.node?.resolved_color || '#ffb300';
+    });
+
     const isAutoCompleted = computed(() => {
       return !!props.node?.completed_at && !props.node?.manual_complete;
     });
@@ -235,6 +246,19 @@ export default {
         emit('node-updated');
       } catch (err) {
         console.error('Failed to save color:', err);
+      }
+    }
+
+    async function clearColor() {
+      try {
+        const axios = (await import('axios')).default;
+        await axios.patch(
+          `/api/goals/trees/${props.treeId}/nodes/${props.node.id}`,
+          { color: '' }
+        );
+        emit('node-updated');
+      } catch (err) {
+        console.error('Failed to clear color:', err);
       }
     }
 
@@ -321,6 +345,7 @@ export default {
       editingCommentId,
       editCommentBody,
       typeLabel,
+      displayColor,
       isAutoCompleted,
       completionText,
       renderedMarkdown,
@@ -328,6 +353,7 @@ export default {
       cancelEdit,
       saveDescription,
       onColorChange,
+      clearColor,
       onFieldChange,
       toggleCompletion,
       renderComment,
@@ -447,6 +473,35 @@ export default {
   border-radius: var(--radius-sm);
   cursor: pointer;
   padding: 0;
+}
+
+.color-row {
+  flex-wrap: wrap;
+}
+
+.inherited-badge {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.btn-clear-color {
+  background: none;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+.btn-clear-color:hover {
+  color: var(--feedback-error);
+  border-color: var(--feedback-error);
 }
 
 /* Completion */
