@@ -50,6 +50,14 @@ export default {
     const { zoomIn, zoomOut, fitView, setViewport } = useVueFlow({ id: 'goal-canvas' });
     const { computeLayout } = useCanvasLayout();
 
+    const nodeColorMap = computed(() => {
+      const map = {};
+      for (const node of props.nodes) {
+        map[node.id] = node.resolved_color || node.color || '#ffb300';
+      }
+      return map;
+    });
+
     const flowEdges = computed(() =>
       props.edges.map((edge) => ({
         id: edge.id,
@@ -57,7 +65,7 @@ export default {
         target: edge.to_id,
         type: 'smoothstep',
         animated: false,
-        style: { stroke: '#ffb300', strokeWidth: 2 },
+        style: { stroke: nodeColorMap.value[edge.from_id] || '#ffb300', strokeWidth: 2 },
       }))
     );
 
