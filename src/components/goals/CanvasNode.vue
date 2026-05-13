@@ -1,5 +1,5 @@
 <template>
-  <div class="goal-node" :class="{ completed: !!data.completed_at }">
+  <div class="goal-node" :class="{ completed: !!data.completed_at, dimmed: data.dimmed }">
     <Handle type="target" :position="Position.Top" />
     <div class="color-bar" :style="{ backgroundColor: resolvedColor }"></div>
     <div class="node-body">
@@ -68,6 +68,12 @@ export default {
 .goal-node.completed {
   opacity: 0.7;
   border-color: var(--feedback-success);
+}
+
+.goal-node.dimmed {
+  opacity: 0.3;
+  filter: grayscale(0.6);
+  pointer-events: auto;
 }
 
 .color-bar {
