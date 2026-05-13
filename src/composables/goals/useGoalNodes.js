@@ -11,12 +11,12 @@ export function useGoalNodes(treeId) {
     loading.value = true;
     error.value = null;
     try {
-      const [nodesResp, edgesResp] = await Promise.all([
-        axios.get(`/api/goals/trees/${treeId.value}/nodes`),
-        axios.get(`/api/goals/trees/${treeId.value}/edges`),
-      ]);
-      nodes.value = nodesResp.data.items || nodesResp.data || [];
-      edges.value = edgesResp.data.items || edgesResp.data || [];
+      const resp = await axios.get(`/api/goals/trees/${treeId.value}/nodes`);
+      const items = resp.data.items || resp.data || [];
+      nodes.value = items;
+      edges.value = items
+        .filter((n) => n.parent_id)
+        .map((n) => ({ from_id: n.parent_id, to_id: n.id }));
     } catch (err) {
       error.value = err.response?.data?.error?.message || err.message;
     }
