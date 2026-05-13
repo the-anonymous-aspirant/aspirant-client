@@ -248,7 +248,7 @@ export default {
     }
 
     function selectNode(nodeId) {
-      const found = nodes.value.find((n) => n.id === nodeId);
+      const found = nodes.value.find((n) => String(n.id) === String(nodeId));
       selectedNode.value = found || null;
     }
 
