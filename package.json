@@ -13,6 +13,8 @@
     "@vue-flow/core": "^1.48.2",
     "axios": "^1.6.8",
     "chart.js": "^4.4.7",
+    "dompurify": "^3.4.2",
+    "marked": "^18.0.3",
     "pdfmake": "^0.3.8",
     "prettier": "^3.5.3",
     "vue": "^3.4.21",
