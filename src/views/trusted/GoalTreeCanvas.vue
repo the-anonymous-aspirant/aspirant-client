@@ -11,12 +11,27 @@
       <button class="btn-add-node" @click="openCreateDialog(null)">+ Add Node</button>
     </div>
 
+    <TimelineFilter
+      :period="filterPeriod"
+      :customStart="filterCustomStart"
+      :customEnd="filterCustomEnd"
+      :mode="filterMode"
+      :active="filterActive"
+      @update:period="filterPeriod = $event"
+      @update:customStart="filterCustomStart = $event"
+      @update:customEnd="filterCustomEnd = $event"
+      @update:mode="filterMode = $event"
+      @apply="applyFilter"
+      @clear="clearFilter"
+    />
+
     <div v-if="loading" class="loading-text">Loading tree...</div>
     <div v-else-if="error" class="error-text">{{ error }}</div>
     <div v-else class="canvas-wrapper">
       <Canvas
         :nodes="nodes"
         :edges="edges"
+        :dimmedNodeIds="dimmedNodeIds"
         @node-click="selectNode"
         @node-repositioned="onNodeRepositioned"
         @node-context="onNodeContext"
@@ -105,7 +120,9 @@ import { useRoute, useRouter } from 'vue-router';
 import Canvas from '../../components/goals/Canvas.vue';
 import TreeSwitcher from '../../components/goals/TreeSwitcher.vue';
 import NodeDetailPanel from '../../components/goals/NodeDetailPanel.vue';
+import TimelineFilter from '../../components/goals/TimelineFilter.vue';
 import { useGoalNodes } from '../../composables/goals/useGoalNodes.js';
+import { useTimelineFilter } from '../../composables/goals/useTimelineFilter.js';
 
 const NODE_TEMPLATES = {
   goal: `## Outcome\n\nWhat does success look like when this goal is achieved?\n\n## Motivation\n\nWhy does this goal matter? What changes if it's completed?\n\n## Key Results\n\n- [ ] \n- [ ] \n- [ ] \n`,
@@ -116,7 +133,7 @@ const NODE_TEMPLATES = {
 const MAX_RECOMMENDED_DEPTH = 5;
 
 export default {
-  components: { Canvas, TreeSwitcher, NodeDetailPanel },
+  components: { Canvas, TreeSwitcher, NodeDetailPanel, TimelineFilter },
   setup() {
     const route = useRoute();
     const router = useRouter();
@@ -124,6 +141,17 @@ export default {
 
     const { nodes, edges, loading, error, fetchNodes, createNode: apiCreateNode, updateSortOrder } =
       useGoalNodes(treeId);
+
+    const {
+      period: filterPeriod,
+      customStart: filterCustomStart,
+      customEnd: filterCustomEnd,
+      mode: filterMode,
+      active: filterActive,
+      dimmedNodeIds,
+      apply: applyFilter,
+      clear: clearFilter,
+    } = useTimelineFilter(nodes);
 
     const selectedNode = ref(null);
 
@@ -271,6 +299,14 @@ export default {
       createNodeInput,
       newNode,
       depthWarning,
+      filterPeriod,
+      filterCustomStart,
+      filterCustomEnd,
+      filterMode,
+      filterActive,
+      dimmedNodeIds,
+      applyFilter,
+      clearFilter,
       openCreateDialog,
       onTypeChange,
       onParentChange,
