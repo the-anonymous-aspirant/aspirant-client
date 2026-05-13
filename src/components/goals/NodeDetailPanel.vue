@@ -266,7 +266,11 @@ export default {
       try {
         const axios = (await import('axios')).default;
         const payload = {};
-        payload[field] = value || null;
+        if ((field === 'planned_start' || field === 'planned_end') && value) {
+          payload[field] = value + 'T00:00:00Z';
+        } else {
+          payload[field] = value || null;
+        }
         await axios.patch(
           `/api/goals/trees/${props.treeId}/nodes/${props.node.id}`,
           payload

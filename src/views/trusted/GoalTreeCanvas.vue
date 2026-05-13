@@ -229,8 +229,8 @@ export default {
           color: newNode.value.color,
           description: newNode.value.description || '',
         };
-        if (newNode.value.planned_start) payload.planned_start = newNode.value.planned_start;
-        if (newNode.value.planned_end) payload.planned_end = newNode.value.planned_end;
+        if (newNode.value.planned_start) payload.planned_start = newNode.value.planned_start + 'T00:00:00Z';
+        if (newNode.value.planned_end) payload.planned_end = newNode.value.planned_end + 'T00:00:00Z';
 
         await apiCreateNode(payload);
         showCreateNode.value = false;
