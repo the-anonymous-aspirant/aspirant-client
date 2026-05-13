@@ -43,6 +43,7 @@ export default {
   props: {
     nodes: { type: Array, default: () => [] },
     edges: { type: Array, default: () => [] },
+    dimmedNodeIds: { type: Object, default: () => new Set() },
   },
   emits: ['node-click', 'node-repositioned', 'node-context'],
   setup(props, { emit }) {
@@ -64,7 +65,7 @@ export default {
       props.nodes.map((node) => ({
         id: node.id,
         type: 'goalNode',
-        data: { ...node },
+        data: { ...node, dimmed: props.dimmedNodeIds.has(node.id) },
         position: { x: 0, y: 0 },
       }))
     );
