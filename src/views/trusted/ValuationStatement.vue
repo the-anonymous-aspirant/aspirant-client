@@ -227,10 +227,10 @@
       <h3>Klart!</h3>
       <p>Värdeutlåtandet är klart att ladda ner.</p>
       <a class="btn-primary" :href="downloadUrl" :download="downloadFilename">
-        Ladda ner värdeutlåtande (.docx)
+        Ladda ner värdeutlåtande ({{ isPdf ? '.pdf' : '.docx' }})
       </a>
-      <p class="muted small" style="margin-top: var(--space-md)">
-        Filen öppnas i Word eller LibreOffice. Spara som PDF därifrån vid behov.
+      <p v-if="!isPdf" class="muted small" style="margin-top: var(--space-md)">
+        PDF-konvertering inte tillgänglig — filen kan öppnas i Word eller LibreOffice och sparas som PDF därifrån vid behov.
       </p>
       <button class="btn-secondary" @click="resetFlow">Skapa ett nytt</button>
     </div>
@@ -279,6 +279,9 @@ export default {
   computed: {
     mode() {
       return this.reviewedFields.upplatelseform === 'Friköpt' ? 'frikopt' : 'bostadsratt';
+    },
+    isPdf() {
+      return this.downloadFilename.toLowerCase().endsWith('.pdf');
     },
   },
   methods: {
@@ -399,11 +402,26 @@ export default {
       this.generateError = null;
       const body = { ...this.reviewedFields, mode: this.mode };
       try {
-        const resp = await axios.post(
-          '/api/commander/valuation-statement/generate',
-          body,
-          { responseType: 'blob' }
-        );
+        // Prefer PDF; if the deploy hasn't shipped LibreOffice yet the
+        // backend returns 503 and we transparently fall back to docx.
+        let resp;
+        try {
+          resp = await axios.post(
+            '/api/commander/valuation-statement/generate?format=pdf',
+            body,
+            { responseType: 'blob' }
+          );
+        } catch (pdfErr) {
+          if (pdfErr.response?.status === 503) {
+            resp = await axios.post(
+              '/api/commander/valuation-statement/generate',
+              body,
+              { responseType: 'blob' }
+            );
+          } else {
+            throw pdfErr;
+          }
+        }
         const cd = resp.headers['content-disposition'] || '';
         const m = cd.match(/filename="([^"]+)"/);
         this.downloadFilename = m ? m[1] : 'vardeutlatande.docx';
