@@ -54,6 +54,13 @@
           route="goals"
           @card-click="goToApplication"
         />
+        <application-card
+          :image-url="appImages.valuation"
+          title="Värdeutlåtande"
+          description="Fyll i värdeutlåtanden från PDF-underlag"
+          route="valuation-statement"
+          @card-click="goToApplication"
+        />
       </div>
     </div>
   </div>
@@ -77,6 +84,7 @@
           translator: '',
           wikipedia: '',
           goals: '',
+          valuation: '',
         },
       };
     },
@@ -93,6 +101,7 @@
           translator: 'home_icon',
           wikipedia: 'home_icon',
           goals: 'home_icon',
+          valuation: 'home_icon',
         };
         await Promise.all(
           Object.entries(assets).map(async ([key, assetName]) => {
