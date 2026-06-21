@@ -212,6 +212,35 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     expect(t1).not.toBe(t2);
   });
 
+  test('#936 done-step action buttons sit in a flex row with a visible gap', async ({ page }) => {
+    await walkToReview(page);
+    await page.getByRole('button', { name: /Generera värdeutlåtande/ }).click();
+    const downloadLink = page.locator('a.btn-primary', { hasText: /Ladda ner/ });
+    await expect(downloadLink).toBeVisible({ timeout: 10_000 });
+
+    const actions = page.locator('.done-actions');
+    await expect(actions).toBeVisible();
+    const display = await actions.evaluate(el => getComputedStyle(el).display);
+    expect(display).toBe('flex');
+
+    // The two action elements sit side-by-side in the row. Their bounding
+    // boxes should be horizontally separated by at least var(--space-lg)
+    // (24px on the design tokens) — the regression guarded here is the
+    // pre-fix layout where the buttons sat directly adjacent with only
+    // the inline whitespace between them.
+    const primary = await downloadLink.boundingBox();
+    const secondary = await page
+      .locator('.done-actions button.btn-secondary')
+      .boundingBox();
+    expect(primary).toBeTruthy();
+    expect(secondary).toBeTruthy();
+    const horizontalGap = secondary!.x - (primary!.x + primary!.width);
+    const verticalGap = secondary!.y - (primary!.y + primary!.height);
+    // Either same row with a real horizontal gap, or stacked with a real
+    // vertical gap — both honor the spacing the operator asked for.
+    expect(Math.max(horizontalGap, verticalGap)).toBeGreaterThanOrEqual(16);
+  });
+
   test('#937 generating-step full spinner animates', async ({ page }) => {
     await installCommanderMocks(page, { generateDelayMs: 2500 });
     await walkToReview(page);

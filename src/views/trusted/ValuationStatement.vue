@@ -324,13 +324,15 @@
     <div v-if="step === 'done'" class="card">
       <h3>Klart!</h3>
       <p>Värdeutlåtandet är klart att ladda ner.</p>
-      <a class="btn-primary" :href="downloadUrl" :download="downloadFilename">
-        Ladda ner värdeutlåtande ({{ isPdf ? '.pdf' : '.docx' }})
-      </a>
-      <p v-if="!isPdf" class="muted small" style="margin-top: var(--space-md)">
+      <p v-if="!isPdf" class="muted small">
         PDF-konvertering inte tillgänglig — filen kan öppnas i Word eller LibreOffice och sparas som PDF därifrån vid behov.
       </p>
-      <button class="btn-secondary" @click="resetFlow">Skapa ett nytt</button>
+      <div class="done-actions">
+        <a class="btn-primary" :href="downloadUrl" :download="downloadFilename">
+          Ladda ner värdeutlåtande ({{ isPdf ? '.pdf' : '.docx' }})
+        </a>
+        <button class="btn-secondary" @click="resetFlow">Skapa ett nytt</button>
+      </div>
     </div>
   </div>
 </template>
@@ -951,6 +953,13 @@ export default {
   display: flex;
   justify-content: space-between;
   gap: var(--space-md);
+  margin-top: var(--space-lg);
+}
+
+.done-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
   margin-top: var(--space-lg);
 }
 
