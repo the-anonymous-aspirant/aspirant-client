@@ -958,6 +958,7 @@ export default {
 .progress-list { list-style: none; padding: 0; margin: 0; }
 .progress-list li { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-xs) 0; }
 .spinner {
+  display: inline-block;
   width: 16px;
   height: 16px;
   border-radius: 50%;
@@ -974,7 +975,20 @@ export default {
   animation: spin 0.8s linear infinite;
   margin: var(--space-xl) auto;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .full-spinner {
+    animation: spinner-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes spinner-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+}
 
 /* Review-step fields */
 .field-block {
