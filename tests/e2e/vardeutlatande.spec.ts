@@ -181,6 +181,38 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     await expect(downloadLink).toContainText('.docx');
   });
 
+  test('#949 comparable-card text stays inside the card bounds at mobile width', async ({ page }) => {
+    // Run the desktop chromium suite at iPhone-sized viewport so the
+    // ≤768px @media block (where .comparable-card narrows to 180px) is
+    // active. Local mobile-safari isn't runnable without webkit system
+    // deps, so checking at chromium-with-resized-viewport keeps the
+    // overflow regression caught locally — CI's mobile-safari project
+    // re-validates the same surface.
+    await page.setViewportSize({ width: 375, height: 800 });
+    await walkToReview(page);
+    const cards = page.locator('.comparable-card');
+    const count = await cards.count();
+    expect(count).toBeGreaterThan(0);
+
+    for (let i = 0; i < count; i++) {
+      const overflow = await cards.nth(i).evaluate(el => {
+        const cardRect = (el as HTMLElement).getBoundingClientRect();
+        const texts = (el as HTMLElement).querySelectorAll('span, dt, dd, p');
+        return Array.from(texts).flatMap(t => {
+          const tr = (t as HTMLElement).getBoundingClientRect();
+          // 1px tolerance for subpixel rounding.
+          const right = tr.right - cardRect.right;
+          const left = cardRect.left - tr.left;
+          if (right > 1 || left > 1) {
+            return [{ text: (t.textContent || '').trim(), right, left }];
+          }
+          return [];
+        });
+      });
+      expect(overflow, `card #${i} has overflowing text: ${JSON.stringify(overflow)}`).toEqual([]);
+    }
+  });
+
   test('#948 range-chart legend names all three visual elements (subject, range, median)', async ({ page }) => {
     await walkToReview(page);
     // The comparables block only renders when the extract fixture

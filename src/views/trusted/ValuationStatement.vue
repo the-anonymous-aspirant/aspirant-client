@@ -1218,5 +1218,17 @@ export default {
      above flows full-width naturally. */
   .comparable-card { flex: 0 0 180px; }
   .comparable-card--raw { flex: 0 0 240px; }
+
+  /* 180px less ~24px horizontal padding = ~156px inner; a 2-column
+     meta grid leaves ~78px per cell which can't hold labels like
+     "AVGIFT/MÅN" + value without clipping the card edge. Collapse to
+     single-column at mobile and drop the label letter-spacing so the
+     content sits comfortably inside the card. */
+  .comparable-card__meta {
+    grid-template-columns: 1fr;
+  }
+  .comparable-card__meta dt {
+    letter-spacing: 0;
+  }
 }
 </style>
