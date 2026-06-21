@@ -181,6 +181,52 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     await expect(downloadLink).toContainText('.docx');
   });
 
+  test('#959 every wizard step renders through the canonical ValuationStep wrapper, centered', async ({ page }) => {
+    // Slow both transient endpoints so the extracting + generating steps
+    // stay on screen long enough to inspect their layout.
+    await installCommanderMocks(page, { extractDelayMs: 1500, generateDelayMs: 1500 });
+    await page.goto('/trusted/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+
+    // Step 1: Upload — wrapper rendered.
+    await assertSingleCanonicalStep(page);
+
+    await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
+    await page.getByRole('button', { name: /Extrahera värden/ }).click();
+
+    // Step 2: Extracting.
+    await expect(page.locator('.spinner').first()).toBeVisible();
+    await assertSingleCanonicalStep(page);
+
+    // Step 3: Review.
+    await expect(page.getByRole('heading', { name: /Granska och justera/ })).toBeVisible({
+      timeout: 5_000,
+    });
+    await assertSingleCanonicalStep(page);
+
+    await page.getByRole('button', { name: /Generera värdeutlåtande/ }).click();
+
+    // Step 4: Generating.
+    await expect(page.locator('.full-spinner')).toBeVisible();
+    await assertSingleCanonicalStep(page);
+
+    // Step 5: Done — and the action row sits on the card's center axis,
+    // the regression guard for #959 / #936. Pre-refactor, .done-actions
+    // was a full-width block-flex row whose buttons fell to the left;
+    // post-refactor it's a flex-item inside the narrow wrapper and
+    // centers naturally.
+    await expect(page.getByRole('heading', { name: /Klart/ })).toBeVisible({ timeout: 5_000 });
+    await assertSingleCanonicalStep(page);
+
+    const card = await page.locator('.valuation-step').boundingBox();
+    const actions = await page.locator('.done-actions').boundingBox();
+    expect(card).toBeTruthy();
+    expect(actions).toBeTruthy();
+    const cardCenter = card!.x + card!.width / 2;
+    const actionsCenter = actions!.x + actions!.width / 2;
+    expect(Math.abs(cardCenter - actionsCenter)).toBeLessThan(4);
+  });
+
   test('#937 extracting-step spinners render with size and animate', async ({ page }) => {
     // Reinstall mocks with a delay so the extracting step stays on screen
     // long enough to capture the spinner's computed transform across frames.
@@ -280,6 +326,17 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     expect(runYellow).toBe(0);
   });
 });
+
+/** Assert exactly one <section.valuation-step> is on screen — the
+ *  invariant that the canonical wrapper component owns every step. If
+ *  a future step bypasses <ValuationStep> for its own <div class="card">,
+ *  this either matches zero (no .valuation-step at all) or matches the
+ *  wrong count (wrapper + raw card). Either way it red-lines the test. */
+async function assertSingleCanonicalStep(page: Page): Promise<void> {
+  const step = page.locator('.valuation-step');
+  await expect(step).toHaveCount(1);
+  await expect(step).toBeVisible();
+}
 
 /** Tiny ZIP central-directory parser. Avoids pulling in a JS zip dep just
  *  for one XML extraction; a docx is a single-shot read of one entry. */
