@@ -181,6 +181,50 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     await expect(downloadLink).toContainText('.docx');
   });
 
+  test('#937 extracting-step spinners render with size and animate', async ({ page }) => {
+    // Reinstall mocks with a delay so the extracting step stays on screen
+    // long enough to capture the spinner's computed transform across frames.
+    await installCommanderMocks(page, { extractDelayMs: 2500 });
+
+    await page.goto('/trusted/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
+    await page.getByRole('button', { name: /Extrahera värden/ }).click();
+
+    const spinner = page.locator('.spinner').first();
+    await expect(spinner).toBeVisible();
+
+    // Regression: the span used to be `display: inline` so width/height
+    // collapsed to 0 and the rotation had nothing visible to spin.
+    const box = await spinner.boundingBox();
+    expect(box?.width).toBeGreaterThan(10);
+    expect(box?.height).toBeGreaterThan(10);
+
+    // Regression: the keyframe used only `to { rotate(360deg) }`, leaving
+    // the implicit `from` as `transform: none` — matrix-identical to the
+    // `to` state, so some engines collapsed the animation to a no-op.
+    // Sample transform twice with a frame in between; the matrix MUST move.
+    const t1 = await spinner.evaluate(el => getComputedStyle(el).transform);
+    await page.waitForTimeout(400);
+    const t2 = await spinner.evaluate(el => getComputedStyle(el).transform);
+    expect(t1).not.toBe('none');
+    expect(t2).not.toBe('none');
+    expect(t1).not.toBe(t2);
+  });
+
+  test('#937 generating-step full spinner animates', async ({ page }) => {
+    await installCommanderMocks(page, { generateDelayMs: 2500 });
+    await walkToReview(page);
+    await page.getByRole('button', { name: /Generera värdeutlåtande/ }).click();
+
+    const spinner = page.locator('.full-spinner');
+    await expect(spinner).toBeVisible();
+    const t1 = await spinner.evaluate(el => getComputedStyle(el).transform);
+    await page.waitForTimeout(400);
+    const t2 = await spinner.evaluate(el => getComputedStyle(el).transform);
+    expect(t1).not.toBe(t2);
+  });
+
   test('#886 generated docx contract: golden fixture has no run-level yellow highlight', async ({ page }) => {
     // The mocked /generate?format=pdf 503-falls-back to /generate (docx);
     // the docx body is the bundled golden fixture. The test downloads it,
