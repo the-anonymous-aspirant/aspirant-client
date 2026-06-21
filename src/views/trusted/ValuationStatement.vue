@@ -939,25 +939,35 @@ export default {
   border-left: 4px solid #e53e3e;
 }
 
-/* Comparable sales decision support */
+/* Comparable sales decision support — read-only reference island. White
+   background with dark text so it stays readable against the dark card,
+   and so confidence tints (scoped to editable .field-row inputs) do not
+   bleed in. */
 .comparables-block {
   margin: var(--space-md) 0;
   padding: var(--space-md);
   border-radius: var(--radius-lg);
-  background-color: var(--surface-card-inner);
+  background-color: #ffffff;
+  color: var(--text-on-light);
 }
-.comparables-block h4 { margin: 0 0 var(--space-xs); font-size: var(--text-base); }
+.comparables-block h4 {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-base);
+  color: var(--text-on-light);
+}
+.comparables-block .muted { color: var(--text-muted); }
 .comparables-scroll { overflow-x: auto; }
 .comparables-table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--text-xs);
   margin-top: var(--space-sm);
+  color: var(--text-on-light);
 }
 .comparables-table th,
 .comparables-table td {
   padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid var(--border-card);
+  border-bottom: 1px solid var(--border-subtle);
   text-align: left;
   white-space: nowrap;
 }
@@ -993,7 +1003,9 @@ export default {
 
   /* Comparable-sales rows collapse into per-row cards: each cell becomes
      a label/value pair and rows are visually separated. Horizontal scroll
-     in a narrow viewport hides values past the first column or two. */
+     in a narrow viewport hides values past the first column or two. The
+     per-row card inherits the parent block's white background so the
+     dark-on-dark readability issue does not return on mobile. */
   .comparables-scroll { overflow-x: visible; }
   .comparables-table { display: block; }
   .comparables-table thead { display: none; }
@@ -1002,11 +1014,12 @@ export default {
     display: block;
     margin-bottom: var(--space-sm);
     padding: var(--space-xs) var(--space-sm);
-    border: 1px solid var(--border-card);
+    border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
-    background-color: var(--surface-card);
+    background-color: #ffffff;
+    color: var(--text-on-light);
   }
-  .comparables-table tr:last-child td { border-bottom: 1px solid var(--border-card); }
+  .comparables-table tr:last-child td { border-bottom: 0; }
   .comparables-table td {
     display: flex;
     justify-content: space-between;
