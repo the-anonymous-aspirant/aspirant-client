@@ -1099,6 +1099,8 @@ export default {
 }
 .comparable-card {
   flex: 0 0 220px;
+  /* min-width: 0 overrides flex's default min-content so flex-basis binds. */
+  min-width: 0;
   display: grid;
   gap: var(--space-2xs, 4px);
   padding: var(--space-sm);
@@ -1114,12 +1116,15 @@ export default {
   align-items: baseline;
   gap: var(--space-xs);
   font-size: var(--text-xs);
+  min-width: 0;
 }
 .comparable-card__brf {
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* min-width: 0 is what activates the ellipsis inside the flex header. */
+  min-width: 0;
 }
 .comparable-card__date {
   color: var(--text-muted);
