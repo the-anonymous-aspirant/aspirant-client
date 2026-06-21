@@ -7,9 +7,9 @@ import {
 } from './helpers/mockBackend';
 
 /** Mobile-only assertions on top of the shared regression spec. CSS rules
- *  scoped to @media (max-width: 768px) in ValuationStatement.vue change the
- *  comparable-sales layout from columns to per-row cards; the desktop spec
- *  exercises the column shape, this one locks the mobile-card shape.
+ *  scoped to @media (max-width: 768px) in ValuationStatement.vue narrow the
+ *  comparable-card flex basis so two cards peek into the viewport
+ *  simultaneously, hinting at the horizontal-scroll affordance on touch.
  *
  *  Native iOS picker behavior (date wheel, multi-file sheet) is OS-level
  *  and not asserted here — Playwright cannot validate that the iOS native
@@ -26,27 +26,26 @@ test.describe('Värdeutlåtande BR-flow — mobile (iPhone 13)', () => {
     await installCommanderMocks(page);
   });
 
-  test('comparable-sales table collapses into per-row cards on mobile', async ({ page }) => {
+  test('comparable cards narrow at mobile to peek the next card', async ({ page }) => {
     await walkToReview(page);
     const block = page.locator('.comparables-block');
     await expect(block).toBeVisible();
 
-    // The mobile @media block sets `tr { display: block; background: #fff }`
-    // so each row reads as a card and stays light-on-light readable.
-    const firstRow = page.locator('.comparables-table tbody tr').first();
-    const { display, bg } = await firstRow.evaluate(el => {
-      const cs = getComputedStyle(el as HTMLElement);
-      return { display: cs.display, bg: cs.backgroundColor };
-    });
-    expect(display).toBe('block');
-    expect(bg).toBe('rgb(255, 255, 255)');
+    // The mobile @media block narrows .comparable-card to flex-basis 180px
+    // (220px desktop). The width tells the operator another card sits
+    // off-edge — a swipe affordance without an explicit indicator.
+    const firstCard = page.locator('.comparable-card').first();
+    const width = await firstCard.evaluate(el => Math.round((el as HTMLElement).getBoundingClientRect().width));
+    expect(width).toBe(180);
 
-    // The header row hides (display:none); the per-cell data-label CSS
-    // pseudo-element carries the column title instead.
-    const headerDisplay = await page
-      .locator('.comparables-table thead')
-      .evaluate(el => getComputedStyle(el as HTMLElement).display);
-    expect(headerDisplay).toBe('none');
+    // The horizontal-scroll container is also overflowing horizontally on
+    // mobile (the fixture only has two cards, but at flex-basis 180px the
+    // container is wide enough to peek the second card while staying
+    // scrollable).
+    const overflowX = await page
+      .locator('.comparable-cards-scroll')
+      .evaluate(el => getComputedStyle(el as HTMLElement).overflowX);
+    expect(overflowX).toBe('auto');
   });
 
   test('field-row stacks label-over-input on mobile', async ({ page }) => {

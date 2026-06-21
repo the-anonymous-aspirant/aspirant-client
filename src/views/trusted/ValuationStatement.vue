@@ -203,42 +203,58 @@
         </div>
       </fieldset>
 
-      <!-- Decision-support: comparable sales table -->
+      <!-- Decision-support: comparable sales as per-metric range charts +
+           horizontal-scrolling card strip. The charts let the operator
+           see at a glance where the subject sits on each metric; the
+           card strip preserves access to per-row specifics. -->
       <div v-if="comparableSales.length" class="comparables-block">
         <h4>Jämförbara försäljningar (från Datavärdering)</h4>
         <p class="muted small">
-          Använd dessa som stöd när du bedömer marknadsvärdet ovan.
+          Subjektets position på varje skala — svart punkt = subjekt, blå
+          stapel = intervall mellan lägsta och högsta jämförbar.
         </p>
-        <div class="comparables-scroll">
-          <table class="comparables-table">
-            <thead>
-              <tr>
-                <th>Förening</th>
-                <th class="num">m²</th>
-                <th>Balkong</th>
-                <th class="num">Avgift/mån</th>
-                <th class="num">Årsavgift</th>
-                <th class="num">Pris</th>
-                <th class="num">kr/m²</th>
-                <th>Datum</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(c, idx) in comparableSales" :key="idx">
-                <template v-if="isStructured(c)">
-                  <td data-label="Förening">{{ c.forening || '—' }}</td>
-                  <td data-label="m²" class="num">{{ c.area_m2 || '—' }}</td>
-                  <td data-label="Balkong">{{ c.balkong || '—' }}</td>
-                  <td data-label="Avgift/mån" class="num">{{ formatKr(c.avgift_kr_manad) }}</td>
-                  <td data-label="Årsavgift" class="num">{{ formatKr(c.arsavgift_kr) }}</td>
-                  <td data-label="Pris" class="num">{{ formatKr(c.pris_kr) }}</td>
-                  <td data-label="kr/m²" class="num">{{ formatKr(c.pris_per_m2) }}</td>
-                  <td data-label="Datum">{{ c.salj_datum || '—' }}</td>
-                </template>
-                <td v-else colspan="8" class="comparables-raw">{{ c.raw }}</td>
-              </tr>
-            </tbody>
-          </table>
+
+        <div class="comparable-ranges">
+          <RangeChart
+            v-for="metric in comparableMetrics"
+            :key="metric.key"
+            :data-metric="metric.key"
+            :label="metric.label"
+            :min="metric.min"
+            :max="metric.max"
+            :median="metric.median"
+            :subject="metric.subject"
+            :format="metric.format"
+          />
+        </div>
+
+        <div class="comparable-cards-scroll">
+          <div class="comparable-cards">
+            <article
+              v-for="(c, idx) in sortedComparableSales"
+              :key="idx"
+              class="comparable-card"
+              :class="{ 'comparable-card--raw': !isStructured(c) }"
+            >
+              <header class="comparable-card__head">
+                <span class="comparable-card__brf">{{ c.forening || '—' }}</span>
+                <span class="comparable-card__date">{{ c.salj_datum || '—' }}</span>
+              </header>
+              <template v-if="isStructured(c)">
+                <div class="comparable-card__primary">
+                  <span class="comparable-card__price">{{ formatKr(c.pris_kr) }} kr</span>
+                  <span class="comparable-card__per-m2">{{ formatKr(c.pris_per_m2) }} kr/m²</span>
+                </div>
+                <dl class="comparable-card__meta">
+                  <div><dt>m²</dt><dd>{{ c.area_m2 || '—' }}</dd></div>
+                  <div><dt>Balkong</dt><dd>{{ c.balkong || '—' }}</dd></div>
+                  <div><dt>Avgift/mån</dt><dd>{{ formatKr(c.avgift_kr_manad) }}</dd></div>
+                  <div><dt>Årsavgift</dt><dd>{{ formatKr(c.arsavgift_kr) }}</dd></div>
+                </dl>
+              </template>
+              <p v-else class="comparable-card__raw">{{ c.raw }}</p>
+            </article>
+          </div>
         </div>
       </div>
 
@@ -322,6 +338,38 @@
 <script>
 import axios from 'axios';
 
+import RangeChart from '@/components/RangeChart.vue';
+
+function parseSwedishNumber(value) {
+  if (value == null || value === '') return null;
+  const cleaned = String(value).replace(/\s/g, '').replace(',', '.');
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseISODate(value) {
+  if (value == null || value === '') return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
+  if (!m) return null;
+  const d = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Number.isFinite(d) ? d : null;
+}
+
+function formatThousands(n) {
+  if (n == null || !Number.isFinite(n)) return '—';
+  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+function formatM2(v) {
+  if (v == null) return '—';
+  return Number.isInteger(v) ? `${v} m²` : `${v.toFixed(1).replace('.', ',')} m²`;
+}
+
+function formatSwedishDate(epoch) {
+  const d = new Date(epoch);
+  return `${d.getUTCDate()}/${d.getUTCMonth() + 1}/${d.getUTCFullYear()}`;
+}
+
 const BLANK_REVIEW = () => ({
   objekt: '',
   objekt_short: '',
@@ -376,6 +424,7 @@ const worstConfidence = (...buckets) => {
 };
 
 export default {
+  components: { RangeChart },
   data() {
     return {
       step: 'upload',
@@ -398,6 +447,76 @@ export default {
     },
     isPdf() {
       return this.downloadFilename.toLowerCase().endsWith('.pdf');
+    },
+
+    subjectAreaM2() {
+      // Subject area lives in the LGH extraction as `boarea`. Numeric in
+      // Swedish formatting ("62,5"); parsed once so all kr/m² derivations
+      // align on a single number.
+      for (const d of this.extractedDocs) {
+        for (const f of (d.fields || [])) {
+          if (f.key === 'boarea' && f.value) return parseSwedishNumber(f.value);
+        }
+      }
+      return null;
+    },
+
+    subjectMarknadsvardeKr() {
+      return parseSwedishNumber(this.reviewedFields.marknadsvarde_kr);
+    },
+
+    subjectKrPerM2() {
+      const a = this.subjectAreaM2;
+      const p = this.subjectMarknadsvardeKr;
+      return a != null && a > 0 && p != null ? p / a : null;
+    },
+
+    subjectDatumEpoch() {
+      return parseISODate(this.reviewedFields.datum);
+    },
+
+    sortedComparableSales() {
+      // Most recent first; rows with no parseable date drop to the tail.
+      return [...this.comparableSales].sort((a, b) => {
+        const da = parseISODate(a.salj_datum);
+        const db = parseISODate(b.salj_datum);
+        if (da == null && db == null) return 0;
+        if (da == null) return 1;
+        if (db == null) return -1;
+        return db - da;
+      });
+    },
+
+    comparableMetrics() {
+      const rows = this.comparableSales.filter(c => this.isStructured(c));
+      const formatKr = v => formatThousands(v) + ' kr';
+      const formatKrPerM2 = v => formatThousands(v) + ' kr/m²';
+
+      const metrics = [
+        { key: 'area_m2', label: 'Boarea', parser: parseSwedishNumber, format: formatM2, subject: this.subjectAreaM2 },
+        { key: 'pris_kr', label: 'Pris', parser: parseSwedishNumber, format: formatKr, subject: this.subjectMarknadsvardeKr },
+        { key: 'pris_per_m2', label: 'kr/m²', parser: parseSwedishNumber, format: formatKrPerM2, subject: this.subjectKrPerM2 },
+        { key: 'avgift_kr_manad', label: 'Avgift/mån', parser: parseSwedishNumber, format: formatKr, subject: null },
+        { key: 'arsavgift_kr', label: 'Årsavgift', parser: parseSwedishNumber, format: formatKr, subject: null },
+        { key: 'salj_datum', label: 'Säljdatum', parser: parseISODate, format: formatSwedishDate, subject: this.subjectDatumEpoch },
+      ];
+
+      return metrics
+        .map(m => {
+          const values = rows.map(r => m.parser(r[m.key])).filter(v => v != null);
+          if (!values.length) return null;
+          values.sort((a, b) => a - b);
+          return {
+            key: m.key,
+            label: m.label,
+            format: m.format,
+            subject: m.subject,
+            min: values[0],
+            max: values[values.length - 1],
+            median: values[Math.floor(values.length / 2)],
+          };
+        })
+        .filter(m => m && m.min != null && m.max != null && m.max > m.min);
     },
   },
   methods: {
@@ -956,35 +1075,102 @@ export default {
   color: var(--text-on-light);
 }
 .comparables-block .muted { color: var(--text-muted); }
-.comparables-scroll { overflow-x: auto; }
-.comparables-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-xs);
+
+/* Tier 1 — vertical stack of one RangeChart per metric. */
+.comparable-ranges {
+  display: grid;
+  gap: var(--space-sm);
   margin-top: var(--space-sm);
+}
+
+/* Tier 2 — horizontal strip of per-row comparable cards. Native overflow
+   carries swipe/scroll on touch; the inner flex row preserves card width
+   so cards keep their shape regardless of N comparables. */
+.comparable-cards-scroll {
+  margin-top: var(--space-md);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+}
+.comparable-cards {
+  display: flex;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-xs);
+}
+.comparable-card {
+  flex: 0 0 220px;
+  display: grid;
+  gap: var(--space-2xs, 4px);
+  padding: var(--space-sm);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background-color: #ffffff;
   color: var(--text-on-light);
+  scroll-snap-align: start;
 }
-.comparables-table th,
-.comparables-table td {
-  padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid var(--border-subtle);
-  text-align: left;
-  white-space: nowrap;
+.comparable-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-xs);
+  font-size: var(--text-xs);
 }
-.comparables-table th {
+.comparable-card__brf {
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.comparable-card__date {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.comparable-card__primary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.comparable-card__price {
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+.comparable-card__per-m2 {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.comparable-card__meta {
+  margin: var(--space-2xs, 4px) 0 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px var(--space-sm);
+  font-size: var(--text-2xs, 0.7rem);
+}
+.comparable-card__meta > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2xs, 4px);
+}
+.comparable-card__meta dt {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  font-size: var(--text-2xs, 0.7rem);
 }
-.comparables-table td.num,
-.comparables-table th.num {
-  text-align: right;
+.comparable-card__meta dd {
+  margin: 0;
   font-variant-numeric: tabular-nums;
 }
-.comparables-table tr:last-child td { border-bottom: 0; }
-.comparables-raw { font-family: monospace; color: var(--text-muted); }
+.comparable-card--raw {
+  flex: 0 0 280px;
+}
+.comparable-card__raw {
+  margin: 0;
+  font-family: monospace;
+  font-size: var(--text-2xs, 0.7rem);
+  color: var(--text-muted);
+  white-space: normal;
+}
 
 /* Provenance disclosure */
 .provenance { margin-top: var(--space-lg); }
@@ -1001,45 +1187,11 @@ export default {
   .field-row { grid-template-columns: 1fr; gap: var(--space-2xs); }
   .field-row label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em; }
 
-  /* Comparable-sales rows collapse into per-row cards: each cell becomes
-     a label/value pair and rows are visually separated. Horizontal scroll
-     in a narrow viewport hides values past the first column or two. The
-     per-row card inherits the parent block's white background so the
-     dark-on-dark readability issue does not return on mobile. */
-  .comparables-scroll { overflow-x: visible; }
-  .comparables-table { display: block; }
-  .comparables-table thead { display: none; }
-  .comparables-table tbody { display: block; }
-  .comparables-table tr {
-    display: block;
-    margin-bottom: var(--space-sm);
-    padding: var(--space-xs) var(--space-sm);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    background-color: #ffffff;
-    color: var(--text-on-light);
-  }
-  .comparables-table tr:last-child td { border-bottom: 0; }
-  .comparables-table td {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--space-sm);
-    padding: 2px 0;
-    border-bottom: 0;
-    white-space: normal;
-    text-align: right;
-  }
-  .comparables-table td::before {
-    content: attr(data-label);
-    color: var(--text-muted);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    font-size: var(--text-2xs, 0.7rem);
-    text-align: left;
-  }
-  .comparables-table td.num { text-align: right; }
-  .comparables-raw::before { content: ''; }
-  .comparables-raw { font-size: var(--text-xs); text-align: left; }
+  /* Comparable-sales cards: narrower at mobile so two cards peek into
+     the viewport simultaneously, hinting at the horizontal-scroll
+     affordance without an explicit indicator. The range-chart stack
+     above flows full-width naturally. */
+  .comparable-card { flex: 0 0 180px; }
+  .comparable-card--raw { flex: 0 0 240px; }
 }
 </style>
