@@ -181,6 +181,21 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     await expect(downloadLink).toContainText('.docx');
   });
 
+  test('#948 range-chart legend names all three visual elements (subject, range, median)', async ({ page }) => {
+    await walkToReview(page);
+    // The comparables block only renders when the extract fixture
+    // supplies comparable_sales; assert it's on screen, then assert the
+    // legend caption mentions each of the three visual elements by name.
+    // Pre-fix the median tick was unlabelled and read to the operator
+    // as 'part of the blue bar'.
+    const legend = page.locator('.comparables-block p.muted.small').first();
+    await expect(legend).toBeVisible();
+    const text = (await legend.textContent()) || '';
+    expect(text).toMatch(/svart punkt/);
+    expect(text).toMatch(/bl[åa] stapel/);
+    expect(text).toMatch(/mitten-tick|medianv[äa]rde/);
+  });
+
   test('#959 every wizard step renders through the canonical ValuationStep wrapper, centered', async ({ page }) => {
     // Slow both transient endpoints so the extracting + generating steps
     // stay on screen long enough to inspect their layout.
