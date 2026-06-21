@@ -156,9 +156,37 @@
         <p class="muted small">
           Använd dessa som stöd när du bedömer marknadsvärdet ovan.
         </p>
-        <ul class="comparables-list">
-          <li v-for="(c, idx) in comparableSales" :key="idx">{{ c.raw }}</li>
-        </ul>
+        <div class="comparables-scroll">
+          <table class="comparables-table">
+            <thead>
+              <tr>
+                <th>Förening</th>
+                <th class="num">m²</th>
+                <th>Balkong</th>
+                <th class="num">Avgift/mån</th>
+                <th class="num">Årsavgift</th>
+                <th class="num">Pris</th>
+                <th class="num">kr/m²</th>
+                <th>Datum</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(c, idx) in comparableSales" :key="idx">
+                <template v-if="isStructured(c)">
+                  <td data-label="Förening">{{ c.forening || '—' }}</td>
+                  <td data-label="m²" class="num">{{ c.area_m2 || '—' }}</td>
+                  <td data-label="Balkong">{{ c.balkong || '—' }}</td>
+                  <td data-label="Avgift/mån" class="num">{{ formatKr(c.avgift_kr_manad) }}</td>
+                  <td data-label="Årsavgift" class="num">{{ formatKr(c.arsavgift_kr) }}</td>
+                  <td data-label="Pris" class="num">{{ formatKr(c.pris_kr) }}</td>
+                  <td data-label="kr/m²" class="num">{{ formatKr(c.pris_per_m2) }}</td>
+                  <td data-label="Datum">{{ c.salj_datum || '—' }}</td>
+                </template>
+                <td v-else colspan="8" class="comparables-raw">{{ c.raw }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <fieldset class="field-block">
@@ -324,6 +352,27 @@ export default {
       if (n < 1024) return `${n} B`;
       if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
       return `${(n / 1024 / 1024).toFixed(1)} MB`;
+    },
+
+    isStructured(row) {
+      // A row is "structured" when the parser split it into columns. A
+      // fallback row (un-parseable line shape) carries only `raw` and
+      // optionally `salj_datum` — render it as a single colspan cell so
+      // the operator still sees the data.
+      return Boolean(
+        row && (row.forening || row.area_m2 || row.pris_kr || row.pris_per_m2)
+      );
+    },
+
+    formatKr(s) {
+      // The parser ships raw digit strings; group thousands with a
+      // non-breaking space so amounts are scannable side-by-side. Non-
+      // numeric values pass through (e.g. '62,5' on the m² column —
+      // though we don't call this on m², a safety net is cheap).
+      if (s == null || s === '') return '—';
+      const digits = String(s).replace(/\s/g, '');
+      if (!/^\d+$/.test(digits)) return s;
+      return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     },
 
     onFilesPicked(e) {
@@ -768,9 +817,34 @@ export default {
   background-color: var(--surface-card-inner);
 }
 .comparables-block h4 { margin: 0 0 var(--space-xs); font-size: var(--text-base); }
-.comparables-list { list-style: none; padding: 0; margin: 0; font-family: monospace; font-size: var(--text-xs); }
-.comparables-list li { padding: 2px 0; border-bottom: 1px solid var(--border-card); }
-.comparables-list li:last-child { border-bottom: 0; }
+.comparables-scroll { overflow-x: auto; }
+.comparables-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+  margin-top: var(--space-sm);
+}
+.comparables-table th,
+.comparables-table td {
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid var(--border-card);
+  text-align: left;
+  white-space: nowrap;
+}
+.comparables-table th {
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--text-2xs, 0.7rem);
+}
+.comparables-table td.num,
+.comparables-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.comparables-table tr:last-child td { border-bottom: 0; }
+.comparables-raw { font-family: monospace; color: var(--text-muted); }
 
 /* Provenance disclosure */
 .provenance { margin-top: var(--space-lg); }
@@ -786,5 +860,43 @@ export default {
   .valuation-view { padding: var(--space-md); }
   .field-row { grid-template-columns: 1fr; gap: var(--space-2xs); }
   .field-row label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* Comparable-sales rows collapse into per-row cards: each cell becomes
+     a label/value pair and rows are visually separated. Horizontal scroll
+     in a narrow viewport hides values past the first column or two. */
+  .comparables-scroll { overflow-x: visible; }
+  .comparables-table { display: block; }
+  .comparables-table thead { display: none; }
+  .comparables-table tbody { display: block; }
+  .comparables-table tr {
+    display: block;
+    margin-bottom: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-sm);
+    background-color: var(--surface-card);
+  }
+  .comparables-table tr:last-child td { border-bottom: 1px solid var(--border-card); }
+  .comparables-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: 2px 0;
+    border-bottom: 0;
+    white-space: normal;
+    text-align: right;
+  }
+  .comparables-table td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: var(--text-2xs, 0.7rem);
+    text-align: left;
+  }
+  .comparables-table td.num { text-align: right; }
+  .comparables-raw::before { content: ''; }
+  .comparables-raw { font-size: var(--text-xs); text-align: left; }
 }
 </style>
