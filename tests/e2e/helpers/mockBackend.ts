@@ -88,6 +88,10 @@ export interface InstallOpts {
   docxBody?: Buffer;
   /** Force PDF route to 503 so the client falls back to docx. */
   pdfReturns503?: boolean;
+  /** Delay /extract response in ms, holding the per-file spinner on screen. */
+  extractDelayMs?: number;
+  /** Delay /generate response in ms, holding the full spinner on screen. */
+  generateDelayMs?: number;
 }
 
 /** Install routes for every backend endpoint the Värdeutlåtande view calls.
@@ -110,6 +114,9 @@ export async function installCommanderMocks(page: Page, opts: InstallOpts = {}):
   // single-char wildcard in globs, so a regex is the safer match anchor for
   // endpoints that vary by query string.
   await page.route(/\/api\/commander\/valuation-statement\/extract$/, async (route: Route) => {
+    if (opts.extractDelayMs) {
+      await new Promise(resolve => setTimeout(resolve, opts.extractDelayMs));
+    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -120,6 +127,10 @@ export async function installCommanderMocks(page: Page, opts: InstallOpts = {}):
   await page.route(/\/api\/commander\/valuation-statement\/generate(\?.*)?$/, async (route: Route) => {
     const url = route.request().url();
     const isPdfRequest = url.includes('format=pdf');
+
+    if (opts.generateDelayMs) {
+      await new Promise(resolve => setTimeout(resolve, opts.generateDelayMs));
+    }
 
     if (isPdfRequest) {
       if (opts.pdfReturns503) {
