@@ -210,7 +210,8 @@
         <h4>Jämförbara försäljningar (från Datavärdering)</h4>
         <p class="muted small">
           Subjektets position på varje skala — svart punkt = subjekt, blå
-          stapel = intervall mellan lägsta och högsta jämförbar.
+          stapel = intervall mellan lägsta och högsta jämförbar,
+          mitten-tick = medianvärde.
         </p>
 
         <div class="comparable-ranges">
