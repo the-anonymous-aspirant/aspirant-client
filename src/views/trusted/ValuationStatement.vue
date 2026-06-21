@@ -76,25 +76,25 @@
 
       <fieldset class="field-block">
         <legend>Värderingsobjekt</legend>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('objekt')">
           <label>Objekt</label>
-          <input v-model="reviewedFields.objekt" />
+          <input v-model="reviewedFields.objekt" @input="markManual('objekt')" />
         </div>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('objekt_short')">
           <label>Objekt (i löptext)</label>
-          <input v-model="reviewedFields.objekt_short" />
+          <input v-model="reviewedFields.objekt_short" @input="markManual('objekt_short')" />
         </div>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('adress')">
           <label>Adress</label>
-          <input v-model="reviewedFields.adress" />
+          <input v-model="reviewedFields.adress" @input="markManual('adress')" />
         </div>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('kommun')">
           <label>Kommun</label>
-          <input v-model="reviewedFields.kommun" />
+          <input v-model="reviewedFields.kommun" @input="markManual('kommun')" />
         </div>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('upplatelseform')">
           <label>Upplåtelseform</label>
-          <select v-model="reviewedFields.upplatelseform" @change="onUpplatelseChange">
+          <select v-model="reviewedFields.upplatelseform" @change="markManual('upplatelseform')">
             <option value="Bostadsrätt">Bostadsrätt</option>
             <option value="Friköpt">Friköpt</option>
             <option value="Tomträtt">Tomträtt</option>
@@ -104,17 +104,17 @@
 
       <fieldset class="field-block">
         <legend>Källdokument (datum)</legend>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('datavardering_date')">
           <label>Datavärdering</label>
-          <input v-model="reviewedFields.datavardering_date" placeholder="åååå-mm-dd" />
+          <input v-model="reviewedFields.datavardering_date" placeholder="åååå-mm-dd" @input="markManual('datavardering_date')" />
         </div>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('fastighetsutdrag_date')">
           <label>Fastighetsutdrag</label>
-          <input v-model="reviewedFields.fastighetsutdrag_date" placeholder="åååå-mm-dd" />
+          <input v-model="reviewedFields.fastighetsutdrag_date" placeholder="åååå-mm-dd" @input="markManual('fastighetsutdrag_date')" />
         </div>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('lagenhetsforteckning_date')">
           <label>Lägenhetsförteckning</label>
-          <input v-model="reviewedFields.lagenhetsforteckning_date" placeholder="åååå-mm-dd" />
+          <input v-model="reviewedFields.lagenhetsforteckning_date" placeholder="åååå-mm-dd" @input="markManual('lagenhetsforteckning_date')" />
         </div>
         <p class="muted small">
           Tomma datum tas bort från beskrivningstexten i det färdiga underlaget.
@@ -123,28 +123,29 @@
 
       <fieldset class="field-block">
         <legend>Värdebedömning</legend>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('likviditet')">
           <label>Likviditet</label>
-          <select v-model="reviewedFields.likviditet">
+          <select v-model="reviewedFields.likviditet" @change="markManual('likviditet')">
             <option value="god">god</option>
             <option value="normal">normal</option>
             <option value="låg">låg</option>
           </select>
         </div>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('marknadsvarde_kr')">
           <label>Marknadsvärde (kr)</label>
-          <input v-model="reviewedFields.marknadsvarde_kr" placeholder="3 050 000" />
+          <input v-model="reviewedFields.marknadsvarde_kr" placeholder="3 050 000" @input="markManual('marknadsvarde_kr')" />
         </div>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('intervall_kr')">
           <label>Intervall ± (kr)</label>
-          <input v-model="reviewedFields.intervall_kr" placeholder="50 000" />
+          <input v-model="reviewedFields.intervall_kr" placeholder="50 000" @input="markManual('intervall_kr')" />
         </div>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('bilder_note')">
           <label>Anteckning om bilder/skick</label>
           <textarea
             v-model="reviewedFields.bilder_note"
             rows="2"
             placeholder="Lämna tom om inget ska läggas till"
+            @input="markManual('bilder_note')"
           ></textarea>
         </div>
       </fieldset>
@@ -162,25 +163,25 @@
 
       <fieldset class="field-block">
         <legend>Utfärdare</legend>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('ort')">
           <label>Ort (valfri)</label>
-          <input v-model="reviewedFields.ort" placeholder="Lämna tom för enbart datum" />
+          <input v-model="reviewedFields.ort" placeholder="Lämna tom för enbart datum" @input="markManual('ort')" />
         </div>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('datum')">
           <label>Datum</label>
-          <input v-model="reviewedFields.datum" placeholder="18/6/2026" />
+          <input v-model="reviewedFields.datum" placeholder="18/6/2026" @input="markManual('datum')" />
         </div>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('maklare_namn')">
           <label>Mäklarens namn</label>
-          <input v-model="reviewedFields.maklare_namn" />
+          <input v-model="reviewedFields.maklare_namn" @input="markManual('maklare_namn')" />
         </div>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('maklare_titel')">
           <label>Titel/funktion</label>
-          <input v-model="reviewedFields.maklare_titel" />
+          <input v-model="reviewedFields.maklare_titel" @input="markManual('maklare_titel')" />
         </div>
-        <div class="field-row">
+        <div class="field-row" :class="confClass('foretag')">
           <label>Företagets namn</label>
-          <input v-model="reviewedFields.foretag" />
+          <input v-model="reviewedFields.foretag" @input="markManual('foretag')" />
         </div>
         <label class="checkbox-row">
           <input type="checkbox" v-model="saveOperatorDefaults" />
@@ -260,6 +261,39 @@ const BLANK_REVIEW = () => ({
   foretag: '',
 });
 
+// Every review-step key starts at 'not_found' (saknas/red); hydrateReview
+// overrides per-key based on the source that won, and markManual flips a
+// key to 'manual' (blue) on operator edit.
+const BLANK_CONFIDENCE = () => ({
+  objekt: 'not_found',
+  objekt_short: 'not_found',
+  adress: 'not_found',
+  kommun: 'not_found',
+  upplatelseform: 'not_found',
+  datavardering_date: 'not_found',
+  fastighetsutdrag_date: 'not_found',
+  lagenhetsforteckning_date: 'not_found',
+  likviditet: 'not_found',
+  marknadsvarde_kr: 'not_found',
+  intervall_kr: 'not_found',
+  bilder_note: 'not_found',
+  ort: 'not_found',
+  datum: 'not_found',
+  maklare_namn: 'not_found',
+  maklare_titel: 'not_found',
+  foretag: 'not_found',
+});
+
+// not_found > uncertain > confident — used for fields composed from
+// multiple source values; the lowest-confidence input wins the tint.
+const worstConfidence = (...buckets) => {
+  const xs = buckets.filter(Boolean);
+  if (xs.includes('not_found')) return 'not_found';
+  if (xs.includes('uncertain')) return 'uncertain';
+  if (xs.includes('confident')) return 'confident';
+  return 'not_found';
+};
+
 export default {
   data() {
     return {
@@ -270,6 +304,7 @@ export default {
       extractedDocs: [],
       comparableSales: [],
       reviewedFields: BLANK_REVIEW(),
+      fieldConfidence: BLANK_CONFIDENCE(),
       saveOperatorDefaults: false,
       generateError: null,
       downloadUrl: null,
@@ -340,61 +375,121 @@ export default {
 
     hydrateReview(docs, operatorDefaults) {
       const review = BLANK_REVIEW();
+      const conf = BLANK_CONFIDENCE();
       // Walk each extracted field; the per-doc-type → review-field mapping
       // lives here so the backend stays neutral about which doc takes
-      // precedence for each template slot.
+      // precedence for each template slot. Track confidence alongside
+      // value so the review step can paint each input by bucket.
       const byType = {};
+      const confByType = {};
       for (const d of docs) {
         byType[d.document_type] = byType[d.document_type] || {};
+        confByType[d.document_type] = confByType[d.document_type] || {};
         for (const f of d.fields) {
           if (f.value) byType[d.document_type][f.key] = f.value;
+          confByType[d.document_type][f.key] = f.confidence;
         }
       }
 
       const lgh = byType.lgh_utdrag || {};
+      const lghC = confByType.lgh_utdrag || {};
       const dv = byType.datavardering || {};
+      const dvC = confByType.datavardering || {};
       const fu = byType.fastighetsutdrag || {};
+      const fuC = confByType.fastighetsutdrag || {};
+
+      // pick first non-empty source value and return its confidence;
+      // 'not_found' if no source had a value.
+      const pickConf = (...sources) => {
+        for (const [val, c] of sources) {
+          if (val) return c || 'not_found';
+        }
+        return 'not_found';
+      };
 
       // BR vs Friköpt mode — pick by which type is present.
       if (lgh.forening_namn && lgh.lgh_skatteverket) {
         review.upplatelseform = 'Bostadsrätt';
+        conf.upplatelseform = 'confident';
         const orgnr = lgh.organisationsnummer || dv.organisationsnummer || '';
         const namn = lgh.forening_namn || dv.forening_namn || '';
         const lghNr = lgh.lgh_skatteverket || dv.lgh_internal || '';
         review.objekt = `LGH ${lghNr} ${namn} (${orgnr})`.trim();
         review.objekt_short = `LGH ${lghNr} ${namn}`.trim();
+        conf.objekt = worstConfidence(
+          pickConf([lgh.lgh_skatteverket, lghC.lgh_skatteverket], [dv.lgh_internal, dvC.lgh_internal]),
+          pickConf([lgh.forening_namn, lghC.forening_namn], [dv.forening_namn, dvC.forening_namn]),
+          pickConf([lgh.organisationsnummer, lghC.organisationsnummer], [dv.organisationsnummer, dvC.organisationsnummer]),
+        );
+        conf.objekt_short = worstConfidence(
+          pickConf([lgh.lgh_skatteverket, lghC.lgh_skatteverket], [dv.lgh_internal, dvC.lgh_internal]),
+          pickConf([lgh.forening_namn, lghC.forening_namn], [dv.forening_namn, dvC.forening_namn]),
+        );
       } else if (fu.kommun_fastighet) {
         review.upplatelseform = 'Friköpt';
+        conf.upplatelseform = 'confident';
         review.objekt = fu.kommun_fastighet;
         review.objekt_short = fu.kommun_fastighet;
+        conf.objekt = fuC.kommun_fastighet || 'confident';
+        conf.objekt_short = fuC.kommun_fastighet || 'confident';
+      } else {
+        // No detection signal — the BR default is a guess, not an extraction.
+        conf.upplatelseform = 'manual';
       }
 
       review.adress = lgh.adress || dv.address_street || '';
+      conf.adress = pickConf([lgh.adress, lghC.adress], [dv.address_street, dvC.address_street]);
       review.kommun = lgh.postort || dv.postort || '';
+      conf.kommun = pickConf([lgh.postort, lghC.postort], [dv.postort, dvC.postort]);
 
       review.datavardering_date = dv.document_date || '';
+      conf.datavardering_date = pickConf([dv.document_date, dvC.document_date]);
       review.lagenhetsforteckning_date = lgh.document_date || '';
+      conf.lagenhetsforteckning_date = pickConf([lgh.document_date, lghC.document_date]);
       review.fastighetsutdrag_date = fu.document_date || '';
+      conf.fastighetsutdrag_date = pickConf([fu.document_date, fuC.document_date]);
 
       review.marknadsvarde_kr = dv.marknadsvarde_suggested || '';
+      conf.marknadsvarde_kr = pickConf([dv.marknadsvarde_suggested, dvC.marknadsvarde_suggested]);
       review.intervall_kr = dv.osakerhet_uppat || '';
+      conf.intervall_kr = pickConf([dv.osakerhet_uppat, dvC.osakerhet_uppat]);
 
+      // Operator-defaulted slots are 'manual' when populated (operator's own
+      // choice carried over) and 'not_found' when blank.
       review.likviditet = operatorDefaults.likviditet || 'normal';
+      conf.likviditet = 'manual';
       review.maklare_namn = operatorDefaults.maklare_namn || '';
+      conf.maklare_namn = operatorDefaults.maklare_namn ? 'manual' : 'not_found';
       review.maklare_titel = operatorDefaults.maklare_titel || '';
+      conf.maklare_titel = operatorDefaults.maklare_titel ? 'manual' : 'not_found';
       review.foretag = operatorDefaults.foretag || '';
+      conf.foretag = operatorDefaults.foretag ? 'manual' : 'not_found';
+
       review.datum = new Date()
         .toLocaleDateString('sv-SE')
         .split('-')
         .map((p, i) => (i === 0 ? p : Number(p)))
         .reverse()
         .join('/');
+      conf.datum = 'manual';
+
+      // bilder_note and ort stay blank → 'not_found' (saknas) until the
+      // operator types, at which point markManual flips them to 'manual'.
 
       this.reviewedFields = review;
+      this.fieldConfidence = conf;
     },
 
-    onUpplatelseChange() {
-      // No-op; mode is a computed property derived from upplatelseform.
+    markManual(key) {
+      if (this.fieldConfidence[key] !== 'manual') {
+        this.fieldConfidence = { ...this.fieldConfidence, [key]: 'manual' };
+      }
+    },
+
+    confClass(key) {
+      const c = this.fieldConfidence[key] || 'not_found';
+      // 'not_found' (backend) → 'not-found' (CSS-friendly class)
+      return c.replace('_', '-');
     },
 
     async doGenerate() {
@@ -457,6 +552,7 @@ export default {
       this.extractedDocs = [];
       this.comparableSales = [];
       this.reviewedFields = BLANK_REVIEW();
+      this.fieldConfidence = BLANK_CONFIDENCE();
       this.uploadError = null;
       this.generateError = null;
       this.downloadUrl = null;
@@ -635,6 +731,34 @@ export default {
 .chip.manual      { background-color: rgba(66, 153, 225, 0.2); color: #3182ce; }
 .chip.not-found,
 .chip.not_found   { background-color: rgba(245, 101, 101, 0.2); color: #e53e3e; }
+
+/* Confidence tint on the value input/select/textarea — matches the legend
+   chips so the operator can scan the form by color: green = säker,
+   orange = osäker, blue = manuell (operator edit), red = saknas. */
+.field-row.confident input,
+.field-row.confident select,
+.field-row.confident textarea {
+  background-color: rgba(72, 187, 120, 0.12);
+  border-left: 4px solid #38a169;
+}
+.field-row.uncertain input,
+.field-row.uncertain select,
+.field-row.uncertain textarea {
+  background-color: rgba(237, 137, 54, 0.12);
+  border-left: 4px solid #dd6b20;
+}
+.field-row.manual input,
+.field-row.manual select,
+.field-row.manual textarea {
+  background-color: rgba(66, 153, 225, 0.12);
+  border-left: 4px solid #3182ce;
+}
+.field-row.not-found input,
+.field-row.not-found select,
+.field-row.not-found textarea {
+  background-color: rgba(245, 101, 101, 0.12);
+  border-left: 4px solid #e53e3e;
+}
 
 /* Comparable sales decision support */
 .comparables-block {
