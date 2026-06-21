@@ -172,14 +172,19 @@ export async function seedTrustedSession(page: Page): Promise<void> {
 /** On mobile the sidebar starts visible on initial page load and overlays
  *  the route content, intercepting every click. checkMobile() only auto-
  *  hides on a *transition* into mobile (not on a fresh mobile mount), so
- *  the operator's normal first action is to tap the hamburger or the
- *  overlay. We do the same here; a no-op on viewports where the overlay
- *  never renders (desktop). */
+ *  the operator's normal first action is to tap the hamburger.
+ *
+ *  We click the hamburger rather than the overlay because .sidebar (z:1000)
+ *  visually covers the left ~200px of the overlay (which is 100% wide), and
+ *  Playwright's default click target is the element center — falling inside
+ *  the sidebar. .mobile-menu-toggle has z-index 1001 and stays above the
+ *  sidebar even when shown. A no-op on viewports where the toggle never
+ *  renders (desktop). */
 export async function dismissMobileSidebarIfPresent(page: Page): Promise<void> {
-  const overlay = page.locator('.mobile-overlay');
-  if (await overlay.isVisible().catch(() => false)) {
-    await overlay.click();
-    await overlay.waitFor({ state: 'hidden', timeout: 5_000 });
+  const toggle = page.locator('.mobile-menu-toggle');
+  if (await toggle.isVisible().catch(() => false)) {
+    await toggle.click();
+    await page.locator('.mobile-overlay').waitFor({ state: 'hidden', timeout: 5_000 });
   }
 }
 
