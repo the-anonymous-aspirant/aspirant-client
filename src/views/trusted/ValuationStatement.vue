@@ -106,15 +106,15 @@
         <legend>Källdokument (datum)</legend>
         <div class="field-row" :class="confClass('datavardering_date')">
           <label>Datavärdering</label>
-          <input v-model="reviewedFields.datavardering_date" placeholder="åååå-mm-dd" @input="markManual('datavardering_date')" />
+          <input type="date" v-model="reviewedFields.datavardering_date" @input="markManual('datavardering_date')" />
         </div>
         <div class="field-row" :class="confClass('fastighetsutdrag_date')">
           <label>Fastighetsutdrag</label>
-          <input v-model="reviewedFields.fastighetsutdrag_date" placeholder="åååå-mm-dd" @input="markManual('fastighetsutdrag_date')" />
+          <input type="date" v-model="reviewedFields.fastighetsutdrag_date" @input="markManual('fastighetsutdrag_date')" />
         </div>
         <div class="field-row" :class="confClass('lagenhetsforteckning_date')">
           <label>Lägenhetsförteckning</label>
-          <input v-model="reviewedFields.lagenhetsforteckning_date" placeholder="åååå-mm-dd" @input="markManual('lagenhetsforteckning_date')" />
+          <input type="date" v-model="reviewedFields.lagenhetsforteckning_date" @input="markManual('lagenhetsforteckning_date')" />
         </div>
         <p class="muted small">
           Tomma datum tas bort från beskrivningstexten i det färdiga underlaget.
@@ -197,7 +197,7 @@
         </div>
         <div class="field-row" :class="confClass('datum')">
           <label>Datum</label>
-          <input v-model="reviewedFields.datum" placeholder="18/6/2026" @input="markManual('datum')" />
+          <input type="date" v-model="reviewedFields.datum" @input="markManual('datum')" />
         </div>
         <div class="field-row" :class="confClass('maklare_namn')">
           <label>Mäklarens namn</label>
@@ -516,12 +516,9 @@ export default {
       review.ort = operatorDefaults.ort || '';
       conf.ort = operatorDefaults.ort ? 'manual' : 'not_found';
 
-      review.datum = new Date()
-        .toLocaleDateString('sv-SE')
-        .split('-')
-        .map((p, i) => (i === 0 ? p : Number(p)))
-        .reverse()
-        .join('/');
+      // <input type="date"> expects ISO YYYY-MM-DD. The backend renders it
+      // as Swedish DD/M/YYYY in the [Datum] footer slot.
+      review.datum = new Date().toLocaleDateString('sv-SE'); // sv-SE locale yields YYYY-MM-DD
       conf.datum = 'manual';
 
       // bilder_note stays blank → 'not_found' (saknas) until the operator
