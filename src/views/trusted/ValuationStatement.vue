@@ -4,8 +4,7 @@
     <h2 class="page-subtitle">Skapa ett värdeutlåtande från PDF-underlag</h2>
 
     <!-- Step 1: Upload -->
-    <div v-if="step === 'upload'" class="card">
-      <h3>1. Ladda upp underlag</h3>
+    <ValuationStep v-if="step === 'upload'" title="1. Ladda upp underlag" wide>
       <p class="muted">
         Släpp en eller flera PDF-filer här eller välj från datorn. Verktyget
         identifierar automatiskt vilken typ av dokument det är (datavärdering,
@@ -96,29 +95,29 @@
 
       <div v-if="uploadError" class="error-text">{{ uploadError }}</div>
 
-      <button
-        class="btn-primary"
-        @click="doExtract"
-        :disabled="!uploadedFiles.length"
-      >
-        Extrahera värden →
-      </button>
-    </div>
+      <div class="step-actions step-actions--centered">
+        <button
+          class="btn-primary"
+          @click="doExtract"
+          :disabled="!uploadedFiles.length"
+        >
+          Extrahera värden →
+        </button>
+      </div>
+    </ValuationStep>
 
     <!-- Step 2: Extracting (per-file spinner) -->
-    <div v-if="step === 'extracting'" class="card">
-      <h3>2. Extraherar värden</h3>
+    <ValuationStep v-if="step === 'extracting'" title="2. Extraherar värden">
       <ul class="progress-list">
         <li v-for="f in uploadedFiles" :key="f.name">
           <span class="spinner" aria-hidden="true"></span>
           <span>Läser {{ f.name }}…</span>
         </li>
       </ul>
-    </div>
+    </ValuationStep>
 
     <!-- Step 3: Review -->
-    <div v-if="step === 'review'" class="card review-card">
-      <h3>3. Granska och justera</h3>
+    <ValuationStep v-if="step === 'review'" title="3. Granska och justera" wide>
       <p class="muted">
         Klicka på ett värde för att redigera. Färgerna visar konfidensgrad:
         <span class="chip confident">säker</span>
@@ -312,17 +311,15 @@
           Generera värdeutlåtande →
         </button>
       </div>
-    </div>
+    </ValuationStep>
 
     <!-- Step 4: Generating -->
-    <div v-if="step === 'generating'" class="card">
-      <h3>4. Genererar värdeutlåtande…</h3>
+    <ValuationStep v-if="step === 'generating'" title="4. Genererar värdeutlåtande…">
       <div class="full-spinner" aria-hidden="true"></div>
-    </div>
+    </ValuationStep>
 
     <!-- Step 5: Done -->
-    <div v-if="step === 'done'" class="card">
-      <h3>Klart!</h3>
+    <ValuationStep v-if="step === 'done'" title="Klart!">
       <p>Värdeutlåtandet är klart att ladda ner.</p>
       <p v-if="!isPdf" class="muted small">
         PDF-konvertering inte tillgänglig — filen kan öppnas i Word eller LibreOffice och sparas som PDF därifrån vid behov.
@@ -333,7 +330,7 @@
         </a>
         <button class="btn-secondary" @click="resetFlow">Skapa ett nytt</button>
       </div>
-    </div>
+    </ValuationStep>
   </div>
 </template>
 
@@ -341,6 +338,7 @@
 import axios from 'axios';
 
 import RangeChart from '@/components/RangeChart.vue';
+import ValuationStep from '@/components/ValuationStep.vue';
 
 function parseSwedishNumber(value) {
   if (value == null || value === '') return null;
@@ -426,7 +424,7 @@ const worstConfidence = (...buckets) => {
 };
 
 export default {
-  components: { RangeChart },
+  components: { RangeChart, ValuationStep },
   data() {
     return {
       step: 'upload',
@@ -817,19 +815,17 @@ export default {
   margin-bottom: var(--space-xl);
 }
 
-.card {
-  background-color: var(--surface-card);
-  border: 2px solid var(--border-card);
-  border-radius: var(--radius-xl);
-  padding: var(--space-xl);
-  width: 100%;
-  margin-bottom: var(--space-lg);
-}
+/* Step chrome (background, border, padding, full-width, content
+ * alignment) lives on the canonical <ValuationStep> wrapper component
+ * — keep it there so a new step added to the wizard can never drift
+ * into a one-off layout the way the Done step did pre-refactor. */
 
-.card h3 {
-  color: var(--text-heading-card);
-  font-size: var(--text-xl);
-  margin: 0 0 var(--space-md) 0;
+.step-actions--centered {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
 }
 
 .muted { color: var(--text-muted); }
