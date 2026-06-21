@@ -7,9 +7,10 @@
     <div v-if="step === 'upload'" class="card">
       <h3>1. Ladda upp underlag</h3>
       <p class="muted">
-        Släpp PDF-filer här eller välj från datorn. Verktyget identifierar
-        automatiskt vilken typ av dokument det är (datavärdering,
-        lägenhetsförteckning, eller fastighetsutdrag).
+        Släpp en eller flera PDF-filer här eller välj från datorn. Verktyget
+        identifierar automatiskt vilken typ av dokument det är (datavärdering,
+        lägenhetsförteckning, eller fastighetsutdrag) — släpp gärna alla
+        underlag samtidigt.
       </p>
 
       <div
@@ -19,7 +20,7 @@
         @dragover.prevent
         @dragleave.prevent="isDragging = false"
         @drop.prevent="onDrop"
-        @click="$refs.fileInput.click()"
+        @click="onDropzoneClick"
       >
         <input
           ref="fileInput"
@@ -29,16 +30,68 @@
           @change="onFilesPicked"
           style="display: none"
         />
-        <div v-if="!uploadedFiles.length">
-          <p>Släpp PDF-filer här</p>
-          <p class="muted small">eller klicka för att välja</p>
+        <div v-if="!uploadedFiles.length" class="dropzone-empty">
+          <svg
+            class="multi-file-icon"
+            width="64"
+            height="64"
+            viewBox="0 0 64 64"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <!-- Stacked-document glyph: three offset rectangles signalling
+                 "drop several files here", not a single sheet. -->
+            <rect x="10" y="14" width="30" height="38" rx="3"
+                  stroke="currentColor" stroke-width="2" fill="none" opacity="0.45" />
+            <rect x="17" y="10" width="30" height="38" rx="3"
+                  stroke="currentColor" stroke-width="2" fill="none" opacity="0.7" />
+            <rect x="24" y="6" width="30" height="38" rx="3"
+                  stroke="currentColor" stroke-width="2" fill="none" />
+            <path d="M30 18 H48 M30 26 H48 M30 34 H42"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <p class="dropzone-headline">Släpp en eller flera PDF-filer här</p>
+          <p class="muted small">eller klicka för att välja (du kan välja flera samtidigt)</p>
         </div>
-        <ul v-else class="file-list">
-          <li v-for="f in uploadedFiles" :key="f.name">
-            <span class="file-name">{{ f.name }}</span>
-            <span class="file-size">{{ formatBytes(f.size) }}</span>
-          </li>
-        </ul>
+        <div v-else class="file-list-wrapper" @click.stop>
+          <div class="file-list-header">
+            <span class="file-count">
+              {{ uploadedFiles.length }}
+              {{ uploadedFiles.length === 1 ? 'fil vald' : 'filer valda' }}
+            </span>
+            <button
+              type="button"
+              class="link-button"
+              @click="$refs.fileInput.click()"
+            >
+              + Lägg till fler
+            </button>
+          </div>
+          <ul class="file-list">
+            <li v-for="(f, idx) in uploadedFiles" :key="f.name">
+              <span class="file-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                     xmlns="http://www.w3.org/2000/svg">
+                  <path d="M14 3 H7 a2 2 0 0 0 -2 2 V19 a2 2 0 0 0 2 2 H17
+                           a2 2 0 0 0 2 -2 V8 z M14 3 V8 H19"
+                        stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+              <span class="file-name">{{ f.name }}</span>
+              <span class="file-size">{{ formatBytes(f.size) }}</span>
+              <button
+                type="button"
+                class="file-remove"
+                :aria-label="`Ta bort ${f.name}`"
+                @click="removeFile(idx)"
+              >
+                ×
+              </button>
+            </li>
+          </ul>
+        </div>
       </div>
 
       <div v-if="uploadError" class="error-text">{{ uploadError }}</div>
@@ -375,12 +428,26 @@ export default {
       return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     },
 
+    onDropzoneClick() {
+      // Only open the picker when the dropzone is empty; once files are
+      // listed, the per-file rows handle their own clicks (remove, etc.)
+      // and the "Lägg till fler" button is the explicit add-more affordance.
+      if (!this.uploadedFiles.length) this.$refs.fileInput.click();
+    },
     onFilesPicked(e) {
       this.appendFiles(Array.from(e.target.files || []));
+      // Reset the input so picking the same file again still fires @change.
+      e.target.value = '';
     },
     onDrop(e) {
       this.isDragging = false;
       this.appendFiles(Array.from(e.dataTransfer.files || []));
+    },
+    removeFile(idx) {
+      const next = this.uploadedFiles.slice();
+      next.splice(idx, 1);
+      this.uploadedFiles = next;
+      if (!next.length) this.uploadError = null;
     },
     appendFiles(files) {
       const pdfs = files.filter(
@@ -663,16 +730,79 @@ export default {
   background-color: var(--surface-card-inner);
 }
 
-.file-list { list-style: none; padding: 0; margin: 0; }
-.file-list li {
+.dropzone-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.multi-file-icon {
+  color: var(--brand-primary);
+  margin-bottom: var(--space-xs);
+}
+.dropzone-headline {
+  font-weight: 600;
+  font-size: var(--text-base);
+  margin: 0;
+}
+
+.file-list-wrapper { text-align: left; cursor: default; }
+.file-list-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-xs);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--border-card);
+}
+.file-count {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--text-heading-card);
+}
+.link-button {
+  background: none;
+  border: none;
+  color: var(--brand-primary);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  padding: 0;
+}
+.link-button:hover { filter: brightness(1.15); }
+
+.file-list { list-style: none; padding: 0; margin: 0; }
+.file-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: var(--space-sm);
+  align-items: center;
   padding: var(--space-xs) 0;
   border-bottom: 1px solid var(--border-card);
 }
 .file-list li:last-child { border-bottom: 0; }
-.file-name { font-weight: 500; }
+.file-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+.file-name { font-weight: 500; overflow-wrap: anywhere; }
 .file-size { color: var(--text-muted); font-size: var(--text-xs); font-family: monospace; }
+.file-remove {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: var(--text-lg);
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--transition-moderate), color var(--transition-moderate);
+}
+.file-remove:hover {
+  background-color: rgba(245, 101, 101, 0.18);
+  color: #e53e3e;
+}
 
 .btn-primary,
 .btn-secondary {
