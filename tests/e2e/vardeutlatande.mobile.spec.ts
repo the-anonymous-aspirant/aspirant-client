@@ -16,12 +16,11 @@ import {
  *  `multiple`) lives in the shared desktop spec; this file asserts only the
  *  CSS that *does* change between viewports. */
 test.describe('Värdeutlåtande BR-flow — mobile (iPhone 13)', () => {
-  test.skip(
-    ({ browserName }, testInfo) => testInfo.project.name !== 'mobile-safari',
-    'Mobile-only assertions; the desktop project covers the shared surfaces.',
-  );
-
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(
+      testInfo.project.name !== 'mobile-safari',
+      'Mobile-only assertions; the desktop project covers the shared surfaces.',
+    );
     await seedTrustedSession(page);
     await installCommanderMocks(page);
   });

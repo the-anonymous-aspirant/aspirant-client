@@ -92,8 +92,20 @@ export interface InstallOpts {
 
 /** Install routes for every backend endpoint the Värdeutlåtande view calls.
  *  Each test starts from a clean review-form state seeded by the fixed
- *  EXTRACT_RESPONSE; per-test overrides go through `opts`.  */
+ *  EXTRACT_RESPONSE; per-test overrides go through `opts`.
+ *
+ *  Routes are matched LIFO — most-recently-registered wins — so the
+ *  noise-suppressing catch-all is installed FIRST and the specific handlers
+ *  added after it take precedence. */
 export async function installCommanderMocks(page: Page, opts: InstallOpts = {}): Promise<void> {
+  // Vuetify's asset loaders and other background calls hit /api/* via the
+  // vite proxy, which has nothing to forward to in the e2e env. Stub them
+  // to a 204 so the WebServer log stays readable when a real failure
+  // surfaces — but register BEFORE the specific handlers so they win.
+  await page.route(/\/api\//, async (route: Route) => {
+    await route.fulfill({ status: 204, body: '' });
+  });
+
   // page.route's URL glob matches path + query as one string; "?" is a
   // single-char wildcard in globs, so a regex is the safer match anchor for
   // endpoints that vary by query string.
