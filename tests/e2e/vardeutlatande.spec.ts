@@ -93,26 +93,49 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     expect(notFoundBg).toBe('rgba(245, 101, 101, 0.12)');
   });
 
-  test('#878 comparable-sales render as columns on a white island', async ({ page }) => {
+  test('#938 comparable-sales render as range charts plus card strip', async ({ page }) => {
     await walkToReview(page);
     const block = page.locator('.comparables-block');
     await expect(block).toBeVisible();
 
-    // #909: the decision-support block is white (#ffffff → rgb(255,255,255))
-    // so the comparable rows stay readable against the dark card.
+    // #909: the decision-support block stays on a white island so the
+    // dark-on-dark readability issue does not return.
     const blockBg = await block.evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
     expect(blockBg).toBe('rgb(255, 255, 255)');
 
-    // #878: the structured column shape is locked in — every column the
-    // operator scans must render in the header.
-    const headerCells = page.locator('.comparables-table thead th');
-    await expect(headerCells).toHaveCount(8);
-    await expect(headerCells.nth(0)).toHaveText('Förening');
-    await expect(headerCells.nth(5)).toHaveText('Pris');
+    // Tier 1 — one range chart per numeric metric with comparable data
+    // in the fixture (pris, kr/m², avgift/mån, årsavgift, säljdatum, m²).
+    // The mock fixture omits subject `boarea`, so the subject dot only
+    // shows on metrics whose subject value comes from the form
+    // (marknadsvarde_kr → Pris, datum → Säljdatum).
+    const ranges = page.locator('.range-chart');
+    await expect(ranges).not.toHaveCount(0);
+    await expect(page.locator('.range-chart[data-metric="pris_kr"]')).toBeVisible();
+    await expect(page.locator('.range-chart[data-metric="pris_per_m2"]')).toBeVisible();
+    await expect(page.locator('.range-chart[data-metric="salj_datum"]')).toBeVisible();
 
-    // The first data row populates from the fixture's COMPARABLE_ROWS[0].
-    const firstRow = page.locator('.comparables-table tbody tr').first();
-    await expect(firstRow.locator('td').nth(0)).toHaveText('Brf Solviken');
+    // The subject dot renders only when subject + range are both known.
+    // Pris carries the marknadsvarde dot; Avgift/mån has no form-side
+    // subject so its chart stays dot-less.
+    await expect(
+      page.locator('.range-chart[data-metric="pris_kr"] .range-chart__dot'),
+    ).toBeVisible();
+    await expect(
+      page.locator('.range-chart[data-metric="avgift_kr_manad"] .range-chart__dot'),
+    ).toHaveCount(0);
+
+    // Tier 2 — horizontal-scroll card strip. Cards render most-recent
+    // first; the fixture's 2026-04-12 row sits ahead of 2026-03-30.
+    const cards = page.locator('.comparable-card');
+    await expect(cards).toHaveCount(2);
+    await expect(cards.first().locator('.comparable-card__brf')).toHaveText('Brf Solviken');
+    await expect(cards.nth(1).locator('.comparable-card__brf')).toHaveText('Brf Bryggan');
+
+    // The strip is a horizontal-overflow container so swipe/scroll works
+    // on touch.
+    const scrollContainer = page.locator('.comparable-cards-scroll');
+    const overflowX = await scrollContainer.evaluate(el => getComputedStyle(el as HTMLElement).overflowX);
+    expect(overflowX).toBe('auto');
   });
 
   test('#880 source-date inputs use the native date picker', async ({ page }) => {
