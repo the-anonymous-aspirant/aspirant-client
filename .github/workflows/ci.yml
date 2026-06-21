@@ -1,6 +1,7 @@
 # CI workflow for aspirant-client (Vue/Nginx).
-# No test job — client has no test suite.
-# Build-and-push only, triggers on push to main.
+# `e2e` runs Playwright against the production build on every PR and on
+# pushes to main; `build-and-push` ships the container only when main moves
+# AND e2e is green (needs:).
 
 name: CI
 
@@ -15,9 +16,35 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    - run: npm ci
+    - name: Install Playwright browsers + system deps
+      run: npx playwright install --with-deps chromium webkit
+    - name: Run Playwright e2e suite
+      run: npm run test:e2e
+    - if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report
+        path: |
+          playwright-report/
+          test-results/
+        retention-days: 14
+
   build-and-push:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    needs: e2e
     permissions:
       contents: read
       packages: write

@@ -1,0 +1,223 @@
+import { test, expect, type Page } from '@playwright/test';
+import {
+  installCommanderMocks,
+  seedTrustedSession,
+  dismissMobileSidebarIfPresent,
+  PDF_UPLOAD_PAYLOAD,
+  OPERATOR_DEFAULTS,
+  GOLDEN_DOCX,
+} from './helpers/mockBackend';
+
+const REVIEW_LEGEND = 'Granska och justera';
+
+/** Drive the upload step and wait for the review step to render. */
+async function walkToReview(page: Page): Promise<void> {
+  await page.goto('/trusted/valuation-statement');
+  await dismissMobileSidebarIfPresent(page);
+  await expect(page.locator('h1', { hasText: 'Värdeutlåtande' })).toBeVisible();
+  // The file input is `display: none`; setInputFiles bypasses that.
+  await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
+  await page.getByRole('button', { name: /Extrahera värden/ }).click();
+  await expect(page.getByRole('heading', { name: new RegExp(REVIEW_LEGEND) })).toBeVisible({
+    timeout: 15_000,
+  });
+}
+
+test.describe('Värdeutlåtande BR-flow regression', () => {
+  test.beforeEach(async ({ page }) => {
+    await seedTrustedSession(page);
+    await installCommanderMocks(page);
+  });
+
+  test('#884 dropzone signals multi-file upload', async ({ page }) => {
+    await page.goto('/trusted/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await expect(page.locator('.dropzone-headline')).toContainText(/flera/i);
+    const fileInput = page.locator('input[type="file"]');
+    await expect(fileInput).toHaveAttribute('multiple', '');
+    await expect(fileInput).toHaveAttribute('accept', /pdf/);
+  });
+
+  test('#879 operator defaults pre-fill the review form', async ({ page }) => {
+    await walkToReview(page);
+    // Each field's <input v-model> mirrors reviewedFields.{key}; the
+    // hydrateReview pass copies operator_defaults into the matching slots.
+    const ortInput = page.locator('.field-row', { hasText: /^Ort/ }).locator('input');
+    await expect(ortInput).toHaveValue(OPERATOR_DEFAULTS.ort);
+
+    const namnInput = page.locator('.field-row', { hasText: 'Mäklarens namn' }).locator('input');
+    await expect(namnInput).toHaveValue(OPERATOR_DEFAULTS.maklare_namn);
+
+    const titelInput = page.locator('.field-row', { hasText: 'Titel/funktion' }).locator('input');
+    await expect(titelInput).toHaveValue(OPERATOR_DEFAULTS.maklare_titel);
+
+    const foretagInput = page.locator('.field-row', { hasText: 'Företagets namn' }).locator('input');
+    await expect(foretagInput).toHaveValue(OPERATOR_DEFAULTS.foretag);
+  });
+
+  test('#877 confidence buckets paint each row and tint the input', async ({ page }) => {
+    await walkToReview(page);
+    // The extract fixture seeds at least one row per bucket; assert each
+    // class is present and its input carries the bucket-specific tint that
+    // ValuationStatement.vue's scoped style applies.
+    const confidentRow = page.locator('.field-row.confident').first();
+    await expect(confidentRow).toBeVisible();
+    const confidentBg = await confidentRow
+      .locator('input, select, textarea')
+      .first()
+      .evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
+    expect(confidentBg).toBe('rgba(72, 187, 120, 0.12)');
+
+    const uncertainRow = page.locator('.field-row.uncertain').first();
+    await expect(uncertainRow).toBeVisible();
+    const uncertainBg = await uncertainRow
+      .locator('input, select, textarea')
+      .first()
+      .evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
+    expect(uncertainBg).toBe('rgba(237, 137, 54, 0.12)');
+
+    const manualRow = page.locator('.field-row.manual').first();
+    await expect(manualRow).toBeVisible();
+    const manualBg = await manualRow
+      .locator('input, select, textarea')
+      .first()
+      .evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
+    expect(manualBg).toBe('rgba(66, 153, 225, 0.12)');
+
+    const notFoundRow = page.locator('.field-row.not-found').first();
+    await expect(notFoundRow).toBeVisible();
+    const notFoundBg = await notFoundRow
+      .locator('input, select, textarea')
+      .first()
+      .evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
+    expect(notFoundBg).toBe('rgba(245, 101, 101, 0.12)');
+  });
+
+  test('#878 comparable-sales render as columns on a white island', async ({ page }) => {
+    await walkToReview(page);
+    const block = page.locator('.comparables-block');
+    await expect(block).toBeVisible();
+
+    // #909: the decision-support block is white (#ffffff → rgb(255,255,255))
+    // so the comparable rows stay readable against the dark card.
+    const blockBg = await block.evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
+    expect(blockBg).toBe('rgb(255, 255, 255)');
+
+    // #878: the structured column shape is locked in — every column the
+    // operator scans must render in the header.
+    const headerCells = page.locator('.comparables-table thead th');
+    await expect(headerCells).toHaveCount(8);
+    await expect(headerCells.nth(0)).toHaveText('Förening');
+    await expect(headerCells.nth(5)).toHaveText('Pris');
+
+    // The first data row populates from the fixture's COMPARABLE_ROWS[0].
+    const firstRow = page.locator('.comparables-table tbody tr').first();
+    await expect(firstRow.locator('td').nth(0)).toHaveText('Brf Solviken');
+  });
+
+  test('#880 source-date inputs use the native date picker', async ({ page }) => {
+    await walkToReview(page);
+    const dateInputs = [
+      'Datavärdering',
+      'Fastighetsutdrag',
+      'Lägenhetsförteckning',
+      'Datum',
+    ];
+    for (const label of dateInputs) {
+      const input = page.locator('.field-row', { hasText: new RegExp(`^${label}`) }).locator('input');
+      await expect(input).toHaveAttribute('type', 'date');
+    }
+  });
+
+  test('#881 PDF export ships the download with application/pdf', async ({ page }) => {
+    await walkToReview(page);
+
+    const generateRequest = page.waitForRequest(
+      req => req.url().includes('/valuation-statement/generate') && req.url().includes('format=pdf'),
+    );
+    await page.getByRole('button', { name: /Generera värdeutlåtande/ }).click();
+    const req = await generateRequest;
+    const response = await req.response();
+    expect(response?.status()).toBe(200);
+    expect(response?.headers()['content-type']).toBe('application/pdf');
+
+    // The "Klart!" step labels the download by extension; .pdf proves the
+    // success path was taken (the 503-fallback would label as .docx).
+    const downloadLink = page.locator('a.btn-primary', { hasText: /Ladda ner/ });
+    await expect(downloadLink).toBeVisible();
+    await expect(downloadLink).toContainText('.pdf');
+    await expect(downloadLink).toHaveAttribute('download', /\.pdf$/);
+  });
+
+  test('#881 fallback path: 503 on PDF transparently serves docx', async ({ page }) => {
+    await installCommanderMocks(page, { pdfReturns503: true });
+    await walkToReview(page);
+    await page.getByRole('button', { name: /Generera värdeutlåtande/ }).click();
+    const downloadLink = page.locator('a.btn-primary', { hasText: /Ladda ner/ });
+    await expect(downloadLink).toBeVisible({ timeout: 10_000 });
+    await expect(downloadLink).toContainText('.docx');
+  });
+
+  test('#886 generated docx contract: golden fixture has no run-level yellow highlight', async ({ page }) => {
+    // The mocked /generate?format=pdf 503-falls-back to /generate (docx);
+    // the docx body is the bundled golden fixture. The test downloads it,
+    // unzips word/document.xml and asserts the post-#886 OOXML rule:
+    //   ZERO  <w:r><w:rPr><w:highlight w:val="yellow"/>...</w:r>
+    //   ANY   <w:pPr><w:rPr><w:highlight w:val="yellow"/></w:rPr></w:pPr>
+    //         (operator-invisible after LibreOffice PDF render, per #886)
+    await installCommanderMocks(page, { pdfReturns503: true });
+    await walkToReview(page);
+
+    const downloadRequest = page.waitForRequest(
+      req =>
+        req.url().includes('/valuation-statement/generate') &&
+        !req.url().includes('format=pdf'),
+    );
+    await page.getByRole('button', { name: /Generera värdeutlåtande/ }).click();
+    const req = await downloadRequest;
+    const response = await req.response();
+    const served = await response!.body();
+
+    expect(served.equals(GOLDEN_DOCX)).toBe(true);
+    const { documentXml } = await unzipDocx(served);
+    const runYellow = (documentXml.match(/<w:r\b[^>]*>\s*<w:rPr>(?:(?!<\/w:r>).)*?<w:highlight\s+w:val="yellow"/gs) || []).length;
+    expect(runYellow).toBe(0);
+  });
+});
+
+/** Tiny ZIP central-directory parser. Avoids pulling in a JS zip dep just
+ *  for one XML extraction; a docx is a single-shot read of one entry. */
+async function unzipDocx(buf: Buffer): Promise<{ documentXml: string }> {
+  // End-of-central-directory record begins with PK\x05\x06.
+  const eocdSig = Buffer.from([0x50, 0x4b, 0x05, 0x06]);
+  const eocdOffset = buf.lastIndexOf(eocdSig);
+  if (eocdOffset < 0) throw new Error('not a zip');
+  const cdOffset = buf.readUInt32LE(eocdOffset + 16);
+  const cdEntries = buf.readUInt16LE(eocdOffset + 10);
+
+  let p = cdOffset;
+  for (let i = 0; i < cdEntries; i++) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error('bad central dir');
+    const compressionMethod = buf.readUInt16LE(p + 10);
+    const compressedSize = buf.readUInt32LE(p + 20);
+    const fileNameLen = buf.readUInt16LE(p + 28);
+    const extraLen = buf.readUInt16LE(p + 30);
+    const commentLen = buf.readUInt16LE(p + 32);
+    const localHeaderOffset = buf.readUInt32LE(p + 42);
+    const name = buf.subarray(p + 46, p + 46 + fileNameLen).toString('utf8');
+    if (name === 'word/document.xml') {
+      const lhFileNameLen = buf.readUInt16LE(localHeaderOffset + 26);
+      const lhExtraLen = buf.readUInt16LE(localHeaderOffset + 28);
+      const dataStart = localHeaderOffset + 30 + lhFileNameLen + lhExtraLen;
+      const compressed = buf.subarray(dataStart, dataStart + compressedSize);
+      const zlib = await import('node:zlib');
+      const inflated =
+        compressionMethod === 0
+          ? compressed
+          : zlib.inflateRawSync(compressed);
+      return { documentXml: inflated.toString('utf8') };
+    }
+    p += 46 + fileNameLen + extraLen + commentLen;
+  }
+  throw new Error('word/document.xml not found in docx');
+}
