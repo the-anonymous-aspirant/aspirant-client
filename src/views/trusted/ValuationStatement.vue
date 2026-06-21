@@ -213,7 +213,7 @@
         </div>
         <label class="checkbox-row">
           <input type="checkbox" v-model="saveOperatorDefaults" />
-          Spara namn, titel och företag som standard för nästa gång
+          Spara ort, namn, titel och företag som standard för nästa gång
         </label>
       </fieldset>
 
@@ -513,6 +513,8 @@ export default {
       conf.maklare_titel = operatorDefaults.maklare_titel ? 'manual' : 'not_found';
       review.foretag = operatorDefaults.foretag || '';
       conf.foretag = operatorDefaults.foretag ? 'manual' : 'not_found';
+      review.ort = operatorDefaults.ort || '';
+      conf.ort = operatorDefaults.ort ? 'manual' : 'not_found';
 
       review.datum = new Date()
         .toLocaleDateString('sv-SE')
@@ -522,8 +524,8 @@ export default {
         .join('/');
       conf.datum = 'manual';
 
-      // bilder_note and ort stay blank → 'not_found' (saknas) until the
-      // operator types, at which point markManual flips them to 'manual'.
+      // bilder_note stays blank → 'not_found' (saknas) until the operator
+      // types, at which point markManual flips it to 'manual'.
 
       this.reviewedFields = review;
       this.fieldConfidence = conf;
@@ -573,6 +575,7 @@ export default {
 
         if (this.saveOperatorDefaults) {
           await axios.put('/api/commander/valuation-statement/operator-defaults', {
+            ort: this.reviewedFields.ort || null,
             maklare_namn: this.reviewedFields.maklare_namn || null,
             maklare_titel: this.reviewedFields.maklare_titel || null,
             foretag: this.reviewedFields.foretag || null,
