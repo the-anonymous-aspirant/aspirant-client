@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import {
   installCommanderMocks,
   seedTrustedSession,
+  dismissMobileSidebarIfPresent,
   PDF_UPLOAD_PAYLOAD,
 } from './helpers/mockBackend';
 
@@ -62,6 +63,7 @@ test.describe('Värdeutlåtande BR-flow — mobile (iPhone 13)', () => {
 
 async function walkToReview(page: Page): Promise<void> {
   await page.goto('/trusted/valuation-statement');
+  await dismissMobileSidebarIfPresent(page);
   await expect(page.locator('h1', { hasText: 'Värdeutlåtande' })).toBeVisible();
   await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
   await page.getByRole('button', { name: /Extrahera värden/ }).click();

@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import {
   installCommanderMocks,
   seedTrustedSession,
+  dismissMobileSidebarIfPresent,
   PDF_UPLOAD_PAYLOAD,
   OPERATOR_DEFAULTS,
   GOLDEN_DOCX,
@@ -12,6 +13,7 @@ const REVIEW_LEGEND = 'Granska och justera';
 /** Drive the upload step and wait for the review step to render. */
 async function walkToReview(page: Page): Promise<void> {
   await page.goto('/trusted/valuation-statement');
+  await dismissMobileSidebarIfPresent(page);
   await expect(page.locator('h1', { hasText: 'Värdeutlåtande' })).toBeVisible();
   // The file input is `display: none`; setInputFiles bypasses that.
   await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
@@ -29,6 +31,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
 
   test('#884 dropzone signals multi-file upload', async ({ page }) => {
     await page.goto('/trusted/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
     await expect(page.locator('.dropzone-headline')).toContainText(/flera/i);
     const fileInput = page.locator('input[type="file"]');
     await expect(fileInput).toHaveAttribute('multiple', '');
