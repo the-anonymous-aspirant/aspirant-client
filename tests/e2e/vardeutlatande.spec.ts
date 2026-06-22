@@ -242,7 +242,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     await page.getByRole('button', { name: /Extrahera värden/ }).click();
 
     // Step 2: Extracting.
-    await expect(page.locator('.spinner').first()).toBeVisible();
+    await expect(page.locator('.progress-bar').first()).toBeVisible();
     await assertSingleCanonicalStep(page);
 
     // Step 3: Review.
@@ -254,7 +254,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     await page.getByRole('button', { name: /Generera värdeutlåtande/ }).click();
 
     // Step 4: Generating.
-    await expect(page.locator('.full-spinner')).toBeVisible();
+    await expect(page.locator('.progress-bar--lg')).toBeVisible();
     await assertSingleCanonicalStep(page);
 
     // Step 5: Done — and the action row sits on the card's center axis,
@@ -274,9 +274,9 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     expect(Math.abs(cardCenter - actionsCenter)).toBeLessThan(4);
   });
 
-  test('#937 extracting-step spinners render with size and animate', async ({ page }) => {
+  test('#991 extracting-step progress bar renders with size and animates', async ({ page }) => {
     // Reinstall mocks with a delay so the extracting step stays on screen
-    // long enough to capture the spinner's computed transform across frames.
+    // long enough to capture the fill band's computed `left` across frames.
     await installCommanderMocks(page, { extractDelayMs: 2500 });
 
     await page.goto('/trusted/valuation-statement');
@@ -284,25 +284,32 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
     await page.getByRole('button', { name: /Extrahera värden/ }).click();
 
-    const spinner = page.locator('.spinner').first();
-    await expect(spinner).toBeVisible();
+    const bar = page.locator('.progress-bar').first();
+    await expect(bar).toBeVisible();
 
-    // Regression: the span used to be `display: inline` so width/height
-    // collapsed to 0 and the rotation had nothing visible to spin.
-    const box = await spinner.boundingBox();
-    expect(box?.width).toBeGreaterThan(10);
-    expect(box?.height).toBeGreaterThan(10);
+    // Track-level regression: bar must occupy a real width and a non-zero
+    // height. The previous spinner (#937) collapsed to ~0×0 from an inline
+    // span; the bar variant must not regress to a zero-area element.
+    const box = await bar.boundingBox();
+    expect(box?.width).toBeGreaterThan(100);
+    expect(box?.height).toBeGreaterThan(2);
 
-    // Regression: the keyframe used only `to { rotate(360deg) }`, leaving
-    // the implicit `from` as `transform: none` — matrix-identical to the
-    // `to` state, so some engines collapsed the animation to a no-op.
-    // Sample transform twice with a frame in between; the matrix MUST move.
-    const t1 = await spinner.evaluate(el => getComputedStyle(el).transform);
+    // Status text is visible and reads as one of the cycling extracting
+    // phases — paired with the bar, this is what gives the operator
+    // timing intuition rather than just "something is happening".
+    await expect(page.locator('.progress-status').first()).toBeVisible();
+    await expect(page.locator('.progress-status').first()).toHaveText(
+      /(Läser PDF-filer|Klassificerar dokument|Extraherar värden|Bearbetar fält)…/
+    );
+
+    // Motion regression: the fill band's computed `left` MUST change
+    // between frames. Two samples spaced ~400ms apart cover one full
+    // 1.4s slide cycle either at the slow start/end or the fast middle.
+    const fill = page.locator('.progress-bar__fill').first();
+    const l1 = await fill.evaluate(el => getComputedStyle(el).left);
     await page.waitForTimeout(400);
-    const t2 = await spinner.evaluate(el => getComputedStyle(el).transform);
-    expect(t1).not.toBe('none');
-    expect(t2).not.toBe('none');
-    expect(t1).not.toBe(t2);
+    const l2 = await fill.evaluate(el => getComputedStyle(el).left);
+    expect(l1).not.toBe(l2);
   });
 
   test('#936 done-step action buttons sit in a flex row with a visible gap', async ({ page }) => {
@@ -334,17 +341,27 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     expect(Math.max(horizontalGap, verticalGap)).toBeGreaterThanOrEqual(16);
   });
 
-  test('#937 generating-step full spinner animates', async ({ page }) => {
+  test('#991 generating-step progress bar animates and shows cycling status', async ({ page }) => {
     await installCommanderMocks(page, { generateDelayMs: 2500 });
     await walkToReview(page);
     await page.getByRole('button', { name: /Generera värdeutlåtande/ }).click();
 
-    const spinner = page.locator('.full-spinner');
-    await expect(spinner).toBeVisible();
-    const t1 = await spinner.evaluate(el => getComputedStyle(el).transform);
+    const bar = page.locator('.progress-bar--lg');
+    await expect(bar).toBeVisible();
+
+    // Status text is visible and reads as one of the cycling generating
+    // phases. Bar + label together replace the single 48px circle the
+    // operator could not see animate on desktop (#937).
+    await expect(page.locator('.progress-status')).toBeVisible();
+    await expect(page.locator('.progress-status')).toHaveText(
+      /(Förbereder mall|Bygger underlag|Genererar diagram|Skapar PDF)…/
+    );
+
+    const fill = bar.locator('.progress-bar__fill');
+    const l1 = await fill.evaluate(el => getComputedStyle(el).left);
     await page.waitForTimeout(400);
-    const t2 = await spinner.evaluate(el => getComputedStyle(el).transform);
-    expect(t1).not.toBe(t2);
+    const l2 = await fill.evaluate(el => getComputedStyle(el).left);
+    expect(l1).not.toBe(l2);
   });
 
   test('#886 generated docx contract: golden fixture has no run-level yellow highlight', async ({ page }) => {
