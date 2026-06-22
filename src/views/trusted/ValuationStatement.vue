@@ -1094,20 +1094,40 @@ export default {
   color: var(--text-muted);
 }
 
-/* Review-step fields */
+/* Review-step fields. Every bordered review-step box (this fieldset, the
+   range-chart, the comparable card, the comparables-block decision-support
+   island) sets box-sizing: border-box + min-width: 0 so the rendered box
+   never exceeds its parent's content area regardless of padding/border,
+   and overflow-wrap: anywhere so unbroken Swedish compound words wrap
+   inside the bounds rather than push descendants past the right edge
+   (#992 root-cause discipline). */
 .field-block {
   border: 1px solid var(--border-card);
   border-radius: var(--radius-lg);
   padding: var(--space-md);
   margin-bottom: var(--space-md);
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
-.field-block legend { padding: 0 var(--space-xs); font-weight: 600; color: var(--text-heading-card); }
+.field-block legend {
+  padding: 0 var(--space-xs);
+  font-weight: 600;
+  color: var(--text-heading-card);
+  max-width: 100%;
+}
 .field-row {
   display: grid;
   grid-template-columns: 220px 1fr;
   gap: var(--space-md);
   align-items: center;
   padding: var(--space-xs) 0;
+  /* min-width: 0 on grid items so a long label or long input value
+     doesn't widen the column past its 220px / 1fr slot. */
+  min-width: 0;
+}
+.field-row > * {
+  min-width: 0;
 }
 .field-row label { font-size: var(--text-sm); color: var(--text-muted); }
 .field-row input,
@@ -1186,6 +1206,9 @@ export default {
   border-radius: var(--radius-lg);
   background-color: #ffffff;
   color: var(--text-on-light);
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .comparables-block h4 {
   margin: 0 0 var(--space-xs);
@@ -1219,6 +1242,13 @@ export default {
   flex: 0 0 220px;
   /* min-width: 0 overrides flex's default min-content so flex-basis binds. */
   min-width: 0;
+  /* border-box so flex-basis 220px is the OUTER box width (border + padding
+     included) rather than the content box. Without this the rendered card
+     overshoots its slot by border + padding-right (~9px), pushing the
+     right-aligned dd of every meta row past the card's visible edge — the
+     desktop "värderingsinformation escaping bounds" the operator reported
+     (#992), distinct from the mobile-only #949 fix. */
+  box-sizing: border-box;
   display: grid;
   gap: var(--space-2xs, 4px);
   padding: var(--space-sm);
@@ -1227,6 +1257,11 @@ export default {
   background-color: #ffffff;
   color: var(--text-on-light);
   scroll-snap-align: start;
+  /* Long föreningsnamn / large kronor values must wrap inside the card
+     rather than push spans past the right edge. Anywhere (not break-word)
+     is what handles unhyphenated Swedish compound words like
+     "Lägenhetsförteckning" without leaving them as a single unbroken run. */
+  overflow-wrap: anywhere;
 }
 .comparable-card__head {
   display: flex;
@@ -1265,20 +1300,31 @@ export default {
 }
 .comparable-card__meta {
   margin: var(--space-2xs, 4px) 0 0;
+  /* Single column at every viewport — at 220px the two-column grid leaves
+     ~100px per cell, and label "ÅRSAVGIFT" plus a six-digit value land
+     within ~3px of that ceiling. Subpixel renderer variance was enough to
+     push the dd past the card edge on desktop (#992), so we collapse to
+     one column everywhere and lean on letter-spacing: 0 (also at desktop)
+     to keep the label compact. */
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 2px var(--space-sm);
   font-size: var(--text-2xs, 0.7rem);
+  min-width: 0;
 }
 .comparable-card__meta > div {
   display: flex;
   justify-content: space-between;
   gap: var(--space-2xs, 4px);
+  min-width: 0;
 }
 .comparable-card__meta dt {
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  /* No letter-spacing at any viewport — see grid-template-columns rationale
+     above. The label still reads as the small-caps uppercase variant. */
+  letter-spacing: 0;
+  min-width: 0;
 }
 .comparable-card__meta dd {
   margin: 0;
@@ -1313,20 +1359,10 @@ export default {
   /* Comparable-sales cards: narrower at mobile so two cards peek into
      the viewport simultaneously, hinting at the horizontal-scroll
      affordance without an explicit indicator. The range-chart stack
-     above flows full-width naturally. */
+     above flows full-width naturally. Meta-grid is already 1-column at
+     every viewport (see .comparable-card__meta above) so no override
+     is needed here. */
   .comparable-card { flex: 0 0 180px; }
   .comparable-card--raw { flex: 0 0 240px; }
-
-  /* 180px less ~24px horizontal padding = ~156px inner; a 2-column
-     meta grid leaves ~78px per cell which can't hold labels like
-     "AVGIFT/MÅN" + value without clipping the card edge. Collapse to
-     single-column at mobile and drop the label letter-spacing so the
-     content sits comfortably inside the card. */
-  .comparable-card__meta {
-    grid-template-columns: 1fr;
-  }
-  .comparable-card__meta dt {
-    letter-spacing: 0;
-  }
 }
 </style>

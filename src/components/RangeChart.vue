@@ -112,6 +112,13 @@ export default {
   border-radius: var(--radius-sm);
   background-color: #ffffff;
   color: var(--text-on-light);
+  /* Match the review-step box discipline (#992): border-box so the chart
+     width never exceeds its grid track; min-width: 0 so a long label or
+     subject value can't widen the chart past the parent; overflow-wrap:
+     anywhere so callout text wraps inside the chart rather than escaping. */
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .range-chart.outlier {
@@ -124,17 +131,21 @@ export default {
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-sm);
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .range-chart__label {
   font-weight: 600;
   font-size: var(--text-sm);
+  min-width: 0;
 }
 
 .range-chart__subject-label {
   font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-muted);
+  min-width: 0;
 }
 
 .range-chart.outlier .range-chart__subject-label {

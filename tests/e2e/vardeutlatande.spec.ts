@@ -181,6 +181,76 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     await expect(downloadLink).toContainText('.docx');
   });
 
+  test('#992 every bordered review-step box keeps its content within bounds at desktop and mobile', async ({ page }) => {
+    // Operator (2026-06-22) reported that the "small boxes with
+    // värderingsinformation" still escape their bounding boxes on
+    // desktop, distinct from the #949 comparable-card fix. The root-cause
+    // ask (per the task body) is to govern overflow at the box level
+    // rather than chasing per-instance regressions: every bordered or
+    // bounded box in the review step must keep every descendant text
+    // node inside its visible rectangle, at BOTH desktop and mobile
+    // widths. Boxes covered:
+    //   - .field-block (Värderingsobjekt / Källdokument / Värdebedömning
+    //                    / Utfärdare — the property-metadata fieldsets)
+    //   - .range-chart  (per-metric comparable-range visualisation)
+    //   - .comparables-block (the white-island decision-support panel)
+    //   - .comparable-card  (already pinned by #949 at mobile; this
+    //                        guard re-checks it at both viewports so a
+    //                        future card edit can't reopen #949 at desktop)
+    const viewports = [
+      { label: 'desktop', width: 1280, height: 900 },
+      { label: 'mobile', width: 375, height: 800 },
+    ];
+    // .comparables-block is intentionally excluded — it wraps the
+    // .comparable-cards-scroll horizontal-overflow strip whose cards
+    // sit past the visible block at narrow viewports by design (#938
+    // tier-2 swipe affordance). The cards themselves carry the bounds
+    // contract, and the strip is its own scroll container.
+    const boxSelectors = [
+      '.field-block',
+      '.range-chart',
+      '.comparable-card',
+    ];
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await walkToReview(page);
+      for (const selector of boxSelectors) {
+        const boxes = page.locator(selector);
+        const count = await boxes.count();
+        expect(count, `${viewport.label}: expected ${selector} to render`).toBeGreaterThan(0);
+        for (let i = 0; i < count; i++) {
+          const overflow = await boxes.nth(i).evaluate(el => {
+            const boxRect = (el as HTMLElement).getBoundingClientRect();
+            // Cover every text-bearing leaf inside the box. Inputs and
+            // textareas overflow horizontally via their own scroll, so we
+            // also assert that their bounding boxes sit inside the parent
+            // — the rendered scrollbar gutter still counts as "escaped".
+            const nodes = (el as HTMLElement).querySelectorAll(
+              'span, dt, dd, p, legend, label, input, select, textarea, h4, h5',
+            );
+            return Array.from(nodes).flatMap(n => {
+              const nr = (n as HTMLElement).getBoundingClientRect();
+              // 1px tolerance for subpixel rounding.
+              const right = nr.right - boxRect.right;
+              const left = boxRect.left - nr.left;
+              if (right > 1 || left > 1) {
+                return [{ tag: (n as HTMLElement).tagName, text: (n.textContent || '').trim().slice(0, 40), right, left }];
+              }
+              return [];
+            });
+          });
+          expect(
+            overflow,
+            `${viewport.label} ${selector}#${i} has descendants overflowing the box: ${JSON.stringify(overflow)}`,
+          ).toEqual([]);
+        }
+      }
+      // Reset to a fresh navigation between viewports so the next pass
+      // starts from a clean Vue tree rather than re-using the same DOM.
+      await page.goto('about:blank');
+    }
+  });
+
   test('#949 comparable-card text stays inside the card bounds at mobile width', async ({ page }) => {
     // Run the desktop chromium suite at iPhone-sized viewport so the
     // ≤768px @media block (where .comparable-card narrows to 180px) is
