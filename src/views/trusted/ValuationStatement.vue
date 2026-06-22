@@ -106,12 +106,24 @@
       </div>
     </ValuationStep>
 
-    <!-- Step 2: Extracting (per-file spinner) -->
+    <!-- Step 2: Extracting (progress bar + cycling status) -->
     <ValuationStep v-if="step === 'extracting'" title="2. Extraherar värden">
-      <ul class="progress-list">
+      <div class="progress-bar" role="progressbar" aria-busy="true" :aria-label="extractingStatus">
+        <div class="progress-bar__fill"></div>
+      </div>
+      <p class="progress-status" aria-live="polite">{{ extractingStatus }}</p>
+      <ul class="progress-files">
         <li v-for="f in uploadedFiles" :key="f.name">
-          <span class="spinner" aria-hidden="true"></span>
-          <span>Läser {{ f.name }}…</span>
+          <span class="file-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                 xmlns="http://www.w3.org/2000/svg">
+              <path d="M14 3 H7 a2 2 0 0 0 -2 2 V19 a2 2 0 0 0 2 2 H17
+                       a2 2 0 0 0 2 -2 V8 z M14 3 V8 H19"
+                    stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span>{{ f.name }}</span>
         </li>
       </ul>
     </ValuationStep>
@@ -314,9 +326,12 @@
       </div>
     </ValuationStep>
 
-    <!-- Step 4: Generating -->
-    <ValuationStep v-if="step === 'generating'" title="4. Genererar värdeutlåtande…">
-      <div class="full-spinner" aria-hidden="true"></div>
+    <!-- Step 4: Generating (progress bar + cycling status) -->
+    <ValuationStep v-if="step === 'generating'" title="4. Genererar värdeutlåtande">
+      <div class="progress-bar progress-bar--lg" role="progressbar" aria-busy="true" :aria-label="generatingStatus">
+        <div class="progress-bar__fill"></div>
+      </div>
+      <p class="progress-status" aria-live="polite">{{ generatingStatus }}</p>
     </ValuationStep>
 
     <!-- Step 5: Done -->
@@ -440,7 +455,12 @@ export default {
       generateError: null,
       downloadUrl: null,
       downloadFilename: 'vardeutlatande.docx',
+      statusPhase: 0,
+      statusTimer: null,
     };
+  },
+  beforeUnmount() {
+    this.stopStatusCycle();
   },
   computed: {
     mode() {
@@ -474,6 +494,26 @@ export default {
 
     subjectDatumEpoch() {
       return parseISODate(this.reviewedFields.datum);
+    },
+
+    extractingStatus() {
+      const phases = [
+        'Läser PDF-filer…',
+        'Klassificerar dokument…',
+        'Extraherar värden…',
+        'Bearbetar fält…',
+      ];
+      return phases[this.statusPhase % phases.length];
+    },
+
+    generatingStatus() {
+      const phases = [
+        'Förbereder mall…',
+        'Bygger underlag…',
+        'Genererar diagram…',
+        'Skapar PDF…',
+      ];
+      return phases[this.statusPhase % phases.length];
     },
 
     sortedComparableSales() {
@@ -583,8 +623,24 @@ export default {
       this.uploadedFiles = Array.from(byName.values());
     },
 
+    startStatusCycle() {
+      this.statusPhase = 0;
+      if (this.statusTimer) clearInterval(this.statusTimer);
+      this.statusTimer = setInterval(() => {
+        this.statusPhase += 1;
+      }, 1800);
+    },
+    stopStatusCycle() {
+      if (this.statusTimer) {
+        clearInterval(this.statusTimer);
+        this.statusTimer = null;
+      }
+      this.statusPhase = 0;
+    },
+
     async doExtract() {
       this.step = 'extracting';
+      this.startStatusCycle();
       const form = new FormData();
       for (const f of this.uploadedFiles) form.append('files', f, f.name);
       try {
@@ -606,6 +662,8 @@ export default {
           'Misslyckades att extrahera: ' +
           (err.response?.data?.error?.message || err.message);
         this.step = 'upload';
+      } finally {
+        this.stopStatusCycle();
       }
     },
 
@@ -729,6 +787,7 @@ export default {
 
     async doGenerate() {
       this.step = 'generating';
+      this.startStatusCycle();
       this.generateError = null;
       const body = { ...this.reviewedFields, mode: this.mode };
       try {
@@ -778,11 +837,14 @@ export default {
         }
         this.generateError = 'Misslyckades att generera: ' + msg;
         this.step = 'review';
+      } finally {
+        this.stopStatusCycle();
       }
     },
 
     resetFlow() {
       if (this.downloadUrl) URL.revokeObjectURL(this.downloadUrl);
+      this.stopStatusCycle();
       this.step = 'upload';
       this.uploadedFiles = [];
       this.extractedDocs = [];
@@ -960,40 +1022,76 @@ export default {
   margin-top: var(--space-lg);
 }
 
-/* Spinner — per-file row */
-.progress-list { list-style: none; padding: 0; margin: 0; }
-.progress-list li { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-xs) 0; }
-.spinner {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 2px solid var(--border-card);
-  border-top-color: var(--brand-primary);
-  animation: spin 0.8s linear infinite;
+/* Loading indication — indeterminate horizontal progress bar with a
+ * travelling fill band. Replaces the per-row 16px spinner (#937/#100)
+ * which the operator could not see animate on desktop: a full-width
+ * bar with a wide travelling band is unambiguous as motion, and the
+ * paired .progress-status text gives the operator real timing
+ * intuition about which phase the backend is in. */
+.progress-bar {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(--border-card);
+  overflow: hidden;
+  margin: var(--space-md) 0 var(--space-sm);
 }
-.full-spinner {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  border: 4px solid var(--border-card);
-  border-top-color: var(--brand-primary);
-  animation: spin 0.8s linear infinite;
-  margin: var(--space-xl) auto;
+.progress-bar--lg {
+  height: 10px;
+  margin: var(--space-xl) 0 var(--space-md);
 }
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.progress-bar__fill {
+  position: absolute;
+  top: 0;
+  left: -35%;
+  width: 35%;
+  height: 100%;
+  background-color: var(--brand-primary);
+  border-radius: 3px;
+  animation: progress-slide 1.4s ease-in-out infinite;
+}
+@keyframes progress-slide {
+  0%   { left: -35%; }
+  100% { left: 100%; }
+}
+/* Reduced-motion fallback: fill the whole bar and pulse its opacity
+ * across a wide range. Far more visible than the prior 16px circle's
+ * 0.4↔1.0 pulse, while still honoring the user's motion preference. */
+@keyframes progress-pulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .spinner,
-  .full-spinner {
-    animation: spinner-pulse 1.4s ease-in-out infinite;
+  .progress-bar__fill {
+    width: 100%;
+    left: 0;
+    animation-name: progress-pulse;
   }
-  @keyframes spinner-pulse {
-    0%, 100% { opacity: 0.4; }
-    50% { opacity: 1; }
-  }
+}
+
+.progress-status {
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin: 0 0 var(--space-md);
+  /* Reserve one line of height so the bar doesn't jump when the text
+   * swaps to a longer/shorter phase label. */
+  min-height: 1.4em;
+}
+
+.progress-files {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.progress-files li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
 }
 
 /* Review-step fields */
