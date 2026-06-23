@@ -434,6 +434,40 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     expect(l1).not.toBe(l2);
   });
 
+  test('#1026 marknadsvärde input renders thousands-spaced as the operator types', async ({ page }) => {
+    // Operator complaint: '500000' and '5000000' look near-identical at a
+    // glance during fast entry. The fix wires the marknadsvärde + intervall
+    // inputs to a live thousands-grouping handler so the format updates on
+    // every keystroke and the two amounts stay visually distinct mid-entry.
+    await walkToReview(page);
+
+    const marknadsvarde = page
+      .locator('.field-row', { hasText: /^Marknadsvärde/ })
+      .locator('input');
+    await marknadsvarde.click();
+    // Clear whatever the extract fixture seeded before exercising the
+    // live-formatting path — sequenceKeyPresses below mimics fast typing.
+    await marknadsvarde.fill('');
+    await marknadsvarde.pressSequentially('5000000');
+    await expect(marknadsvarde).toHaveValue('5 000 000');
+
+    // Swap to the smaller amount and confirm grouping rebuilds (idempotent
+    // on already-spaced input — the regression we'd catch is the formatter
+    // double-spacing existing spaces into '50  000').
+    await marknadsvarde.fill('');
+    await marknadsvarde.pressSequentially('500000');
+    await expect(marknadsvarde).toHaveValue('500 000');
+
+    // Intervall behaves the same.
+    const intervall = page
+      .locator('.field-row', { hasText: /^Intervall/ })
+      .locator('input');
+    await intervall.click();
+    await intervall.fill('');
+    await intervall.pressSequentially('50000');
+    await expect(intervall).toHaveValue('50 000');
+  });
+
   test('#886 generated docx contract: golden fixture has no run-level yellow highlight', async ({ page }) => {
     // The mocked /generate?format=pdf 503-falls-back to /generate (docx);
     // the docx body is the bundled golden fixture. The test downloads it,

@@ -197,11 +197,21 @@
         </div>
         <div class="field-row" :class="confClass('marknadsvarde_kr')">
           <label>Marknadsvärde (kr)</label>
-          <input v-model="reviewedFields.marknadsvarde_kr" placeholder="3 050 000" @input="markManual('marknadsvarde_kr')" />
+          <input
+            inputmode="numeric"
+            v-model="reviewedFields.marknadsvarde_kr"
+            placeholder="3 050 000"
+            @input="onAmountInput('marknadsvarde_kr', $event)"
+          />
         </div>
         <div class="field-row" :class="confClass('intervall_kr')">
           <label>Intervall ± (kr)</label>
-          <input v-model="reviewedFields.intervall_kr" placeholder="50 000" @input="markManual('intervall_kr')" />
+          <input
+            inputmode="numeric"
+            v-model="reviewedFields.intervall_kr"
+            placeholder="50 000"
+            @input="onAmountInput('intervall_kr', $event)"
+          />
         </div>
         <div class="field-row" :class="confClass('bilder_note')">
           <label>Anteckning om bilder/skick</label>
@@ -776,6 +786,37 @@ export default {
     markManual(key) {
       if (this.fieldConfidence[key] !== 'manual') {
         this.fieldConfidence = { ...this.fieldConfidence, [key]: 'manual' };
+      }
+    },
+
+    onAmountInput(key, event) {
+      // Mark the field as operator-edited (drops the source-extraction
+      // confidence tint, paints the input blue), then reformat the typed
+      // digits into Swedish space-as-thousands-separator form so 500 000
+      // and 5 000 000 stay visually distinct mid-entry. Non-digit input
+      // (e.g. an operator pasting '~3M') passes through untouched.
+      this.markManual(key);
+      const input = event && event.target;
+      const raw = String(this.reviewedFields[key] ?? '');
+      const digits = raw.replace(/\s/g, '');
+      if (!/^\d*$/.test(digits) || digits === '') return;
+
+      const formatted = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+      if (formatted === raw) return;
+
+      // Compute caret offset measured from the END of the string so the
+      // cursor stays in the same logical position when spaces are inserted
+      // mid-stream (typing '500000' → '500 000' shouldn't jump the caret
+      // backward by the number of newly-inserted spaces).
+      const distFromEnd = input ? raw.length - (input.selectionStart ?? raw.length) : 0;
+
+      this.reviewedFields = { ...this.reviewedFields, [key]: formatted };
+
+      if (input) {
+        this.$nextTick(() => {
+          const newPos = Math.max(0, formatted.length - distFromEnd);
+          try { input.setSelectionRange(newPos, newPos); } catch (_) { /* some input types reject */ }
+        });
       }
     },
 
