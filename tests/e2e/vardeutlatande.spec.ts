@@ -525,6 +525,47 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     const runYellow = (documentXml.match(/<w:r\b[^>]*>\s*<w:rPr>(?:(?!<\/w:r>).)*?<w:highlight\s+w:val="yellow"/gs) || []).length;
     expect(runYellow).toBe(0);
   });
+
+  test('#1080 about transparency section is collapsed by default and renders the registry on expand', async ({ page }) => {
+    await page.goto('/trusted/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+
+    const about = page.locator('details.about');
+    await expect(about).toBeVisible();
+
+    // Collapsed by default — the per-DocumentType cards aren't in the
+    // accessibility tree until the operator expands the disclosure.
+    await expect(about).not.toHaveAttribute('open', /.*/);
+    const brHeading = about.locator('h3', { hasText: 'Datavärdering Bostadsrätt' });
+    await expect(brHeading).toBeHidden();
+
+    // Click the summary to expand; the body now renders the canonical
+    // classifier CATEGORIES + per-parser strategy registry from the mock.
+    await about.locator('summary').click();
+    await expect(about).toHaveAttribute('open', /.*/);
+    await expect(brHeading).toBeVisible();
+
+    // Both BR category names (Fastighetsbyrån prose + UC tabular) render
+    // verbatim, and the fingerprint regex strings come through as code.
+    await expect(
+      about.getByText('Värdeutlåtande Bostadsrätt — Fastighetsbyrån prose appraisal'),
+    ).toBeVisible();
+    await expect(
+      about.getByText('Värdeutlåtande Bostadsrätt — UC Bostad data-feed report'),
+    ).toBeVisible();
+    await expect(about.locator('code', { hasText: 'VÄRDEUTLÅTANDE' })).toBeVisible();
+
+    // Strategy priority ordering is preserved: uc_tabular_adress_label is
+    // the first <li> in the address_street slot, prose bullet is second.
+    const addressSlotRow = about.locator('tr', { has: page.locator('code', { hasText: 'address_street' }) });
+    const addressStrategies = addressSlotRow.locator('.about-strategies li');
+    await expect(addressStrategies.nth(0)).toContainText('uc_tabular_adress_label');
+    await expect(addressStrategies.nth(1)).toContainText('fb_prose_adress_bullet');
+
+    // The fastighetsutdrag stub renders with the no-auto-extraction note.
+    await expect(about.locator('h3', { hasText: 'Fastighetsutdrag' })).toBeVisible();
+    await expect(about.getByText(/Ingen automatisk extraktion/i)).toBeVisible();
+  });
 });
 
 /** Assert exactly one <section.valuation-step> is on screen — the

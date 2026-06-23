@@ -3,6 +3,89 @@
     <h1>Värdeutlåtande</h1>
     <h2 class="page-subtitle">Skapa ett värdeutlåtande från PDF-underlag</h2>
 
+    <!-- About / transparency: a render of the commander's classifier
+         CATEGORIES + per-parser strategy registry. Collapsed by default
+         so it stays out of the upload-step workflow; the operator opens
+         it to see WHY a given PDF was identified as a given type and HOW
+         each populated/empty field was extracted. -->
+    <details v-if="aboutRegistry" class="about">
+      <summary>Om verktyget — så identifieras och tolkas dokument</summary>
+      <p class="muted small">
+        För varje känd dokumenttyp visas de mönster (regex) som söks på
+        sida 1 för att klassificera filen, och vilka strategier som
+        försöks för att fylla varje fält. Strategierna prövas i ordning;
+        första träffen vinner. Saknar listan en strategi för ett fält
+        skrivs det manuellt vid granskning.
+      </p>
+      <div
+        v-for="dt in aboutRegistry"
+        :key="dt.document_type"
+        class="about-doctype"
+      >
+        <h3>
+          {{ dt.title }}
+          <code class="muted small">({{ dt.document_type }})</code>
+        </h3>
+
+        <div v-if="dt.categories.length" class="about-categories">
+          <h4>Identifieras som någon av:</h4>
+          <ul
+            v-for="(cat, i) in dt.categories"
+            :key="i"
+            class="about-category"
+          >
+            <li class="about-category-name">{{ cat.name }}</li>
+            <li
+              v-for="fp in cat.fingerprints"
+              :key="fp"
+              class="about-fingerprint"
+            >
+              <code>{{ fp }}</code>
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="dt.slots.length" class="about-slots">
+          <h4>Extraherade fält:</h4>
+          <table>
+            <thead>
+              <tr>
+                <th>Fält</th>
+                <th>Strategier (i prioritetsordning)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="slot in dt.slots" :key="slot.slot_key">
+                <td>
+                  <code>{{ slot.slot_key }}</code>
+                  <p v-if="slot.note" class="muted small">{{ slot.note }}</p>
+                </td>
+                <td>
+                  <ol class="about-strategies">
+                    <li
+                      v-for="st in slot.strategies"
+                      :key="st.name"
+                    >
+                      <span>{{ st.name }}</span>
+                      <span
+                        class="chip"
+                        :class="st.confidence === 'uncertain' ? 'uncertain' : 'confident'"
+                      >{{ st.confidence }}</span>
+                    </li>
+                  </ol>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p v-else class="muted small about-no-slots">
+          Ingen automatisk extraktion ännu — operatören skriver fälten
+          manuellt vid granskning.
+        </p>
+      </div>
+    </details>
+
     <!-- Step 1: Upload -->
     <ValuationStep v-if="step === 'upload'" title="1. Ladda upp underlag" wide>
       <p class="muted">
@@ -486,7 +569,20 @@ export default {
       pdfFilename: 'vardeutlatande.pdf',
       statusPhase: 0,
       statusTimer: null,
+      aboutRegistry: null,
     };
+  },
+  async mounted() {
+    // Fetch the canonical classifier + parser registry the operator-facing
+    // 'About' section renders. Best-effort: if the endpoint is unreachable
+    // (deploy lag, network blip) the <details> block hides itself and the
+    // rest of the page works unchanged.
+    try {
+      const resp = await axios.get('/api/commander/valuation-statement/about');
+      this.aboutRegistry = resp.data?.document_types || null;
+    } catch (_) {
+      this.aboutRegistry = null;
+    }
   },
   beforeUnmount() {
     this.stopStatusCycle();
@@ -1409,6 +1505,95 @@ export default {
   font-size: var(--text-2xs, 0.7rem);
   color: var(--text-muted);
   white-space: normal;
+}
+
+/* About / transparency disclosure — collapsed by default, opens to show
+   the live classifier CATEGORIES + per-parser strategy registry. Same
+   <details> shape as the per-source provenance block below, but with a
+   different content density (per-DocumentType cards). */
+.about {
+  width: 100%;
+  margin-bottom: var(--space-lg);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  background-color: var(--surface-card-inner);
+  box-sizing: border-box;
+  color: var(--text-on-light);
+}
+.about summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: var(--space-xs) 0;
+}
+.about-doctype {
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-card);
+}
+.about-doctype h3 {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-base);
+}
+.about-doctype h4 {
+  margin: var(--space-sm) 0 var(--space-2xs);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.about-category {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-xs);
+}
+.about-category-name {
+  font-weight: 500;
+  font-size: var(--text-sm);
+}
+.about-fingerprint {
+  margin-left: var(--space-md);
+  font-size: var(--text-xs);
+}
+.about-fingerprint code,
+.about-doctype code {
+  font-family: monospace;
+  background-color: rgba(0, 0, 0, 0.04);
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+.about-slots table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+  margin-top: var(--space-xs);
+}
+.about-slots th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-card);
+}
+.about-slots td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-card);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.about-strategies {
+  margin: 0;
+  padding-left: var(--space-md);
+}
+.about-strategies li {
+  margin-bottom: var(--space-2xs, 4px);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+.about-no-slots {
+  margin: var(--space-sm) 0;
+  font-style: italic;
 }
 
 /* Provenance disclosure */
