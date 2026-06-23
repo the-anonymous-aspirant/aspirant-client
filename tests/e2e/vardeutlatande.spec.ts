@@ -164,21 +164,50 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     expect(response?.status()).toBe(200);
     expect(response?.headers()['content-type']).toBe('application/pdf');
 
-    // The "Klart!" step labels the download by extension; .pdf proves the
-    // success path was taken (the 503-fallback would label as .docx).
-    const downloadLink = page.locator('a.btn-primary', { hasText: /Ladda ner/ });
-    await expect(downloadLink).toBeVisible();
-    await expect(downloadLink).toContainText('.pdf');
-    await expect(downloadLink).toHaveAttribute('download', /\.pdf$/);
+    // The "Klart!" step ships both formats side-by-side; the .pdf link
+    // proves the LibreOffice path was taken (the 503-fallback drops it
+    // and leaves the .docx-only flow).
+    const pdfLink = page.getByRole('link', { name: 'Ladda ner .pdf' });
+    await expect(pdfLink).toBeVisible();
+    await expect(pdfLink).toHaveAttribute('download', /\.pdf$/);
   });
 
-  test('#881 fallback path: 503 on PDF transparently serves docx', async ({ page }) => {
+  test('#881 fallback path: 503 on PDF still ships the docx download', async ({ page }) => {
     await installCommanderMocks(page, { pdfReturns503: true });
     await walkToReview(page);
     await page.getByRole('button', { name: /Generera värdeutlåtande/ }).click();
-    const downloadLink = page.locator('a.btn-primary', { hasText: /Ladda ner/ });
-    await expect(downloadLink).toBeVisible({ timeout: 10_000 });
-    await expect(downloadLink).toContainText('.docx');
+    const docxLink = page.getByRole('link', { name: 'Ladda ner .docx' });
+    await expect(docxLink).toBeVisible({ timeout: 10_000 });
+    // The PDF button hides when LibreOffice isn't available so the
+    // operator isn't offered a broken link.
+    await expect(page.getByRole('link', { name: 'Ladda ner .pdf' })).toHaveCount(0);
+  });
+
+  test('#1026 done step offers both .pdf and .docx downloads side-by-side', async ({ page }) => {
+    // Operator follow-up: docx + pdf must both be reachable from the same
+    // UI. Pre-fix the Done step exposed a single download whose extension
+    // followed whichever format the doGenerate flow had cached.
+    await walkToReview(page);
+    await page.getByRole('button', { name: /Generera värdeutlåtande/ }).click();
+
+    const pdfLink = page.getByRole('link', { name: 'Ladda ner .pdf' });
+    const docxLink = page.getByRole('link', { name: 'Ladda ner .docx' });
+    await expect(pdfLink).toBeVisible({ timeout: 10_000 });
+    await expect(docxLink).toBeVisible();
+
+    // Both links carry the right MIME extension on their `download`
+    // attribute so the browser saves under the .pdf / .docx name.
+    await expect(pdfLink).toHaveAttribute('download', /\.pdf$/);
+    await expect(docxLink).toHaveAttribute('download', /\.docx$/);
+
+    // The .docx blob is reachable as a non-empty body.
+    const docxHref = await docxLink.getAttribute('href');
+    expect(docxHref).toMatch(/^blob:/);
+    const docxBytes = await page.evaluate(async (url) => {
+      const blob = await (await fetch(url)).blob();
+      return blob.size;
+    }, docxHref);
+    expect(docxBytes).toBeGreaterThan(0);
   });
 
   test('#992 every bordered review-step box keeps its content within bounds at desktop and mobile', async ({ page }) => {
@@ -385,7 +414,12 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
   test('#936 done-step action buttons sit in a flex row with a visible gap', async ({ page }) => {
     await walkToReview(page);
     await page.getByRole('button', { name: /Generera värdeutlåtande/ }).click();
-    const downloadLink = page.locator('a.btn-primary', { hasText: /Ladda ner/ });
+    // After #1026 the Done step ships both formats side-by-side; the .pdf
+    // link is the leftmost primary button when LibreOffice is available
+    // (which the default mock provides). The spacing guard measures the
+    // gap between the FIRST primary action and the secondary 'Skapa ett
+    // nytt' button — same pre-#936 contract.
+    const downloadLink = page.locator('a.btn-primary', { hasText: /Ladda ner/ }).first();
     await expect(downloadLink).toBeVisible({ timeout: 10_000 });
 
     const actions = page.locator('.done-actions');
@@ -393,21 +427,19 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     const display = await actions.evaluate(el => getComputedStyle(el).display);
     expect(display).toBe('flex');
 
-    // The two action elements sit side-by-side in the row. Their bounding
-    // boxes should be horizontally separated by at least var(--space-lg)
-    // (24px on the design tokens) — the regression guarded here is the
-    // pre-fix layout where the buttons sat directly adjacent with only
-    // the inline whitespace between them.
-    const primary = await downloadLink.boundingBox();
+    // Find the secondary 'Skapa ett nytt' button and assert at least
+    // var(--space-lg) (24px) of separation from the LAST primary action.
+    // Pre-fix the buttons sat directly adjacent with only inline whitespace
+    // between them.
+    const primaryLinks = page.locator('a.btn-primary', { hasText: /Ladda ner/ });
+    const lastPrimary = await primaryLinks.nth((await primaryLinks.count()) - 1).boundingBox();
     const secondary = await page
       .locator('.done-actions button.btn-secondary')
       .boundingBox();
-    expect(primary).toBeTruthy();
+    expect(lastPrimary).toBeTruthy();
     expect(secondary).toBeTruthy();
-    const horizontalGap = secondary!.x - (primary!.x + primary!.width);
-    const verticalGap = secondary!.y - (primary!.y + primary!.height);
-    // Either same row with a real horizontal gap, or stacked with a real
-    // vertical gap — both honor the spacing the operator asked for.
+    const horizontalGap = secondary!.x - (lastPrimary!.x + lastPrimary!.width);
+    const verticalGap = secondary!.y - (lastPrimary!.y + lastPrimary!.height);
     expect(Math.max(horizontalGap, verticalGap)).toBeGreaterThanOrEqual(16);
   });
 
