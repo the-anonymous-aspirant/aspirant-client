@@ -337,12 +337,24 @@
     <!-- Step 5: Done -->
     <ValuationStep v-if="step === 'done'" title="Klart!">
       <p>Värdeutlåtandet är klart att ladda ner.</p>
-      <p v-if="!isPdf" class="muted small">
-        PDF-konvertering inte tillgänglig — filen kan öppnas i Word eller LibreOffice och sparas som PDF därifrån vid behov.
+      <p v-if="!pdfUrl" class="muted small">
+        PDF-konvertering inte tillgänglig på servern just nu — ladda ner .docx-filen istället; den kan öppnas i Word eller LibreOffice och sparas som PDF därifrån vid behov.
       </p>
       <div class="done-actions">
-        <a class="btn-primary" :href="downloadUrl" :download="downloadFilename">
-          Ladda ner värdeutlåtande ({{ isPdf ? '.pdf' : '.docx' }})
+        <a
+          v-if="pdfUrl"
+          class="btn-primary"
+          :href="pdfUrl"
+          :download="pdfFilename"
+        >
+          Ladda ner .pdf
+        </a>
+        <a
+          class="btn-primary"
+          :href="docxUrl"
+          :download="docxFilename"
+        >
+          Ladda ner .docx
         </a>
         <button class="btn-secondary" @click="resetFlow">Skapa ett nytt</button>
       </div>
@@ -384,6 +396,11 @@ function formatM2(v) {
 function formatSwedishDate(epoch) {
   const d = new Date(epoch);
   return `${d.getUTCDate()}/${d.getUTCMonth() + 1}/${d.getUTCFullYear()}`;
+}
+
+function filenameFromContentDisposition(header, fallback) {
+  const m = (header || '').match(/filename="([^"]+)"/);
+  return m ? m[1] : fallback;
 }
 
 const BLANK_REVIEW = () => ({
@@ -453,8 +470,10 @@ export default {
       fieldConfidence: BLANK_CONFIDENCE(),
       saveOperatorDefaults: false,
       generateError: null,
-      downloadUrl: null,
-      downloadFilename: 'vardeutlatande.docx',
+      docxUrl: null,
+      docxFilename: 'vardeutlatande.docx',
+      pdfUrl: null,
+      pdfFilename: 'vardeutlatande.pdf',
       statusPhase: 0,
       statusTimer: null,
     };
@@ -465,9 +484,6 @@ export default {
   computed: {
     mode() {
       return this.reviewedFields.upplatelseform === 'Friköpt' ? 'frikopt' : 'bostadsratt';
-    },
-    isPdf() {
-      return this.downloadFilename.toLowerCase().endsWith('.pdf');
     },
 
     subjectAreaM2() {
@@ -791,30 +807,41 @@ export default {
       this.generateError = null;
       const body = { ...this.reviewedFields, mode: this.mode };
       try {
-        // Prefer PDF; if the deploy hasn't shipped LibreOffice yet the
-        // backend returns 503 and we transparently fall back to docx.
-        let resp;
-        try {
-          resp = await axios.post(
-            '/api/commander/valuation-statement/generate?format=pdf',
+        // Fetch BOTH formats so the Done step can offer .docx and .pdf
+        // side-by-side. DOCX is authoritative and always succeeds; PDF
+        // depends on LibreOffice and may 503 — when it does, we still
+        // ship the .docx flow and the Done step hides the PDF button.
+        const [docxResp, pdfResp] = await Promise.all([
+          axios.post(
+            '/api/commander/valuation-statement/generate',
             body,
             { responseType: 'blob' }
-          );
-        } catch (pdfErr) {
-          if (pdfErr.response?.status === 503) {
-            resp = await axios.post(
-              '/api/commander/valuation-statement/generate',
+          ),
+          axios
+            .post(
+              '/api/commander/valuation-statement/generate?format=pdf',
               body,
               { responseType: 'blob' }
-            );
-          } else {
-            throw pdfErr;
-          }
+            )
+            .catch(err => {
+              if (err.response?.status === 503) return null;
+              throw err;
+            }),
+        ]);
+
+        this.docxFilename = filenameFromContentDisposition(
+          docxResp.headers['content-disposition'],
+          'vardeutlatande.docx',
+        );
+        this.docxUrl = URL.createObjectURL(docxResp.data);
+
+        if (pdfResp) {
+          this.pdfFilename = filenameFromContentDisposition(
+            pdfResp.headers['content-disposition'],
+            'vardeutlatande.pdf',
+          );
+          this.pdfUrl = URL.createObjectURL(pdfResp.data);
         }
-        const cd = resp.headers['content-disposition'] || '';
-        const m = cd.match(/filename="([^"]+)"/);
-        this.downloadFilename = m ? m[1] : 'vardeutlatande.docx';
-        this.downloadUrl = URL.createObjectURL(resp.data);
 
         if (this.saveOperatorDefaults) {
           await axios.put('/api/commander/valuation-statement/operator-defaults', {
@@ -843,7 +870,8 @@ export default {
     },
 
     resetFlow() {
-      if (this.downloadUrl) URL.revokeObjectURL(this.downloadUrl);
+      if (this.docxUrl) URL.revokeObjectURL(this.docxUrl);
+      if (this.pdfUrl) URL.revokeObjectURL(this.pdfUrl);
       this.stopStatusCycle();
       this.step = 'upload';
       this.uploadedFiles = [];
@@ -853,7 +881,8 @@ export default {
       this.fieldConfidence = BLANK_CONFIDENCE();
       this.uploadError = null;
       this.generateError = null;
-      this.downloadUrl = null;
+      this.docxUrl = null;
+      this.pdfUrl = null;
     },
   },
 };
