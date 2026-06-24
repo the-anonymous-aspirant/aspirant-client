@@ -183,6 +183,141 @@ export async function installCommanderMocks(page: Page, opts: InstallOpts = {}):
     }
     await route.fallback();
   });
+
+  // ---------- processed-valuations store ('Tidigare värderingar' tab, #1154) ----------
+  await installProcessedValuationsMocks(page);
+}
+
+/** In-memory seed store for the /processed* endpoints. Reset on every
+ *  installCommanderMocks call so each test starts clean. Exposed so a
+ *  test can seed rows via `seedProcessedRows([...])` or assert on
+ *  `processedSeed.rows` after a wizard run. */
+export const processedSeed: { rows: any[] } = { rows: [] };
+
+export interface SeedRow {
+  id?: string;
+  name: string;
+  input_files?: string[];
+  extracted_values?: Record<string, unknown>;
+  final_values?: Record<string, unknown>;
+  was_manually_edited?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export function seedProcessedRows(rows: SeedRow[] = []) {
+  const now = '2026-06-24T20:00:00Z';
+  processedSeed.rows = rows.map((r, i) => ({
+    id: r.id ?? `seed-${i + 1}`,
+    name: r.name,
+    input_files: r.input_files ?? [],
+    extracted_values: r.extracted_values ?? {},
+    final_values: r.final_values ?? {},
+    was_manually_edited: r.was_manually_edited ?? false,
+    created_at: r.created_at ?? now,
+    updated_at: r.updated_at ?? now,
+    created_by: null,
+  }));
+}
+
+export async function installProcessedValuationsMocks(page: Page): Promise<void> {
+  processedSeed.rows = [];
+
+  // GET /export.csv must be matched BEFORE the /:id route — Playwright's
+  // page.route is LIFO so the most-specific pattern is registered LAST
+  // for priority, but we register .csv FIRST then the others on top.
+  // Actually playwright's order: routes are matched in REGISTRATION order
+  // (first match wins) — confirmed in docs. We register exact match → :id → collection.
+  await page.route(/\/api\/commander\/valuation-statement\/processed\/export\.csv$/, async (route: Route) => {
+    const rows = processedSeed.rows;
+    const header = ['id', 'name', 'created_at', 'updated_at', 'was_manually_edited'];
+    const body = [
+      header.join(','),
+      ...rows.map(r => header.map(k => String((r as any)[k])).join(',')),
+    ].join('\n') + '\n';
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/csv; charset=utf-8',
+      headers: { 'content-disposition': 'attachment; filename="processed_valuations.csv"' },
+      body,
+    });
+  });
+
+  await page.route(/\/api\/commander\/valuation-statement\/processed\/[^/?]+$/, async (route: Route) => {
+    const url = new URL(route.request().url());
+    const id = url.pathname.split('/').pop()!;
+    const method = route.request().method();
+    const idx = processedSeed.rows.findIndex(r => r.id === id);
+
+    if (method === 'GET') {
+      if (idx < 0) {
+        await route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(processedSeed.rows[idx]) });
+      return;
+    }
+    if (method === 'PATCH') {
+      if (idx < 0) {
+        await route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+        return;
+      }
+      const patch = JSON.parse(route.request().postData() || '{}');
+      const row = processedSeed.rows[idx];
+      if (patch.name !== undefined) row.name = patch.name;
+      if (patch.extracted_values !== undefined) row.extracted_values = patch.extracted_values;
+      if (patch.final_values !== undefined) row.final_values = patch.final_values;
+      row.was_manually_edited =
+        JSON.stringify(row.final_values) !== JSON.stringify(row.extracted_values);
+      row.updated_at = new Date().toISOString();
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(row) });
+      return;
+    }
+    if (method === 'DELETE') {
+      if (idx >= 0) processedSeed.rows.splice(idx, 1);
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.route(/\/api\/commander\/valuation-statement\/processed(\?.*)?$/, async (route: Route) => {
+    const method = route.request().method();
+    if (method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: processedSeed.rows,
+          total: processedSeed.rows.length,
+          limit: 500,
+          offset: 0,
+        }),
+      });
+      return;
+    }
+    if (method === 'POST') {
+      const body = JSON.parse(route.request().postData() || '{}');
+      const id = body.id ?? `created-${processedSeed.rows.length + 1}`;
+      const final = body.final_values ?? {};
+      const extracted = body.extracted_values ?? {};
+      const row = {
+        id,
+        name: body.name ?? `${new Date().toISOString().slice(0, 10)}_${(final as any).objekt_short ?? 'valuation'}`,
+        input_files: body.input_files ?? [],
+        extracted_values: extracted,
+        final_values: final,
+        was_manually_edited: JSON.stringify(final) !== JSON.stringify(extracted),
+        created_by: body.created_by ?? null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      processedSeed.rows.unshift(row);
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify(row) });
+      return;
+    }
+    await route.fallback();
+  });
 }
 
 /** Seed localStorage with a Trusted-role session so the router guard lets

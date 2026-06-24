@@ -1278,12 +1278,17 @@ export default {
     },
 
     exportCsv() {
-      // Native browser download via a temporary anchor — works against the
-      // proxy + auth cookie and lets the browser pick the filename from
-      // Content-Disposition.
+      // Native browser download via a temporary anchor. We set an explicit
+      // `download` attribute so the saved filename is meaningful even if
+      // the server's Content-Disposition gets stripped by an intermediate
+      // proxy or a test harness; the server returns a timestamped name on
+      // its own when the attribute is empty, but the client-side fallback
+      // wins on browsers that don't honour Content-Disposition for same-
+      // origin downloads.
+      const stamp = new Date().toISOString().slice(0, 10);
       const a = document.createElement('a');
       a.href = '/api/commander/valuation-statement/processed/export.csv';
-      a.download = '';
+      a.download = `processed_valuations_${stamp}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
