@@ -18,62 +18,6 @@ export const GOLDEN_PDF = Buffer.from(
 
 export const GOLDEN_DOCX: Buffer = goldenDocx;
 
-/** Mirror of the commander's classifier + per-parser registry served at
- *  GET /valuation-statement/about. The Vue 'About' section renders this
- *  verbatim; the fixture mixes both a multi-fingerprint category and a
- *  multi-strategy slot so the e2e spec can assert ordering + chip render. */
-export const ABOUT_REGISTRY = {
-  document_types: [
-    {
-      document_type: 'datavardering_br',
-      title: 'Datavärdering Bostadsrätt',
-      categories: [
-        {
-          name: 'Värdeutlåtande Bostadsrätt — Fastighetsbyrån prose appraisal',
-          fingerprints: [
-            'VÄRDEUTLÅTANDE',
-            'Värderingsobjekt',
-            'Uppl[åa]telseform\\s*:\\s*Bostadsr[äa]tt',
-          ],
-        },
-        {
-          name: 'Värdeutlåtande Bostadsrätt — UC Bostad data-feed report',
-          fingerprints: ['V[äa]rdeutl[åa]tande\\s+Bostadsr[äa]tt'],
-        },
-      ],
-      slots: [
-        {
-          slot_key: 'address_street',
-          note: null,
-          strategies: [
-            { name: 'uc_tabular_adress_label', confidence: 'confident' },
-            { name: 'fb_prose_adress_bullet', confidence: 'confident' },
-          ],
-        },
-        {
-          slot_key: 'marknadsvarde_suggested',
-          note: 'Machine-suggested by the issuer.',
-          strategies: [
-            { name: 'uc_tabular_marknadsvarde_label', confidence: 'confident' },
-            { name: 'fb_prose_bedoms_till', confidence: 'confident' },
-          ],
-        },
-      ],
-    },
-    {
-      document_type: 'fastighetsutdrag',
-      title: 'Fastighetsutdrag (Lantmäteriet)',
-      categories: [
-        {
-          name: 'Lantmäteriet Fastighetsrapport Plus R',
-          fingerprints: ['Fastighetsrapport\\s+Plus\\s+R'],
-        },
-      ],
-      slots: [],
-    },
-  ],
-};
-
 /** Operator-defaults block that #879 surfaces in the review step pre-fill. */
 export const OPERATOR_DEFAULTS = {
   ort: 'Nynäshamn',
@@ -214,14 +158,6 @@ export async function installCommanderMocks(page: Page, opts: InstallOpts = {}):
       contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       headers: { 'content-disposition': 'attachment; filename="vardeutlatande.docx"' },
       body: opts.docxBody ?? GOLDEN_DOCX,
-    });
-  });
-
-  await page.route(/\/api\/commander\/valuation-statement\/about$/, async (route: Route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(ABOUT_REGISTRY),
     });
   });
 
