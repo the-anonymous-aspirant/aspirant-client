@@ -52,27 +52,42 @@ const COMPARABLE_ROWS = [
 ];
 
 /** Extract response that drives the review step the spec asserts against.
- *  Confidence mix is deliberate so each .field-row.{bucket} class appears. */
+ *  Confidence mix is deliberate so each .field-row.{bucket} class appears:
+ *  the lgh_utdrag PDF feeds 'confident' identifier slots, the datavardering
+ *  PDF feeds 'uncertain' appraisal slots, operator-defaulted slots paint
+ *  'manual', and unfed slots (bilder_note, fastighetsutdrag_date) stay
+ *  'not_found'. Field shape follows the #1113 field-first contract — each
+ *  PDF surfaces the full slot set; per-PDF source_class routes the date
+ *  rows. */
 const EXTRACT_RESPONSE = {
   documents: [
     {
       filename: 'lgh_utdrag.pdf',
-      document_type: 'lgh_utdrag',
       fields: [
-        { key: 'forening_namn', value: 'Brf Exempel', confidence: 'confident', source_page: 1 },
-        { key: 'lgh_skatteverket', value: '1001', confidence: 'confident', source_page: 1 },
-        { key: 'organisationsnummer', value: '769600-0000', confidence: 'confident', source_page: 1 },
+        { key: 'source_class', value: 'lagenhetsforteckning', confidence: 'confident', source_page: 1 },
+        { key: 'property_shape', value: 'bostadsratt', confidence: 'confident', source_page: 1 },
+        { key: 'objekt', value: 'LGH 1001 Brf Exempel (769600-0000)', confidence: 'confident', source_page: 1 },
+        { key: 'objekt_short', value: 'LGH 1001 Brf Exempel', confidence: 'confident', source_page: 1 },
         { key: 'adress', value: 'Exempelgatan 1', confidence: 'confident', source_page: 2 },
-        { key: 'postort', value: 'Nynäshamn', confidence: 'confident', source_page: 2 },
+        { key: 'kommun', value: 'Nynäshamn', confidence: 'confident', source_page: 2 },
+        { key: 'upplatelseform', value: 'Bostadsrätt', confidence: 'confident', source_page: 1 },
         { key: 'document_date', value: '2026-06-01', confidence: 'confident', source_page: 1 },
+        { key: 'marknadsvarde_kr', value: null, confidence: 'not_found', source_page: null },
+        { key: 'intervall_kr', value: null, confidence: 'not_found', source_page: null },
       ],
     },
     {
       filename: 'datavardering.pdf',
-      document_type: 'datavardering',
       fields: [
-        { key: 'marknadsvarde_suggested', value: '3050000', confidence: 'uncertain', source_page: 3 },
-        { key: 'osakerhet_uppat', value: '50000', confidence: 'uncertain', source_page: 3 },
+        { key: 'source_class', value: 'datavardering', confidence: 'confident', source_page: 1 },
+        { key: 'property_shape', value: 'bostadsratt', confidence: 'confident', source_page: 1 },
+        { key: 'objekt', value: 'LGH 1001 Brf Exempel (769600-0000)', confidence: 'uncertain', source_page: 1 },
+        { key: 'objekt_short', value: 'LGH 1001 Brf Exempel', confidence: 'uncertain', source_page: 1 },
+        { key: 'adress', value: 'Exempelgatan 1', confidence: 'uncertain', source_page: 1 },
+        { key: 'kommun', value: 'Nynäshamn', confidence: 'uncertain', source_page: 1 },
+        { key: 'upplatelseform', value: 'Bostadsrätt', confidence: 'uncertain', source_page: 1 },
+        { key: 'marknadsvarde_kr', value: '3050000', confidence: 'uncertain', source_page: 3 },
+        { key: 'intervall_kr', value: '50000', confidence: 'uncertain', source_page: 3 },
         { key: 'document_date', value: '2026-05-20', confidence: 'confident', source_page: 1 },
       ],
       comparable_sales: COMPARABLE_ROWS,
