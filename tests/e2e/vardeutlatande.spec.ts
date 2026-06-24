@@ -527,6 +527,15 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
   });
 
   test('#1080 about transparency section is collapsed by default and renders the registry on expand', async ({ page }) => {
+    // #1106 invariant: registry ships with the build (no runtime fetch).
+    // Count any leak to /about so a regression that re-adds the call red-
+    // lines the test rather than silently working off mocked content.
+    const aboutCalls: string[] = [];
+    await page.route(/\/api\/commander\/valuation-statement\/about/, (route) => {
+      aboutCalls.push(route.request().url());
+      void route.fulfill({ status: 599, body: 'unexpected /about call' });
+    });
+
     await page.goto('/trusted/valuation-statement');
     await dismissMobileSidebarIfPresent(page);
 
@@ -540,7 +549,8 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     await expect(brHeading).toBeHidden();
 
     // Click the summary to expand; the body now renders the canonical
-    // classifier CATEGORIES + per-parser strategy registry from the mock.
+    // classifier CATEGORIES + per-parser strategy registry from the
+    // build-bundled constant.
     await about.locator('summary').click();
     await expect(about).toHaveAttribute('open', /.*/);
     await expect(brHeading).toBeVisible();
@@ -553,7 +563,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     await expect(
       about.getByText('Värdeutlåtande Bostadsrätt — UC Bostad data-feed report'),
     ).toBeVisible();
-    await expect(about.locator('code', { hasText: 'VÄRDEUTLÅTANDE' })).toBeVisible();
+    await expect(about.locator('code', { hasText: 'VÄRDEUTLÅTANDE' }).first()).toBeVisible();
 
     // Strategy priority ordering is preserved: uc_tabular_adress_label is
     // the first <li> in the address_street slot, prose bullet is second.
@@ -565,6 +575,9 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     // The fastighetsutdrag stub renders with the no-auto-extraction note.
     await expect(about.locator('h3', { hasText: 'Fastighetsutdrag' })).toBeVisible();
     await expect(about.getByText(/Ingen automatisk extraktion/i)).toBeVisible();
+
+    // The whole point of #1106: no network call for /about.
+    expect(aboutCalls).toEqual([]);
   });
 });
 
