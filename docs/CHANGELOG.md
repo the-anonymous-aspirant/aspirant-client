@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Värdeutlåtande About section: regenerated the bundled snapshot at
+  `src/resources/valuationAbout.json` against aspirant-commander's
+  post-#1113 field-first slot extractor registry, and rewrote the
+  disclosure to a two-column slot/strategy-chain table (left = docx
+  template slot key, right = priority-ordered strategy chain). Drops
+  the per-DocumentType classification cards (CATEGORIES + fingerprint
+  regex list) — each strategy now carries its own content-fingerprint
+  guard, so the chain is the dispatch. UI and snapshot now match what
+  the commander actually runs.
 - Värdeutlåtande About section: switched from a runtime
   `GET /api/commander/valuation-statement/about` fetch to a
   build-time bundled snapshot at `src/resources/valuationAbout.json`.

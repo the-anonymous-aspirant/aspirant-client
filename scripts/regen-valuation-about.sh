@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Regenerate src/resources/valuationAbout.json from aspirant-commander's
-# classifier CATEGORIES + per-parser strategy registry.
+# field-first slot extractor registry (post-refactor for system_3 #1113;
+# the classify-then-per-type-parser shape is gone).
 #
 # The Värdeutlåtande page's About / transparency disclosure renders this
 # snapshot at runtime — no API call. Run this script whenever the commander's
-# classifier or parser strategy registry changes, then commit the result.
+# SLOTS list or any slot's strategy chain changes, then commit the result.
 #
 # Usage:
 #   COMMANDER_DIR=../aspirant-commander ./scripts/regen-valuation-about.sh
