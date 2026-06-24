@@ -3,6 +3,35 @@
     <h1>Värdeutlåtande</h1>
     <h2 class="page-subtitle">Skapa ett värdeutlåtande från PDF-underlag</h2>
 
+    <!-- Top-level tab switch: the wizard ('Skapa') and the persisted-
+         iterations browser ('Tidigare värderingar') share the same
+         component so Edit can hand a row's final_values straight back
+         into the existing review step without unmounting it. -->
+    <nav class="tab-nav" role="tablist" aria-label="Värdeutlåtande-vyer">
+      <button
+        type="button"
+        role="tab"
+        class="tab-button"
+        :class="{ active: activeTab === 'create' }"
+        :aria-selected="activeTab === 'create'"
+        @click="activeTab = 'create'"
+      >
+        Skapa
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="tab-button"
+        :class="{ active: activeTab === 'history' }"
+        :aria-selected="activeTab === 'history'"
+        @click="onOpenHistoryTab"
+      >
+        Tidigare värderingar
+      </button>
+    </nav>
+
+    <div v-if="activeTab === 'create'">
+
     <!-- About / transparency: a render of the commander's field-first
          slot extractor registry, bundled at build time from
          `src/resources/valuationAbout.json`. Collapsed by default so it
@@ -418,6 +447,80 @@
         <button class="btn-secondary" @click="resetFlow">Skapa ett nytt</button>
       </div>
     </ValuationStep>
+
+    </div><!-- /tab=create -->
+
+    <!-- 'Tidigare värderingar' tab: list view backed by /api/commander/
+         valuation-statement/processed*. Persists when the wizard reaches
+         the Done step; PATCH on Edit save (edit-in-place per operator
+         decision 2026-06-24 — no history snapshots). -->
+    <div v-if="activeTab === 'history'" class="history-tab">
+      <div class="history-toolbar">
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="!processedRows.length"
+          @click="exportCsv"
+        >
+          Exportera alla till CSV
+        </button>
+        <button
+          type="button"
+          class="btn-secondary"
+          @click="loadProcessed"
+          :aria-label="'Ladda om listan'"
+        >
+          ⟳ Ladda om
+        </button>
+      </div>
+
+      <p v-if="processedLoading" class="muted">Laddar…</p>
+      <p v-else-if="processedError" class="error-text">{{ processedError }}</p>
+      <p v-else-if="!processedRows.length" class="muted">
+        Inga sparade värderingar än — slutförda iterationer dyker upp här automatiskt.
+      </p>
+
+      <table v-else class="history-table" data-test="history-table">
+        <thead>
+          <tr>
+            <th>Namn</th>
+            <th>Skapad</th>
+            <th>Fastighet</th>
+            <th>Adress</th>
+            <th>Marknadsvärde</th>
+            <th>Status</th>
+            <th class="actions-col">Åtgärder</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in processedRows" :key="row.id" :data-test-row-id="row.id">
+            <td>
+              <input
+                type="text"
+                class="history-name-input"
+                :value="row.name"
+                @change="renameProcessed(row, $event.target.value)"
+                :aria-label="'Namn för värdering ' + row.name"
+              />
+            </td>
+            <td class="nowrap">{{ formatRowDate(row.created_at) }}</td>
+            <td>{{ rowPreview(row, 'fastighetsbeteckning') || rowPreview(row, 'objekt_short') || '—' }}</td>
+            <td>{{ rowPreview(row, 'adress') || '—' }}</td>
+            <td class="nowrap">{{ rowPreview(row, 'marknadsvarde_kr') || '—' }}</td>
+            <td>
+              <span v-if="row.was_manually_edited" class="badge edited">manuellt justerad</span>
+              <span v-else class="badge auto">automatisk</span>
+            </td>
+            <td class="actions-cell">
+              <button type="button" class="link-button" @click="editProcessed(row)">Redigera</button>
+              <button type="button" class="link-button" @click="downloadDocxFor(row)">.docx</button>
+              <button type="button" class="link-button" @click="downloadPdfFor(row)">.pdf</button>
+              <button type="button" class="link-button link-danger" @click="confirmDeleteProcessed(row)">Radera</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
 
@@ -531,6 +634,19 @@ export default {
       statusPhase: 0,
       statusTimer: null,
       aboutSlots: valuationAbout.slots,
+      // Tab state + persisted-iterations store ('Tidigare värderingar').
+      activeTab: 'create',
+      processedRows: [],
+      processedLoading: false,
+      processedError: null,
+      // When the operator clicks Edit on a history row, the row's id is
+      // captured here; doGenerate then PATCHes the same row instead of
+      // POSTing a new one (edit-in-place per operator decision 2026-06-24).
+      currentProcessedId: null,
+      // The set of source PDF filenames carried into the current wizard
+      // pass so we can persist them with the iteration. Hydrated by
+      // doExtract and by editProcessed (from row.input_files).
+      currentInputFiles: [],
     };
   },
   beforeUnmount() {
@@ -717,6 +833,13 @@ export default {
     async doExtract() {
       this.step = 'extracting';
       this.startStatusCycle();
+      // Capture the filenames so the persisted iteration carries the
+      // operator's actual source list (separate from extractedDocs, which
+      // commander rewrites with parsed structure).
+      this.currentInputFiles = this.uploadedFiles.map(f => f.name);
+      // A fresh extract is a new iteration — drop any prior history-row
+      // binding so doGenerate POSTs rather than PATCHes.
+      this.currentProcessedId = null;
       const form = new FormData();
       for (const f of this.uploadedFiles) form.append('files', f, f.name);
       try {
@@ -936,6 +1059,13 @@ export default {
           }).catch(() => { /* non-fatal */ });
         }
 
+        // Persist (or update) the processed-valuations row. Non-fatal:
+        // a 500 here must not block the docx the operator already has.
+        await this.persistIteration(body).catch(err => {
+          // eslint-disable-next-line no-console
+          console.warn('Could not persist iteration to history store:', err);
+        });
+
         this.step = 'done';
       } catch (err) {
         let msg = err.message;
@@ -966,6 +1096,197 @@ export default {
       this.generateError = null;
       this.docxUrl = null;
       this.pdfUrl = null;
+      this.currentProcessedId = null;
+      this.currentInputFiles = [];
+    },
+
+    // ---------- 'Tidigare värderingar' tab ----------
+
+    async persistIteration(generateBody) {
+      // Build the extracted/final value pair: `extracted` is the original
+      // hydrateReview output (last-known snapshot of the source PDFs),
+      // `final` is what the operator actually shipped. Divergence flips
+      // was_manually_edited server-side.
+      const extracted = this.extractedSnapshot();
+      const final = { ...this.reviewedFields, mode: generateBody.mode };
+      const payload = {
+        input_files: this.currentInputFiles,
+        extracted_values: extracted,
+        final_values: final,
+      };
+      if (this.currentProcessedId) {
+        const resp = await axios.patch(
+          `/api/commander/valuation-statement/processed/${this.currentProcessedId}`,
+          { final_values: final },
+        );
+        return resp.data;
+      }
+      const resp = await axios.post(
+        '/api/commander/valuation-statement/processed',
+        payload,
+      );
+      // Capture the new id so a subsequent re-Generera on the same review
+      // session updates the same row rather than minting a duplicate.
+      if (resp.data?.id) this.currentProcessedId = resp.data.id;
+      return resp.data;
+    },
+
+    extractedSnapshot() {
+      // Mirror hydrateReview's output: walk extractedDocs once and emit a
+      // flat slot map. Keeps `extracted_values` independent of any
+      // operator edits performed in the review step.
+      const snap = {};
+      for (const doc of (this.extractedDocs || [])) {
+        for (const f of (doc.fields || [])) {
+          if (f.value != null && snap[f.key] == null) snap[f.key] = f.value;
+        }
+      }
+      return snap;
+    },
+
+    onOpenHistoryTab() {
+      this.activeTab = 'history';
+      this.loadProcessed();
+    },
+
+    async loadProcessed() {
+      this.processedLoading = true;
+      this.processedError = null;
+      try {
+        const resp = await axios.get(
+          '/api/commander/valuation-statement/processed',
+          { params: { limit: 500, offset: 0 } },
+        );
+        this.processedRows = resp.data?.items || [];
+      } catch (err) {
+        this.processedError =
+          'Kunde inte ladda listan: ' +
+          (err.response?.data?.error?.message || err.message);
+      } finally {
+        this.processedLoading = false;
+      }
+    },
+
+    rowPreview(row, key) {
+      const v = (row.final_values && row.final_values[key]) ??
+                (row.extracted_values && row.extracted_values[key]);
+      return v == null ? '' : String(v);
+    },
+
+    formatRowDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return iso;
+      return d.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' });
+    },
+
+    async renameProcessed(row, newName) {
+      if (!newName || newName === row.name) return;
+      try {
+        const resp = await axios.patch(
+          `/api/commander/valuation-statement/processed/${row.id}`,
+          { name: newName },
+        );
+        // Mutate the row in place so the table re-renders without a full reload.
+        Object.assign(row, resp.data);
+      } catch (err) {
+        this.processedError =
+          'Kunde inte byta namn: ' +
+          (err.response?.data?.error?.message || err.message);
+      }
+    },
+
+    editProcessed(row) {
+      // Reopen the wizard at the review step with this row's final_values
+      // pre-loaded. PATCH (not POST) on subsequent Generera, since
+      // currentProcessedId is set.
+      this.currentProcessedId = row.id;
+      this.currentInputFiles = Array.isArray(row.input_files) ? [...row.input_files] : [];
+      const blank = BLANK_REVIEW();
+      this.reviewedFields = { ...blank, ...(row.final_values || {}) };
+      // Mark every populated key as 'manual' so the operator sees they're
+      // editing previously-committed values, not a fresh extract.
+      const conf = BLANK_CONFIDENCE();
+      for (const k of Object.keys(conf)) {
+        if (this.reviewedFields[k]) conf[k] = 'manual';
+      }
+      this.fieldConfidence = conf;
+      // The original extractedDocs aren't persisted as PDFs; rebuild a
+      // shim so doGenerate's mode toggle and comparableSales rendering
+      // don't crash. We can't restore the comparable_sales array exactly,
+      // but extracted_values carries it through extractedSnapshot.
+      this.extractedDocs = [];
+      this.comparableSales = row.extracted_values?.comparable_sales || [];
+      this.step = 'review';
+      this.activeTab = 'create';
+    },
+
+    async confirmDeleteProcessed(row) {
+      const ok = window.confirm(
+        `Radera "${row.name}"? Detta går inte att ångra.`,
+      );
+      if (!ok) return;
+      try {
+        await axios.delete(
+          `/api/commander/valuation-statement/processed/${row.id}`,
+        );
+        this.processedRows = this.processedRows.filter(r => r.id !== row.id);
+      } catch (err) {
+        this.processedError =
+          'Kunde inte radera: ' +
+          (err.response?.data?.error?.message || err.message);
+      }
+    },
+
+    async downloadDocxFor(row) {
+      await this.regenerateFor(row, 'docx');
+    },
+
+    async downloadPdfFor(row) {
+      await this.regenerateFor(row, 'pdf');
+    },
+
+    async regenerateFor(row, format) {
+      // Re-run /generate with this row's final_values; the docx/pdf is
+      // produced on demand so we don't have to store blobs. Streams the
+      // response into a temporary <a> click for browser-native download.
+      const body = { ...row.final_values };
+      try {
+        const url = format === 'pdf'
+          ? '/api/commander/valuation-statement/generate?format=pdf'
+          : '/api/commander/valuation-statement/generate';
+        const resp = await axios.post(url, body, { responseType: 'blob' });
+        const filename = filenameFromContentDisposition(
+          resp.headers['content-disposition'],
+          `${row.name}.${format}`,
+        );
+        const blobUrl = URL.createObjectURL(resp.data);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        // Schedule revoke after the click handler has run.
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+      } catch (err) {
+        const msg = err.response?.status === 503
+          ? 'PDF-konvertering inte tillgänglig på servern just nu.'
+          : (err.response?.data?.error?.message || err.message);
+        this.processedError = 'Kunde inte ladda ner: ' + msg;
+      }
+    },
+
+    exportCsv() {
+      // Native browser download via a temporary anchor — works against the
+      // proxy + auth cookie and lets the browser pick the filename from
+      // Content-Disposition.
+      const a = document.createElement('a');
+      a.href = '/api/commander/valuation-statement/processed/export.csv';
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     },
   },
 };
@@ -1519,6 +1840,96 @@ export default {
 .provenance table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
 .provenance td { padding: 4px 8px; border-bottom: 1px solid var(--border-card); }
 .provenance-key { color: var(--text-muted); font-family: monospace; }
+
+/* Top-level tab nav: matches the tonal weight of the rest of the page
+ * (no heavy underline; the active button gets a brand-coloured rule).
+ * Lives outside the .step chrome so it can wrap the whole wizard. */
+.tab-nav {
+  display: flex;
+  gap: var(--space-md);
+  margin: 0 0 var(--space-lg) 0;
+  border-bottom: 1px solid var(--border-card);
+  width: 100%;
+}
+.tab-button {
+  background: none;
+  border: none;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-base);
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--transition-quick), border-color var(--transition-quick);
+}
+.tab-button:hover { color: var(--text-on-light); }
+.tab-button.active {
+  color: var(--brand-primary);
+  border-bottom-color: var(--brand-primary);
+  font-weight: 600;
+}
+
+/* History tab */
+.history-tab { width: 100%; }
+.history-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.history-table th,
+.history-table td {
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid var(--border-card);
+  text-align: left;
+  vertical-align: top;
+}
+.history-table th { color: var(--text-muted); font-weight: 600; }
+.history-table .nowrap { white-space: nowrap; }
+.history-table .actions-col,
+.history-table .actions-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+.history-table .actions-cell .link-button + .link-button {
+  margin-left: var(--space-sm);
+}
+.history-name-input {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 2px 4px;
+  font: inherit;
+  color: inherit;
+}
+.history-name-input:focus,
+.history-name-input:hover {
+  border-color: var(--border-card);
+  background: var(--surface-card-inner);
+}
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+.badge.edited {
+  background: var(--feedback-warning-bg, #fef3c7);
+  color: var(--feedback-warning, #92400e);
+}
+.badge.auto {
+  background: var(--surface-card-inner);
+  color: var(--text-muted);
+}
+.link-danger {
+  color: var(--feedback-error, #c0392b);
+}
 
 /* Mobile */
 @media (max-width: 768px) {
