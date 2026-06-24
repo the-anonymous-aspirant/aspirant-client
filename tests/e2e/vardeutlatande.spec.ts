@@ -526,7 +526,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     expect(runYellow).toBe(0);
   });
 
-  test('#1080 about transparency section is collapsed by default and renders the registry on expand', async ({ page }) => {
+  test('#1080 about transparency section is collapsed by default and renders the field-first registry on expand', async ({ page }) => {
     // #1106 invariant: registry ships with the build (no runtime fetch).
     // Count any leak to /about so a regression that re-adds the call red-
     // lines the test rather than silently working off mocked content.
@@ -542,39 +542,28 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     const about = page.locator('details.about');
     await expect(about).toBeVisible();
 
-    // Collapsed by default — the per-DocumentType cards aren't in the
-    // accessibility tree until the operator expands the disclosure.
+    // Collapsed by default — the slot rows aren't in the accessibility
+    // tree until the operator expands the disclosure.
     await expect(about).not.toHaveAttribute('open', /.*/);
-    const brHeading = about.locator('h3', { hasText: 'Datavärdering Bostadsrätt' });
-    await expect(brHeading).toBeHidden();
+    const objektCode = about.locator('code', { hasText: /^objekt$/ });
+    await expect(objektCode).toBeHidden();
 
     // Click the summary to expand; the body now renders the canonical
-    // classifier CATEGORIES + per-parser strategy registry from the
-    // build-bundled constant.
+    // field-first slot registry (one row per docx-template slot, with
+    // its priority-ordered strategy chain) from the build-bundled
+    // constant — no per-DocumentType classification table.
     await about.locator('summary').click();
     await expect(about).toHaveAttribute('open', /.*/);
-    await expect(brHeading).toBeVisible();
+    await expect(objektCode).toBeVisible();
 
-    // Both BR category names (Fastighetsbyrån prose + UC tabular) render
-    // verbatim, and the fingerprint regex strings come through as code.
-    await expect(
-      about.getByText('Värdeutlåtande Bostadsrätt — Fastighetsbyrån prose appraisal'),
-    ).toBeVisible();
-    await expect(
-      about.getByText('Värdeutlåtande Bostadsrätt — UC Bostad data-feed report'),
-    ).toBeVisible();
-    await expect(about.locator('code', { hasText: 'VÄRDEUTLÅTANDE' }).first()).toBeVisible();
-
-    // Strategy priority ordering is preserved: uc_tabular_adress_label is
-    // the first <li> in the address_street slot, prose bullet is second.
-    const addressSlotRow = about.locator('tr', { has: page.locator('code', { hasText: 'address_street' }) });
+    // The adress slot's strategy chain is rendered in priority order:
+    // Fastighetsbyrån prose bullet first, UC tabular label-below second.
+    const addressSlotRow = about.locator('tr', {
+      has: page.locator('code', { hasText: /^adress$/ }),
+    });
     const addressStrategies = addressSlotRow.locator('.about-strategies li');
-    await expect(addressStrategies.nth(0)).toContainText('uc_tabular_adress_label');
-    await expect(addressStrategies.nth(1)).toContainText('fb_prose_adress_bullet');
-
-    // The fastighetsutdrag stub renders with the no-auto-extraction note.
-    await expect(about.locator('h3', { hasText: 'Fastighetsutdrag' })).toBeVisible();
-    await expect(about.getByText(/Ingen automatisk extraktion/i)).toBeVisible();
+    await expect(addressStrategies.nth(0)).toContainText('prose_adress_bullet');
+    await expect(addressStrategies.nth(1)).toContainText('uc_label_adress_below');
 
     // The whole point of #1106: no network call for /about.
     expect(aboutCalls).toEqual([]);

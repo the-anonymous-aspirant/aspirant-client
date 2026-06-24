@@ -3,88 +3,53 @@
     <h1>Värdeutlåtande</h1>
     <h2 class="page-subtitle">Skapa ett värdeutlåtande från PDF-underlag</h2>
 
-    <!-- About / transparency: a render of the commander's classifier
-         CATEGORIES + per-parser strategy registry, bundled at build time
-         from `src/resources/valuationAbout.json`. Collapsed by default
-         so it stays out of the upload-step workflow; the operator opens
-         it to see WHY a given PDF was identified as a given type and HOW
-         each populated/empty field was extracted. -->
+    <!-- About / transparency: a render of the commander's field-first
+         slot extractor registry, bundled at build time from
+         `src/resources/valuationAbout.json`. Collapsed by default so it
+         stays out of the upload-step workflow; the operator opens it to
+         see, per docx-template slot, the priority-ordered strategy chain
+         that fills it. The first strategy whose content-fingerprint
+         guard fires on the PDF wins; if none fires the field is left
+         blank for manual entry at granskning. -->
     <details class="about">
-      <summary>Om verktyget — så identifieras och tolkas dokument</summary>
+      <summary>Om verktyget — så identifieras och tolkas fält</summary>
       <p class="muted small">
-        För varje känd dokumenttyp visas de mönster (regex) som söks på
-        sida 1 för att klassificera filen, och vilka strategier som
-        försöks för att fylla varje fält. Strategierna prövas i ordning;
-        första träffen vinner. Saknar listan en strategi för ett fält
-        skrivs det manuellt vid granskning.
+        För varje fält i mallen visas strategikedjan som försöks, i
+        prioritetsordning. Varje strategi har sitt eget innehållsfilter
+        (t.ex. UC-tabell, Fastighetsbyrån-prosa, Lantmäteriets
+        fastighetsrapport, HSB-lägenhetsförteckning) som avgör om den
+        tillämpas på en given PDF. Första strategin som tar hem fältet
+        vinner; om ingen träffar lämnas fältet tomt för manuell ifyllning.
       </p>
-      <div
-        v-for="dt in aboutRegistry"
-        :key="dt.document_type"
-        class="about-doctype"
-      >
-        <h3>
-          {{ dt.title }}
-          <code class="muted small">({{ dt.document_type }})</code>
-        </h3>
-
-        <div v-if="dt.categories.length" class="about-categories">
-          <h4>Identifieras som någon av:</h4>
-          <ul
-            v-for="(cat, i) in dt.categories"
-            :key="i"
-            class="about-category"
-          >
-            <li class="about-category-name">{{ cat.name }}</li>
-            <li
-              v-for="fp in cat.fingerprints"
-              :key="fp"
-              class="about-fingerprint"
-            >
-              <code>{{ fp }}</code>
-            </li>
-          </ul>
-        </div>
-
-        <div v-if="dt.slots.length" class="about-slots">
-          <h4>Extraherade fält:</h4>
-          <table>
-            <thead>
-              <tr>
-                <th>Fält</th>
-                <th>Strategier (i prioritetsordning)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="slot in dt.slots" :key="slot.slot_key">
-                <td>
-                  <code>{{ slot.slot_key }}</code>
-                  <p v-if="slot.note" class="muted small">{{ slot.note }}</p>
-                </td>
-                <td>
-                  <ol class="about-strategies">
-                    <li
-                      v-for="st in slot.strategies"
-                      :key="st.name"
-                    >
-                      <span>{{ st.name }}</span>
-                      <span
-                        class="chip"
-                        :class="st.confidence === 'uncertain' ? 'uncertain' : 'confident'"
-                      >{{ st.confidence }}</span>
-                    </li>
-                  </ol>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <p v-else class="muted small about-no-slots">
-          Ingen automatisk extraktion ännu — operatören skriver fälten
-          manuellt vid granskning.
-        </p>
-      </div>
+      <table class="about-slots">
+        <thead>
+          <tr>
+            <th>Fält</th>
+            <th>Strategikedja (i prioritetsordning)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="slot in aboutSlots" :key="slot.key">
+            <td>
+              <code>{{ slot.key }}</code>
+              <p v-if="slot.description" class="muted small">{{ slot.description }}</p>
+            </td>
+            <td>
+              <ol class="about-strategies">
+                <li
+                  v-for="st in slot.strategies"
+                  :key="st.name"
+                >
+                  <code>{{ st.name }}</code>
+                  <span v-if="st.description" class="muted small about-strategy-note">
+                    {{ st.description }}
+                  </span>
+                </li>
+              </ol>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </details>
 
     <!-- Step 1: Upload -->
@@ -461,10 +426,10 @@ import axios from 'axios';
 
 import RangeChart from '@/components/RangeChart.vue';
 import ValuationStep from '@/components/ValuationStep.vue';
-// Build-time snapshot of the commander's classifier CATEGORIES + per-parser
-// strategy registry. Regenerated by `scripts/regen-valuation-about.sh` against
-// aspirant-commander's transparency.py — ships with the bundle so the About
-// disclosure renders without a runtime API call.
+// Build-time snapshot of the commander's field-first slot extractor
+// registry. Regenerated by `scripts/regen-valuation-about.sh` against
+// aspirant-commander's transparency.py — ships with the bundle so the
+// About disclosure renders without a runtime API call.
 import valuationAbout from '@/resources/valuationAbout.json';
 
 function parseSwedishNumber(value) {
@@ -575,7 +540,7 @@ export default {
       pdfFilename: 'vardeutlatande.pdf',
       statusPhase: 0,
       statusTimer: null,
-      aboutRegistry: valuationAbout.document_types,
+      aboutSlots: valuationAbout.slots,
     };
   },
   beforeUnmount() {
@@ -1501,10 +1466,11 @@ export default {
   white-space: normal;
 }
 
-/* About / transparency disclosure — collapsed by default, opens to show
-   the live classifier CATEGORIES + per-parser strategy registry. Same
-   <details> shape as the per-source provenance block below, but with a
-   different content density (per-DocumentType cards). */
+/* About / transparency disclosure — collapsed by default, opens to a
+   field-first table: left column = docx-template slot key, right column
+   = priority-ordered strategy chain. Each strategy carries its own
+   content-fingerprint guard, so there's no separate per-DocumentType
+   classification table to render — the chain *is* the dispatch. */
 .about {
   width: 100%;
   margin-bottom: var(--space-lg);
@@ -1520,46 +1486,18 @@ export default {
   font-weight: 600;
   padding: var(--space-xs) 0;
 }
-.about-doctype {
-  margin-top: var(--space-md);
-  padding-top: var(--space-sm);
-  border-top: 1px solid var(--border-card);
-}
-.about-doctype h3 {
-  margin: 0 0 var(--space-xs);
-  font-size: var(--text-base);
-}
-.about-doctype h4 {
-  margin: var(--space-sm) 0 var(--space-2xs);
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-}
-.about-category {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 var(--space-xs);
-}
-.about-category-name {
-  font-weight: 500;
-  font-size: var(--text-sm);
-}
-.about-fingerprint {
-  margin-left: var(--space-md);
-  font-size: var(--text-xs);
-}
-.about-fingerprint code,
-.about-doctype code {
+.about code {
   font-family: monospace;
   background-color: rgba(0, 0, 0, 0.04);
   padding: 1px 4px;
   border-radius: var(--radius-sm);
   overflow-wrap: anywhere;
 }
-.about-slots table {
+.about-slots {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--text-xs);
-  margin-top: var(--space-xs);
+  margin-top: var(--space-sm);
 }
 .about-slots th {
   text-align: left;
@@ -1579,15 +1517,11 @@ export default {
   padding-left: var(--space-md);
 }
 .about-strategies li {
-  margin-bottom: var(--space-2xs, 4px);
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  flex-wrap: wrap;
+  margin-bottom: var(--space-xs);
 }
-.about-no-slots {
-  margin: var(--space-sm) 0;
-  font-style: italic;
+.about-strategy-note {
+  display: block;
+  margin-top: 2px;
 }
 
 /* Provenance disclosure */
