@@ -1,0 +1,552 @@
+{
+  "document_types": [
+    {
+      "document_type": "datavardering_br",
+      "title": "Datavärdering Bostadsrätt",
+      "categories": [
+        {
+          "name": "Värdeutlåtande Bostadsrätt — Fastighetsbyrån prose appraisal",
+          "fingerprints": [
+            "VÄRDEUTLÅTANDE",
+            "Värderingsobjekt",
+            "Uppl[åa]telseform\\s*:\\s*Bostadsr[äa]tt"
+          ]
+        },
+        {
+          "name": "Värdeutlåtande Bostadsrätt — UC Bostad data-feed report",
+          "fingerprints": [
+            "V[äa]rdeutl[åa]tande\\s+Bostadsr[äa]tt"
+          ]
+        }
+      ],
+      "slots": [
+        {
+          "slot_key": "forening_namn",
+          "note": null,
+          "strategies": [
+            {
+              "name": "uc_tabular_foreningsinformation",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_objekt_line",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "organisationsnummer",
+          "note": "Compact form (no dash) as used in the template.",
+          "strategies": [
+            {
+              "name": "uc_tabular_organisationsnummer",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_objekt_parens",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "lgh_internal",
+          "note": "Föreningens internal lgh# (e.g. 1303); not Skatteverkets-nr.",
+          "strategies": [
+            {
+              "name": "uc_tabular_address_suffix",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_objekt_prefix",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "address_street",
+          "note": null,
+          "strategies": [
+            {
+              "name": "uc_tabular_adress_label",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_adress_bullet",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "postnummer",
+          "note": null,
+          "strategies": [
+            {
+              "name": "uc_tabular_below_address",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "postort",
+          "note": "From data-valuation footer; tag-case (Hägersten, not HÄGERSTEN).",
+          "strategies": [
+            {
+              "name": "uc_tabular_below_address_locality",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_kommun_bullet",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "kommun_datavardering",
+          "note": "Datavärdering reports the wider-area kommun (Stockholm); LGH-extract's postort (Hägersten) usually preferred.",
+          "strategies": [
+            {
+              "name": "uc_tabular_kommun_label",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_kommun_bullet",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "upplatelseform",
+          "note": "UC banner ('Värdeutlåtande / Bostadsrätt') always implies Bostadsrätt; prose bullet otherwise.",
+          "strategies": [
+            {
+              "name": "uc_tabular_banner_bostadsratt",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_upplatelseform_bullet",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "marknadsvarde_suggested",
+          "note": "Machine-suggested by the issuer. Appraiser typically overrides using the comparables table.",
+          "strategies": [
+            {
+              "name": "uc_tabular_marknadsvarde_label",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_bedoms_till",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "osakerhet_uppat",
+          "note": null,
+          "strategies": [
+            {
+              "name": "uc_tabular_osakerhet_upp_label",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_symmetric_interval",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "osakerhet_nedat",
+          "note": null,
+          "strategies": [
+            {
+              "name": "uc_tabular_osakerhet_ned_label",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_symmetric_interval",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "document_date",
+          "note": "Date the datavärdering was issued (appears in template's Beskrivning sentence).",
+          "strategies": [
+            {
+              "name": "uc_tabular_footer",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_dd_m_yyyy_stamp",
+              "confidence": "confident"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "document_type": "datavardering_smahus",
+      "title": "Datavärdering Småhus",
+      "categories": [
+        {
+          "name": "Värdeutlåtande Småhus — Fastighetsbyrån prose appraisal",
+          "fingerprints": [
+            "VÄRDEUTLÅTANDE",
+            "Värderingsobjekt",
+            "Uppl[åa]telseform\\s*:\\s*Frik[öo]pt"
+          ]
+        },
+        {
+          "name": "Värdeutlåtande Småhus — UC Bostad data-feed report",
+          "fingerprints": [
+            "V[äa]rdeutl[åa]tande\\s+Sm[åa]hus"
+          ]
+        }
+      ],
+      "slots": [
+        {
+          "slot_key": "fastighetsbeteckning",
+          "note": null,
+          "strategies": [
+            {
+              "name": "uc_tabular_col0_label_below",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_objekt_bullet",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "adress",
+          "note": null,
+          "strategies": [
+            {
+              "name": "uc_tabular_col0_adress_label",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_adress_bullet",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "kommun",
+          "note": null,
+          "strategies": [
+            {
+              "name": "uc_tabular_kommun_any_column",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_kommun_bullet",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "byggnadstyp",
+          "note": null,
+          "strategies": [
+            {
+              "name": "uc_tabular_col4_label_below",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "taxeringsvarde",
+          "note": "Includes the `(Tax<YY>)` tax-year qualifier UC prints next to the amount.",
+          "strategies": [
+            {
+              "name": "uc_tabular_col0_label_below",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "tomtyta_m2",
+          "note": null,
+          "strategies": [
+            {
+              "name": "uc_tabular_col1_label_below",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "byggnadsar",
+          "note": null,
+          "strategies": [
+            {
+              "name": "uc_tabular_col3_label_below",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "vardear",
+          "note": null,
+          "strategies": [
+            {
+              "name": "uc_tabular_col3_label_below",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "upplatelseform",
+          "note": "Drives the template's bostadsrätt/friköpt mode toggle.",
+          "strategies": [
+            {
+              "name": "fb_prose_upplatelseform_bullet",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "marknadsvarde_suggested",
+          "note": "Machine-suggested by the issuer. Appraiser typically overrides using the comparables table.",
+          "strategies": [
+            {
+              "name": "uc_tabular_col4_marknadsvarde_label",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_bedoms_till",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "osakerhet_uppat",
+          "note": "Prose layout reports a single ±X kr interval; uppåt = nedåt = X.",
+          "strategies": [
+            {
+              "name": "uc_tabular_col5_osakerhet_upp_label",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_symmetric_interval",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "osakerhet_nedat",
+          "note": "Prose layout reports a single ±X kr interval; uppåt = nedåt = X.",
+          "strategies": [
+            {
+              "name": "uc_tabular_col5_osakerhet_ned_label",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_symmetric_interval",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "document_date",
+          "note": "Date the datavärdering was issued (appears in template's Beskrivning sentence).",
+          "strategies": [
+            {
+              "name": "uc_tabular_footer",
+              "confidence": "confident"
+            },
+            {
+              "name": "fb_prose_dd_m_yyyy_stamp",
+              "confidence": "confident"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "document_type": "lgh_utdrag",
+      "title": "Lägenhetsförteckning (Bostadsrättsförening)",
+      "categories": [
+        {
+          "name": "Bostadsrättsförening lägenhetsförteckning",
+          "fingerprints": [
+            "L[äa]genhetsuppgi.{1,3}ter",
+            "Bostadsr[äa].{1,3}tsf[öo]rening"
+          ]
+        }
+      ],
+      "slots": [
+        {
+          "slot_key": "lgh_internal_hsb",
+          "note": null,
+          "strategies": [
+            {
+              "name": "label stem 'lghnr' → next non-label line",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "lgh_skatteverket",
+          "note": "Multiple stems map to the same key — HSB's font drops `ff`/`ft`/`tt` ligatures, so both clean and damaged spellings are tolerated.",
+          "strategies": [
+            {
+              "name": "label stem 'skateverketslghnr' → next non-label line",
+              "confidence": "confident"
+            },
+            {
+              "name": "label stem 'skatteverketslghnr' → next non-label line",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "antal_rum",
+          "note": null,
+          "strategies": [
+            {
+              "name": "label stem 'antalrum' → next non-label line",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "boarea",
+          "note": null,
+          "strategies": [
+            {
+              "name": "label stem 'lagenhetsyta' → next non-label line",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "vaning",
+          "note": null,
+          "strategies": [
+            {
+              "name": "label stem 'vaning' → next non-label line",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "adress",
+          "note": null,
+          "strategies": [
+            {
+              "name": "label stem 'adress' → next non-label line",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "forvarvsdatum",
+          "note": null,
+          "strategies": [
+            {
+              "name": "label stem 'forvarvsdatum' → next non-label line",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "forening_namn",
+          "note": null,
+          "strategies": [
+            {
+              "name": "label stem 'forening' → next non-label line",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "fastighetsbeteckning",
+          "note": null,
+          "strategies": [
+            {
+              "name": "label stem 'fastighetsbeteckning' → next non-label line",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "organisationsnummer",
+          "note": null,
+          "strategies": [
+            {
+              "name": "label stem 'organisationsnummer' → next non-label line",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "registrerad_ekonomisk_plan",
+          "note": null,
+          "strategies": [
+            {
+              "name": "label stem 'registreradekonomiskplan' → next non-label line",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "andel",
+          "note": null,
+          "strategies": [
+            {
+              "name": "label stem 'andelidag' → next non-label line",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "postnummer",
+          "note": "Split from the 5-digit prefix on the line after 'Adress'.",
+          "strategies": [
+            {
+              "name": "adress-followup-line: leading 5-digit run",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "postort",
+          "note": "Split from the locality token on the line after 'Adress' (reformatted from UPPER to TitleCase to match the template).",
+          "strategies": [
+            {
+              "name": "adress-followup-line: trailing locality, TitleCased",
+              "confidence": "confident"
+            }
+          ]
+        },
+        {
+          "slot_key": "document_date",
+          "note": "Date the lägenhetsförteckning extract was issued.",
+          "strategies": [
+            {
+              "name": "'Utskriftsdatum: YYYY-MM-DD' header regex",
+              "confidence": "confident"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "document_type": "fastighetsutdrag",
+      "title": "Fastighetsutdrag (Lantmäteriet)",
+      "categories": [
+        {
+          "name": "Lantmäteriet Fastighetsrapport Plus R",
+          "fingerprints": [
+            "Fastighetsrapport\\s+Plus\\s+R"
+          ]
+        }
+      ],
+      "slots": []
+    }
+  ]
+}
