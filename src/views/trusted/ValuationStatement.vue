@@ -361,7 +361,7 @@
       <details class="provenance">
         <summary>Visa rådata från extraheringen</summary>
         <div v-for="d in extractedDocs" :key="d.filename" class="provenance-doc">
-          <h5>{{ d.filename }} <span class="muted">({{ d.document_type }})</span></h5>
+          <h5>{{ d.filename }} <span class="muted">({{ provenanceSourceClass(d) || '—' }})</span></h5>
           <table>
             <tbody>
               <tr v-for="f in d.fields" :key="f.key">
@@ -510,16 +510,6 @@ const BLANK_CONFIDENCE = () => ({
   foretag: 'not_found',
 });
 
-// not_found > uncertain > confident — used for fields composed from
-// multiple source values; the lowest-confidence input wins the tint.
-const worstConfidence = (...buckets) => {
-  const xs = buckets.filter(Boolean);
-  if (xs.includes('not_found')) return 'not_found';
-  if (xs.includes('uncertain')) return 'uncertain';
-  if (xs.includes('confident')) return 'confident';
-  return 'not_found';
-};
-
 export default {
   components: { RangeChart, ValuationStep },
   data() {
@@ -648,6 +638,11 @@ export default {
       return `${(n / 1024 / 1024).toFixed(1)} MB`;
     },
 
+    provenanceSourceClass(doc) {
+      const f = (doc.fields || []).find(x => x.key === 'source_class');
+      return f ? f.value : null;
+    },
+
     isStructured(row) {
       // A row is "structured" when the parser split it into columns. A
       // fallback row (un-parseable line shape) carries only `raw` and
@@ -751,83 +746,75 @@ export default {
     hydrateReview(docs, operatorDefaults) {
       const review = BLANK_REVIEW();
       const conf = BLANK_CONFIDENCE();
-      // Walk each extracted field; the per-doc-type → review-field mapping
-      // lives here so the backend stays neutral about which doc takes
-      // precedence for each template slot. Track confidence alongside
-      // value so the review step can paint each input by bucket.
-      const byType = {};
-      const confByType = {};
-      for (const d of docs) {
-        byType[d.document_type] = byType[d.document_type] || {};
-        confByType[d.document_type] = confByType[d.document_type] || {};
-        for (const f of d.fields) {
-          if (f.value) byType[d.document_type][f.key] = f.value;
-          confByType[d.document_type][f.key] = f.confidence;
-        }
-      }
+      // The field-first extractor (#1113) runs every slot's strategy chain
+      // on every PDF and surfaces the result as one entry in `fields[]`.
+      // Each PDF carries its own `source_class` slot value identifying
+      // which docx date row it feeds (datavardering / lagenhetsforteckning
+      // / fastighetsutdrag); the renderer routes per-source dates by that
+      // value and resolves shared slots by source priority.
+      const indexed = docs.map(d => {
+        const byKey = {};
+        for (const f of (d.fields || [])) byKey[f.key] = f;
+        return { sourceClass: byKey.source_class?.value || null, byKey };
+      });
+      const dv = indexed.find(x => x.sourceClass === 'datavardering') || null;
+      const lgh = indexed.find(x => x.sourceClass === 'lagenhetsforteckning') || null;
+      const fu = indexed.find(x => x.sourceClass === 'fastighetsutdrag') || null;
 
-      const lgh = byType.lgh_utdrag || {};
-      const lghC = confByType.lgh_utdrag || {};
-      const dv = byType.datavardering || {};
-      const dvC = confByType.datavardering || {};
-      const fu = byType.fastighetsutdrag || {};
-      const fuC = confByType.fastighetsutdrag || {};
-
-      // pick first non-empty source value and return its confidence;
-      // 'not_found' if no source had a value.
-      const pickConf = (...sources) => {
-        for (const [val, c] of sources) {
-          if (val) return c || 'not_found';
+      // Walk an ordered list of (doc, fieldKey) pairs and return the first
+      // non-null value alongside the source's confidence bucket; 'not_found'
+      // when no source had a value.
+      const pickWinner = (...candidates) => {
+        for (const [doc, key] of candidates) {
+          if (!doc) continue;
+          const f = doc.byKey[key];
+          if (f && f.value) return { value: f.value, confidence: f.confidence || 'not_found' };
         }
-        return 'not_found';
+        return { value: null, confidence: 'not_found' };
       };
 
-      // BR vs Friköpt mode — pick by which type is present.
-      if (lgh.forening_namn && lgh.lgh_skatteverket) {
+      // BR vs Friköpt — pick the first non-null property_shape across docs.
+      const shape = indexed.map(d => d.byKey.property_shape?.value).find(v => v) || null;
+      if (shape === 'bostadsratt') {
         review.upplatelseform = 'Bostadsrätt';
         conf.upplatelseform = 'confident';
-        const orgnr = lgh.organisationsnummer || dv.organisationsnummer || '';
-        const namn = lgh.forening_namn || dv.forening_namn || '';
-        const lghNr = lgh.lgh_skatteverket || dv.lgh_internal || '';
-        review.objekt = `LGH ${lghNr} ${namn} (${orgnr})`.trim();
-        review.objekt_short = `LGH ${lghNr} ${namn}`.trim();
-        conf.objekt = worstConfidence(
-          pickConf([lgh.lgh_skatteverket, lghC.lgh_skatteverket], [dv.lgh_internal, dvC.lgh_internal]),
-          pickConf([lgh.forening_namn, lghC.forening_namn], [dv.forening_namn, dvC.forening_namn]),
-          pickConf([lgh.organisationsnummer, lghC.organisationsnummer], [dv.organisationsnummer, dvC.organisationsnummer]),
-        );
-        conf.objekt_short = worstConfidence(
-          pickConf([lgh.lgh_skatteverket, lghC.lgh_skatteverket], [dv.lgh_internal, dvC.lgh_internal]),
-          pickConf([lgh.forening_namn, lghC.forening_namn], [dv.forening_namn, dvC.forening_namn]),
-        );
-      } else if (fu.kommun_fastighet) {
+      } else if (shape === 'fastighet') {
         review.upplatelseform = 'Friköpt';
         conf.upplatelseform = 'confident';
-        review.objekt = fu.kommun_fastighet;
-        review.objekt_short = fu.kommun_fastighet;
-        conf.objekt = fuC.kommun_fastighet || 'confident';
-        conf.objekt_short = fuC.kommun_fastighet || 'confident';
       } else {
-        // No detection signal — the BR default is a guess, not an extraction.
+        // No detection signal — leave operator to pick.
         conf.upplatelseform = 'manual';
       }
 
-      review.adress = lgh.adress || dv.address_street || '';
-      conf.adress = pickConf([lgh.adress, lghC.adress], [dv.address_street, dvC.address_street]);
-      review.kommun = lgh.postort || dv.postort || '';
-      conf.kommun = pickConf([lgh.postort, lghC.postort], [dv.postort, dvC.postort]);
+      // Identifier slots — prefer the appraisal (datavardering), then the
+      // lägenhetsförteckning (HSB carries an explicit förening identifier),
+      // then the fastighetsutdrag.
+      for (const key of ['objekt', 'objekt_short', 'adress', 'kommun']) {
+        const w = pickWinner([dv, key], [lgh, key], [fu, key]);
+        review[key] = w.value || '';
+        conf[key] = w.value ? w.confidence : 'not_found';
+      }
 
-      review.datavardering_date = dv.document_date || '';
-      conf.datavardering_date = pickConf([dv.document_date, dvC.document_date]);
-      review.lagenhetsforteckning_date = lgh.document_date || '';
-      conf.lagenhetsforteckning_date = pickConf([lgh.document_date, lghC.document_date]);
-      review.fastighetsutdrag_date = fu.document_date || '';
-      conf.fastighetsutdrag_date = pickConf([fu.document_date, fuC.document_date]);
+      // Appraisal-only slots — only the datavardering chain produces these.
+      for (const key of ['marknadsvarde_kr', 'intervall_kr']) {
+        const w = pickWinner([dv, key]);
+        review[key] = w.value || '';
+        conf[key] = w.value ? w.confidence : 'not_found';
+      }
 
-      review.marknadsvarde_kr = dv.marknadsvarde_suggested || '';
-      conf.marknadsvarde_kr = pickConf([dv.marknadsvarde_suggested, dvC.marknadsvarde_suggested]);
-      review.intervall_kr = dv.osakerhet_uppat || '';
-      conf.intervall_kr = pickConf([dv.osakerhet_uppat, dvC.osakerhet_uppat]);
+      // Per-source dates — each row's value is the `document_date` of the
+      // doc whose `source_class` matches; absent sources leave the row
+      // empty and 'not_found' (saknas/red).
+      const pickDate = (doc) => pickWinner([doc, 'document_date']);
+      const dvDate = pickDate(dv);
+      review.datavardering_date = dvDate.value || '';
+      conf.datavardering_date = dvDate.value ? dvDate.confidence : 'not_found';
+      const lghDate = pickDate(lgh);
+      review.lagenhetsforteckning_date = lghDate.value || '';
+      conf.lagenhetsforteckning_date = lghDate.value ? lghDate.confidence : 'not_found';
+      const fuDate = pickDate(fu);
+      review.fastighetsutdrag_date = fuDate.value || '';
+      conf.fastighetsutdrag_date = fuDate.value ? fuDate.confidence : 'not_found';
 
       // Operator-defaulted slots are 'manual' when populated (operator's own
       // choice carried over) and 'not_found' when blank.
