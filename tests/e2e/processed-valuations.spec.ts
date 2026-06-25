@@ -24,7 +24,7 @@ test.describe('Tidigare värderingar tab — list + edit + delete', () => {
     await installCommanderMocks(page);
   });
 
-  test('list renders seeded rows with metadata and badges', async ({ page }) => {
+  test('list renders seeded rows with metadata', async ({ page }) => {
     seedProcessedRows([
       {
         id: 'row-a',
@@ -58,12 +58,11 @@ test.describe('Tidigare värderingar tab — list + edit + delete', () => {
     await expect(table.locator('tbody tr')).toHaveCount(2);
 
     const editedRow = page.locator('[data-test-row-id="row-b"]');
-    await expect(editedRow.locator('.badge.edited')).toBeVisible();
     await expect(editedRow).toContainText('LGH 2002 Brf Två');
     await expect(editedRow).toContainText('4 200 000');
 
     const autoRow = page.locator('[data-test-row-id="row-a"]');
-    await expect(autoRow.locator('.badge.auto')).toBeVisible();
+    await expect(autoRow).toContainText('LGH 1001 Brf Exempel');
   });
 
   test('empty state renders friendly message', async ({ page }) => {
@@ -107,7 +106,8 @@ test.describe('Tidigare värderingar tab — list + edit + delete', () => {
     }]);
 
     await openHistory(page);
-    await page.locator('[data-test-row-id="row-edit"] >> text=Redigera').click();
+    await page.locator('[data-test-row-id="row-edit"] .row-menu-trigger').click();
+    await page.locator('[data-test-row-id="row-edit"] .row-menu-popover >> text=Redigera').click();
 
     // Tab switches back to Skapa
     await expect(page.getByRole('tab', { name: CREATE_TAB })).toHaveAttribute('aria-selected', 'true');
@@ -131,7 +131,8 @@ test.describe('Tidigare värderingar tab — list + edit + delete', () => {
 
     // Accept the window.confirm
     page.once('dialog', dialog => dialog.accept());
-    await page.locator('[data-test-row-id="row-del-2"] >> text=Radera').click();
+    await page.locator('[data-test-row-id="row-del-2"] .row-menu-trigger').click();
+    await page.locator('[data-test-row-id="row-del-2"] .row-menu-popover >> text=Radera').click();
 
     await expect(page.locator('[data-test-row-id="row-del-2"]')).toHaveCount(0);
     await expect(page.locator('[data-test="history-table"] tbody tr')).toHaveCount(1);
@@ -143,7 +144,8 @@ test.describe('Tidigare värderingar tab — list + edit + delete', () => {
     await openHistory(page);
 
     page.once('dialog', dialog => dialog.dismiss());
-    await page.locator('[data-test-row-id="row-cancel"] >> text=Radera').click();
+    await page.locator('[data-test-row-id="row-cancel"] .row-menu-trigger').click();
+    await page.locator('[data-test-row-id="row-cancel"] .row-menu-popover >> text=Radera').click();
 
     await expect(page.locator('[data-test-row-id="row-cancel"]')).toBeVisible();
     expect(processedSeed.rows).toHaveLength(1);

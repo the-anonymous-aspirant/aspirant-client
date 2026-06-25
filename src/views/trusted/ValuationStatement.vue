@@ -463,7 +463,6 @@
             <th>Fastighet</th>
             <th>Adress</th>
             <th>Marknadsvärde</th>
-            <th>Status</th>
             <th class="actions-col">Åtgärder</th>
           </tr>
         </thead>
@@ -482,15 +481,32 @@
             <td>{{ rowPreview(row, 'fastighetsbeteckning') || rowPreview(row, 'objekt_short') || '—' }}</td>
             <td>{{ rowPreview(row, 'adress') || '—' }}</td>
             <td class="nowrap">{{ rowPreview(row, 'marknadsvarde_kr') || '—' }}</td>
-            <td>
-              <span v-if="row.was_manually_edited" class="badge edited">manuellt justerad</span>
-              <span v-else class="badge auto">automatisk</span>
-            </td>
             <td class="actions-cell">
-              <button type="button" class="link-button" @click="editProcessed(row)">Redigera</button>
-              <button type="button" class="link-button" @click="downloadDocxFor(row)">.docx</button>
-              <button type="button" class="link-button" @click="downloadPdfFor(row)">.pdf</button>
-              <button type="button" class="link-button link-danger" @click="confirmDeleteProcessed(row)">Radera</button>
+              <!-- Single kebab/popover replaces the four inline action
+                   buttons (#1173) so the Name column has room for the
+                   row to stay on one line. The menu items themselves
+                   carry the same labels the e2e tests select by. -->
+              <div class="row-menu" :class="{ open: openMenuRowId === row.id }">
+                <button
+                  type="button"
+                  class="row-menu-trigger"
+                  :aria-haspopup="'menu'"
+                  :aria-expanded="openMenuRowId === row.id"
+                  :aria-label="'Åtgärder för ' + row.name"
+                  @click.stop="toggleRowMenu(row.id)"
+                >⋮</button>
+                <div
+                  v-if="openMenuRowId === row.id"
+                  class="row-menu-popover"
+                  role="menu"
+                  @click.stop
+                >
+                  <button type="button" role="menuitem" class="row-menu-item" @click="runRowAction(row, 'edit')">Redigera</button>
+                  <button type="button" role="menuitem" class="row-menu-item" @click="runRowAction(row, 'docx')">.docx</button>
+                  <button type="button" role="menuitem" class="row-menu-item" @click="runRowAction(row, 'pdf')">.pdf</button>
+                  <button type="button" role="menuitem" class="row-menu-item row-menu-item--danger" @click="runRowAction(row, 'delete')">Radera</button>
+                </div>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -672,10 +688,17 @@ export default {
       // pass so we can persist them with the iteration. Hydrated by
       // doExtract and by editProcessed (from row.input_files).
       currentInputFiles: [],
+      // Tracks the row whose action menu is open in 'Tidigare värderingar'.
+      // Null = no menu open. Outside-clicks close via _onDocClick.
+      openMenuRowId: null,
     };
+  },
+  mounted() {
+    document.addEventListener('click', this._onDocClick);
   },
   beforeUnmount() {
     this.stopStatusCycle();
+    document.removeEventListener('click', this._onDocClick);
   },
   computed: {
     mode() {
@@ -1239,6 +1262,24 @@ export default {
           'Kunde inte byta namn: ' +
           (err.response?.data?.error?.message || err.message);
       }
+    },
+
+    toggleRowMenu(rowId) {
+      this.openMenuRowId = this.openMenuRowId === rowId ? null : rowId;
+    },
+
+    runRowAction(row, action) {
+      this.openMenuRowId = null;
+      if (action === 'edit') this.editProcessed(row);
+      else if (action === 'docx') this.downloadDocxFor(row);
+      else if (action === 'pdf') this.downloadPdfFor(row);
+      else if (action === 'delete') this.confirmDeleteProcessed(row);
+    },
+
+    _onDocClick() {
+      // Outside-click closes any open row menu. The trigger and popover
+      // both stop propagation, so this only fires for clicks elsewhere.
+      if (this.openMenuRowId !== null) this.openMenuRowId = null;
     },
 
     editProcessed(row) {
@@ -1835,7 +1876,6 @@ export default {
 }
 .about-intro {
   margin: 0 0 var(--space-sm);
-  max-width: 60ch;
   color: var(--text-on-light);
 }
 .about-meta {
@@ -1926,6 +1966,7 @@ export default {
  * Lives outside the .step chrome so it can wrap the whole wizard. */
 .tab-nav {
   display: flex;
+  justify-content: center;
   gap: var(--space-md);
   margin: 0 0 var(--space-lg) 0;
   border-bottom: 1px solid var(--border-card);
@@ -1953,7 +1994,7 @@ export default {
 .history-tab { width: 100%; }
 .history-toolbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: var(--space-sm);
   margin-bottom: var(--space-md);
 }
@@ -1979,6 +2020,52 @@ export default {
 .history-table .actions-cell .link-button + .link-button {
   margin-left: var(--space-sm);
 }
+
+/* Row action menu (#1173): one kebab trigger per row + a small popover
+   holding Redigera / .docx / .pdf / Radera. Frees horizontal space so
+   the Name column can stay readable on one line. */
+.row-menu { position: relative; display: inline-block; }
+.row-menu-trigger {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-size: var(--text-lg);
+  line-height: 1;
+  color: var(--text-on-light);
+  cursor: pointer;
+}
+.row-menu-trigger:hover,
+.row-menu.open .row-menu-trigger {
+  border-color: var(--border-card);
+  background: var(--surface-card-inner);
+}
+.row-menu-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  background: var(--surface-card, #fff);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.row-menu-item {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: var(--space-xs) var(--space-sm);
+  font: inherit;
+  color: var(--text-on-light);
+  cursor: pointer;
+}
+.row-menu-item:hover {
+  background: var(--surface-card-inner);
+}
+.row-menu-item--danger { color: var(--feedback-error, #c0392b); }
 .history-name-input {
   width: 100%;
   background: transparent;
