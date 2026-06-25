@@ -526,10 +526,11 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     expect(runYellow).toBe(0);
   });
 
-  test('#1080 about transparency section is collapsed by default and renders the field-first registry on expand', async ({ page }) => {
-    // #1106 invariant: registry ships with the build (no runtime fetch).
-    // Count any leak to /about so a regression that re-adds the call red-
-    // lines the test rather than silently working off mocked content.
+  test('#1172 Om verktyget tab renders the field-first registry from the build-time snapshot', async ({ page }) => {
+    // #1106 invariant carried forward: registry ships with the build (no
+    // runtime fetch). Count any leak to /about so a regression that re-adds
+    // the call red-lines the test rather than silently working off mocked
+    // content.
     const aboutCalls: string[] = [];
     await page.route(/\/api\/commander\/valuation-statement\/about/, (route) => {
       aboutCalls.push(route.request().url());
@@ -539,33 +540,40 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     await page.goto('/trusted/valuation-statement');
     await dismissMobileSidebarIfPresent(page);
 
-    const about = page.locator('details.about');
-    await expect(about).toBeVisible();
+    // 'Om verktyget' is a top-level tab alongside 'Skapa' and 'Tidigare
+    // värderingar' (#1172). Not visible until clicked; clicking switches
+    // away from the wizard.
+    const omVerktygetTab = page.locator('button[role="tab"]', { hasText: /^Om verktyget$/ });
+    await expect(omVerktygetTab).toBeVisible();
 
-    // Collapsed by default — the slot rows aren't in the accessibility
-    // tree until the operator expands the disclosure.
-    await expect(about).not.toHaveAttribute('open', /.*/);
-    const objektCode = about.locator('code', { hasText: /^objekt$/ });
-    await expect(objektCode).toBeHidden();
+    const aboutTab = page.locator('.about-tab');
+    await expect(aboutTab).toBeHidden();
 
-    // Click the summary to expand; the body now renders the canonical
-    // field-first slot registry (one row per docx-template slot, with
-    // its priority-ordered strategy chain) from the build-bundled
-    // constant — no per-DocumentType classification table.
-    await about.locator('summary').click();
-    await expect(about).toHaveAttribute('open', /.*/);
-    await expect(objektCode).toBeVisible();
+    await omVerktygetTab.click();
+    await expect(aboutTab).toBeVisible();
+    await expect(omVerktygetTab).toHaveAttribute('aria-selected', 'true');
 
-    // The adress slot's strategy chain is rendered in priority order:
-    // Fastighetsbyrån prose bullet first, UC tabular label-below second.
-    const addressSlotRow = about.locator('tr', {
-      has: page.locator('code', { hasText: /^adress$/ }),
-    });
-    const addressStrategies = addressSlotRow.locator('.about-strategies li');
-    await expect(addressStrategies.nth(0)).toContainText('prose_adress_bullet');
-    await expect(addressStrategies.nth(1)).toContainText('uc_label_adress_below');
+    // 'Senast uppdaterad' metadata renders an ISO date; schema version
+    // present as a secondary token.
+    await expect(aboutTab.locator('.about-meta')).toContainText('Senast uppdaterad:');
+    await expect(aboutTab.locator('.about-meta')).toContainText(/\d{4}-\d{2}-\d{2}/);
 
-    // The whole point of #1106: no network call for /about.
+    // One row per docx-template slot, each row labelled with the human
+    // field name (not the snake_case key) and the priority-ordered
+    // strategy chain in compact Swedish prose.
+    const adressField = aboutTab.locator('.about-field', { hasText: 'Adress' }).first();
+    await expect(adressField).toBeVisible();
+    const adressChain = adressField.locator('.about-chain-step');
+    await expect(adressChain.nth(0)).toContainText("Fastighetsbyrån prosa: 'Adress:'-raden");
+    await expect(adressChain.nth(1)).toContainText("UC-tabell: cellen under rubriken 'Adress'");
+
+    // Engineering identifiers (snake_case strategy names, regex strings)
+    // do not bleed into the rendered prose — the audience is a human
+    // appraiser, not an engineer.
+    await expect(aboutTab).not.toContainText('prose_adress_bullet');
+    await expect(aboutTab).not.toContainText('uc_label_adress_below');
+
+    // The whole point of #1106 / #1172: no network call for /about.
     expect(aboutCalls).toEqual([]);
   });
 });
