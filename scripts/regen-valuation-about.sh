@@ -30,5 +30,14 @@ if [[ ! -x "$PY" ]]; then
 fi
 
 cd "$COMMANDER_DIR"
-"$PY" -c "from app.valuation_statement.transparency import registry_as_dict; import json; print(json.dumps(registry_as_dict(), ensure_ascii=False, indent=2))" > "$OUT"
+"$PY" - <<'PY' > "$OUT"
+from app.valuation_statement.transparency import registry_as_dict
+from datetime import date
+import json
+
+payload = registry_as_dict()
+payload["generated_at"] = date.today().isoformat()
+payload["schema_version"] = 1
+print(json.dumps(payload, ensure_ascii=False, indent=2))
+PY
 echo "Regenerated $OUT"

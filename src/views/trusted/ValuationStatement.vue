@@ -1,12 +1,26 @@
 <template>
   <div class="valuation-view">
     <h1>Värdeutlåtande</h1>
-    <h2 class="page-subtitle">Skapa ett värdeutlåtande från PDF-underlag</h2>
+    <h2 v-if="activeTab === 'create'" class="page-subtitle">
+      Skapa ett värdeutlåtande från PDF-underlag
+    </h2>
+    <h2 v-else-if="activeTab === 'history'" class="page-subtitle">
+      Tidigare värderingar
+    </h2>
+    <h2 v-else-if="activeTab === 'about'" class="page-subtitle">
+      Om verktyget
+    </h2>
 
-    <!-- Top-level tab switch: the wizard ('Skapa') and the persisted-
-         iterations browser ('Tidigare värderingar') share the same
-         component so Edit can hand a row's final_values straight back
-         into the existing review step without unmounting it. -->
+    <!-- Top-level tab switch. Three tabs share this component:
+         'Skapa' (the upload → review → klart wizard), 'Tidigare
+         värderingar' (persisted-iterations browser, backed by
+         /api/commander/valuation-statement/processed*), and 'Om
+         verktyget' (transparency view of the field-first extractor
+         registry, rendered from the build-time JSON snapshot in
+         src/resources/valuationAbout.json). The wizard and the
+         history tab share state so Edit can hand a row's final_values
+         straight back into the existing review step without
+         unmounting it. -->
     <nav class="tab-nav" role="tablist" aria-label="Värdeutlåtande-vyer">
       <button
         type="button"
@@ -28,58 +42,19 @@
       >
         Tidigare värderingar
       </button>
+      <button
+        type="button"
+        role="tab"
+        class="tab-button"
+        :class="{ active: activeTab === 'about' }"
+        :aria-selected="activeTab === 'about'"
+        @click="activeTab = 'about'"
+      >
+        Om verktyget
+      </button>
     </nav>
 
     <div v-if="activeTab === 'create'">
-
-    <!-- About / transparency: a render of the commander's field-first
-         slot extractor registry, bundled at build time from
-         `src/resources/valuationAbout.json`. Collapsed by default so it
-         stays out of the upload-step workflow; the operator opens it to
-         see, per docx-template slot, the priority-ordered strategy chain
-         that fills it. The first strategy whose content-fingerprint
-         guard fires on the PDF wins; if none fires the field is left
-         blank for manual entry at granskning. -->
-    <details class="about">
-      <summary>Om verktyget — så identifieras och tolkas fält</summary>
-      <p class="muted small">
-        För varje fält i mallen visas strategikedjan som försöks, i
-        prioritetsordning. Varje strategi har sitt eget innehållsfilter
-        (t.ex. UC-tabell, Fastighetsbyrån-prosa, Lantmäteriets
-        fastighetsrapport, HSB-lägenhetsförteckning) som avgör om den
-        tillämpas på en given PDF. Första strategin som tar hem fältet
-        vinner; om ingen träffar lämnas fältet tomt för manuell ifyllning.
-      </p>
-      <table class="about-slots">
-        <thead>
-          <tr>
-            <th>Fält</th>
-            <th>Strategikedja (i prioritetsordning)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="slot in aboutSlots" :key="slot.key">
-            <td>
-              <code>{{ slot.key }}</code>
-              <p v-if="slot.description" class="muted small">{{ slot.description }}</p>
-            </td>
-            <td>
-              <ol class="about-strategies">
-                <li
-                  v-for="st in slot.strategies"
-                  :key="st.name"
-                >
-                  <code>{{ st.name }}</code>
-                  <span v-if="st.description" class="muted small about-strategy-note">
-                    {{ st.description }}
-                  </span>
-                </li>
-              </ol>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </details>
 
     <!-- Step 1: Upload -->
     <ValuationStep v-if="step === 'upload'" title="1. Ladda upp underlag" wide>
@@ -521,6 +496,54 @@
         </tbody>
       </table>
     </div>
+
+    <!-- 'Om verktyget' tab: human-readable render of the field-first
+         strategy registry, bundled at build time from
+         src/resources/valuationAbout.json (no runtime API call). One
+         row per docx-template slot; each row lists the priority-
+         ordered strategy chain that fills it as a short prose chain.
+         The first strategy whose content-fingerprint guard fires on a
+         given PDF wins; if none fires the field is left blank for
+         manual entry during granskning. -->
+    <div v-if="activeTab === 'about'" class="about-tab">
+      <p class="about-intro">
+        För varje fält i värdeutlåtandemallen visas, i prioritetsordning,
+        hur verktyget försöker läsa fältet ur dina underlag. Varje försök
+        är knutet till en viss typ av PDF (Fastighetsbyråns prosa-utlåtande,
+        UC-tabell, HSB-lägenhetsförteckning eller Lantmäteriets fastighets-
+        rapport) och tillämpas bara om PDF:en har det formatet. Första försök
+        som lyckas vinner; om inget lyckas lämnas fältet tomt för manuell
+        ifyllning i granskningssteget.
+      </p>
+      <p class="about-meta">
+        <span>Senast uppdaterad: <strong>{{ aboutGeneratedAt || '—' }}</strong></span>
+        <span v-if="aboutSchemaVersion != null" class="muted small">
+          · Schemaversion {{ aboutSchemaVersion }}
+        </span>
+      </p>
+      <dl class="about-fields">
+        <div v-for="slot in aboutSlots" :key="slot.key" class="about-field">
+          <dt>
+            <span class="about-field-key">{{ slotLabel(slot.key) }}</span>
+            <span v-if="slot.description" class="about-field-desc muted small">
+              {{ slot.description }}
+            </span>
+          </dt>
+          <dd>
+            <ol class="about-chain">
+              <li
+                v-for="(st, idx) in slot.strategies"
+                :key="st.name"
+                class="about-chain-step"
+              >
+                <span class="about-chain-rank">{{ idx + 1 }}.</span>
+                <span class="about-chain-text">{{ st.description || st.name }}</span>
+              </li>
+            </ol>
+          </dd>
+        </div>
+      </dl>
+    </div>
   </div>
 </template>
 
@@ -634,6 +657,8 @@ export default {
       statusPhase: 0,
       statusTimer: null,
       aboutSlots: valuationAbout.slots,
+      aboutGeneratedAt: valuationAbout.generated_at || null,
+      aboutSchemaVersion: valuationAbout.schema_version ?? null,
       // Tab state + persisted-iterations store ('Tidigare värderingar').
       activeTab: 'create',
       processedRows: [],
@@ -752,6 +777,26 @@ export default {
       if (n < 1024) return `${n} B`;
       if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
       return `${(n / 1024 / 1024).toFixed(1)} MB`;
+    },
+
+    slotLabel(key) {
+      // Render the docx-template slot key as the human label the operator
+      // sees during review, not the snake_case identifier. The keys are
+      // fixed (commander's field_extractor.SLOTS); a missing entry falls
+      // back to the key so a new slot still surfaces, just unlabelled.
+      const labels = {
+        objekt: 'Objekt',
+        objekt_short: 'Objekt (kort form)',
+        adress: 'Adress',
+        kommun: 'Kommun',
+        upplatelseform: 'Upplåtelseform',
+        marknadsvarde_kr: 'Marknadsvärde',
+        intervall_kr: 'Osäkerhetsintervall',
+        document_date: 'Dokumentdatum',
+        source_class: 'Underlagstyp',
+        property_shape: 'Objektstyp',
+      };
+      return labels[key] || key;
     },
 
     provenanceSourceClass(doc) {
@@ -1779,62 +1824,92 @@ export default {
   white-space: normal;
 }
 
-/* About / transparency disclosure — collapsed by default, opens to a
-   field-first table: left column = docx-template slot key, right column
-   = priority-ordered strategy chain. Each strategy carries its own
-   content-fingerprint guard, so there's no separate per-DocumentType
-   classification table to render — the chain *is* the dispatch. */
-.about {
+/* 'Om verktyget' tab — transparency view of the field-first extractor
+   registry, rendered from the build-time JSON snapshot. One row per
+   docx-template slot, each row showing the priority-ordered strategy
+   chain in plain Swedish. No internal identifiers, no regex strings —
+   the audience is a human appraiser, not an engineer. */
+.about-tab {
   width: 100%;
-  margin-bottom: var(--space-lg);
-  padding: var(--space-sm) var(--space-md);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-lg);
-  background-color: var(--surface-card-inner);
-  box-sizing: border-box;
   color: var(--text-on-light);
 }
-.about summary {
-  cursor: pointer;
-  font-weight: 600;
-  padding: var(--space-xs) 0;
+.about-intro {
+  margin: 0 0 var(--space-sm);
+  max-width: 60ch;
+  color: var(--text-on-light);
 }
-.about code {
-  font-family: monospace;
-  background-color: rgba(0, 0, 0, 0.04);
-  padding: 1px 4px;
+.about-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: baseline;
+  margin: 0 0 var(--space-lg);
+  padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
-  overflow-wrap: anywhere;
+  background-color: var(--surface-card-inner);
+  font-size: var(--text-sm);
 }
-.about-slots {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-xs);
-  margin-top: var(--space-sm);
-}
-.about-slots th {
-  text-align: left;
-  font-weight: 600;
-  color: var(--text-muted);
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border-card);
-}
-.about-slots td {
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border-card);
-  vertical-align: top;
-  overflow-wrap: anywhere;
-}
-.about-strategies {
+.about-fields {
   margin: 0;
-  padding-left: var(--space-md);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border-top: 1px solid var(--border-card);
 }
-.about-strategies li {
-  margin-bottom: var(--space-xs);
+.about-field {
+  display: grid;
+  grid-template-columns: minmax(170px, 220px) 1fr;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--border-card);
+  align-items: start;
 }
-.about-strategy-note {
+.about-field dt {
+  margin: 0;
+}
+.about-field dd {
+  margin: 0;
+}
+.about-field-key {
+  display: block;
+  font-weight: 600;
+  font-size: var(--text-base);
+  color: var(--text-on-light);
+}
+.about-field-desc {
   display: block;
   margin-top: 2px;
+}
+.about-chain {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.about-chain-step {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: baseline;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+.about-chain-rank {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 1.5em;
+}
+.about-chain-text {
+  flex: 1 1 auto;
+  color: var(--text-on-light);
+}
+@media (max-width: 640px) {
+  .about-field {
+    grid-template-columns: 1fr;
+    gap: var(--space-xs);
+  }
 }
 
 /* Provenance disclosure */
