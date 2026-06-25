@@ -543,7 +543,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     // 'Om verktyget' is a top-level tab alongside 'Skapa' and 'Tidigare
     // värderingar' (#1172). Not visible until clicked; clicking switches
     // away from the wizard.
-    const omVerktygetTab = page.locator('button[role="tab"]', { hasText: /^Om verktyget$/ });
+    const omVerktygetTab = page.getByRole('tab', { name: 'Om verktyget' });
     await expect(omVerktygetTab).toBeVisible();
 
     const aboutTab = page.locator('.about-tab');
@@ -560,8 +560,13 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
 
     // One row per docx-template slot, each row labelled with the human
     // field name (not the snake_case key) and the priority-ordered
-    // strategy chain in compact Swedish prose.
-    const adressField = aboutTab.locator('.about-field', { hasText: 'Adress' }).first();
+    // strategy chain in compact Swedish prose. Locate the Adress row by
+    // the field-key element specifically — substring matches against the
+    // chain text would pick up sibling rows (objekt's chain mentions
+    // 'Adress' as a source cell).
+    const adressField = aboutTab.locator('.about-field', {
+      has: page.locator('.about-field-key', { hasText: /^Adress$/ }),
+    });
     await expect(adressField).toBeVisible();
     const adressChain = adressField.locator('.about-chain-step');
     await expect(adressChain.nth(0)).toContainText("Fastighetsbyrån prosa: 'Adress:'-raden");
