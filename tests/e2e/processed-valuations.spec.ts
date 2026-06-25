@@ -62,7 +62,8 @@ test.describe('Tidigare värderingar tab — list + edit + delete', () => {
     await expect(editedRow).toContainText('4 200 000');
 
     const autoRow = page.locator('[data-test-row-id="row-a"]');
-    await expect(autoRow).toContainText('LGH 1001 Brf Exempel');
+    await expect(autoRow).toContainText('Hägersten 1:1');
+    await expect(autoRow).toContainText('3 050 000');
   });
 
   test('empty state renders friendly message', async ({ page }) => {
