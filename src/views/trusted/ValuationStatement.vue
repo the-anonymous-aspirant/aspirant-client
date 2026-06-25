@@ -1,7 +1,15 @@
 <template>
   <div class="valuation-view">
     <h1>Värdeutlåtande</h1>
-    <h2 class="page-subtitle">Skapa ett värdeutlåtande från PDF-underlag</h2>
+    <h2 v-if="activeTab === 'create'" class="page-subtitle">
+      Skapa ett värdeutlåtande från PDF-underlag
+    </h2>
+    <h2 v-else-if="activeTab === 'history'" class="page-subtitle">
+      Tidigare värderingar
+    </h2>
+    <h2 v-else-if="activeTab === 'about'" class="page-subtitle">
+      Om verktyget
+    </h2>
 
     <!-- Top-level tab switch. Three tabs share this component:
          'Skapa' (the upload → review → klart wizard), 'Tidigare
