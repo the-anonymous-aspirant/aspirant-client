@@ -2048,10 +2048,10 @@ export default {
   display: flex;
   flex-direction: column;
   min-width: 140px;
-  background: var(--surface-card, #fff);
+  background: var(--surface-elevated, #f9f9f9);
   border: 1px solid var(--border-card);
   border-radius: var(--radius-sm);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 .row-menu-item {
   background: none;
@@ -2063,7 +2063,7 @@ export default {
   cursor: pointer;
 }
 .row-menu-item:hover {
-  background: var(--surface-card-inner);
+  background: rgba(255, 179, 0, 0.15);
 }
 .row-menu-item--danger { color: var(--feedback-error, #c0392b); }
 .history-name-input {
@@ -2078,24 +2078,6 @@ export default {
 .history-name-input:hover {
   border-color: var(--border-card);
   background: var(--surface-card-inner);
-}
-.badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: var(--text-xs);
-  white-space: nowrap;
-}
-.badge.edited {
-  background: var(--feedback-warning-bg, #fef3c7);
-  color: var(--feedback-warning, #92400e);
-}
-.badge.auto {
-  background: var(--surface-card-inner);
-  color: var(--text-muted);
-}
-.link-danger {
-  color: var(--feedback-error, #c0392b);
 }
 
 /* Mobile */
