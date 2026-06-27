@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Robbans Tusen site-wide audio widget: fixed-position play/pause +
+  volume slider mounted in `App.vue`, backed by a singleton `Audio`
+  object in `src/composables/useRobbansTusen.js`. Asset fetched via
+  `AssetManager.getAsset('robbans_tusen')` so the existing
+  `/api/fetch-object/<hash>` cache pipeline applies. The play button
+  doubles as the browser autoplay-unlock gesture; volume persists in
+  `localStorage` under `robbans_tusen_volume`; playback position
+  survives route changes because the `Audio` lives in module scope.
+  e2e coverage in `tests/e2e/robbans-tusen.spec.ts`.
+
 - Värdeutlåtande About section: regenerated the bundled snapshot at
   `src/resources/valuationAbout.json` against aspirant-commander's
   post-#1113 field-first slot extractor registry, and rewrote the
