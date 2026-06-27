@@ -61,6 +61,13 @@
           route="valuation-statement"
           @card-click="goToApplication"
         />
+        <application-card
+          :image-url="appImages.pappas"
+          title="Pappas armhävningar"
+          description="60 dagars utmaning — 1000 armhävningar"
+          route="pappas-armhavningar"
+          @card-click="goToApplication"
+        />
       </div>
     </div>
   </div>
@@ -85,6 +92,7 @@
           wikipedia: '',
           goals: '',
           valuation: '',
+          pappas: '',
         },
       };
     },
@@ -102,6 +110,7 @@
           wikipedia: 'home_icon',
           goals: 'home_icon',
           valuation: 'home_icon',
+          pappas: 'home_icon',
         };
         await Promise.all(
           Object.entries(assets).map(async ([key, assetName]) => {
