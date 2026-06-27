@@ -25,6 +25,9 @@
         
         <!-- Persistent Back Button -->
         <BackButton></BackButton>
+
+        <!-- Site-wide audio widget — singleton state survives route changes -->
+        <RobbansTusen></RobbansTusen>
       </div>
     </v-content>
   </v-app>
@@ -33,6 +36,7 @@
 <script>
   import Sidebar from './components/sidebar/Sidebar.vue';
   import BackButton from './components/BackButton.vue';
+  import RobbansTusen from './components/RobbansTusen.vue';
   import { sidebarWidth, collapsed, isMobile, sidebarHidden, toggleSidebar, checkMobile, authVersion } from './global_state_manager.js';
   import HomeView from './views/HomeView.vue';
   import { onMounted, onBeforeUnmount } from 'vue';
@@ -42,6 +46,7 @@
       HomeView,
       Sidebar,
       BackButton,
+      RobbansTusen,
     },
     setup() {
       const handleResize = () => {
