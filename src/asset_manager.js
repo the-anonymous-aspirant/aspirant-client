@@ -73,6 +73,8 @@ const assetMap = {
   'quiz_success_sound': { hash: '6cc726019d4324f4815f32742fdec010', type: AssetType.AUDIO },
   'quiz_fail_sound': { hash: '734a637eed4f663b4b07ba99b96202d7', type: AssetType.AUDIO },
   'birthday-fanfare': { hash: '0ab465040e6198fae962940358d24f68', type: AssetType.AUDIO },
+  // TODO: replace placeholder hash with the real MinIO etag from /admin/assets after operator confirms.
+  robbans_tusen: { hash: '0000000000000000000000000000000000000000000000000000000000000000', type: AssetType.AUDIO },
 };
 
 class AssetManager {
