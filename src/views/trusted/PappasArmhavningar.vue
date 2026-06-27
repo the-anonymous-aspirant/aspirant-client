@@ -29,45 +29,57 @@
 
       <div class="entries-card">
         <h3>Dagar</h3>
-        <table class="entries-table">
-          <thead>
-            <tr>
-              <th>Datum</th>
-              <th>Antal</th>
-              <th>Total</th>
-              <th>Meddelande</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="row in tableRows"
-              :key="row.date"
-              :class="{ locked: !row.editable, today: row.isToday }"
-            >
-              <td class="date-cell">
-                <span class="weekday">{{ row.weekday }}</span>
-                <span class="date-label">{{ row.dateLabel }}</span>
-              </td>
-              <td class="count-cell">
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  :value="row.count"
-                  :disabled="!row.editable || savingDates.has(row.date)"
-                  @change="onCountChange(row, $event)"
-                  :aria-label="`Antal armhävningar för ${row.dateLabel}`"
-                />
-                <span v-if="savingDates.has(row.date)" class="saving-pill">sparar…</span>
-                <span v-else-if="errorDates.has(row.date)" class="error-pill">fel</span>
-              </td>
-              <td class="cumulative-cell">{{ row.cumulative !== null ? row.cumulative : '—' }}</td>
-              <td class="message-cell">
-                <span v-if="row.message" class="milestone-badge">{{ row.message }}</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <details
+          v-for="week in weekChunks"
+          :key="week.index"
+          class="week-block"
+          :open="week.containsToday"
+        >
+          <summary class="week-summary">
+            <span class="week-label">Vecka {{ week.index + 1 }}</span>
+            <span class="week-range">{{ week.label }}</span>
+            <span v-if="week.containsToday" class="week-today-pill">idag</span>
+          </summary>
+          <table class="entries-table">
+            <thead>
+              <tr>
+                <th>Datum</th>
+                <th>Antal</th>
+                <th>Total</th>
+                <th>Meddelande</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in week.rows"
+                :key="row.date"
+                :class="{ locked: !row.editable, today: row.isToday }"
+              >
+                <td class="date-cell">
+                  <span class="weekday">{{ row.weekday }}</span>
+                  <span class="date-label">{{ row.dateLabel }}</span>
+                </td>
+                <td class="count-cell">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    :value="row.count"
+                    :disabled="!row.editable || savingDates.has(row.date)"
+                    @change="onCountChange(row, $event)"
+                    :aria-label="`Antal armhävningar för ${row.dateLabel}`"
+                  />
+                  <span v-if="savingDates.has(row.date)" class="saving-pill">sparar…</span>
+                  <span v-else-if="errorDates.has(row.date)" class="error-pill">fel</span>
+                </td>
+                <td class="cumulative-cell">{{ row.cumulative !== null ? row.cumulative : '—' }}</td>
+                <td class="message-cell">
+                  <span v-if="row.message" class="milestone-badge">{{ row.message }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </details>
       </div>
     </template>
   </div>
@@ -112,14 +124,36 @@
     return new Date(Date.UTC(y, m - 1, d));
   }
 
-  function todayUTC() {
-    const now = new Date();
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const STOCKHOLM_TODAY_FMT = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Stockholm',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  function todayInStockholm() {
+    return parseISODate(STOCKHOLM_TODAY_FMT.format(new Date()));
   }
 
   function dayDiff(a, b) {
     const ms = a.getTime() - b.getTime();
     return Math.round(ms / 86400000);
+  }
+
+  function chunkIntoWeeks(rows) {
+    const chunks = [];
+    for (let i = 0; i < rows.length; i += 7) {
+      const slice = rows.slice(i, i + 7);
+      const first = slice[0];
+      const last = slice[slice.length - 1];
+      chunks.push({
+        index: chunks.length,
+        label: `${first.dateLabel} – ${last.dateLabel}`,
+        rows: slice,
+        containsToday: slice.some((r) => r.isToday),
+      });
+    }
+    return chunks;
   }
 
   export default {
@@ -147,7 +181,7 @@
         return map;
       },
       tableRows() {
-        const today = todayUTC();
+        const today = todayInStockholm();
         let running = 0;
         const rows = [];
         for (const entry of this.entries) {
@@ -176,6 +210,9 @@
           });
         }
         return rows;
+      },
+      weekChunks() {
+        return chunkIntoWeeks(this.tableRows);
       },
       cumulativeTotal() {
         let total = 0;
@@ -418,6 +455,61 @@
 
 .chart-meta-sep {
   opacity: 0.5;
+}
+
+.week-block {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.week-block:first-of-type {
+  border-top: none;
+}
+
+.week-summary {
+  cursor: pointer;
+  padding: var(--space-sm) var(--space-xs);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  list-style: none;
+  user-select: none;
+  color: var(--text-on-dark);
+}
+
+.week-summary::-webkit-details-marker {
+  display: none;
+}
+
+.week-summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 1em;
+  color: var(--text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.week-block[open] > .week-summary::before {
+  transform: rotate(90deg);
+}
+
+.week-label {
+  font-weight: 600;
+  color: var(--text-heading-card);
+}
+
+.week-range {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.week-today-pill {
+  margin-left: auto;
+  padding: 0 var(--space-xs);
+  font-size: var(--text-xs);
+  background-color: var(--brand-primary);
+  color: #1a1a1a;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
 }
 
 .entries-table {
