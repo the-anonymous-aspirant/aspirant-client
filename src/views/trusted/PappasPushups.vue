@@ -4,9 +4,10 @@
     <p class="page-subtitle">
       60 dagars utmaning — 1000 armhävningar mellan 1 juli och 29 augusti 2026.
     </p>
-    <p class="music-hint">Glöm inte att klicka på musikknappen för Robbans Tusen!</p>
 
-    <RobbansTusen></RobbansTusen>
+    <div class="music-row">
+      <RobbansTusen></RobbansTusen>
+    </div>
 
     <div v-if="loading" class="loading-text">Laddar…</div>
     <div v-else-if="loadError" class="error-text">{{ loadError }}</div>
@@ -17,7 +18,7 @@
       </transition>
 
       <div class="chart-card">
-        <h3>Kumulativ summa</h3>
+        <h3>Pushups</h3>
         <div class="chart-wrap">
           <canvas ref="chartCanvas"></canvas>
         </div>
@@ -115,6 +116,7 @@
   );
 
   const TARGET = 1000;
+  const CHART_CEILING = 1100;
   const EDIT_WINDOW_DAYS = 2;
 
   const SV_WEEKDAYS = ['sön', 'mån', 'tis', 'ons', 'tor', 'fre', 'lör'];
@@ -196,10 +198,18 @@
           const count = entry.count;
           let cumulative = null;
           let message = null;
-          if (count !== null && count !== undefined) {
+          const isPastOrToday = diff <= 0;
+          if (count === null || count === undefined) {
+            if (isPastOrToday) message = 'vilodag?';
+          } else if (count === 0) {
+            cumulative = running;
+            message = 'vilodag?';
+          } else {
             running += count;
             cumulative = running;
-            if (this.milestoneMap.has(running)) {
+            if (running > TARGET) {
+              message = '👑';
+            } else if (this.milestoneMap.has(running)) {
               message = this.milestoneMap.get(running);
             }
           }
@@ -352,7 +362,7 @@
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-              y: { beginAtZero: true, suggestedMax: this.target },
+              y: { beginAtZero: true, suggestedMax: CHART_CEILING, max: CHART_CEILING },
             },
             plugins: {
               legend: { position: 'bottom', labels: { color: '#e4e4e4' } },
@@ -392,12 +402,10 @@
   text-align: center;
 }
 
-.music-hint {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  margin: 0 0 var(--space-xl) 0;
-  text-align: center;
-  font-style: italic;
+.music-row {
+  margin: var(--space-md) 0 var(--space-xl) 0;
+  display: flex;
+  justify-content: center;
 }
 
 .loading-text,

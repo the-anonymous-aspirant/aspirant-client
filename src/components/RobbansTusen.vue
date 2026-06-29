@@ -72,21 +72,15 @@
 
 <style scoped>
   .robbans-tusen {
-    position: fixed;
-    bottom: 12px;
-    right: 12px;
-    z-index: 1000;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 8px 14px;
     border-radius: 999px;
     background: rgba(0, 0, 0, 0.55);
     color: #fff;
-    backdrop-filter: blur(6px);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
     font-family: inherit;
-    pointer-events: auto;
   }
 
   .rt-button {
@@ -135,8 +129,6 @@
 
   @media (max-width: 480px) {
     .robbans-tusen {
-      bottom: 8px;
-      right: 8px;
       padding: 6px 10px;
     }
     .rt-volume {
