@@ -37,6 +37,7 @@ import ValuationStatement from '../views/trusted/ValuationStatement.vue';
 import PappasPushups from '../views/trusted/PappasPushups.vue';
 import Advisor from '../views/admin/Advisor.vue';
 import KvittoMaker from '../views/admin/tools/KvittoMaker.vue';
+import NotFound from '../views/NotFound.vue';
 
 const routes = [
   { path: '/', component: HomeView },
@@ -87,6 +88,12 @@ const routes = [
   { path: '/trusted/pappas-pushups', component: PappasPushups, meta: { roles: ['Trusted', 'Admin'] } },
 
   { path: '/support', component: SupportView },
+
+  // Catch-all for unknown paths. Kept public (no role meta) so anonymous
+  // visitors see a graceful 404 instead of being silently redirected to /.
+  // The nginx layer 301s known renames before they reach Vue (see
+  // default.conf); this is the safety net for typos and unmapped paths.
+  { path: '/:pathMatch(.*)*', component: NotFound },
 ];
 
 const router = createRouter({
