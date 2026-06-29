@@ -53,6 +53,13 @@
         route="/admin/advisor"
         @card-click="navigateTo"
       />
+      <application-card
+        :image-url="appImages.default"
+        title="Browser Flows"
+        description="Server-rendered Selenium flow runner — proxy/geo/UA probes"
+        route="/browser-flows"
+        @card-click="navigateTo"
+      />
     </div>
 
     <h2 class="section-title">Tools</h2>
@@ -98,6 +105,12 @@
         );
       },
       navigateTo(route) {
+        // /browser-flows is served by the aspirant-browser upstream via nginx,
+        // not by the Vue SPA — router.push would 404 against the SPA.
+        if (route === '/browser-flows') {
+          window.location.href = route;
+          return;
+        }
         this.$router.push(route);
       },
     },
