@@ -5,6 +5,8 @@
       60 dagars utmaning — 1000 armhävningar mellan 1 juli och 29 augusti 2026.
     </p>
 
+    <RobbansTusen></RobbansTusen>
+
     <div v-if="loading" class="loading-text">Laddar…</div>
     <div v-else-if="loadError" class="error-text">{{ loadError }}</div>
 
@@ -98,6 +100,7 @@
     Legend,
     Filler,
   } from 'chart.js';
+  import RobbansTusen from '../../components/RobbansTusen.vue';
 
   Chart.register(
     LineController,
@@ -158,6 +161,7 @@
 
   export default {
     name: 'PappasArmhavningar',
+    components: { RobbansTusen },
     data() {
       return {
         target: TARGET,
