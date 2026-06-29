@@ -1,9 +1,10 @@
 <template>
   <div class="pappas-view">
-    <h1>Pappas armhävningar</h1>
+    <h1>Pappas pushups</h1>
     <p class="page-subtitle">
       60 dagars utmaning — 1000 armhävningar mellan 1 juli och 29 augusti 2026.
     </p>
+    <p class="music-hint">Glöm inte att klicka på musikknappen för Robbans Tusen!</p>
 
     <RobbansTusen></RobbansTusen>
 
@@ -160,7 +161,7 @@
   }
 
   export default {
-    name: 'PappasArmhavningar',
+    name: 'PappasPushups',
     components: { RobbansTusen },
     data() {
       return {
@@ -387,8 +388,16 @@
 .page-subtitle {
   color: var(--text-muted);
   font-weight: normal;
-  margin-bottom: var(--space-xl);
+  margin-bottom: var(--space-xs);
   text-align: center;
+}
+
+.music-hint {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-xl) 0;
+  text-align: center;
+  font-style: italic;
 }
 
 .loading-text,
@@ -538,6 +547,17 @@
   opacity: 0.5;
 }
 
+.entries-table tr.locked td.count-cell,
+.entries-table tr.locked td.cumulative-cell {
+  opacity: 1;
+}
+
+.entries-table tr.locked td.count-cell input:disabled {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+}
+
 .entries-table tr.today {
   background-color: rgba(255, 179, 0, 0.06);
 }
@@ -559,7 +579,8 @@
   border-radius: var(--radius-sm);
   border: 1px solid rgba(255, 255, 255, 0.15);
   background-color: rgba(255, 255, 255, 0.05);
-  color: inherit;
+  color: #ffffff;
+  font-weight: 700;
   font-size: var(--text-base);
   text-align: right;
 }
@@ -593,7 +614,8 @@
 
 .cumulative-cell {
   font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
+  color: #ffffff;
+  font-weight: 700;
 }
 
 .milestone-badge {
