@@ -1,7 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
-
-const PLACEHOLDER_HASH = '0000000000000000000000000000000000000000000000000000000000000000';
 
 const TINY_WAV = Buffer.from(
   'UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=',
@@ -9,7 +7,7 @@ const TINY_WAV = Buffer.from(
 );
 
 async function mockAudioAsset(page: Page): Promise<void> {
-  await page.route(`**/api/fetch-object/${PLACEHOLDER_HASH}`, async (route) => {
+  await page.route(/\/api\/fetch-object\/[0-9a-f]{64}/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'audio/wav',
@@ -18,14 +16,32 @@ async function mockAudioAsset(page: Page): Promise<void> {
   });
 }
 
-test.describe('Robbans Tusen site-wide audio widget', () => {
+async function mockPushupEndpoints(page: Page): Promise<void> {
+  await page.route(/\/api\/pushups\/entries$/, async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ entries: [] }),
+    });
+  });
+  await page.route(/\/api\/pushups\/milestones$/, async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ milestones: [] }),
+    });
+  });
+}
+
+test.describe('Robbans Tusen audio widget scoped to Pappas armhävningar', () => {
   test.beforeEach(async ({ page }) => {
     await seedTrustedSession(page);
     await mockAudioAsset(page);
+    await mockPushupEndpoints(page);
   });
 
-  test('renders the play button and volume slider on the home page', async ({ page }) => {
-    await page.goto('/');
+  test('renders on /trusted/pappas-armhavningar with play button and volume slider', async ({ page }) => {
+    await page.goto('/trusted/pappas-armhavningar');
     await dismissMobileSidebarIfPresent(page);
     const widget = page.locator('.robbans-tusen');
     await expect(widget).toBeVisible();
@@ -34,7 +50,7 @@ test.describe('Robbans Tusen site-wide audio widget', () => {
   });
 
   test('volume slider input persists to localStorage', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/trusted/pappas-armhavningar');
     await dismissMobileSidebarIfPresent(page);
     const slider = page.locator('input.rt-volume');
     await slider.evaluate((el: HTMLInputElement) => {
@@ -45,12 +61,15 @@ test.describe('Robbans Tusen site-wide audio widget', () => {
     expect(stored).toBe('0.25');
   });
 
-  test('widget survives route changes (singleton mount in App.vue)', async ({ page }) => {
+  test('widget does NOT render on the site root', async ({ page }) => {
     await page.goto('/');
     await dismissMobileSidebarIfPresent(page);
-    await expect(page.locator('.robbans-tusen')).toBeVisible();
-    await page.goto('/about');
+    await expect(page.locator('.robbans-tusen')).toHaveCount(0);
+  });
+
+  test('widget does NOT render on other Trusted routes', async ({ page }) => {
+    await page.goto('/trusted/goals');
     await dismissMobileSidebarIfPresent(page);
-    await expect(page.locator('.robbans-tusen')).toBeVisible();
+    await expect(page.locator('.robbans-tusen')).toHaveCount(0);
   });
 });
