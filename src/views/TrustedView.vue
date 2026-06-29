@@ -63,9 +63,9 @@
         />
         <application-card
           :image-url="appImages.pappas"
-          title="Pappas armhävningar"
+          title="Pappas pushups"
           description="60 dagars utmaning — 1000 armhävningar"
-          route="pappas-armhavningar"
+          route="pappas-pushups"
           @card-click="goToApplication"
         />
       </div>

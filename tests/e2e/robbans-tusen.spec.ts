@@ -33,15 +33,15 @@ async function mockPushupEndpoints(page: Page): Promise<void> {
   });
 }
 
-test.describe('Robbans Tusen audio widget scoped to Pappas armhävningar', () => {
+test.describe('Robbans Tusen audio widget scoped to Pappas pushups', () => {
   test.beforeEach(async ({ page }) => {
     await seedTrustedSession(page);
     await mockAudioAsset(page);
     await mockPushupEndpoints(page);
   });
 
-  test('renders on /trusted/pappas-armhavningar with play button and volume slider', async ({ page }) => {
-    await page.goto('/trusted/pappas-armhavningar');
+  test('renders on /trusted/pappas-pushups with play button and volume slider', async ({ page }) => {
+    await page.goto('/trusted/pappas-pushups');
     await dismissMobileSidebarIfPresent(page);
     const widget = page.locator('.robbans-tusen');
     await expect(widget).toBeVisible();
@@ -50,7 +50,7 @@ test.describe('Robbans Tusen audio widget scoped to Pappas armhävningar', () =>
   });
 
   test('volume slider input persists to localStorage', async ({ page }) => {
-    await page.goto('/trusted/pappas-armhavningar');
+    await page.goto('/trusted/pappas-pushups');
     await dismissMobileSidebarIfPresent(page);
     const slider = page.locator('input.rt-volume');
     await slider.evaluate((el: HTMLInputElement) => {
