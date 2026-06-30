@@ -35,6 +35,7 @@ import Goals from '../views/trusted/Goals.vue';
 import GoalTreeCanvas from '../views/trusted/GoalTreeCanvas.vue';
 import ValuationStatement from '../views/trusted/ValuationStatement.vue';
 import PappasPushups from '../views/trusted/PappasPushups.vue';
+import JobsView from '../views/trusted/JobsView.vue';
 import Advisor from '../views/admin/Advisor.vue';
 import BrowserFlows from '../views/admin/BrowserFlows.vue';
 import KvittoMaker from '../views/admin/tools/KvittoMaker.vue';
@@ -88,6 +89,7 @@ const routes = [
   { path: '/trusted/goals/:id', component: GoalTreeCanvas, meta: { roles: ['Trusted', 'Admin'] } },
   { path: '/trusted/valuation-statement', component: ValuationStatement, meta: { roles: ['Trusted', 'Admin'] } },
   { path: '/trusted/pappas-pushups', component: PappasPushups, meta: { roles: ['Trusted', 'Admin'] } },
+  { path: '/trusted/jobs', component: JobsView, meta: { roles: ['Trusted', 'Admin'] } },
 
   { path: '/support', component: SupportView },
 
