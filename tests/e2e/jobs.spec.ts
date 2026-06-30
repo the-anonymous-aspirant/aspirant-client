@@ -115,7 +115,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
     await expect(page.locator('[data-test-row-id="job-001"] .badge-distance')).toContainText('1.8 km');
     await expect(page.locator('[data-test-row-id="job-002"] .badge-distance')).toContainText('4.2 km');
-    await expect(page.locator('[data-test-row-id="job-003"] .badge-distance')).toContainText('9 km');
+    await expect(page.locator('[data-test-row-id="job-003"] .badge-distance')).toContainText('8.5 km');
   });
 
   test('free-text filter narrows the visible rows', async ({ page }) => {
