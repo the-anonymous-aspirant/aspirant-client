@@ -320,6 +320,131 @@ export async function installProcessedValuationsMocks(page: Page): Promise<void>
   });
 }
 
+// ---------- /api/jobs read+hide mocks (#1290 — /trusted/jobs overview) ----------
+
+export interface JobSeedRow {
+  id: string;
+  title: string;
+  source?: string;
+  company?: string | null;
+  canonical_url?: string;
+  distance_km?: number | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  currency?: string | null;
+  description_excerpt?: string | null;
+  dedup_group_id?: string | null;
+  is_hidden?: boolean;
+  scraped_at?: string;
+  last_seen_at?: string;
+  seen_on_sites_count?: number;
+}
+
+export const jobsSeed: { rows: JobSeedRow[] } = { rows: [] };
+
+export function seedJobsRows(rows: JobSeedRow[] = []) {
+  const now = '2026-06-30T19:00:00Z';
+  jobsSeed.rows = rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    source: r.source ?? 'berlinstartupjobs.com',
+    company: r.company ?? null,
+    canonical_url: r.canonical_url ?? `https://example.com/jobs/${r.id}`,
+    distance_km: r.distance_km ?? null,
+    salary_min: r.salary_min ?? null,
+    salary_max: r.salary_max ?? null,
+    currency: r.currency ?? 'EUR',
+    description_excerpt: r.description_excerpt ?? null,
+    dedup_group_id: r.dedup_group_id ?? null,
+    is_hidden: r.is_hidden ?? false,
+    scraped_at: r.scraped_at ?? now,
+    last_seen_at: r.last_seen_at ?? now,
+    seen_on_sites_count: r.seen_on_sites_count ?? 1,
+  }));
+}
+
+/** Install routes for GET /api/jobs and PATCH /api/jobs/{id}/hide backed by
+ *  the in-memory `jobsSeed`. Filtering (q), sort, and pagination are
+ *  honoured so the view's actual query parameters round-trip through the
+ *  mocks. Hide flips is_hidden true on the seed row and drops it from
+ *  future default reads.
+ *
+ *  Registered AFTER the noise-suppressing catch-all in installCommanderMocks
+ *  (registration-order match means later wins in some Playwright versions —
+ *  this helper assumes the caller has either skipped the catch-all or
+ *  registers this AFTER it). */
+export async function installJobsMocks(page: Page): Promise<void> {
+  jobsSeed.rows = [];
+
+  await page.route(/\/api\/jobs\/[^/]+\/hide$/, async (route: Route) => {
+    if (route.request().method() !== 'PATCH') {
+      await route.fallback();
+      return;
+    }
+    const url = new URL(route.request().url());
+    const id = url.pathname.split('/').slice(-2, -1)[0];
+    const idx = jobsSeed.rows.findIndex((r) => r.id === id);
+    if (idx < 0) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"detail":"job not found"}' });
+      return;
+    }
+    jobsSeed.rows[idx].is_hidden = true;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(jobsSeed.rows[idx]),
+    });
+  });
+
+  await page.route(/\/api\/jobs(\?.*)?$/, async (route: Route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    const url = new URL(route.request().url());
+    const q = (url.searchParams.get('q') || '').toLowerCase();
+    const sort = url.searchParams.get('sort') || 'distance';
+    const page_ = parseInt(url.searchParams.get('page') || '1', 10);
+    const perPage = parseInt(url.searchParams.get('per_page') || '25', 10);
+    const includeHidden = url.searchParams.get('include_hidden') === 'true';
+
+    let filtered = jobsSeed.rows.slice();
+    if (!includeHidden) filtered = filtered.filter((r) => !r.is_hidden);
+    if (q) {
+      filtered = filtered.filter((r) =>
+        [r.title, r.company || '', r.description_excerpt || '']
+          .some((s) => s.toLowerCase().includes(q))
+      );
+    }
+
+    const cmpNullsLast = (a: number | null | undefined, b: number | null | undefined, asc: boolean) => {
+      const an = a === null || a === undefined;
+      const bn = b === null || b === undefined;
+      if (an && bn) return 0;
+      if (an) return 1;
+      if (bn) return -1;
+      return asc ? (a as number) - (b as number) : (b as number) - (a as number);
+    };
+    if (sort === 'distance') {
+      filtered.sort((a, b) => cmpNullsLast(a.distance_km, b.distance_km, true) || a.id.localeCompare(b.id));
+    } else if (sort === 'scraped_at') {
+      filtered.sort((a, b) => (b.scraped_at || '').localeCompare(a.scraped_at || '') || a.id.localeCompare(b.id));
+    } else if (sort === 'salary') {
+      filtered.sort((a, b) => cmpNullsLast(a.salary_min, b.salary_min, false) || a.id.localeCompare(b.id));
+    }
+
+    const total = filtered.length;
+    const start = (page_ - 1) * perPage;
+    const slice = filtered.slice(start, start + perPage);
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ jobs: slice, total, page: page_, per_page: perPage }),
+    });
+  });
+}
+
 /** Seed localStorage with a Trusted-role session so the router guard lets
  *  the view mount; called via addInitScript so it runs before any nav. */
 export async function seedTrustedSession(page: Page): Promise<void> {
