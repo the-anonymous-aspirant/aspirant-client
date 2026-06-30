@@ -68,6 +68,13 @@
           route="pappas-pushups"
           @card-click="goToApplication"
         />
+        <application-card
+          :image-url="appImages.jobs"
+          title="Jobs"
+          description="Berlin part-time English-job feed across scraped boards"
+          route="jobs"
+          @card-click="goToApplication"
+        />
       </div>
     </div>
   </div>
@@ -93,6 +100,7 @@
           goals: '',
           valuation: '',
           pappas: '',
+          jobs: '',
         },
       };
     },
@@ -111,6 +119,7 @@
           goals: 'home_icon',
           valuation: 'home_icon',
           pappas: 'home_icon',
+          jobs: 'home_icon',
         };
         await Promise.all(
           Object.entries(assets).map(async ([key, assetName]) => {
