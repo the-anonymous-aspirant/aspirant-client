@@ -66,17 +66,26 @@
             :data-test-row-id="job.id"
           >
             <td class="col-title">
-              <a :href="job.canonical_url" target="_blank" rel="noopener">{{ job.title }}</a>
-              <span v-if="job.seen_on_sites_count > 1" class="badge badge-sites" :title="`Seen on ${job.seen_on_sites_count} sites`">
-                ×{{ job.seen_on_sites_count }} sites
-              </span>
-              <div v-if="job.company || job.description_excerpt" class="row-meta">
-                <span v-if="job.company" class="company">{{ job.company }}</span>
-                <span v-if="job.company && job.description_excerpt" class="meta-sep">·</span>
-                <span v-if="job.description_excerpt" class="excerpt">{{ job.description_excerpt }}</span>
+              <div class="title-cell">
+                <div class="title-line">
+                  <a class="title-link" :href="job.canonical_url" target="_blank" rel="noopener">{{ job.title }}</a>
+                  <span v-if="job.seen_on_sites_count > 1" class="badge badge-sites" :title="`Seen on ${job.seen_on_sites_count} sites`">
+                    ×{{ job.seen_on_sites_count }}
+                  </span>
+                </div>
+                <div class="row-meta">
+                  <template v-if="job.company || job.description_excerpt">
+                    <span v-if="job.company" class="company">{{ job.company }}</span>
+                    <span v-if="job.company && job.description_excerpt" class="meta-sep">·</span>
+                    <span v-if="job.description_excerpt" class="excerpt">{{ job.description_excerpt }}</span>
+                  </template>
+                  <span v-else class="muted">—</span>
+                </div>
               </div>
             </td>
-            <td class="col-source">{{ job.source }}</td>
+            <td class="col-source">
+              <span class="badge badge-source">{{ job.source }}</span>
+            </td>
             <td class="col-distance">
               <span v-if="job.distance_km !== null && job.distance_km !== undefined" class="badge badge-distance">
                 {{ formatDistance(job.distance_km) }}
@@ -300,6 +309,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: var(--text-sm);
+    table-layout: fixed;
   }
 
   .jobs-table th,
@@ -307,7 +317,12 @@
     text-align: left;
     padding: var(--space-sm);
     border-bottom: 1px solid var(--border-card, #333);
-    vertical-align: top;
+    vertical-align: middle;
+    overflow: hidden;
+  }
+
+  .jobs-table tbody tr {
+    height: 80px;
   }
 
   .jobs-table th {
@@ -316,6 +331,13 @@
     position: sticky;
     top: 0;
   }
+
+  .col-title { width: 44%; }
+  .col-source { width: 12%; }
+  .col-distance { width: 10%; }
+  .col-salary { width: 12%; }
+  .col-scraped { width: 12%; }
+  .col-action { width: 10%; }
 
   .jobs-table th.sortable {
     cursor: pointer;
@@ -330,18 +352,56 @@
     color: var(--brand-accent, #6cf);
   }
 
-  .col-title a {
+  .title-cell {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--space-2xs);
+    height: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .title-line {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    min-width: 0;
+  }
+
+  .title-link {
     font-weight: 600;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
+    line-height: 1.3;
+    max-height: 2.6em;
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
   .row-meta {
-    margin-top: var(--space-2xs);
     font-size: var(--text-xs);
     color: var(--text-muted, #888);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
   }
 
   .meta-sep {
     margin: 0 var(--space-2xs);
+  }
+
+  .col-source,
+  .col-salary,
+  .col-scraped {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .badge {
@@ -350,18 +410,27 @@
     border-radius: var(--radius-pill, 999px);
     font-size: var(--text-xs);
     font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .badge-distance {
     background-color: var(--badge-distance-bg, #1f3a5f);
     color: var(--badge-distance-fg, #cfe0ff);
-    white-space: nowrap;
+  }
+
+  .badge-source {
+    background-color: var(--badge-source-bg, #1f5f3a);
+    color: var(--badge-source-fg, #cfffd0);
   }
 
   .badge-sites {
     background-color: var(--badge-sites-bg, #3a1f5f);
     color: var(--badge-sites-fg, #e0cfff);
-    margin-left: var(--space-xs);
+    flex: 0 0 auto;
   }
 
   .btn-hide {
@@ -433,5 +502,10 @@
     .col-scraped {
       display: none;
     }
+
+    .col-title { width: 58%; }
+    .col-distance { width: 14%; }
+    .col-salary { width: 16%; }
+    .col-action { width: 12%; }
   }
 </style>
