@@ -153,10 +153,17 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
     const heights = await rows.evaluateAll((els) =>
       els.map((el) => Math.round((el as HTMLElement).getBoundingClientRect().height)),
     );
-    // All rows within 1px of the first — the fixed 80px height locks it.
+    // All rows within 2px of the first — the fixed 80px row height locks
+    // this; the 2px tolerance absorbs Chromium's sub-pixel rounding around
+    // the collapsed border between adjacent rows.
     const [first] = heights;
     for (const h of heights) {
-      expect(Math.abs(h - first)).toBeLessThanOrEqual(1);
+      expect(Math.abs(h - first)).toBeLessThanOrEqual(2);
+    }
+    // Sanity: every row is at least 70px — a regression that dropped the
+    // fixed height would render short-title rows at ~40px.
+    for (const h of heights) {
+      expect(h).toBeGreaterThanOrEqual(70);
     }
   });
 
