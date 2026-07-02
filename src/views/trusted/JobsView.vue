@@ -34,14 +34,6 @@
               Distance
             </th>
             <th
-              class="col-salary sortable"
-              :class="{ active: sort === 'salary' }"
-              data-test="sort-salary"
-              @click="setSort('salary')"
-            >
-              Salary
-            </th>
-            <th
               class="col-scraped sortable"
               :class="{ active: sort === 'scraped_at' }"
               data-test="sort-scraped"
@@ -54,7 +46,7 @@
         </thead>
         <tbody>
           <tr v-if="!loading && !jobs.length">
-            <td colspan="6" class="empty-cell" data-test="jobs-empty">
+            <td colspan="5" class="empty-cell" data-test="jobs-empty">
               <span v-if="loadError">—</span>
               <span v-else-if="query">No jobs match “{{ query }}”.</span>
               <span v-else>No jobs in the feed yet — the scrapers may not have run.</span>
@@ -92,7 +84,6 @@
               </span>
               <span v-else class="muted">—</span>
             </td>
-            <td class="col-salary">{{ formatSalary(job) }}</td>
             <td class="col-scraped">{{ formatScraped(job.scraped_at) }}</td>
             <td class="col-action">
               <button
@@ -168,15 +159,6 @@
         if (km < 1) return `${Math.round(km * 1000)} m`;
         if (km < 10) return `${km.toFixed(1)} km`;
         return `${Math.round(km)} km`;
-      },
-      formatSalary(job) {
-        const min = job.salary_min;
-        const max = job.salary_max;
-        if (min === null && max === null) return '—';
-        const cur = job.currency || '';
-        const fmt = (n) => `${Math.round(n).toLocaleString('en-GB')}${cur ? ' ' + cur : ''}`;
-        if (min !== null && max !== null && max !== min) return `${fmt(min)} – ${fmt(max)}`;
-        return fmt(min ?? max);
       },
       formatScraped(iso) {
         return formatRelative(iso);
@@ -332,12 +314,11 @@
     top: 0;
   }
 
-  .col-title { width: 44%; }
-  .col-source { width: 12%; }
+  .col-title { width: 52%; }
+  .col-source { width: 14%; }
   .col-distance { width: 10%; }
-  .col-salary { width: 12%; }
   .col-scraped { width: 12%; }
-  .col-action { width: 10%; }
+  .col-action { width: 12%; }
 
   .jobs-table th.sortable {
     cursor: pointer;
@@ -397,7 +378,6 @@
   }
 
   .col-source,
-  .col-salary,
   .col-scraped {
     white-space: nowrap;
     overflow: hidden;
@@ -503,9 +483,8 @@
       display: none;
     }
 
-    .col-title { width: 58%; }
-    .col-distance { width: 14%; }
-    .col-salary { width: 16%; }
-    .col-action { width: 12%; }
+    .col-title { width: 62%; }
+    .col-distance { width: 16%; }
+    .col-action { width: 22%; }
   }
 </style>

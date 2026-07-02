@@ -213,15 +213,23 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
     expect(jobsSeed.rows.find((r) => r.id === 'job-002')!.is_hidden).toBe(true);
   });
 
-  test('sort by salary surfaces the highest-paying row first', async ({ page }) => {
+  test('salary column is hidden from the default view', async ({ page }) => {
+    // #1411 amendment 4718 — salary is null on 88% of rows, so it's
+    // dropped from the default table. The API still returns
+    // salary_min/max on each row (for a future detail panel) but the
+    // /trusted/jobs table no longer surfaces them, and no sort-salary
+    // control exists.
     seedJobsRows(SEED_ROWS);
     await page.goto('/trusted/jobs');
     await dismissMobileSidebarIfPresent(page);
 
-    await page.locator('[data-test="sort-salary"]').click();
-
-    const firstRow = page.locator('[data-test="jobs-table"] tbody tr').first();
-    await expect(firstRow).toContainText('Junior frontend engineer');
+    await expect(page.locator('[data-test="sort-salary"]')).toHaveCount(0);
+    await expect(page.locator('.col-salary')).toHaveCount(0);
+    // The seeded rows carry EUR salary strings — none should render on
+    // the default view. Filter by a value that only appears in a
+    // salary cell to prove it.
+    await expect(page.locator('[data-test="jobs-table"] tbody')).not.toContainText('12 EUR');
+    await expect(page.locator('[data-test="jobs-table"] tbody')).not.toContainText('25 EUR');
   });
 
   test('empty feed renders the friendly empty state', async ({ page }) => {
