@@ -102,10 +102,69 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
     const multi = page.locator('[data-test-row-id="job-002"]');
     await expect(multi.locator('.badge-sites')).toBeVisible();
-    await expect(multi.locator('.badge-sites')).toContainText('×2 sites');
+    await expect(multi.locator('.badge-sites')).toContainText('×2');
+    await expect(multi.locator('.badge-sites')).toHaveAttribute('title', 'Seen on 2 sites');
 
     const single = page.locator('[data-test-row-id="job-001"]');
     await expect(single.locator('.badge-sites')).toHaveCount(0);
+  });
+
+  test('all rendered rows have the same pixel height', async ({ page }) => {
+    // Row-height parity is the operator's scan-friendliness contract for
+    // /trusted/jobs (#1411 Part 1). One long-title + short-title row and
+    // one short-title + long-excerpt row still render at the same height.
+    const paddedRows = [
+      ...SEED_ROWS,
+      {
+        id: 'job-004',
+        title:
+          'Senior full-stack platform engineer with kubernetes and observability expertise for late-stage growth fintech based in Kreuzberg',
+        company: 'LongName Berlin GmbH',
+        description_excerpt: 'Very long description that should be clipped to a single line.',
+        source: 'stellenanzeigen.de',
+        distance_km: 2.4,
+        salary_min: 45,
+        salary_max: 70,
+        currency: 'EUR',
+        seen_on_sites_count: 1,
+        scraped_at: '2026-06-30T15:00:00Z',
+      },
+      {
+        id: 'job-005',
+        title: 'Kellner',
+        company: null,
+        description_excerpt: null,
+        source: 'meinestadt.de',
+        distance_km: 0.6,
+        salary_min: null,
+        salary_max: null,
+        currency: null,
+        seen_on_sites_count: 1,
+        scraped_at: '2026-06-30T14:00:00Z',
+      },
+    ];
+    seedJobsRows(paddedRows);
+    await page.goto('/trusted/jobs');
+    await dismissMobileSidebarIfPresent(page);
+
+    const rows = page.locator('[data-test="jobs-table"] tbody tr');
+    await expect(rows).toHaveCount(5);
+
+    const heights = await rows.evaluateAll((els) =>
+      els.map((el) => Math.round((el as HTMLElement).getBoundingClientRect().height)),
+    );
+    // All rows within 2px of the first — the fixed 80px row height locks
+    // this; the 2px tolerance absorbs Chromium's sub-pixel rounding around
+    // the collapsed border between adjacent rows.
+    const [first] = heights;
+    for (const h of heights) {
+      expect(Math.abs(h - first)).toBeLessThanOrEqual(2);
+    }
+    // Sanity: every row is at least 70px — a regression that dropped the
+    // fixed height would render short-title rows at ~40px.
+    for (const h of heights) {
+      expect(h).toBeGreaterThanOrEqual(70);
+    }
   });
 
   test('distance badge surfaces the per-row km value', async ({ page }) => {
