@@ -5,6 +5,27 @@
       Berlin · part-time · English-speaking — deduplicated overview across the scraped boards.
     </p>
 
+    <div class="tab-strip" data-test="jobs-tabs">
+      <button
+        type="button"
+        class="tab-btn"
+        :class="{ active: tab === 'all' }"
+        data-test="jobs-tab-all"
+        @click="setTab('all')"
+      >
+        All
+      </button>
+      <button
+        type="button"
+        class="tab-btn"
+        :class="{ active: tab === 'saved' }"
+        data-test="jobs-tab-saved"
+        @click="setTab('saved')"
+      >
+        Saved
+      </button>
+    </div>
+
     <div class="filter-bar">
       <input
         v-model="query"
@@ -57,6 +78,7 @@
             <td colspan="6" class="empty-cell" data-test="jobs-empty">
               <span v-if="loadError">—</span>
               <span v-else-if="query">No jobs match “{{ query }}”.</span>
+              <span v-else-if="tab === 'saved'">No saved jobs yet — press <em>Save</em> on a row to add one.</span>
               <span v-else>No jobs in the feed yet — the scrapers may not have run.</span>
             </td>
           </tr>
@@ -95,16 +117,30 @@
             <td class="col-salary">{{ formatSalary(job) }}</td>
             <td class="col-scraped">{{ formatScraped(job.scraped_at) }}</td>
             <td class="col-action">
-              <button
-                type="button"
-                class="btn-hide"
-                :disabled="hidingIds.has(job.id)"
-                :data-test-hide="job.id"
-                @click="onHide(job)"
-              >
-                <span v-if="hidingIds.has(job.id)">…</span>
-                <span v-else>Hide</span>
-              </button>
+              <div class="action-buttons">
+                <button
+                  type="button"
+                  class="btn-action btn-save"
+                  :class="{ saved: !!job.saved_at }"
+                  :disabled="actingIds.has(job.id) || !!job.saved_at"
+                  :data-test-save="job.id"
+                  @click="onSave(job)"
+                >
+                  <span v-if="actingIds.has(job.id)">…</span>
+                  <span v-else-if="job.saved_at">Saved ✓</span>
+                  <span v-else>Save</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn-action btn-hide"
+                  :disabled="actingIds.has(job.id)"
+                  :data-test-hide="job.id"
+                  @click="onHide(job)"
+                >
+                  <span v-if="actingIds.has(job.id)">…</span>
+                  <span v-else>Not interested</span>
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -150,10 +186,11 @@
         page: 1,
         perPage: PER_PAGE,
         sort: 'distance',
+        tab: 'all',
         query: '',
         loading: false,
         loadError: null,
-        hidingIds: new Set(),
+        actingIds: new Set(),
         debounceTimer: null,
       };
     },
@@ -187,6 +224,12 @@
         this.page = 1;
         this.fetchJobs();
       },
+      setTab(next) {
+        if (this.tab === next) return;
+        this.tab = next;
+        this.page = 1;
+        this.fetchJobs();
+      },
       changePage(next) {
         if (next < 1 || next > this.totalPages) return;
         this.page = next;
@@ -209,6 +252,7 @@
             per_page: this.perPage,
           };
           if (this.query.trim()) params.q = this.query.trim();
+          if (this.tab === 'saved') params.filter = 'saved';
           const resp = await axios.get('/api/jobs', { params });
           this.jobs = resp.data.jobs || [];
           this.total = resp.data.total ?? 0;
@@ -224,9 +268,29 @@
           this.loading = false;
         }
       },
+      async onSave(job) {
+        if (this.actingIds.has(job.id)) return;
+        this.actingIds.add(job.id);
+        try {
+          const resp = await axios.patch(`/api/jobs/${job.id}/save`);
+          const updated = resp.data;
+          const idx = this.jobs.findIndex((j) => j.id === job.id);
+          if (idx >= 0) {
+            this.jobs.splice(idx, 1, { ...this.jobs[idx], ...updated });
+          }
+        } catch (err) {
+          this.loadError =
+            err.response?.data?.error?.message ||
+            err.response?.data?.detail ||
+            err.message ||
+            'Could not save row';
+        } finally {
+          this.actingIds.delete(job.id);
+        }
+      },
       async onHide(job) {
-        if (this.hidingIds.has(job.id)) return;
-        this.hidingIds.add(job.id);
+        if (this.actingIds.has(job.id)) return;
+        this.actingIds.add(job.id);
         try {
           await axios.patch(`/api/jobs/${job.id}/hide`);
           this.jobs = this.jobs.filter((j) => j.id !== job.id);
@@ -235,7 +299,7 @@
             this.page -= 1;
           }
           if (!this.jobs.length) {
-            await this.fetchJobs();
+            this.fetchJobs();
           }
         } catch (err) {
           this.loadError =
@@ -244,7 +308,7 @@
             err.message ||
             'Could not hide row';
         } finally {
-          this.hidingIds.delete(job.id);
+          this.actingIds.delete(job.id);
         }
       },
     },
@@ -267,6 +331,33 @@
   .page-subtitle {
     color: var(--text-muted, #888);
     margin-bottom: var(--space-md);
+  }
+
+  .tab-strip {
+    display: flex;
+    gap: var(--space-xs);
+    margin-bottom: var(--space-md);
+    border-bottom: 1px solid var(--border-card, #333);
+  }
+
+  .tab-btn {
+    padding: var(--space-xs) var(--space-md);
+    background-color: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted, #888);
+    font-size: var(--text-base);
+    cursor: pointer;
+    margin-bottom: -1px;
+  }
+
+  .tab-btn:hover {
+    color: inherit;
+  }
+
+  .tab-btn.active {
+    color: inherit;
+    border-bottom-color: var(--brand-accent, #6cf);
   }
 
   .filter-bar {
@@ -332,12 +423,12 @@
     top: 0;
   }
 
-  .col-title { width: 44%; }
+  .col-title { width: 40%; }
   .col-source { width: 12%; }
   .col-distance { width: 10%; }
   .col-salary { width: 12%; }
-  .col-scraped { width: 12%; }
-  .col-action { width: 10%; }
+  .col-scraped { width: 10%; }
+  .col-action { width: 16%; }
 
   .jobs-table th.sortable {
     cursor: pointer;
@@ -433,22 +524,36 @@
     flex: 0 0 auto;
   }
 
-  .btn-hide {
+  .action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+    align-items: stretch;
+  }
+
+  .btn-action {
     padding: var(--space-2xs) var(--space-sm);
     background-color: transparent;
     border: 1px solid var(--border-card, #444);
     border-radius: var(--radius-sm, 4px);
     color: inherit;
     cursor: pointer;
+    font-size: var(--text-xs);
+    white-space: nowrap;
   }
 
-  .btn-hide:hover:not(:disabled) {
+  .btn-action:hover:not(:disabled) {
     background-color: var(--surface-hover, rgba(255, 255, 255, 0.05));
   }
 
-  .btn-hide:disabled {
+  .btn-action:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .btn-save {
+    border-color: var(--brand-accent, #6cf);
+    color: var(--brand-accent, #6cf);
   }
 
   .empty-cell {
@@ -503,9 +608,9 @@
       display: none;
     }
 
-    .col-title { width: 58%; }
+    .col-title { width: 44%; }
     .col-distance { width: 14%; }
     .col-salary { width: 16%; }
-    .col-action { width: 12%; }
+    .col-action { width: 26%; }
   }
 </style>

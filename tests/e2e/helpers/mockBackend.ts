@@ -335,6 +335,7 @@ export interface JobSeedRow {
   description_excerpt?: string | null;
   dedup_group_id?: string | null;
   is_hidden?: boolean;
+  saved_at?: string | null;
   scraped_at?: string;
   last_seen_at?: string;
   seen_on_sites_count?: number;
@@ -357,6 +358,7 @@ export function seedJobsRows(rows: JobSeedRow[] = []) {
     description_excerpt: r.description_excerpt ?? null,
     dedup_group_id: r.dedup_group_id ?? null,
     is_hidden: r.is_hidden ?? false,
+    saved_at: r.saved_at ?? null,
     scraped_at: r.scraped_at ?? now,
     last_seen_at: r.last_seen_at ?? now,
     seen_on_sites_count: r.seen_on_sites_count ?? 1,
@@ -396,6 +398,28 @@ export async function installJobsMocks(page: Page): Promise<void> {
     });
   });
 
+  await page.route(/\/api\/jobs\/[^/]+\/save$/, async (route: Route) => {
+    if (route.request().method() !== 'PATCH') {
+      await route.fallback();
+      return;
+    }
+    const url = new URL(route.request().url());
+    const id = url.pathname.split('/').slice(-2, -1)[0];
+    const idx = jobsSeed.rows.findIndex((r) => r.id === id);
+    if (idx < 0) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"detail":"job not found"}' });
+      return;
+    }
+    if (!jobsSeed.rows[idx].saved_at) {
+      jobsSeed.rows[idx].saved_at = '2026-06-30T19:30:00Z';
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(jobsSeed.rows[idx]),
+    });
+  });
+
   await page.route(/\/api\/jobs(\?.*)?$/, async (route: Route) => {
     if (route.request().method() !== 'GET') {
       await route.fallback();
@@ -407,9 +431,11 @@ export async function installJobsMocks(page: Page): Promise<void> {
     const page_ = parseInt(url.searchParams.get('page') || '1', 10);
     const perPage = parseInt(url.searchParams.get('per_page') || '25', 10);
     const includeHidden = url.searchParams.get('include_hidden') === 'true';
+    const filter = url.searchParams.get('filter');
 
     let filtered = jobsSeed.rows.slice();
     if (!includeHidden) filtered = filtered.filter((r) => !r.is_hidden);
+    if (filter === 'saved') filtered = filtered.filter((r) => !!r.saved_at);
     if (q) {
       filtered = filtered.filter((r) =>
         [r.title, r.company || '', r.description_excerpt || '']
