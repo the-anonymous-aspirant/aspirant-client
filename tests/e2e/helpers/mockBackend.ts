@@ -620,10 +620,44 @@ export interface BrowserFlowRunSeed {
   location_used?: string | null;
 }
 
-export const browserFlowsSeed: { flows: BrowserFlowSeed[]; runs: BrowserFlowRunSeed[] } = {
+export interface BrowserFlowHealthSeed {
+  flow_id: string;
+  window: number;
+  total_runs: number;
+  success_rate: number;
+  avg_duration_ms: number | null;
+  rows_returned_trend: number[];
+  last_failure: {
+    id: string;
+    status: string;
+    started_at: string;
+    completed_at: string | null;
+    output_rows_count: number;
+  } | null;
+}
+
+export const browserFlowsSeed: {
+  flows: BrowserFlowSeed[];
+  runs: BrowserFlowRunSeed[];
+  health: Record<string, BrowserFlowHealthSeed>;
+} = {
   flows: [],
   runs: [],
+  health: {},
 };
+
+export function seedBrowserFlowHealth(flowId: string, health: Partial<BrowserFlowHealthSeed> = {}): void {
+  browserFlowsSeed.health[flowId] = {
+    flow_id: flowId,
+    window: 20,
+    total_runs: 0,
+    success_rate: 0,
+    avg_duration_ms: null,
+    rows_returned_trend: [],
+    last_failure: null,
+    ...health,
+  };
+}
 
 export function seedBrowserFlows(flows: BrowserFlowSeed[]): void {
   browserFlowsSeed.flows = flows.map((f) => ({
@@ -674,6 +708,37 @@ function lastRunSummary(flowId: string): unknown {
 export async function installBrowserFlowsMocks(page: Page): Promise<void> {
   browserFlowsSeed.flows = [];
   browserFlowsSeed.runs = [];
+  browserFlowsSeed.health = {};
+
+  await page.route(/\/api\/browser-flows\/[^/]+\/health(\?.*)?$/, async (route: Route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    const url = new URL(route.request().url());
+    const parts = url.pathname.split('/');
+    const flowId = parts[parts.length - 2];
+    const flow = browserFlowsSeed.flows.find((f) => f.id === flowId);
+    if (!flow) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"detail":"flow not found"}' });
+      return;
+    }
+    const seeded = browserFlowsSeed.health[flowId];
+    const windowSize = parseInt(url.searchParams.get('window') || '20', 10);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(seeded ?? {
+        flow_id: flowId,
+        window: windowSize,
+        total_runs: 0,
+        success_rate: 0,
+        avg_duration_ms: null,
+        rows_returned_trend: [],
+        last_failure: null,
+      }),
+    });
+  });
 
   await page.route(/\/api\/browser-flows\/[^/]+\/runs\/[^/]+\/cancel$/, async (route: Route) => {
     if (route.request().method() !== 'POST') {
