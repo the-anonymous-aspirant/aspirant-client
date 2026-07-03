@@ -193,7 +193,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
     await expect(table.locator('tbody tr')).toHaveCount(3);
   });
 
-  test('hide button PATCHes the API and drops the row', async ({ page }) => {
+  test('Not-interested button PATCHes /hide and drops the row', async ({ page }) => {
     seedJobsRows(SEED_ROWS);
     await page.goto('/trusted/jobs');
     await dismissMobileSidebarIfPresent(page);
@@ -211,6 +211,72 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
     await expect(page.locator('[data-test-row-id="job-002"]')).toHaveCount(0);
     await expect(page.locator('[data-test="jobs-table"] tbody tr')).toHaveCount(2);
     expect(jobsSeed.rows.find((r) => r.id === 'job-002')!.is_hidden).toBe(true);
+  });
+
+  test('Save button PATCHes /save; row stays in All and Save flips to Saved ✓', async ({ page }) => {
+    seedJobsRows(SEED_ROWS);
+    await page.goto('/trusted/jobs');
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.locator('[data-test="jobs-table"] tbody tr')).toHaveCount(3);
+
+    const patchPromise = page.waitForRequest(
+      (req) =>
+        req.method() === 'PATCH' &&
+        req.url().endsWith('/api/jobs/job-002/save'),
+    );
+    await page.locator('[data-test-save="job-002"]').click();
+    await patchPromise;
+
+    // The row stays in the All view (saved is a distinct state, not a
+    // rejection) but the Save button flips to a disabled "Saved ✓" indicator.
+    await expect(page.locator('[data-test-row-id="job-002"]')).toBeVisible();
+    const savedBtn = page.locator('[data-test-save="job-002"]');
+    await expect(savedBtn).toHaveText(/Saved/);
+    await expect(savedBtn).toBeDisabled();
+    // Seed carries the stamped saved_at, is_hidden stays false.
+    expect(jobsSeed.rows.find((r) => r.id === 'job-002')!.saved_at).not.toBeNull();
+    expect(jobsSeed.rows.find((r) => r.id === 'job-002')!.is_hidden).toBe(false);
+  });
+
+  test('Saved tab lists only saved rows and requests filter=saved', async ({ page }) => {
+    seedJobsRows(SEED_ROWS);
+    await page.goto('/trusted/jobs');
+    await dismissMobileSidebarIfPresent(page);
+
+    // Save one row on the All tab.
+    await page.locator('[data-test-save="job-001"]').click();
+    await expect(page.locator('[data-test-save="job-001"]')).toHaveText(/Saved/);
+
+    // Switch to the Saved tab; it must send filter=saved and render only
+    // the saved row.
+    const savedRequest = page.waitForRequest(
+      (req) =>
+        req.method() === 'GET' &&
+        req.url().includes('/api/jobs') &&
+        new URL(req.url()).searchParams.get('filter') === 'saved',
+    );
+    await page.locator('[data-test="jobs-tab-saved"]').click();
+    await savedRequest;
+
+    await expect(page.locator('[data-test="jobs-table"] tbody tr')).toHaveCount(1);
+    await expect(page.locator('[data-test="jobs-table"] tbody tr').first()).toContainText(
+      'English-speaking barista',
+    );
+
+    // Switching back to All drops the filter and re-shows all 3 rows —
+    // saved rows remain in All (only rejected rows drop out).
+    await page.locator('[data-test="jobs-tab-all"]').click();
+    await expect(page.locator('[data-test="jobs-table"] tbody tr')).toHaveCount(3);
+  });
+
+  test('Saved tab empty state guides the operator to press Save', async ({ page }) => {
+    seedJobsRows(SEED_ROWS);
+    await page.goto('/trusted/jobs');
+    await dismissMobileSidebarIfPresent(page);
+
+    await page.locator('[data-test="jobs-tab-saved"]').click();
+    await expect(page.locator('[data-test="jobs-empty"]')).toContainText('No saved jobs yet');
   });
 
   test('sort by salary surfaces the highest-paying row first', async ({ page }) => {
