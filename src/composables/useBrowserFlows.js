@@ -62,5 +62,16 @@ export function useBrowserFlows() {
     }
   }
 
-  return { listFlows, listRuns, triggerRun, cancelRun };
+  async function getFlowHealth(flowId, { window: healthWindow = 20 } = {}) {
+    try {
+      const resp = await axios.get(`${API_BASE}/${flowId}/health`, {
+        params: { window: healthWindow },
+      });
+      return { health: resp.data, error: null };
+    } catch (err) {
+      return { health: null, error: extractError(err, 'Could not fetch flow health') };
+    }
+  }
+
+  return { listFlows, listRuns, triggerRun, cancelRun, getFlowHealth };
 }
