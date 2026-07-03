@@ -59,15 +59,15 @@ test.describe('/admin/browser-flows — native matrix', () => {
     await page.goto('/admin/browser-flows');
     await dismissMobileSidebarIfPresent(page);
 
-    await expect(page.getByTestId('browser-flows-view')).toBeVisible();
-    await expect(page.getByTestId('browser-flows-matrix')).toBeVisible();
+    await expect(page.locator('[data-test="browser-flows-view"]')).toBeVisible();
+    await expect(page.locator('[data-test="browser-flows-matrix"]')).toBeVisible();
 
-    await expect(page.getByTestId('flow-row-flow-a')).toBeVisible();
-    await expect(page.getByTestId('flow-row-flow-b')).toBeVisible();
-    await expect(page.getByTestId('flow-row-flow-c')).toBeVisible();
+    await expect(page.locator('[data-test="flow-row-flow-a"]')).toBeVisible();
+    await expect(page.locator('[data-test="flow-row-flow-b"]')).toBeVisible();
+    await expect(page.locator('[data-test="flow-row-flow-c"]')).toBeVisible();
 
     // Flow A has 3 runs → 17 empty cells + 3 status cells = 20 cells.
-    const rowA = page.getByTestId('flow-row-flow-a');
+    const rowA = page.locator('[data-test="flow-row-flow-a"]');
     await expect(rowA.locator('.cell')).toHaveCount(20);
     await expect(rowA.locator('.cell-empty')).toHaveCount(17);
     await expect(rowA.locator('.cell-success')).toHaveCount(1);
@@ -75,7 +75,7 @@ test.describe('/admin/browser-flows — native matrix', () => {
     await expect(rowA.locator('.cell-running')).toHaveCount(1);
 
     // Flow C has no runs → all 20 cells empty.
-    const rowC = page.getByTestId('flow-row-flow-c');
+    const rowC = page.locator('[data-test="flow-row-flow-c"]');
     await expect(rowC.locator('.cell-empty')).toHaveCount(20);
   });
 
@@ -92,7 +92,7 @@ test.describe('/admin/browser-flows — native matrix', () => {
     await page.goto('/admin/browser-flows');
     await dismissMobileSidebarIfPresent(page);
 
-    const row = page.getByTestId('flow-row-flow-b');
+    const row = page.locator('[data-test="flow-row-flow-b"]');
     await expect(row.locator('.cell-success')).toHaveCount(1);
     await expect(row.locator('.cell-failed')).toHaveCount(1);
     await expect(row.locator('.cell-blocked')).toHaveCount(1);
@@ -107,8 +107,8 @@ test.describe('/admin/browser-flows — native matrix', () => {
     await page.goto('/admin/browser-flows');
     await dismissMobileSidebarIfPresent(page);
 
-    await expect(page.getByTestId('browser-flows-empty')).toBeVisible();
-    await expect(page.getByTestId('browser-flows-matrix')).toHaveCount(0);
+    await expect(page.locator('[data-test="browser-flows-empty"]')).toBeVisible();
+    await expect(page.locator('[data-test="browser-flows-matrix"]')).toHaveCount(0);
   });
 
   test('flow ordering follows the API list order (oldest created_at first)', async ({ page }) => {
@@ -130,11 +130,11 @@ test.describe('/admin/browser-flows — native matrix', () => {
     await page.goto('/admin/browser-flows');
     await dismissMobileSidebarIfPresent(page);
 
-    await page.getByTestId('trigger-flow-a').click();
+    await page.locator('[data-test="trigger-flow-a"]').click();
 
     // A new "running" run appears; cancel button surfaces on the row.
-    await expect(page.getByTestId('cancel-flow-a')).toBeVisible();
-    await expect(page.getByTestId('flow-row-flow-a').locator('.cell-running')).toHaveCount(1);
+    await expect(page.locator('[data-test="cancel-flow-a"]')).toBeVisible();
+    await expect(page.locator('[data-test="flow-row-flow-a"] .cell-running')).toHaveCount(1);
     expect(browserFlowsSeed.runs.some((r) => r.status === 'running')).toBe(true);
   });
 
@@ -144,7 +144,7 @@ test.describe('/admin/browser-flows — native matrix', () => {
     await page.goto('/admin/browser-flows');
     await dismissMobileSidebarIfPresent(page);
 
-    await expect(page.getByTestId('trigger-flow-c')).toBeDisabled();
+    await expect(page.locator('[data-test="trigger-flow-c"]')).toBeDisabled();
   });
 
   test('?legacy=1 falls back to the iframe wrapper for rollback', async ({ page }) => {
@@ -152,8 +152,8 @@ test.describe('/admin/browser-flows — native matrix', () => {
     await page.goto('/admin/browser-flows?legacy=1');
     await dismissMobileSidebarIfPresent(page);
 
-    await expect(page.getByTestId('browser-flows-legacy')).toBeVisible();
-    await expect(page.getByTestId('browser-flows-view')).toHaveCount(0);
+    await expect(page.locator('[data-test="browser-flows-legacy"]')).toBeVisible();
+    await expect(page.locator('[data-test="browser-flows-view"]')).toHaveCount(0);
     await expect(page.locator('iframe.browser-flows-iframe')).toHaveAttribute('src', '/browser-flows');
   });
 
@@ -163,7 +163,7 @@ test.describe('/admin/browser-flows — native matrix', () => {
     await page.goto('/admin/browser-flows');
     await dismissMobileSidebarIfPresent(page);
 
-    const cell = page.getByTestId('cell-flow-a-run-a1');
+    const cell = page.locator('[data-test="cell-flow-a-run-a1"]');
     await expect(cell).toHaveAttribute('href', '/admin/browser-flows/flow-a/runs/run-a1');
   });
 
@@ -173,7 +173,7 @@ test.describe('/admin/browser-flows — native matrix', () => {
     await page.goto('/admin/browser-flows');
     await dismissMobileSidebarIfPresent(page);
 
-    const link = page.getByTestId('flow-row-flow-a').locator('.flow-name a');
+    const link = page.locator('[data-test="flow-row-flow-a"] .flow-name a');
     await expect(link).toHaveAttribute('href', '/admin/browser-flows/flow-a');
   });
 });
