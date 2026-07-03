@@ -343,6 +343,53 @@ export interface JobSeedRow {
 
 export const jobsSeed: { rows: JobSeedRow[] } = { rows: [] };
 
+export interface SourceSeedRow {
+  source: string;
+  flow_name?: string;
+  board_url?: string | null;
+  description?: string | null;
+  proxy?: string | null;
+  respect_robots?: boolean;
+  last_run_at?: string | null;
+  last_run_status?: string | null;
+  row_count?: number;
+}
+
+export const jobsSourcesSeed: {
+  sources: SourceSeedRow[];
+  global_criteria: {
+    whitelist_keywords: string[];
+    blacklist_keywords: string[];
+    max_distance_km: number;
+    english_required: boolean;
+    english_heuristic: string;
+  };
+} = {
+  sources: [],
+  global_criteria: {
+    whitelist_keywords: ['barista', 'cleaner', 'server'],
+    blacklist_keywords: ['senior', 'engineer'],
+    max_distance_km: 10.0,
+    english_required: true,
+    english_heuristic:
+      'Explicit English mention wins; otherwise stop-word ratio decides.',
+  },
+};
+
+export function seedJobsSources(rows: SourceSeedRow[] = []) {
+  jobsSourcesSeed.sources = rows.map((r) => ({
+    source: r.source,
+    flow_name: r.flow_name ?? `jobs_${r.source}`,
+    board_url: r.board_url ?? `https://example.com/${r.source}`,
+    description: r.description ?? null,
+    proxy: r.proxy ?? 'direct',
+    respect_robots: r.respect_robots ?? true,
+    last_run_at: r.last_run_at ?? null,
+    last_run_status: r.last_run_status ?? null,
+    row_count: r.row_count ?? 0,
+  }));
+}
+
 export function seedJobsRows(rows: JobSeedRow[] = []) {
   const now = '2026-06-30T19:00:00Z';
   jobsSeed.rows = rows.map((r) => ({
@@ -377,6 +424,22 @@ export function seedJobsRows(rows: JobSeedRow[] = []) {
  *  registers this AFTER it). */
 export async function installJobsMocks(page: Page): Promise<void> {
   jobsSeed.rows = [];
+  jobsSourcesSeed.sources = [];
+
+  await page.route(/\/api\/jobs\/sources(\?.*)?$/, async (route: Route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        global_criteria: jobsSourcesSeed.global_criteria,
+        sources: jobsSourcesSeed.sources.slice(),
+      }),
+    });
+  });
 
   await page.route(/\/api\/jobs\/[^/]+\/hide$/, async (route: Route) => {
     if (route.request().method() !== 'PATCH') {

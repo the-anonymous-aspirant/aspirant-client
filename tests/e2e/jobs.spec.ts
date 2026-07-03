@@ -4,6 +4,7 @@ import {
   dismissMobileSidebarIfPresent,
   installJobsMocks,
   seedJobsRows,
+  seedJobsSources,
   jobsSeed,
 } from './helpers/mockBackend';
 
@@ -306,5 +307,82 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
     await page.locator('[data-test="jobs-filter"]').fill('quantumastronomy');
     await expect(page.locator('[data-test="jobs-empty"]')).toContainText('No jobs match');
+  });
+
+  test('sources panel is collapsed by default and expands on click', async ({ page }) => {
+    // Per #1411-B5 / task #1419 — surface which sources are producing
+    // data and what each filters on, without spending vertical space
+    // by default.
+    seedJobsRows(SEED_ROWS);
+    seedJobsSources([
+      {
+        source: 'berlinstartupjobs',
+        description: 'English-speaking Berlin startup roles via Algolia backend.',
+        proxy: 'direct',
+        last_run_at: '2026-06-30T18:00:00Z',
+        last_run_status: 'success',
+        row_count: 84,
+      },
+      {
+        source: 'expat_berlin',
+        description: 'expat.com Berlin forum threads tagged as jobs.',
+        proxy: 'direct',
+        last_run_at: '2026-06-30T18:05:00Z',
+        last_run_status: 'failed',
+        row_count: 0,
+      },
+    ]);
+    await page.goto('/trusted/jobs');
+    await dismissMobileSidebarIfPresent(page);
+
+    const panel = page.locator('[data-test="sources-panel"]');
+    await expect(panel).toBeVisible();
+    // <details> starts closed — the body is in the DOM but not rendered.
+    // Contents inside a closed <details> are not visible per Playwright's
+    // visibility semantics, and the panel's own ``open`` property flips
+    // once the summary is clicked.
+    await expect(page.locator('[data-test="sources-table"]')).not.toBeVisible();
+    await expect(panel).not.toHaveJSProperty('open', true);
+
+    await panel.locator('[data-test="sources-panel-summary"]').click();
+    await expect(panel).toHaveJSProperty('open', true);
+    await expect(page.locator('[data-test="sources-table"]')).toBeVisible();
+    await expect(page.locator('[data-test="sources-table"] tbody tr')).toHaveCount(2);
+
+    const bsj = page.locator('[data-test-source="berlinstartupjobs"]');
+    await expect(bsj).toContainText('English-speaking Berlin startup roles');
+    await expect(bsj).toContainText('84');
+    await expect(bsj.locator('.badge-run-ok')).toContainText('success');
+
+    const expat = page.locator('[data-test-source="expat_berlin"]');
+    await expect(expat.locator('.badge-run-fail')).toContainText('failed');
+    await expect(expat).toContainText('0');
+  });
+
+  test('sources panel surfaces global classifier criteria once', async ({ page }) => {
+    seedJobsRows(SEED_ROWS);
+    seedJobsSources([
+      { source: 'x', description: 'stub', row_count: 0 },
+    ]);
+    await page.goto('/trusted/jobs');
+    await dismissMobileSidebarIfPresent(page);
+
+    await page.locator('[data-test="sources-panel-summary"]').click();
+    const crit = page.locator('[data-test="sources-global-criteria"]');
+    await expect(crit).toContainText('≤ 10 km');
+    await expect(crit).toContainText('required');
+    await expect(crit).toContainText('barista');
+    await expect(crit).toContainText('senior');
+  });
+
+  test('sources panel renders empty state when no scraper flows are registered', async ({ page }) => {
+    seedJobsRows(SEED_ROWS);
+    seedJobsSources([]);
+    await page.goto('/trusted/jobs');
+    await dismissMobileSidebarIfPresent(page);
+
+    await page.locator('[data-test="sources-panel-summary"]').click();
+    await expect(page.locator('[data-test="sources-empty"]')).toBeVisible();
+    await expect(page.locator('[data-test="sources-empty"]')).toContainText('No scraper flows');
   });
 });
