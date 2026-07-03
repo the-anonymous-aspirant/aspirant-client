@@ -590,6 +590,191 @@ export async function dismissMobileSidebarIfPresent(page: Page): Promise<void> {
   }
 }
 
+// ---------- /api/browser-flows read+trigger mocks (#1445 — /admin/browser-flows) ----------
+
+export interface BrowserFlowSeed {
+  id: string;
+  name: string;
+  description?: string | null;
+  owner_actor_id?: number | null;
+  input_schema?: Record<string, unknown>;
+  output_schema?: Record<string, unknown>;
+  flow_definition?: string;
+  enabled?: boolean;
+  robots_check_required?: boolean;
+  headed?: boolean;
+  created_at?: string;
+}
+
+export interface BrowserFlowRunSeed {
+  id: string;
+  flow_id: string;
+  started_at: string;
+  completed_at?: string | null;
+  status: string;
+  input_payload?: Record<string, unknown>;
+  output_rows_count?: number;
+  errors?: unknown[];
+  proxy_used?: string | null;
+  user_agent_used?: string | null;
+  location_used?: string | null;
+}
+
+export const browserFlowsSeed: { flows: BrowserFlowSeed[]; runs: BrowserFlowRunSeed[] } = {
+  flows: [],
+  runs: [],
+};
+
+export function seedBrowserFlows(flows: BrowserFlowSeed[]): void {
+  browserFlowsSeed.flows = flows.map((f) => ({
+    description: null,
+    owner_actor_id: null,
+    input_schema: {},
+    output_schema: {},
+    flow_definition: '',
+    enabled: true,
+    robots_check_required: true,
+    headed: false,
+    created_at: '2026-07-03T12:00:00Z',
+    ...f,
+  }));
+}
+
+export function seedBrowserFlowRuns(runs: BrowserFlowRunSeed[]): void {
+  browserFlowsSeed.runs = runs.map((r) => ({
+    completed_at: null,
+    input_payload: {},
+    output_rows_count: 0,
+    errors: [],
+    proxy_used: null,
+    user_agent_used: null,
+    location_used: null,
+    ...r,
+  }));
+}
+
+function lastRunSummary(flowId: string): unknown {
+  const forFlow = browserFlowsSeed.runs.filter((r) => r.flow_id === flowId);
+  if (!forFlow.length) return null;
+  const newest = forFlow
+    .slice()
+    .sort((a, b) => b.started_at.localeCompare(a.started_at))[0];
+  return {
+    id: newest.id,
+    status: newest.status,
+    started_at: newest.started_at,
+    completed_at: newest.completed_at,
+    output_rows_count: newest.output_rows_count ?? 0,
+  };
+}
+
+/** Install /api/browser-flows routes: list flows, list runs (paged), trigger,
+ *  cancel. The seeded state is per-test; call `seedBrowserFlows`/`seedBrowserFlowRuns`
+ *  in the test body before navigating. */
+export async function installBrowserFlowsMocks(page: Page): Promise<void> {
+  browserFlowsSeed.flows = [];
+  browserFlowsSeed.runs = [];
+
+  await page.route(/\/api\/browser-flows\/[^/]+\/runs\/[^/]+\/cancel$/, async (route: Route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    const parts = new URL(route.request().url()).pathname.split('/');
+    const runId = parts[parts.length - 2];
+    const run = browserFlowsSeed.runs.find((r) => r.id === runId);
+    if (!run) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"detail":"run not found"}' });
+      return;
+    }
+    run.status = 'cancelled';
+    run.completed_at = '2026-07-03T14:00:00Z';
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(run) });
+  });
+
+  await page.route(/\/api\/browser-flows\/[^/]+\/run$/, async (route: Route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    const parts = new URL(route.request().url()).pathname.split('/');
+    const flowId = parts[parts.length - 2];
+    const flow = browserFlowsSeed.flows.find((f) => f.id === flowId);
+    if (!flow) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"detail":"flow not found"}' });
+      return;
+    }
+    const newRunId = `run-${browserFlowsSeed.runs.length + 1}`;
+    browserFlowsSeed.runs.push({
+      id: newRunId,
+      flow_id: flowId,
+      started_at: '2026-07-03T14:01:00Z',
+      completed_at: null,
+      status: 'running',
+      input_payload: {},
+      output_rows_count: 0,
+      errors: [],
+      proxy_used: null,
+      user_agent_used: null,
+      location_used: null,
+    });
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: JSON.stringify({ run_id: newRunId, status: 'running' }),
+    });
+  });
+
+  await page.route(/\/api\/browser-flows\/[^/]+\/runs(\?.*)?$/, async (route: Route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    const url = new URL(route.request().url());
+    const parts = url.pathname.split('/');
+    const flowId = parts[parts.length - 2];
+    const flow = browserFlowsSeed.flows.find((f) => f.id === flowId);
+    if (!flow) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"detail":"flow not found"}' });
+      return;
+    }
+    const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+    const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+    const forFlow = browserFlowsSeed.runs
+      .filter((r) => r.flow_id === flowId)
+      .slice()
+      .sort((a, b) => b.started_at.localeCompare(a.started_at));
+    const slice = forFlow.slice(offset, offset + limit);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ runs: slice, total: forFlow.length, limit, offset }),
+    });
+  });
+
+  await page.route(/\/api\/browser-flows(\?.*)?$/, async (route: Route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    const items = browserFlowsSeed.flows.map((f) => ({ ...f, last_run: lastRunSummary(f.id) }));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(items),
+    });
+  });
+}
+
+/** Seed localStorage with an Admin-role session so `/admin/*` routes mount. */
+export async function seedAdminSession(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('user_token', 'e2e-admin-token');
+    localStorage.setItem('user_role', 'Admin');
+    localStorage.setItem('user_name', 'e2e-admin');
+  });
+}
+
 /** A pair of `name + buffer + mimeType` chunks fed to setInputFiles; the
  *  PDF body is byte-minimal because the upload step does not parse the
  *  content (commander does, but commander is mocked). */
