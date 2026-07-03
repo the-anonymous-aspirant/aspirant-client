@@ -38,6 +38,7 @@ import PappasPushups from '../views/trusted/PappasPushups.vue';
 import JobsView from '../views/trusted/JobsView.vue';
 import Advisor from '../views/admin/Advisor.vue';
 import BrowserFlows from '../views/admin/BrowserFlows.vue';
+import FlowDetail from '../views/admin/browser-flows/FlowDetail.vue';
 import KvittoMaker from '../views/admin/tools/KvittoMaker.vue';
 import NotFound from '../views/NotFound.vue';
 
@@ -52,6 +53,7 @@ const routes = [
   { path: '/admin/finance', component: Finance, meta: { roles: ['Admin'] } },
   { path: '/admin/advisor', component: Advisor, meta: { roles: ['Admin'] } },
   { path: '/admin/browser-flows', component: BrowserFlows, meta: { roles: ['Admin'] } },
+  { path: '/admin/browser-flows/:id', component: FlowDetail, meta: { roles: ['Admin'] } },
   { path: '/admin/tools/kvitto', component: KvittoMaker, meta: { roles: ['Admin'] } },
 
   { path: '/about', component: AboutView },
