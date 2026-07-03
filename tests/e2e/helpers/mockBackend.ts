@@ -376,6 +376,21 @@ export const jobsSourcesSeed: {
   },
 };
 
+/** Operator-facing 'about me' block payload — mirrors the aspirant-browser
+ *  GET /api/jobs/about response the JobsView renders above the sources
+ *  panel (#1411-B6). */
+export const jobsAboutSeed: {
+  description: string;
+  in_scope: string[];
+  out_of_scope: string[];
+} = {
+  description:
+    'English-speaking part-time service, creative, and hospitality jobs ' +
+    'within 10 km of Parkaue 15, 10367 Berlin. No prior experience required.',
+  in_scope: ['barista', 'cleaner', 'server', 'concierge', 'bartender'],
+  out_of_scope: ['senior', 'engineer', 'manager', 'architect'],
+};
+
 export function seedJobsSources(rows: SourceSeedRow[] = []) {
   jobsSourcesSeed.sources = rows.map((r) => ({
     source: r.source,
@@ -425,6 +440,18 @@ export function seedJobsRows(rows: JobSeedRow[] = []) {
 export async function installJobsMocks(page: Page): Promise<void> {
   jobsSeed.rows = [];
   jobsSourcesSeed.sources = [];
+
+  await page.route(/\/api\/jobs\/about$/, async (route: Route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(jobsAboutSeed),
+    });
+  });
 
   await page.route(/\/api\/jobs\/sources(\?.*)?$/, async (route: Route) => {
     if (route.request().method() !== 'GET') {
