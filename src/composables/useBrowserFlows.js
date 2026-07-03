@@ -73,5 +73,14 @@ export function useBrowserFlows() {
     }
   }
 
-  return { listFlows, listRuns, triggerRun, cancelRun, getFlowHealth };
+  async function getRunDetail(flowId, runId) {
+    try {
+      const resp = await axios.get(`${API_BASE}/${flowId}/runs/${runId}`);
+      return { run: resp.data, error: null };
+    } catch (err) {
+      return { run: null, error: extractError(err, 'Could not fetch run detail') };
+    }
+  }
+
+  return { listFlows, listRuns, triggerRun, cancelRun, getFlowHealth, getRunDetail };
 }

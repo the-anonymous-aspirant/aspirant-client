@@ -659,6 +659,38 @@ export function seedBrowserFlowHealth(flowId: string, health: Partial<BrowserFlo
   };
 }
 
+export interface BrowserFlowActionSeed {
+  id: string;
+  step_order: number;
+  action_type: string;
+  selector?: string | null;
+  value?: string | null;
+  succeeded: boolean;
+  duration_ms?: number | null;
+  error?: string | null;
+}
+
+export interface BrowserFlowOutputSeed {
+  id: string;
+  row_data: Record<string, unknown>;
+  scraped_at: string;
+  inserted_at?: string;
+}
+
+export const browserFlowRunDetailSeed: {
+  actions: Record<string, BrowserFlowActionSeed[]>;
+  outputs: Record<string, BrowserFlowOutputSeed[]>;
+} = { actions: {}, outputs: {} };
+
+export function seedBrowserFlowRunDetail(
+  runId: string,
+  actions: BrowserFlowActionSeed[],
+  outputs: BrowserFlowOutputSeed[] = [],
+): void {
+  browserFlowRunDetailSeed.actions[runId] = actions;
+  browserFlowRunDetailSeed.outputs[runId] = outputs;
+}
+
 export function seedBrowserFlows(flows: BrowserFlowSeed[]): void {
   browserFlowsSeed.flows = flows.map((f) => ({
     description: null,
@@ -709,6 +741,46 @@ export async function installBrowserFlowsMocks(page: Page): Promise<void> {
   browserFlowsSeed.flows = [];
   browserFlowsSeed.runs = [];
   browserFlowsSeed.health = {};
+  browserFlowRunDetailSeed.actions = {};
+  browserFlowRunDetailSeed.outputs = {};
+
+  await page.route(/\/api\/browser-flows\/[^/]+\/runs\/[^/]+$/, async (route: Route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    const url = new URL(route.request().url());
+    const parts = url.pathname.split('/');
+    const runId = parts[parts.length - 1];
+    const flowId = parts[parts.length - 3];
+    const run = browserFlowsSeed.runs.find((r) => r.id === runId && r.flow_id === flowId);
+    if (!run) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"detail":"run not found"}' });
+      return;
+    }
+    const actions = browserFlowRunDetailSeed.actions[runId] || [];
+    const outputs = browserFlowRunDetailSeed.outputs[runId] || [];
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...run,
+        actions: actions.map((a) => ({
+          selector: null,
+          value: null,
+          duration_ms: null,
+          error: null,
+          ...a,
+          run_id: runId,
+        })),
+        outputs: outputs.map((o) => ({
+          inserted_at: o.scraped_at,
+          ...o,
+          run_id: runId,
+        })),
+      }),
+    });
+  });
 
   await page.route(/\/api\/browser-flows\/[^/]+\/health(\?.*)?$/, async (route: Route) => {
     if (route.request().method() !== 'GET') {

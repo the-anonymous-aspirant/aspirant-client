@@ -349,7 +349,7 @@
     font-weight: 600;
   }
   h2 {
-    color: #424242;
+    color: var(--brand-primary, #ffb300);
     font-size: 1rem;
     font-weight: 600;
     margin: 1.5rem 0 0.5rem;
@@ -386,7 +386,7 @@
   .kpi-value {
     font-size: 1.8rem;
     font-weight: 700;
-    color: #424242;
+    color: #ffffff;
     margin: 0.25rem 0;
   }
   .kpi-value-small {
@@ -434,7 +434,7 @@
   .schema-json {
     margin: 0;
     font-size: 0.8rem;
-    color: #424242;
+    color: #ffffff;
     white-space: pre;
     font-family: ui-monospace, SFMono-Regular, monospace;
   }
@@ -455,11 +455,12 @@
   .runs-table td {
     padding: 0.4rem 0.6rem;
     text-align: left;
-    border-bottom: 1px solid #eeeeee;
+    border-bottom: 1px solid rgba(255, 179, 0, 0.15);
+    color: #ffffff;
   }
   .runs-table th {
     font-weight: 600;
-    color: #424242;
+    color: #ffffff;
     font-size: 0.85rem;
   }
   .status-pill {
