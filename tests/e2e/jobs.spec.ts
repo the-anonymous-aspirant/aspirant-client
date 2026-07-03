@@ -375,6 +375,40 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
     await expect(crit).toContainText('senior');
   });
 
+  test('about-me block renders above the sources panel with description and role lists', async ({ page }) => {
+    // Per #1411-B6 — surface what the operator is optimising for so
+    // /trusted/jobs opens with a scannable target-description above the
+    // sources panel and the table. Data comes from GET /api/jobs/about.
+    seedJobsRows(SEED_ROWS);
+    await page.goto('/trusted/jobs');
+    await dismissMobileSidebarIfPresent(page);
+
+    const about = page.locator('[data-test="about-me"]');
+    await expect(about).toBeVisible();
+    await expect(about).toContainText('Berlin');
+    await expect(about).toContainText('10 km');
+    await expect(about).toContainText('No prior experience');
+
+    const inScope = page.locator('[data-test="about-me-in-scope"]');
+    await expect(inScope).toContainText('Looking for');
+    await expect(inScope.locator('.keyword-pill-whitelist')).toContainText([
+      'barista',
+      'cleaner',
+    ]);
+
+    const outOfScope = page.locator('[data-test="about-me-out-of-scope"]');
+    await expect(outOfScope).toContainText('Not looking for');
+    await expect(outOfScope.locator('.keyword-pill-blacklist')).toContainText([
+      'senior',
+      'engineer',
+    ]);
+
+    // Block renders above the sources panel in the reading order.
+    const aboutBox = await about.boundingBox();
+    const panelBox = await page.locator('[data-test="sources-panel"]').boundingBox();
+    expect(aboutBox!.y).toBeLessThan(panelBox!.y);
+  });
+
   test('sources panel renders empty state when no scraper flows are registered', async ({ page }) => {
     seedJobsRows(SEED_ROWS);
     seedJobsSources([]);

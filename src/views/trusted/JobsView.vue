@@ -5,6 +5,47 @@
       Berlin · part-time · English-speaking — deduplicated overview across the scraped boards.
     </p>
 
+    <section
+      v-if="about"
+      class="about-me"
+      data-test="about-me"
+      aria-labelledby="about-me-heading"
+    >
+      <h2 id="about-me-heading" class="about-me-heading">About me</h2>
+      <p class="about-me-description" data-test="about-me-description">
+        {{ about.description }}
+      </p>
+      <div class="about-me-lists">
+        <div class="about-me-list" data-test="about-me-in-scope">
+          <span class="about-me-list-label">Looking for</span>
+          <span class="keyword-pills">
+            <span
+              v-for="kw in about.in_scope"
+              :key="'in-' + kw"
+              class="keyword-pill keyword-pill-whitelist"
+            >{{ kw }}</span>
+          </span>
+        </div>
+        <div class="about-me-list" data-test="about-me-out-of-scope">
+          <span class="about-me-list-label">Not looking for</span>
+          <span class="keyword-pills">
+            <span
+              v-for="kw in about.out_of_scope"
+              :key="'out-' + kw"
+              class="keyword-pill keyword-pill-blacklist"
+            >{{ kw }}</span>
+          </span>
+        </div>
+      </div>
+    </section>
+    <p
+      v-else-if="aboutLoadError"
+      class="about-me-error"
+      data-test="about-me-error"
+    >
+      {{ aboutLoadError }}
+    </p>
+
     <details class="sources-panel" data-test="sources-panel">
       <summary class="sources-panel-summary" data-test="sources-panel-summary">
         <span>Sources &amp; criteria</span>
@@ -299,6 +340,8 @@
         globalCriteria: null,
         sourcesLoading: false,
         sourcesLoadError: null,
+        about: null,
+        aboutLoadError: null,
       };
     },
     computed: {
@@ -398,6 +441,20 @@
       formatRelative(iso) {
         return formatRelative(iso);
       },
+      async fetchAbout() {
+        this.aboutLoadError = null;
+        try {
+          const resp = await axios.get('/api/jobs/about');
+          this.about = resp.data || null;
+        } catch (err) {
+          this.aboutLoadError =
+            err.response?.data?.error?.message ||
+            err.response?.data?.detail ||
+            err.message ||
+            'Could not load target description';
+          this.about = null;
+        }
+      },
       async fetchSources() {
         this.sourcesLoading = true;
         this.sourcesLoadError = null;
@@ -444,6 +501,7 @@
     mounted() {
       this.fetchJobs();
       this.fetchSources();
+      this.fetchAbout();
     },
     beforeUnmount() {
       if (this.debounceTimer) clearTimeout(this.debounceTimer);
@@ -461,6 +519,56 @@
   .page-subtitle {
     color: var(--text-muted, #888);
     margin-bottom: var(--space-md);
+  }
+
+  .about-me {
+    margin-bottom: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--border-card, #444);
+    border-left: 3px solid var(--brand-accent, #6cf);
+    border-radius: var(--radius-sm, 4px);
+    background-color: var(--surface-card, transparent);
+  }
+
+  .about-me-heading {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--text-muted, #888);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 0 var(--space-xs);
+  }
+
+  .about-me-description {
+    margin: 0 0 var(--space-sm);
+    font-size: var(--text-base);
+    line-height: 1.5;
+  }
+
+  .about-me-lists {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--space-xs) var(--space-md);
+    align-items: baseline;
+  }
+
+  .about-me-list {
+    display: contents;
+  }
+
+  .about-me-list-label {
+    font-size: var(--text-sm);
+    color: var(--text-muted, #888);
+    white-space: nowrap;
+  }
+
+  .about-me-error {
+    margin: 0 0 var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--text-error, #c00);
+    border-radius: var(--radius-sm, 4px);
+    color: var(--text-error, #c00);
+    font-size: var(--text-sm);
   }
 
   .sources-panel {
