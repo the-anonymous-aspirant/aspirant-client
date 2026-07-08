@@ -93,49 +93,20 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     expect(notFoundBg).toBe('rgba(245, 101, 101, 0.12)');
   });
 
-  test('#938 comparable-sales render as range charts plus card strip', async ({ page }) => {
+  test('#1828 comparables block is not rendered', async ({ page }) => {
+    // The "Jämförbara försäljningar (från Datavärdering)" block used to
+    // sit in the review step. It was removed 2026-07-08 because it
+    // overflowed horizontally and broke navigation on the whole page.
+    // The commander /extract endpoint still returns comparable_sales in
+    // its payload; the view now ignores them. Any future re-add ships
+    // as a separate PR with proper width containment.
     await walkToReview(page);
-    const block = page.locator('.comparables-block');
-    await expect(block).toBeVisible();
-
-    // #909: the decision-support block stays on a white island so the
-    // dark-on-dark readability issue does not return.
-    const blockBg = await block.evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
-    expect(blockBg).toBe('rgb(255, 255, 255)');
-
-    // Tier 1 — one range chart per numeric metric with comparable data
-    // in the fixture (pris, kr/m², avgift/mån, årsavgift, säljdatum, m²).
-    // The mock fixture omits subject `boarea`, so the subject dot only
-    // shows on metrics whose subject value comes from the form
-    // (marknadsvarde_kr → Pris, datum → Säljdatum).
-    const ranges = page.locator('.range-chart');
-    await expect(ranges).not.toHaveCount(0);
-    await expect(page.locator('.range-chart[data-metric="pris_kr"]')).toBeVisible();
-    await expect(page.locator('.range-chart[data-metric="pris_per_m2"]')).toBeVisible();
-    await expect(page.locator('.range-chart[data-metric="salj_datum"]')).toBeVisible();
-
-    // The subject dot renders only when subject + range are both known.
-    // Pris carries the marknadsvarde dot; Avgift/mån has no form-side
-    // subject so its chart stays dot-less.
+    await expect(page.locator('.comparables-block')).toHaveCount(0);
+    await expect(page.locator('.comparable-card')).toHaveCount(0);
+    await expect(page.locator('.range-chart')).toHaveCount(0);
     await expect(
-      page.locator('.range-chart[data-metric="pris_kr"] .range-chart__dot'),
-    ).toBeVisible();
-    await expect(
-      page.locator('.range-chart[data-metric="avgift_kr_manad"] .range-chart__dot'),
+      page.getByRole('heading', { name: /Jämförbara försäljningar/ }),
     ).toHaveCount(0);
-
-    // Tier 2 — horizontal-scroll card strip. Cards render most-recent
-    // first; the fixture's 2026-04-12 row sits ahead of 2026-03-30.
-    const cards = page.locator('.comparable-card');
-    await expect(cards).toHaveCount(2);
-    await expect(cards.first().locator('.comparable-card__brf')).toHaveText('Brf Solviken');
-    await expect(cards.nth(1).locator('.comparable-card__brf')).toHaveText('Brf Bryggan');
-
-    // The strip is a horizontal-overflow container so swipe/scroll works
-    // on touch.
-    const scrollContainer = page.locator('.comparable-cards-scroll');
-    const overflowX = await scrollContainer.evaluate(el => getComputedStyle(el as HTMLElement).overflowX);
-    expect(overflowX).toBe('auto');
   });
 
   test('#880 source-date inputs use the native date picker', async ({ page }) => {
@@ -213,32 +184,23 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
   test('#992 every bordered review-step box keeps its content within bounds at desktop and mobile', async ({ page }) => {
     // Operator (2026-06-22) reported that the "small boxes with
     // värderingsinformation" still escape their bounding boxes on
-    // desktop, distinct from the #949 comparable-card fix. The root-cause
-    // ask (per the task body) is to govern overflow at the box level
-    // rather than chasing per-instance regressions: every bordered or
-    // bounded box in the review step must keep every descendant text
-    // node inside its visible rectangle, at BOTH desktop and mobile
-    // widths. Boxes covered:
+    // desktop. The root-cause ask (per the task body) is to govern
+    // overflow at the box level rather than chasing per-instance
+    // regressions: every bordered or bounded box in the review step
+    // must keep every descendant text node inside its visible
+    // rectangle, at BOTH desktop and mobile widths. Boxes covered:
     //   - .field-block (Värderingsobjekt / Källdokument / Värdebedömning
     //                    / Utfärdare — the property-metadata fieldsets)
-    //   - .range-chart  (per-metric comparable-range visualisation)
-    //   - .comparables-block (the white-island decision-support panel)
-    //   - .comparable-card  (already pinned by #949 at mobile; this
-    //                        guard re-checks it at both viewports so a
-    //                        future card edit can't reopen #949 at desktop)
+    // The .range-chart / .comparable-card / .comparables-block boxes
+    // covered here pre-#1828 were removed together with the
+    // comparables-block whose horizontal overflow broke navigation on
+    // the whole page (2026-07-08 removal).
     const viewports = [
       { label: 'desktop', width: 1280, height: 900 },
       { label: 'mobile', width: 375, height: 800 },
     ];
-    // .comparables-block is intentionally excluded — it wraps the
-    // .comparable-cards-scroll horizontal-overflow strip whose cards
-    // sit past the visible block at narrow viewports by design (#938
-    // tier-2 swipe affordance). The cards themselves carry the bounds
-    // contract, and the strip is its own scroll container.
     const boxSelectors = [
       '.field-block',
-      '.range-chart',
-      '.comparable-card',
     ];
     for (const viewport of viewports) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -278,53 +240,6 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
       // starts from a clean Vue tree rather than re-using the same DOM.
       await page.goto('about:blank');
     }
-  });
-
-  test('#949 comparable-card text stays inside the card bounds at mobile width', async ({ page }) => {
-    // Run the desktop chromium suite at iPhone-sized viewport so the
-    // ≤768px @media block (where .comparable-card narrows to 180px) is
-    // active. Local mobile-safari isn't runnable without webkit system
-    // deps, so checking at chromium-with-resized-viewport keeps the
-    // overflow regression caught locally — CI's mobile-safari project
-    // re-validates the same surface.
-    await page.setViewportSize({ width: 375, height: 800 });
-    await walkToReview(page);
-    const cards = page.locator('.comparable-card');
-    const count = await cards.count();
-    expect(count).toBeGreaterThan(0);
-
-    for (let i = 0; i < count; i++) {
-      const overflow = await cards.nth(i).evaluate(el => {
-        const cardRect = (el as HTMLElement).getBoundingClientRect();
-        const texts = (el as HTMLElement).querySelectorAll('span, dt, dd, p');
-        return Array.from(texts).flatMap(t => {
-          const tr = (t as HTMLElement).getBoundingClientRect();
-          // 1px tolerance for subpixel rounding.
-          const right = tr.right - cardRect.right;
-          const left = cardRect.left - tr.left;
-          if (right > 1 || left > 1) {
-            return [{ text: (t.textContent || '').trim(), right, left }];
-          }
-          return [];
-        });
-      });
-      expect(overflow, `card #${i} has overflowing text: ${JSON.stringify(overflow)}`).toEqual([]);
-    }
-  });
-
-  test('#948 range-chart legend names all three visual elements (subject, range, median)', async ({ page }) => {
-    await walkToReview(page);
-    // The comparables block only renders when the extract fixture
-    // supplies comparable_sales; assert it's on screen, then assert the
-    // legend caption mentions each of the three visual elements by name.
-    // Pre-fix the median tick was unlabelled and read to the operator
-    // as 'part of the blue bar'.
-    const legend = page.locator('.comparables-block p.muted.small').first();
-    await expect(legend).toBeVisible();
-    const text = (await legend.textContent()) || '';
-    expect(text).toMatch(/svart punkt/);
-    expect(text).toMatch(/bl[åa] stapel/);
-    expect(text).toMatch(/mitten-tick|medianv[äa]rde/);
   });
 
   test('#959 every wizard step renders through the canonical ValuationStep wrapper, centered', async ({ page }) => {
