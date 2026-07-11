@@ -3,60 +3,46 @@
     <h1>Applications</h1>
     <h2 class="page-subtitle">Odds and ends. Some clever. Some stupid. Some just....weird</h2>
     <div class="application-list">
-      <application-card
-        :image-url="appImages.transparencymapper"
-        title="Transperator"
-        description="Quickly make parts of pngs transparent"
-        route="transparencymapper"
-        @card-click="goToApplication"
-      />
-      <application-card
-        :image-url="appImages.quiz"
-        title="Quiz Center"
-        description="Quizzes and personality tests galore"
-        route="quizzes"
-        @card-click="goToApplication"
-      />
-      <application-card
-        :image-url="appImages.games"
-        title="Game Center"
-        description="Fun and engaging games to pass the time"
-        route="games"
-        @card-click="goToApplication"
-      />
-      <application-card
-        :image-url="appImages.emotionalExcellence"
-        title="Emotional Excellence"
-        description="Track and analyze your emotions."
-        route="emotional-excellence"
-        @card-click="goToApplication"
-      />
-      <application-card
-        :image-url="appImages.remarkablePdfs"
-        title="Remarkable PDFs"
-        description="Generate PDFs for your Remarkable tablet"
-        route="remarkable-pdfs"
-        @card-click="goToApplication"
-      />
-      <application-card
-        :image-url="appImages.qrGenerator"
-        title="QR Generator"
-        description="Generate QR codes from any text or URL."
-        route="qr-generator"
-        @card-click="goToApplication"
-      />
+      <!--
+        Dogfood spike (#1979): ApplicationCard replaced with the design-system
+        AspCard. Title -> #header slot, image + description -> body, an "Open"
+        hint -> #footer slot; interactive+@click preserves the original
+        card-click-to-route behaviour.
+      -->
+      <AspCard
+        v-for="app in apps"
+        :key="app.route"
+        class="app-card"
+        variant="default"
+        padding="lg"
+        interactive
+        @click="goToApplication(app.route)"
+      >
+        <template #header>{{ app.title }}</template>
+        <img
+          v-if="appImages[app.imageKey]"
+          :src="appImages[app.imageKey]"
+          :alt="app.title"
+          class="app-card__image"
+        />
+        <div v-else class="app-card__image app-card__image--placeholder"></div>
+        <p class="app-card__desc">
+          <em>{{ app.description }}</em>
+        </p>
+        <template #footer>Open →</template>
+      </AspCard>
     </div>
   </div>
 </template>
 
 <script>
   import AssetManager from '../../asset_manager';
-  import ApplicationCard from '../../components/ApplicationCard.vue';
+  import { AspCard } from '@aspirant/design-system';
 
   export default {
     name: 'Applications',
     components: {
-      ApplicationCard,
+      AspCard,
     },
     data() {
       return {
@@ -69,6 +55,46 @@
           qrGenerator: '',
           home_icon: '',
         },
+        // App tiles, lifted from the former inline card list so the AspCard
+        // grid can render them with v-for. Order and values are unchanged.
+        apps: [
+          {
+            title: 'Transperator',
+            description: 'Quickly make parts of pngs transparent',
+            route: 'transparencymapper',
+            imageKey: 'transparencymapper',
+          },
+          {
+            title: 'Quiz Center',
+            description: 'Quizzes and personality tests galore',
+            route: 'quizzes',
+            imageKey: 'quiz',
+          },
+          {
+            title: 'Game Center',
+            description: 'Fun and engaging games to pass the time',
+            route: 'games',
+            imageKey: 'games',
+          },
+          {
+            title: 'Emotional Excellence',
+            description: 'Track and analyze your emotions.',
+            route: 'emotional-excellence',
+            imageKey: 'emotionalExcellence',
+          },
+          {
+            title: 'Remarkable PDFs',
+            description: 'Generate PDFs for your Remarkable tablet',
+            route: 'remarkable-pdfs',
+            imageKey: 'remarkablePdfs',
+          },
+          {
+            title: 'QR Generator',
+            description: 'Generate QR codes from any text or URL.',
+            route: 'qr-generator',
+            imageKey: 'qrGenerator',
+          },
+        ],
       };
     },
     methods: {
@@ -128,29 +154,50 @@
     padding: var(--space-sm);
   }
 
-  .application-list :deep(.application-card) {
+  .application-list .app-card {
     width: 100%;
-    height: 160px;
+    height: 100%;
   }
 
-  .application-list :deep(.app-image) {
-    height: 60px;
-    padding: var(--space-xs);
-    padding-top: var(--space-sm);
-  }
-
-  .application-list :deep(.card-content) {
-    padding: var(--space-sm);
-    gap: var(--space-2xs);
-  }
-
-  .application-list :deep(.card-content h2) {
+  /* Tighten the DS card's default padding="lg" spacing for this dense tile
+     grid. AspCard exposes header/body/footer sub-parts via :deep. */
+  .application-list :deep(.card__header) {
     font-size: var(--text-sm);
-    margin: 0 0 var(--space-2xs);
+    padding: var(--space-sm) var(--space-md);
   }
 
-  .application-list :deep(.card-content p) {
+  .application-list :deep(.card__body) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2xs);
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .application-list :deep(.card__footer) {
+    padding: var(--space-2xs) var(--space-md);
+    text-align: right;
+  }
+
+  .app-card__image {
+    width: 100%;
+    height: 48px;
+    object-fit: contain;
+    filter: invert(1);
+  }
+
+  .app-card__image--placeholder {
+    height: 48px;
+    width: 100%;
+    background: var(--surface-card-inner);
+    border-radius: var(--radius-sm);
+  }
+
+  .app-card__desc {
+    margin: 0;
     font-size: var(--text-xs);
+    color: var(--text-on-dark);
+    text-align: center;
   }
 
   @media (max-width: 767px) {
@@ -163,9 +210,9 @@
       gap: var(--space-md);
     }
 
-    .application-list :deep(.application-card) {
+    .application-list .app-card {
       max-width: none;
-      height: 160px;
+      height: 100%;
     }
   }
 </style>

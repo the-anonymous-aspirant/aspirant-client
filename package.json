@@ -11,6 +11,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@aspirant/design-system": "file:../aspirant-design-system",
     "@dagrejs/dagre": "^3.0.0",
     "@vue-flow/core": "^1.48.2",
     "axios": "^1.6.8",
