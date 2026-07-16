@@ -29,7 +29,7 @@ test.describe('/admin/penpot — design service entry', () => {
     await expect(page.locator('h1')).toHaveText('Penpot Design');
     await expect(page.locator('.status-label')).toHaveText('ONLINE');
     const launch = page.locator('a.launch-button');
-    await expect(launch).toHaveAttribute('href', 'https://design.the-aspirant.com');
+    await expect(launch).toHaveAttribute('href', '/admin/penpot/app/');
     await expect(launch).toHaveAttribute('target', '_blank');
   });
 

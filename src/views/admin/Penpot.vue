@@ -11,10 +11,10 @@
 
     <div class="launch-card">
       <p>
-        Penpot runs as its own application on a dedicated subdomain — it needs a full
+        Penpot runs as its own application on a same-origin admin path — it needs a full
         browser tab (canvas, shortcuts, websockets), not an embed.
       </p>
-      <a class="launch-button" href="https://design.the-aspirant.com" target="_blank" rel="noopener">
+      <a class="launch-button" href="/admin/penpot/app/" target="_blank" rel="noopener">
         Open Penpot ↗
       </a>
       <ul class="notes">
