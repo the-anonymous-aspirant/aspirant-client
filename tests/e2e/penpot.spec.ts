@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { seedAdminSession } from './helpers/mockBackend';
+import { seedAdminSession, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 
 /** Covers system_3 #2195-C1: /admin/penpot renders the launch surface and a
  *  live status banner fed by the nginx-proxied /penpot-status probe. */
@@ -48,7 +48,9 @@ test.describe('/admin/penpot — design service entry', () => {
       await route.fulfill({ status: 200, contentType: 'text/plain', body: 'OK' });
     });
     await page.goto('/admin');
+    await dismissMobileSidebarIfPresent(page);
     const card = page.getByText('Penpot Design', { exact: true });
+    await card.scrollIntoViewIfNeeded();
     await expect(card).toBeVisible();
     await card.click();
     await expect(page).toHaveURL(/\/admin\/penpot$/);
