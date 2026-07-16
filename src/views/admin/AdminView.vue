@@ -70,6 +70,15 @@
         route="/admin/penpot/"
         @card-click="openInNewTab"
       />
+      <!-- nginx-served like Penpot above: static Histoire build of the
+           design system's stories (system_3 #2218). -->
+      <application-card
+        :image-url="appImages.default"
+        title="Histoire — Design System"
+        description="Component workbench — stories and variants for @aspirant/design-system. Opens in a new tab"
+        route="/admin/histoire/"
+        @card-click="openInNewTab"
+      />
     </div>
 
     <h2 class="section-title">Tools</h2>
