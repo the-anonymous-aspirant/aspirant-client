@@ -60,12 +60,15 @@
         route="/admin/browser-flows"
         @card-click="navigateTo"
       />
+      <!-- Opens in a new tab: Penpot's canvas needs a full browser tab, not
+           an iframe embed. The path is served by nginx (auth_request-gated
+           reverse proxy to penpot-frontend), not a Vue route. -->
       <application-card
         :image-url="appImages.default"
         title="Penpot Design"
-        description="Self-hosted design tool — mockups, tokens, component libraries"
-        route="/admin/penpot"
-        @card-click="navigateTo"
+        description="Self-hosted design tool — mockups, tokens, component libraries. Opens in a new tab (full canvas, not an iframe embed)"
+        route="/admin/penpot/"
+        @card-click="openInNewTab"
       />
     </div>
 
@@ -113,6 +116,11 @@
       },
       navigateTo(route) {
         this.$router.push(route);
+      },
+      // For nginx-served (non-SPA) destinations like Penpot, which need a
+      // full browser tab rather than an in-app route or iframe.
+      openInNewTab(route) {
+        window.open(route, '_blank', 'noopener');
       },
     },
     mounted() {
