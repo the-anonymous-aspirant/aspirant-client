@@ -60,6 +60,13 @@
         route="/admin/browser-flows"
         @card-click="navigateTo"
       />
+      <application-card
+        :image-url="appImages.default"
+        title="Penpot Design"
+        description="Self-hosted design tool — mockups, tokens, component libraries"
+        route="/admin/penpot"
+        @card-click="navigateTo"
+      />
     </div>
 
     <h2 class="section-title">Tools</h2>
