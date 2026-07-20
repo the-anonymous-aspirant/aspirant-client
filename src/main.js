@@ -32,8 +32,22 @@ axios.interceptors.request.use(
     const token = localStorage.getItem('user_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      // Sync cookie for non-AJAX requests (e.g. iframe content)
-      document.cookie = `auth_token=${token}; path=/; SameSite=Strict; max-age=86400`;
+      // Sync cookie for non-AJAX requests (e.g. iframe content): nginx
+      // auth_request gates /browser-flows, /admin/penpot/ and /admin/histoire/,
+      // and an iframe load carries no Authorization header, so the cookie is
+      // the only credential those subrequests can present.
+      //
+      // `Secure` is not optional here (system_3 #2564). Without it this write
+      // SHADOWS the server's hardened cookie: login.go issues auth_token as
+      // Secure+HttpOnly, and this sets a same-name, same-path cookie from JS
+      // that is neither. Browsers then send the soft one over `http://`, so the
+      // session token traverses cleartext on the un-proxied origin. A JS-set
+      // cookie can never be HttpOnly, but it can and must be Secure.
+      //
+      // Consequence, and it is the intended one: over plaintext the browser
+      // silently declines to set this cookie, so the gated iframes do not
+      // authenticate there. Failing closed on a cleartext origin is the point.
+      document.cookie = `auth_token=${token}; path=/; SameSite=Strict; Secure; max-age=86400`;
     }
     return config;
   },
