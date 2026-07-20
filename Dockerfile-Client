@@ -1,12 +1,86 @@
+# Client SPA: node build -> nginx runtime (CONVENTIONS.md §Code).
+#
+# THE PROBLEM THIS FILE SOLVES
+#
+# `@aspirant/design-system` is consumed as `file:../aspirant-design-system`, a
+# sibling-directory dependency recorded by that exact relative path in
+# `package-lock.json`. `npm ci` inside a container whose context is only
+# `aspirant-client/` cannot resolve it, and the build fails at Rollup with
+# `failed to resolve import "@aspirant/design-system/tokens.css"`.
+#
+# That dependency arrived with #139 (Applications grid -> AspCard) and this file
+# was not updated to match, so `docker build -f Dockerfile-Client .` has been
+# broken on main since 2026-07-11. The gap went unnoticed because nothing
+# rebuilt the client for days; it surfaced when #144/#145 needed shipping and
+# the image could not be produced. Dockerfile-ExplorerFrontend already carries
+# this fix, and its header even notes "aspirant-client's main does not import
+# the DS yet" — true when written, not any more.
+#
+# Solved with a BuildKit NAMED BUILD CONTEXT, identically to the explorer:
+#
+#   docker build -f Dockerfile-Client \
+#     --build-context designsystem=../aspirant-design-system \
+#     -t ghcr.io/the-anonymous-aspirant/aspirant-client:latest .
+#
+# THE DESIGN SYSTEM IS BUILT FROM SOURCE HERE, NOT COPIED
+#
+# Its `dist/` and `build/` are gitignored and have zero tracked files, so a
+# clean checkout contains no built artifact — they exist on a dev box only
+# because someone ran the build there. Copying them in would bake an untracked,
+# locally-generated artifact into a production image: green on the machine that
+# happened to have them, broken or silently stale anywhere else. A build that
+# PASSED for that reason was the actual bug in the explorer work (#2409), so the
+# named context supplies the DS's SOURCE and this build compiles it.
+#
+# The /src/... paths reproduce the on-disk sibling layout inside the image, so
+# the `file:` specifier and the lockfile entry both resolve unchanged. Rewriting
+# the dependency to a registry version at build time would make the container
+# and the dev build resolve different artifacts — the failure mode where "works
+# locally" and "works in the image" diverge without saying so.
+
+
+# --- design system: compiled from source ------------------------------------
+# node:22-alpine, matching aspirant-design-system/Dockerfile.histoire, which is
+# the toolchain this package is known to build under. The app stage below keeps
+# the node:21-alpine this file already used; pinning the DS to the version its
+# own image uses avoids making this build the first place the DS is compiled on
+# a different node major.
+FROM node:22-alpine AS designsystem-build
+
+WORKDIR /src/aspirant-design-system
+
+COPY --from=designsystem package.json package-lock.json ./
+RUN npm ci
+
+COPY --from=designsystem . .
+
+# Two steps, not one: `build` is `vite build` (-> dist/) and does not generate
+# tokens. `build/tokens.css` and `build/tokens.js` come from style-dictionary
+# via `tokens:build`, and the package's `exports` map points at both trees — so
+# skipping tokens yields a package that installs cleanly and then fails to
+# resolve `@aspirant/design-system/tokens.css` at app build time, which is the
+# exact error this file exists to fix.
+RUN npm run tokens:build && npm run build
+
+
+# --- client SPA -------------------------------------------------------------
 FROM node:21-alpine AS builder
-WORKDIR /app
+
+WORKDIR /src/aspirant-client
+
+# The compiled DS, placed so that `../aspirant-design-system` resolves.
+COPY --from=designsystem-build /src/aspirant-design-system /src/aspirant-design-system
+
 COPY package*.json ./
 RUN npm ci
+
 COPY . .
 RUN npm run build
 
+
+# --- runtime ----------------------------------------------------------------
 FROM nginx:alpine
 COPY default.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /src/aspirant-client/dist /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
