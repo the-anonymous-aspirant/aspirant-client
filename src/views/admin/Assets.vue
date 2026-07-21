@@ -228,10 +228,9 @@
         }
       },
       downloadAsset(file) {
-        const token = localStorage.getItem('user_token');
-        fetch('/api/fetch-object/' + file.etag, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        // Same-origin fetch sends the server's HttpOnly auth_token cookie by
+        // default; no Authorization header and no credentials option needed.
+        fetch('/api/fetch-object/' + file.etag)
           .then(res => res.blob())
           .then(blob => {
             const url = URL.createObjectURL(blob);

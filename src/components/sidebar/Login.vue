@@ -51,7 +51,6 @@
         role: '',
         error: '',
         success: '',
-        token: '',
       };
     },
     methods: {
@@ -68,13 +67,11 @@
         this.username = '';
         this.password = '';
         this.role = '';
-        this.token = '';
         this.error = '';
         this.success = '';
 
         localStorage.removeItem('user_name');
         localStorage.removeItem('user_role');
-        localStorage.removeItem('user_token');
         this.$emit('logout');
       },
       async login() {
@@ -99,12 +96,10 @@
           this.success = 'Login successful!';
           this.error = '';
           this.role = data.data.role;
-          this.token = data.data.token;
           this.username = data.data.username;
 
           localStorage.setItem('user_name', this.username);
           localStorage.setItem('user_role', this.role);
-          localStorage.setItem('user_token', this.token);
           this.$emit('login');
         } catch (err) {
           this.error = err.message;

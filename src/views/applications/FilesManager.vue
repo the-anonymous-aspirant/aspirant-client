@@ -263,11 +263,10 @@
       downloadFile(filename) {
         const prefix = this.activeTab === 'my' ? '/api/files/download/' : '/api/files/shared/download/';
         const pathQuery = this.pathParam();
-        const token = localStorage.getItem('user_token');
         const url = prefix + encodeURIComponent(filename) + (pathQuery ? pathQuery : '');
-        fetch(url, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        // Same-origin fetch sends the server's HttpOnly auth_token cookie by
+        // default; no Authorization header and no credentials option needed.
+        fetch(url)
           .then((res) => {
             if (!res.ok) throw new Error('Download failed');
             return res.blob();
