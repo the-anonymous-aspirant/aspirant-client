@@ -565,7 +565,6 @@ export async function installJobsMocks(page: Page): Promise<void> {
  *  the view mount; called via addInitScript so it runs before any nav. */
 export async function seedTrustedSession(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    localStorage.setItem('user_token', 'e2e-test-token');
     localStorage.setItem('user_role', 'Trusted');
     localStorage.setItem('user_name', 'e2e-tester');
   });
@@ -906,7 +905,9 @@ export async function installBrowserFlowsMocks(page: Page): Promise<void> {
 /** Seed localStorage with an Admin-role session so `/admin/*` routes mount. */
 export async function seedAdminSession(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    localStorage.setItem('user_token', 'e2e-admin-token');
+    // No user_token: the session is the server's HttpOnly auth_token cookie,
+    // which the app never reads (system_3 #2564). These two are display state
+    // only — what the sidebar renders and what the router guard checks.
     localStorage.setItem('user_role', 'Admin');
     localStorage.setItem('user_name', 'e2e-admin');
   });
