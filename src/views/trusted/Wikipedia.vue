@@ -135,13 +135,10 @@ export default {
     },
   },
   mounted() {
-    const token = localStorage.getItem('user_token');
-    if (token) {
-      // Secure is mandatory: see the interceptor in src/main.js (system_3
-      // #2564). Without it this shadows the server's Secure+HttpOnly cookie
-      // with a soft one that rides cleartext on the un-proxied origin.
-      document.cookie = `auth_token=${token}; path=/; SameSite=Strict; Secure; max-age=86400`;
-    }
+    // No cookie sync here. The iframe's subrequest is same-origin, so it
+    // already carries the server's HttpOnly auth_token for the nginx
+    // auth_request gate; the JS copy this used to write only shadowed that
+    // hardened cookie with a weaker one (system_3 #2564).
     this.iframeSrc = `${CONTENT_BASE}/Main_Page`;
     this.ready = true;
   },

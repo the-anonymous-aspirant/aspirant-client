@@ -363,10 +363,6 @@ export default {
     totalPages() {
       return Math.ceil(this.transactions.total / this.pageSize);
     },
-    authHeaders() {
-      const token = localStorage.getItem('user_token');
-      return token ? { Authorization: `Bearer ${token}` } : {};
-    },
     chartableCategories() {
       return this.availableCategories.filter(c => c !== 'internal_transfer' && c !== 'transfers');
     },
@@ -386,7 +382,7 @@ export default {
   methods: {
     async loadOverview() {
       try {
-        const res = await axios.get('/api/finance/summary/overview', { headers: this.authHeaders });
+        const res = await axios.get('/api/finance/summary/overview');
         this.overview = res.data;
         this.availableCategories = res.data.categories || [];
       } catch (err) {
@@ -395,7 +391,7 @@ export default {
     },
     async loadSources() {
       try {
-        const res = await axios.get('/api/finance/sources', { headers: this.authHeaders });
+        const res = await axios.get('/api/finance/sources');
         this.sources = res.data;
       } catch (err) {
         console.error('Failed to load sources:', err);
@@ -412,7 +408,7 @@ export default {
         if (this.filterDateTo) params.set('date_to', this.filterDateTo);
         if (this.filterSearch) params.set('search', this.filterSearch);
 
-        const res = await axios.get(`/api/finance/transactions?${params}`, { headers: this.authHeaders });
+        const res = await axios.get(`/api/finance/transactions?${params}`);
         this.transactions = res.data;
       } catch (err) {
         console.error('Failed to load transactions:', err);
@@ -427,7 +423,7 @@ export default {
         if (this.filterDateTo) params.set('date_to', this.filterDateTo);
         const qs = params.toString();
         const url = qs ? `/api/finance/summary/outliers?${qs}` : '/api/finance/summary/outliers';
-        const res = await axios.get(url, { headers: this.authHeaders });
+        const res = await axios.get(url);
         this.outliers = res.data;
       } catch (err) {
         console.error('Failed to load outliers:', err);
@@ -495,7 +491,7 @@ export default {
     },
     async loadMonthly() {
       try {
-        const res = await axios.get('/api/finance/summary/monthly', { headers: this.authHeaders });
+        const res = await axios.get('/api/finance/summary/monthly');
         this.monthlyData = res.data;
         this.scheduleRenderCharts();
       } catch (err) {
@@ -533,7 +529,7 @@ export default {
 
       try {
         const res = await axios.post(`/api/finance/sources/${bank}/upload`, formData, {
-          headers: { ...this.authHeaders, 'Content-Type': 'multipart/form-data' },
+          headers: { 'Content-Type': 'multipart/form-data' },
         });
         this.uploadResults[bank] = {
           error: false,
@@ -556,7 +552,7 @@ export default {
     // --- Schema modal ---
     async showSchema(bank) {
       try {
-        const res = await axios.get(`/api/finance/sources/${bank}/schema`, { headers: this.authHeaders });
+        const res = await axios.get(`/api/finance/sources/${bank}/schema`);
         this.schemaModal = res.data;
       } catch (err) {
         console.error('Failed to load schema:', err);
@@ -568,7 +564,7 @@ export default {
       this.importingLocal = true;
       this.importLocalResult = null;
       try {
-        const res = await axios.post('/api/finance/import-local', {}, { headers: this.authHeaders });
+        const res = await axios.post('/api/finance/import-local', {});
         this.importLocalResult = {
           error: false,
           summary: `Imported ${res.data.total_new} new transactions (${res.data.total_skipped} duplicates skipped) from ${res.data.files.length} file(s).`,
@@ -592,7 +588,7 @@ export default {
       this.reEnriching = true;
       this.reEnrichResult = '';
       try {
-        const res = await axios.post('/api/finance/re-enrich', {}, { headers: this.authHeaders });
+        const res = await axios.post('/api/finance/re-enrich', {});
         this.reEnrichResult = `Updated ${res.data.updated} of ${res.data.total} transactions.`;
         this.loadOverview();
         this.loadTransactions();

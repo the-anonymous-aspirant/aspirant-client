@@ -113,10 +113,14 @@ router.beforeEach((to) => {
   const requiredRoles = to.meta.roles;
   if (!requiredRoles) return true;
 
-  const token = localStorage.getItem('user_token');
+  // Cached display state, not a credential: the session is an HttpOnly
+  // cookie this script cannot read (system_3 #2564). This guard only keeps
+  // the UI honest — it is trivially bypassed from devtools and always was,
+  // so every gated route stays enforced server-side by the /api/ auth
+  // middleware and, for the embedded surfaces, the nginx auth_request gate.
   const role = localStorage.getItem('user_role');
 
-  if (!token || !requiredRoles.includes(role)) {
+  if (!role || !requiredRoles.includes(role)) {
     return '/';
   }
   return true;

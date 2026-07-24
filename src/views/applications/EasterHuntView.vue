@@ -290,7 +290,10 @@ export default {
   },
   computed: {
     isLoggedIn() {
-      return !!localStorage.getItem('user_token');
+      // Keyed off cached display state, not the token: the session itself is
+      // an HttpOnly cookie the page cannot read (system_3 #2564). This gates
+      // UI only — the server authorises every request regardless.
+      return !!localStorage.getItem('user_name');
     },
     isAdmin() {
       return localStorage.getItem('user_role') === 'Admin';
