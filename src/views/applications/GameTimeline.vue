@@ -774,7 +774,8 @@ export default {
     },
   },
   mounted() {
-    this.isLoggedIn = !!localStorage.getItem('user_token');
+    // Display state; the session lives in the HttpOnly cookie (#2564).
+    this.isLoggedIn = !!localStorage.getItem('user_name');
     this.fetchAssets();
     this.loadHighScores();
     this.loadScoreHistory();

@@ -21,7 +21,6 @@
     setup() {
       const username = ref(localStorage.getItem('user_name'));
       const userRole = ref(localStorage.getItem('user_role'));
-      const userToken = ref(localStorage.getItem('user_token'));
       const aspiringHandImageUrl = ref('');
 
       // Add refs for sidebar icons - initialize as null instead of empty string
@@ -39,7 +38,6 @@
         console.log('Refreshing user data');
         username.value = localStorage.getItem('user_name');
         userRole.value = localStorage.getItem('user_role');
-        userToken.value = localStorage.getItem('user_token');
         bumpAuthVersion();
       };
 
@@ -108,7 +106,6 @@
         toggleDebugMode,
         username,
         userRole,
-        userToken,
         refreshUserData,
         aspiringHandImageUrl,
         homeIconUrl,
@@ -167,7 +164,7 @@
 
     <transition name="sidebar-login-transition" mode="out-in">
       <div v-if="!collapsed" class="auth-section">
-        <div v-if="!userToken">
+        <div v-if="!username">
           <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="false" :collapsed="false"></Login>
         </div>
         <div v-else class="user-info">
