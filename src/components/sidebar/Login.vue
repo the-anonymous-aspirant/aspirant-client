@@ -64,6 +64,20 @@
         }
       },
       async logout() {
+        // The session is the server's HttpOnly auth_token cookie, which this
+        // script cannot touch — clearing localStorage alone left a valid Admin
+        // credential in the browser for the token's full 24h while the UI
+        // showed a logged-out state (system_3 #2589). Only the server can end
+        // it, so ask it to.
+        try {
+          await fetch('/api/logout', { method: 'POST' });
+        } catch {
+          // Offline or the request failed: fall through and clear local state
+          // anyway. Leaving the UI logged-in because a network call failed
+          // strands the user in a state they cannot get out of, and the cookie
+          // expires on its own regardless.
+        }
+
         this.username = '';
         this.password = '';
         this.role = '';

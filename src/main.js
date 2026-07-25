@@ -53,8 +53,14 @@ axios.interceptors.response.use(
   (error) => {
     // Check if error is due to invalid authentication (401 Unauthorized)
     if (error.response && error.response.status === 401) {
-      // Display state only — the session itself lives in the HttpOnly
-      // cookie and can only be ended server-side (system_3 #2589).
+      // Ask the server to drop the cookie too. The token is already rejected,
+      // but the browser keeps sending it until something expires it, and only
+      // the server can — auth_token is HttpOnly (system_3 #2589). Safe to fire
+      // from inside a 401 handler: /api/logout is unauthenticated and answers
+      // 200, so it cannot recurse into this branch.
+      fetch('/api/logout', { method: 'POST' }).catch(() => {});
+
+      // Display state only.
       localStorage.removeItem('user_name');
       localStorage.removeItem('user_role');
     }
