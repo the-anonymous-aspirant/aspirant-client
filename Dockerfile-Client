@@ -50,7 +50,14 @@ FROM node:22-alpine AS designsystem-build
 WORKDIR /src/aspirant-design-system
 
 COPY --from=designsystem package.json package-lock.json ./
-RUN npm ci
+# --ignore-scripts: aspirant-design-system#46 added a `prepare` lifecycle hook
+# (`npm run build`) so the package is buildable from a clean clone. npm runs
+# `prepare` during `npm ci`, but here only package*.json exists — the source
+# `prepare` needs (style-dictionary.config.js and the token/component trees) is
+# not copied until the next layer, so an unguarded `npm ci` dies in
+# style-dictionary. This stage installs deps only and builds explicitly below,
+# once the source is present; --ignore-scripts keeps that two-step intact.
+RUN npm ci --ignore-scripts
 
 COPY --from=designsystem . .
 
