@@ -116,8 +116,22 @@
   );
 
   const TARGET = 1000;
-  const CHART_CEILING = 1100;
+  const CHART_CEILING = 2000;
   const EDIT_WINDOW_DAYS = 2;
+
+  // Crown ladder: passing the 1000 target earns the first crown; from 1500
+  // cumulative pushups upward, each additional 100 adds another crown
+  // (1500 → 2, 1600 → 3, … 2000 → 7).
+  const CROWN_LADDER_START = 1500;
+  const CROWN_LADDER_STEP = 100;
+
+  function crownsFor(running) {
+    let crowns = 1;
+    if (running >= CROWN_LADDER_START) {
+      crowns += Math.floor((running - CROWN_LADDER_START) / CROWN_LADDER_STEP) + 1;
+    }
+    return '👑'.repeat(crowns);
+  }
 
   const SV_WEEKDAYS = ['sön', 'mån', 'tis', 'ons', 'tor', 'fre', 'lör'];
   const SV_MONTHS = [
@@ -208,7 +222,7 @@
             running += count;
             cumulative = running;
             if (running > TARGET) {
-              message = '👑';
+              message = crownsFor(running);
             } else if (this.milestoneMap.has(running)) {
               message = this.milestoneMap.get(running);
             }
@@ -460,7 +474,7 @@
 }
 
 .chart-wrap {
-  height: 280px;
+  height: 560px;
   position: relative;
 }
 
@@ -642,7 +656,7 @@
     display: none;
   }
   .chart-wrap {
-    height: 220px;
+    height: 440px;
   }
 }
 </style>
