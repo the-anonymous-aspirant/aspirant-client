@@ -178,6 +178,27 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
     await expect(page.locator('[data-test-row-id="job-003"] .badge-distance')).toContainText('8.5 km');
   });
 
+  test('each row surfaces its entry age from scraped_at', async ({ page }) => {
+    // #2805 — the operator needs to tell new-vs-old at a glance. The age
+    // comes from the DS AspTimeSince component, which renders a <time>
+    // element carrying the exact instant in its datetime attribute; assert
+    // on that (deterministic) rather than the relative text (clock-relative).
+    seedJobsRows(SEED_ROWS);
+    await page.goto('/trusted/jobs');
+    await dismissMobileSidebarIfPresent(page);
+
+    const row = page.locator('[data-test-row-id="job-001"]');
+    // Whichever cell is visible for this viewport (the "Added" column on
+    // desktop, the inline row-age on mobile) must carry the scraped_at instant.
+    const visibleAge = row.locator('time.time-since:visible');
+    await expect(visibleAge).toHaveCount(1);
+    await expect(visibleAge).toHaveAttribute(
+      'datetime',
+      '2026-06-30T18:00:00.000Z',
+    );
+    await expect(visibleAge).toContainText('ago');
+  });
+
   test('free-text filter narrows the visible rows', async ({ page }) => {
     seedJobsRows(SEED_ROWS);
     await page.goto('/trusted/jobs');
