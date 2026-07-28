@@ -202,9 +202,10 @@
               class="col-scraped sortable"
               :class="{ active: sort === 'scraped_at' }"
               data-test="sort-scraped"
+              title="How long ago this entry first appeared in the feed"
               @click="setSort('scraped_at')"
             >
-              Scraped
+              Added
             </th>
             <th class="col-action"></th>
           </tr>
@@ -232,6 +233,16 @@
                   </span>
                 </div>
                 <div class="row-meta">
+                  <!-- The Added column is hidden below 768px (see media query),
+                       so surface the entry age inline for mobile — otherwise
+                       the "new vs old" signal disappears on a phone. Kept on
+                       the single row-meta line so it adds no vertical height
+                       and row-height parity survives. -->
+                  <span class="row-meta-age" data-test="job-age-mobile">
+                    <span class="row-age-label">Added</span>
+                    <AspTimeSince :datetime="job.scraped_at" />
+                  </span>
+                  <span class="row-meta-age meta-sep">·</span>
                   <template v-if="job.company || job.description_excerpt">
                     <span v-if="job.company" class="company">{{ job.company }}</span>
                     <span v-if="job.company && job.description_excerpt" class="meta-sep">·</span>
@@ -250,7 +261,9 @@
               </span>
               <span v-else class="muted">—</span>
             </td>
-            <td class="col-scraped">{{ formatScraped(job.scraped_at) }}</td>
+            <td class="col-scraped" data-test="job-age">
+              <AspTimeSince :datetime="job.scraped_at" />
+            </td>
             <td class="col-action">
               <div class="action-buttons">
                 <button
@@ -292,6 +305,7 @@
 
 <script>
   import axios from 'axios';
+  import { AspTimeSince } from '@aspirant/design-system';
 
   const PER_PAGE = 25;
   const FILTER_DEBOUNCE_MS = 300;
@@ -314,6 +328,7 @@
 
   export default {
     name: 'JobsView',
+    components: { AspTimeSince },
     data() {
       return {
         jobs: [],
@@ -346,9 +361,6 @@
         if (km < 1) return `${Math.round(km * 1000)} m`;
         if (km < 10) return `${km.toFixed(1)} km`;
         return `${Math.round(km)} km`;
-      },
-      formatScraped(iso) {
-        return formatRelative(iso);
       },
       setSort(next) {
         if (this.sort === next) return;
@@ -881,6 +893,19 @@
     margin: 0 var(--space-2xs);
   }
 
+  /* Desktop shows the age in its own "Added" column; the inline row-meta age
+     is a mobile-only fallback for when that column is hidden. Inline (not a
+     new line) so it adds no row height and equal-height parity survives. */
+  .row-meta-age {
+    display: none;
+  }
+
+  .row-age-label {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: var(--space-2xs, 4px);
+  }
+
   .col-source,
   .col-scraped {
     white-space: nowrap;
@@ -999,6 +1024,10 @@
     .col-source,
     .col-scraped {
       display: none;
+    }
+
+    .row-meta-age {
+      display: inline;
     }
 
     .col-title { width: 60%; }
