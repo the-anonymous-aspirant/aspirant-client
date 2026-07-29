@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- system_3 admin app entry (system_3 #2867 / #2865-B, M0 cell migration):
+  added a `system_3` tile to the admin applications and an nginx
+  `/admin/apps/system_3/` reverse-proxy location that mirrors the existing
+  Penpot/Histoire admin-gated pattern (`auth_request /_internal/verify-admin`,
+  new-tab launch). The system_3 fleet Vue runs on the cell backend and is
+  served here behind the Admin auth gate. **Prepared, inert until cutover:**
+  the upstream (`host.docker.internal:8000`) is a lazily-resolved variable so
+  nginx starts even when the cell isn't reachable — going live needs (a) the
+  aspirant-deploy compose to grant this nginx service host-gateway access
+  (`extra_hosts: host.docker.internal:host-gateway`) and (b) the system_3 Vue
+  built `--base=/admin/apps/system_3/` with its backend mounting the dist there
+  (system_3 #2866), so the base matches the proxy prefix (no path rewrite).
+
 - Robbans Tusen site-wide audio widget: fixed-position play/pause +
   volume slider mounted in `App.vue`, backed by a singleton `Audio`
   object in `src/composables/useRobbansTusen.js`. Asset fetched via
