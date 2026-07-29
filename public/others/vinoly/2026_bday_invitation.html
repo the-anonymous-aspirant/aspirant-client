@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="robots" content="noindex" />
+  <title>You're invited</title>
+  <style>
+    /* Standalone page — no app chrome, no shared stylesheet. Everything the
+       page needs is inline so it renders identically whether or not the SPA
+       assets are reachable. */
+    :root { color-scheme: dark; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+
+    /* Full-viewport black stage. Uses 100dvh so mobile browser chrome
+       (address bar) does not leave a white/letterbox strip at the bottom. */
+    .stage {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100dvh;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: default;
+    }
+
+    /* contain = whole frame visible on any aspect ratio, letterboxed on black.
+       The video itself is portrait (648x1152); contain keeps it fully visible
+       on landscape desktop and fills the height on portrait phones. */
+    .stage video {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      background: #000;
+      display: block;
+    }
+
+    /* Subtle "tap for sound" affordance. Hidden by default; revealed only
+       when the video is muted AND an audio track is detected (see script).
+       Sits bottom-centre, low-contrast, non-intrusive. */
+    .sound-hint {
+      position: fixed;
+      left: 50%;
+      bottom: max(1.5rem, env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      display: none;
+      align-items: center;
+      gap: 0.5em;
+      padding: 0.55em 1.1em;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.35);
+      color: rgba(255, 255, 255, 0.82);
+      font: 500 0.85rem/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      letter-spacing: 0.02em;
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+      cursor: pointer;
+      user-select: none;
+      transition: opacity 0.4s ease;
+    }
+    .sound-hint.show { display: inline-flex; }
+    .sound-hint svg { width: 1.05em; height: 1.05em; display: block; }
+
+    /* Tap-to-play fallback, shown only if the browser blocks muted autoplay
+       (rare, but some locked-down mobile configs do). Full-screen invisible
+       catcher with a centred play glyph. */
+    .play-fallback {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      cursor: pointer;
+      z-index: 2;
+    }
+    .play-fallback.show { display: flex; }
+    .play-fallback svg { width: 84px; height: 84px; opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <video
+      id="invite"
+      src="/others/vinoly/flowah_bday.mp4"
+      autoplay
+      muted
+      loop
+      playsinline
+      webkit-playsinline
+      preload="auto"
+      disablepictureinpicture
+      disableremoteplayback
+    ></video>
+  </div>
+
+  <button class="sound-hint" id="soundHint" type="button" aria-label="Tap for sound">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M11 5 6 9H2v6h4l5 4V5z"></path>
+      <path d="M15.5 8.5a5 5 0 0 1 0 7"></path>
+      <path d="M19 5a9 9 0 0 1 0 14"></path>
+    </svg>
+    <span>Tap for sound</span>
+  </button>
+
+  <div class="play-fallback" id="playFallback" aria-label="Tap to play">
+    <svg viewBox="0 0 24 24" fill="rgba(255,255,255,0.9)" aria-hidden="true">
+      <path d="M8 5v14l11-7z"></path>
+    </svg>
+  </div>
+
+  <script>
+    (function () {
+      var video = document.getElementById('invite');
+      var soundHint = document.getElementById('soundHint');
+      var playFallback = document.getElementById('playFallback');
+
+      // Best-effort: does this file actually carry an audio track? The provided
+      // file may be silent, in which case promising "tap for sound" is a lie —
+      // so only reveal the affordance when we can positively detect audio.
+      // Detection is browser-specific and none of these are universal, so we
+      // stay conservative: reveal only on a positive signal.
+      function hasAudio() {
+        if (typeof video.mozHasAudio === 'boolean') return video.mozHasAudio;
+        if (typeof video.webkitAudioDecodedByteCount === 'number') {
+          return video.webkitAudioDecodedByteCount > 0;
+        }
+        if (video.audioTracks && typeof video.audioTracks.length === 'number') {
+          return video.audioTracks.length > 0;
+        }
+        return false; // unknown -> assume silent, keep the hint hidden
+      }
+
+      function maybeShowSoundHint() {
+        if (video.muted && hasAudio()) {
+          soundHint.classList.add('show');
+        } else {
+          soundHint.classList.remove('show');
+        }
+      }
+
+      function unmute() {
+        video.muted = false;
+        var p = video.play();
+        if (p && typeof p.catch === 'function') { p.catch(function () {}); }
+        soundHint.classList.remove('show');
+      }
+
+      soundHint.addEventListener('click', function (e) {
+        e.stopPropagation();
+        unmute();
+      });
+
+      // Kick off muted autoplay. If the browser refuses even muted playback,
+      // show the tap-to-play catcher so the guest can start it manually.
+      function tryPlay() {
+        var p = video.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(function () { playFallback.classList.add('show'); });
+        }
+      }
+
+      playFallback.addEventListener('click', function () {
+        playFallback.classList.remove('show');
+        video.muted = true; // keep muted so it definitely starts
+        tryPlay();
+        // give the browser a beat to populate audio-track metadata
+        setTimeout(maybeShowSoundHint, 400);
+      });
+
+      video.addEventListener('loadedmetadata', maybeShowSoundHint);
+      video.addEventListener('playing', function () {
+        playFallback.classList.remove('show');
+        // webkitAudioDecodedByteCount only becomes > 0 after some audio has
+        // decoded, so re-check shortly after playback begins.
+        setTimeout(maybeShowSoundHint, 400);
+      });
+
+      if (video.readyState >= 1) { maybeShowSoundHint(); }
+      tryPlay();
+    })();
+  </script>
+</body>
+</html>
