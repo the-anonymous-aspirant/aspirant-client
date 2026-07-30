@@ -40,7 +40,16 @@ const CROWN_ENTRIES = [
   { date: '2026-07-04', count: 400 }, //  running 2000 -> 7 crowns
 ];
 
-test.describe('Pappas pushups graph — taller chart, 2000 ceiling, crown cadence', () => {
+// Cumulative climbs through the new headroom: 1499 -> 1500 -> 2000 -> 2500 -> 3000.
+const CROWN_ENTRIES_TO_3000 = [
+  { date: '2026-07-01', count: 1499 }, // running 1499 -> 1 crown
+  { date: '2026-07-02', count: 1 }, //    running 1500 -> 2 crowns
+  { date: '2026-07-03', count: 500 }, //  running 2000 -> 7 crowns
+  { date: '2026-07-04', count: 500 }, //  running 2500 -> 12 crowns
+  { date: '2026-07-05', count: 500 }, //  running 3000 -> 17 crowns
+];
+
+test.describe('Pappas pushups graph — taller chart, 3000 ceiling, crown cadence', () => {
   test.beforeEach(async ({ page }) => {
     await seedTrustedSession(page);
   });
@@ -54,6 +63,23 @@ test.describe('Pappas pushups graph — taller chart, 2000 ceiling, crown cadenc
 
     const badges = page.locator('.entries-table .message-cell .milestone-badge');
     await expect(badges).toHaveText(['👑', '👑👑', '👑👑👑', '👑👑👑👑👑👑👑']);
+  });
+
+  test('crown cadence extends through the new headroom to 3000 (👑×17)', async ({ page }) => {
+    await mockPushups(page, CROWN_ENTRIES_TO_3000);
+    await page.goto('/trusted/pappas-pushups');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('.chart-card').waitFor();
+    await openAllWeeks(page);
+
+    const badges = page.locator('.entries-table .message-cell .milestone-badge');
+    await expect(badges).toHaveText([
+      '👑',
+      '👑👑',
+      '👑'.repeat(7), // 2000
+      '👑'.repeat(12), // 2500
+      '👑'.repeat(17), // 3000
+    ]);
   });
 
   test('below 1500 keeps the single existing crown', async ({ page }) => {

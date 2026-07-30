@@ -116,11 +116,17 @@
   );
 
   const TARGET = 1000;
-  const CHART_CEILING = 2000;
+  const CHART_CEILING = 3000;
   const EDIT_WINDOW_DAYS = 2;
 
+  // Horizontal reference markings on the graph (operator #2848): a violet line
+  // at 2000 and a red line at the 3000 roof.
+  const VIOLET_MARK = 2000;
+  const RED_MARK = 3000;
+
   // Crowns: one for passing the 1000 goal, then one more per 100 from 1500 up
-  // (operator #2661). 1499 -> 👑, 1500 -> 👑👑, 1600 -> 👑👑👑, … 2000 -> 👑×7.
+  // (operator #2661/#2848). 1499 -> 👑, 1500 -> 👑👑, 1600 -> 👑👑👑, … 2000 ->
+  // 👑×7, … extends through the new headroom to 3000 -> 👑×17.
   const CROWN_STEP_START = 1500;
   const CROWN_STEP = 100;
 
@@ -339,11 +345,15 @@
           return running;
         });
         const targetLine = labels.map(() => this.target);
+        const violetLine = labels.map(() => VIOLET_MARK);
+        const redLine = labels.map(() => RED_MARK);
 
         if (this.chart) {
           this.chart.data.labels = labels;
           this.chart.data.datasets[0].data = cumulative;
           this.chart.data.datasets[1].data = targetLine;
+          this.chart.data.datasets[2].data = violetLine;
+          this.chart.data.datasets[3].data = redLine;
           this.chart.update();
           return;
         }
@@ -366,6 +376,22 @@
                 label: `Mål (${this.target})`,
                 data: targetLine,
                 borderColor: '#82b1ff',
+                borderDash: [6, 4],
+                pointRadius: 0,
+                fill: false,
+              },
+              {
+                label: '2000',
+                data: violetLine,
+                borderColor: '#a970ff',
+                borderDash: [6, 4],
+                pointRadius: 0,
+                fill: false,
+              },
+              {
+                label: 'Tak (3000)',
+                data: redLine,
+                borderColor: '#ff4d4f',
                 borderDash: [6, 4],
                 pointRadius: 0,
                 fill: false,
