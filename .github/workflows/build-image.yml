@@ -19,7 +19,37 @@ jobs:
       contents: read
       packages: write
     steps:
-    - uses: actions/checkout@v4
+    # Two checkouts into sibling paths, reproducing the on-disk layout
+    # Dockerfile-Client documents (/src/aspirant-client next to
+    # /src/aspirant-design-system) so the `file:../aspirant-design-system`
+    # specifier and its package-lock.json entry both resolve unchanged.
+    - name: Check out aspirant-client
+      uses: actions/checkout@v4
+      with:
+        path: aspirant-client
+    # Dockerfile-Client compiles the design system FROM SOURCE via a BuildKit
+    # named build context called `designsystem` (see that file's header). CI
+    # never supplied it, so BuildKit fell back to treating `designsystem` as an
+    # image reference and failed with a misleading "docker.io/library/
+    # designsystem:latest pull access denied" — the ~19-day-broken build this
+    # step fixes (#3013). aspirant-design-system is public, so a plain checkout
+    # suffices — no token or deploy key.
+    #
+    # Ref pinning: we deliberately track DS `main`. The local dev build resolves
+    # `file:../aspirant-design-system` — whatever DS working tree sits beside the
+    # client — so tracking main keeps the CI image and the dev build compiling
+    # the SAME DS source, which is exactly the "works locally vs works in the
+    # image" divergence Dockerfile-Client's header exists to prevent. Pinning to
+    # a tag/SHA would be more reproducible but (a) there is no DS release/bump
+    # process yet and (b) it would routinely ship a DS older than the sibling dev
+    # checkout, re-introducing that divergence. Revisit if/when the DS gains
+    # tagged releases.
+    - name: Check out aspirant-design-system (the `designsystem` build context)
+      uses: actions/checkout@v4
+      with:
+        repository: the-anonymous-aspirant/aspirant-design-system
+        ref: main
+        path: aspirant-design-system
     - uses: docker/setup-buildx-action@v3
     - uses: docker/login-action@v3
       with:
@@ -38,8 +68,11 @@ jobs:
     - name: Build and push
       uses: docker/build-push-action@v5
       with:
-        context: .
-        file: ./Dockerfile-Client
+        context: aspirant-client
+        file: aspirant-client/Dockerfile-Client
+        # Supplies the `designsystem` named context Dockerfile-Client requires.
+        build-contexts: |
+          designsystem=aspirant-design-system
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
