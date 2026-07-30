@@ -79,6 +79,15 @@
         route="/admin/histoire/"
         @card-click="openInNewTab"
       />
+      <!-- nginx-served like Penpot above: the system_3 fleet's Vue frontend,
+           reverse-proxied to the backend on the cell host (system_3 #2867). -->
+      <application-card
+        :image-url="appImages.default"
+        title="System 3"
+        description="Agent fleet console — tasks, agents, health, chat. Opens in a new tab"
+        route="/admin/apps/system_3/"
+        @card-click="openInNewTab"
+      />
     </div>
 
     <h2 class="section-title">Tools</h2>
