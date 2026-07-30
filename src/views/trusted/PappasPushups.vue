@@ -116,7 +116,14 @@
   );
 
   const TARGET = 1000;
-  const CHART_CEILING = 2000;
+  // Roof raised to 3000 (operator #2848); the earlier #2759 change took it to
+  // 2000. Two reference markings live inside this range: a violet line at 2000
+  // and a red line at the 3000 roof.
+  const CHART_CEILING = 3000;
+  const LINE_2000 = 2000;
+  const LINE_3000 = 3000;
+  const COLOR_LINE_2000 = '#b388ff'; // violet
+  const COLOR_LINE_3000 = '#ff5252'; // red (the roof)
   const EDIT_WINDOW_DAYS = 2;
 
   // Crowns: one for passing the 1000 goal, then one more per 100 from 1500 up
@@ -339,11 +346,15 @@
           return running;
         });
         const targetLine = labels.map(() => this.target);
+        const line2000 = labels.map(() => LINE_2000);
+        const line3000 = labels.map(() => LINE_3000);
 
         if (this.chart) {
           this.chart.data.labels = labels;
           this.chart.data.datasets[0].data = cumulative;
           this.chart.data.datasets[1].data = targetLine;
+          this.chart.data.datasets[2].data = line2000;
+          this.chart.data.datasets[3].data = line3000;
           this.chart.update();
           return;
         }
@@ -366,6 +377,22 @@
                 label: `Mål (${this.target})`,
                 data: targetLine,
                 borderColor: '#82b1ff',
+                borderDash: [6, 4],
+                pointRadius: 0,
+                fill: false,
+              },
+              {
+                label: '2000',
+                data: line2000,
+                borderColor: COLOR_LINE_2000,
+                borderDash: [6, 4],
+                pointRadius: 0,
+                fill: false,
+              },
+              {
+                label: 'Tak (3000)',
+                data: line3000,
+                borderColor: COLOR_LINE_3000,
                 borderDash: [6, 4],
                 pointRadius: 0,
                 fill: false,

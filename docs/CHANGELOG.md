@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Pappas pushups graph: raised the chart roof from 2000 to 3000 and added
+  two horizontal reference markings — a violet dashed line at 2000 and a
+  red dashed line at the 3000 roof (`Tak (3000)`), mirroring the existing
+  `Mål (1000)` target-line pattern. The chart height is unchanged (the
+  doubled 560px from #2759); the taller ceiling shows the 2000→3000
+  headroom. The crown cadence (one past 1000, one more per 100 from 1500)
+  already has no upper cap, so it extends through the new range unchanged
+  (2000 → 👑×7, 3000 → 👑×17); e2e covers the 2000–3000 headroom in
+  `tests/e2e/pappas-pushups.spec.ts`. Operator request (#2848), follows
+  #2759.
+
 - Robbans Tusen site-wide audio widget: fixed-position play/pause +
   volume slider mounted in `App.vue`, backed by a singleton `Audio`
   object in `src/composables/useRobbansTusen.js`. Asset fetched via
