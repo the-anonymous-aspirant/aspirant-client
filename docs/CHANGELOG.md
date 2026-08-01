@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Värdeutlåtande: fixed invisible text on the wizard step cards. The
+  `ValuationStep` card paints `--surface-card` (#424242) inside a view
+  whose inherited ink is `--text-on-light` (#424242), so inherited card
+  text sat at 1.00:1 and everything using `--text-muted` collapsed from
+  2.14:1 to 1.00:1 when the design system (#27) derived muted from
+  `currentColor`. The card now pairs its surface with its own ink
+  (`color: var(--text-on-dark)`); measured contrast after the fix is
+  10.05:1 (inherited) and 7.13:1 (muted). Contrast regression lock in
+  `tests/e2e/vardeutlatande.spec.ts`. Operator-reported (system_3 #3014).
+
 - Pappas pushups graph: raised the chart roof from 2000 to 3000 and added
   two horizontal reference markings — a violet dashed line at 2000 and a
   red dashed line at the 3000 roof (`Tak (3000)`), mirroring the existing

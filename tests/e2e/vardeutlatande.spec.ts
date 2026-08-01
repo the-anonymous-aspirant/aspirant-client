@@ -496,6 +496,52 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     // The whole point of #1106 / #1172: no network call for /about.
     expect(aboutCalls).toEqual([]);
   });
+
+  test('#3014 card text keeps WCAG AA contrast against the card surface', async ({ page }) => {
+    // Regression lock for the invisible-text collision: the step card
+    // paints --surface-card inside a view whose inherited ink is
+    // --text-on-light (the same value), so card text that inherits — or
+    // derives from currentColor, as --text-muted does since
+    // design-system #27 — rendered at 1.00:1. The card must pair its
+    // surface with its own ink; this asserts the outcome, not the token.
+    await page.goto('/trusted/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await expect(page.locator('.dropzone-headline')).toBeVisible();
+
+    for (const selector of ['.dropzone-headline', '.valuation-step p.muted', '.dropzone .muted.small']) {
+      const ratio = await page.locator(selector).first().evaluate((el) => {
+        const parse = (s: string) => {
+          let m = s.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+          if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] };
+          m = s.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)/);
+          if (m) return { r: 255 * +m[1], g: 255 * +m[2], b: 255 * +m[3], a: m[4] === undefined ? 1 : +m[4] };
+          return null;
+        };
+        const lum = (c: { r: number; g: number; b: number }) => {
+          const f = (v: number) => {
+            v /= 255;
+            return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+          };
+          return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+        };
+        // Effective background: nearest ancestor with an opaque background.
+        let bg = null;
+        for (let n: Element | null = el; n && !bg; n = n.parentElement) {
+          const c = parse(getComputedStyle(n).backgroundColor);
+          if (c && c.a === 1) bg = c;
+        }
+        const fg = parse(getComputedStyle(el).color);
+        if (!fg || !bg) return 0;
+        const eff = fg.a < 1
+          ? { r: fg.r * fg.a + bg.r * (1 - fg.a), g: fg.g * fg.a + bg.g * (1 - fg.a), b: fg.b * fg.a + bg.b * (1 - fg.a) }
+          : fg;
+        const l1 = lum(eff);
+        const l2 = lum(bg);
+        return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+      });
+      expect(ratio, `${selector} contrast`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
 });
 
 /** Assert exactly one <section.valuation-step> is on screen — the
