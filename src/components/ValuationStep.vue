@@ -18,6 +18,12 @@ export default {
 <style scoped>
 .valuation-step {
   background-color: var(--surface-card);
+  /* The card paints a dark surface inside a view whose ink is
+   * --text-on-light, so it must pair that surface with its own ink;
+   * without this, inherited text and anything derived from currentColor
+   * (--text-muted since design-system #27) collapses into the card
+   * background (system_3 #3014). */
+  color: var(--text-on-dark);
   border: 2px solid var(--border-card);
   border-radius: var(--radius-xl);
   padding: var(--space-xl);
