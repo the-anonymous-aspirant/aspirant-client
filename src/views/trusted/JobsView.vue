@@ -522,6 +522,11 @@
     border-left: 3px solid var(--brand-accent, #6cf);
     border-radius: var(--radius-sm, 4px);
     background-color: var(--surface-card, transparent);
+    /* Pair the dark surface with its own ink; the view's inherited ink is
+     * --text-on-light and --text-muted derives from currentColor since
+     * design-system #27, so both collapse into --surface-card without
+     * this (system_3 #3027, same class as #3014). */
+    color: var(--text-on-dark);
   }
 
   .about-me-heading {
@@ -570,6 +575,10 @@
     border: 1px solid var(--border-card, #444);
     border-radius: var(--radius-sm, 4px);
     background-color: var(--surface-card, transparent);
+    /* Same surface/ink pairing as .about-me — the "Sources & criteria"
+     * toggle and criteria/table text would otherwise sit at 1.99:1
+     * (system_3 #3027). */
+    color: var(--text-on-dark);
   }
 
   .sources-panel-summary {
@@ -826,6 +835,10 @@
   .jobs-table th {
     font-weight: 600;
     background-color: var(--surface-card, transparent);
+    /* The sticky header paints --surface-card over the scrolling body, so
+     * it must carry its own ink; body cells keep the view's inherited ink
+     * on the page background (system_3 #3027). */
+    color: var(--text-on-dark);
     position: sticky;
     top: 0;
   }
