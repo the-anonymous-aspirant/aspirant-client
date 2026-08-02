@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Trusted tools: fixed low-contrast text on `/trusted/translator` and
+  `/trusted/jobs`, the same surface/ink collision #3014 fixed on the
+  valuation wizard. Cards painting `--surface-card` inside a view whose
+  inherited ink is `--text-on-light` carried no ink of their own, so the
+  `From`/`To` labels and `0 / 5000` counter on the translator sat at
+  1.00:1 and the `Sources & criteria` toggle and jobs table headers at
+  1.99:1 (`--text-muted` derives from `currentColor` since design-system
+  #27). Each surface-owning component now pairs its surface with
+  `color: var(--text-on-dark)` (`.translate-card`, `.languages-card`,
+  `.about-me`, `.sources-panel`, `.jobs-table th`). Contrast regression
+  lock in `tests/e2e/trusted-contrast.spec.ts`. Operator-reported
+  (system_3 #3027).
+
 - Värdeutlåtande: fixed invisible text on the wizard step cards. The
   `ValuationStep` card paints `--surface-card` (#424242) inside a view
   whose inherited ink is `--text-on-light` (#424242), so inherited card
