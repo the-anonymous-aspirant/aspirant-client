@@ -41,10 +41,12 @@ import BrowserFlows from '../views/admin/BrowserFlows.vue';
 import FlowDetail from '../views/admin/browser-flows/FlowDetail.vue';
 import RunForensic from '../views/admin/browser-flows/RunForensic.vue';
 import KvittoMaker from '../views/admin/tools/KvittoMaker.vue';
+import LoginView from '../views/LoginView.vue';
 import NotFound from '../views/NotFound.vue';
 
 const routes = [
   { path: '/', component: HomeView },
+  { path: '/login', component: LoginView },
   { path: '/admin', component: AdminView, meta: { roles: ['Admin'] } },
   { path: '/admin/users', component: UserAdmin, meta: { roles: ['Admin'] } },
   { path: '/admin/assets', component: Assets, meta: { roles: ['Admin'] } },

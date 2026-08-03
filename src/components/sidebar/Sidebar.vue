@@ -1,5 +1,6 @@
 <script>
-  import { ref, onMounted, onBeforeUnmount } from 'vue';
+  import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+  import { useRoute } from 'vue-router';
   import {
     debugMode,
     toggleDebugMode,
@@ -19,6 +20,16 @@
     components: { SidebarLink, Login },
     props: {},
     setup() {
+      const route = useRoute();
+      // The /login page (system_3 #3342) renders its own copy of this same
+      // Login form as the page's focus. Leaving the sidebar's copy visible
+      // too would put two forms with the same input ids on screen at once —
+      // confusing, and invalid HTML besides. Only the anonymous-state form
+      // is suppressed; a logged-in visitor who navigates to /login is
+      // bounced elsewhere by LoginView's own guard before this matters.
+      // `route` is reactive (vue-router), so this stays correct across SPA
+      // navigation into and out of /login, not just on a fresh mount.
+      const onLoginPage = computed(() => route.path === '/login');
       const username = ref(localStorage.getItem('user_name'));
       const userRole = ref(localStorage.getItem('user_role'));
       const aspiringHandImageUrl = ref('');
@@ -117,6 +128,7 @@
         imagesLoaded,
         isMobile,
         sidebarHidden,
+        onLoginPage,
       };
     },
   };
@@ -164,10 +176,10 @@
 
     <transition name="sidebar-login-transition" mode="out-in">
       <div v-if="!collapsed" class="auth-section">
-        <div v-if="!username">
+        <div v-if="!username && !onLoginPage">
           <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="false" :collapsed="false"></Login>
         </div>
-        <div v-else class="user-info">
+        <div v-else-if="username" class="user-info">
           <p class="user-detail">{{ username }}</p>
           <p class="user-role">{{ userRole }}</p>
           <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="true" :collapsed="false"></Login>
