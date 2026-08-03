@@ -9,10 +9,11 @@ The aspirant-client is the web frontend for the Aspirant Online platform. It pro
 ### Authentication
 
 - Users log in via the sidebar Login component
-- Credentials are sent to `/api/auth/login`
-- On success, `user_token`, `user_name`, and `user_role` are stored in `localStorage`
-- Axios interceptors automatically attach the Bearer token to all API requests
-- A 401 response clears stored credentials and returns the user to a logged-out state
+- Credentials are POSTed (via `fetch`, same-origin) to `/api/login`
+- On success the server establishes the session as a `Secure` + `HttpOnly` + `SameSite=Strict` `auth_token` cookie; the session token is never written to client-readable storage
+- Only `user_name` and `user_role` are kept in `localStorage`, for display and client-side role gating — never the session token itself
+- Because `auth_token` is `HttpOnly`, the same-origin cookie authenticates every request automatically (no `Authorization` header, no `withCredentials`); logout is a server call, since the client cannot clear an `HttpOnly` cookie
+- A 401 response clears the stored display state and returns the user to a logged-out state
 
 ### Role-Based Access
 
