@@ -70,7 +70,6 @@
       },
       // Emit the save event with the local user data
       handleSubmit() {
-        console.log('Form submitted with data:', this.localUser);
         this.$emit('save', { ...this.localUser });
       },
       // Emit the cancel event
