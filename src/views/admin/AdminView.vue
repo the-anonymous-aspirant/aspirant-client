@@ -34,13 +34,6 @@
       />
       <application-card
         :image-url="appImages.default"
-        title="reMarkable Notebooks"
-        description="Browse, render, and sync notebooks"
-        route="/admin/remarkable"
-        @card-click="navigateTo"
-      />
-      <application-card
-        :image-url="appImages.default"
         title="Finance"
         description="Track spending, upload bank CSVs, view reports"
         route="/admin/finance"
