@@ -48,6 +48,33 @@ test.describe('Dedicated /login page', () => {
     await expect(page).toHaveURL('/trusted');
   });
 
+  test('already-logged-in visitor redirected to a proxied path does a full-page navigation, not a client-side route into NotFound (#4081)', async ({
+    page,
+  }) => {
+    // #4081 / #4065: the redirect target is frequently a proxied admin surface
+    // (e.g. /admin/apps/system_3/) that this SPA's router has NO route for. The
+    // old `this.$router.replace(target)` routed client-side, fell through to the
+    // NotFound catch-all, and manufactured a 404 while the operator was logged
+    // in. `window.location.assign` does a full-page GET instead, which nginx
+    // proxies to the real surface.
+    await seedAdminSession(page);
+    const proxied = '/admin/apps/system_3/';
+    // A full-page navigation makes a real top-level document request; stub it so
+    // the nav lands on a marker page. A client-side route into the SPA NotFound
+    // would make NO such request and this stub would never fire.
+    await page.route(proxied, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><html><body><h1>proxied surface reached</h1></body></html>',
+      }),
+    );
+    await page.goto('/login?redirect=' + encodeURIComponent(proxied));
+    // Only reachable via the full-page navigation — proves it was not a
+    // client-side $router.replace into NotFound.
+    await expect(page.locator('h1')).toHaveText('proxied surface reached');
+  });
+
   test('successful login with no redirect param lands on home', async ({ page }) => {
     await mockLoginSuccess(page);
     await page.goto('/login');
