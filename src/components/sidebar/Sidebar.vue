@@ -11,13 +11,15 @@
     sidebarHidden,
     bumpAuthVersion,
   } from '../../global_state_manager.js';
+  import axios from 'axios';
   import SidebarLink from './SidebarLink.vue';
   import Login from './Login.vue';
+  import UserAvatar from '../UserAvatar.vue';
   import assetManager from '../../asset_manager';
 
   export default {
     name: 'Sidebar',
-    components: { SidebarLink, Login },
+    components: { SidebarLink, Login, UserAvatar },
     props: {},
     setup() {
       const route = useRoute();
@@ -33,6 +35,10 @@
       const username = ref(localStorage.getItem('user_name'));
       const userRole = ref(localStorage.getItem('user_role'));
       const aspiringHandImageUrl = ref('');
+      // The logged-in user's own avatar URL (#4170), used both as the Profile
+      // sidebar entry's icon and in the who-am-I strip. '' ⇒ the default_user
+      // glyph / initials fallback.
+      const profileAvatarUrl = ref('');
 
       // Add refs for sidebar icons - initialize as null instead of empty string
       const homeIconUrl = ref(null);
@@ -45,11 +51,28 @@
       // Add loading state ref
       const imagesLoaded = ref(false);
 
+      // Fetch the logged-in user's own avatar for the sidebar. Best-effort: a
+      // 401 (not logged in) or any error just leaves the placeholder in place.
+      const fetchProfileAvatar = async () => {
+        if (!localStorage.getItem('user_name')) {
+          profileAvatarUrl.value = '';
+          return;
+        }
+        try {
+          const res = await axios.get('/api/profile');
+          const data = res.data && 'data' in res.data ? res.data.data : res.data;
+          profileAvatarUrl.value = (data && data.avatar_url) || '';
+        } catch (error) {
+          profileAvatarUrl.value = '';
+        }
+      };
+
       const refreshUserData = () => {
         console.log('Refreshing user data');
         username.value = localStorage.getItem('user_name');
         userRole.value = localStorage.getItem('user_role');
         bumpAuthVersion();
+        fetchProfileAvatar();
       };
 
       // Pre-load assets before mounting to ensure they're ready
@@ -93,6 +116,9 @@
           supportIconUrl.value = await assetManager.getAsset('coffemug');
 
           imagesLoaded.value = true;
+
+          // Load the logged-in user's avatar (if any) for the Profile entry.
+          await fetchProfileAvatar();
         } catch (error) {
           console.error('Error loading images:', error);
         }
@@ -125,6 +151,7 @@
         adminIconUrl,
         supportIconUrl,
         defaultUserIconUrl,
+        profileAvatarUrl,
         imagesLoaded,
         isMobile,
         sidebarHidden,
@@ -172,6 +199,13 @@
         to="/support"
         >Support</SidebarLink
       >
+      <SidebarLink
+        v-if="username"
+        :key="'profile' + imagesLoaded + profileAvatarUrl"
+        :image="profileAvatarUrl || defaultUserIconUrl"
+        to="/profile"
+        >Profile</SidebarLink
+      >
     </div>
 
     <transition name="sidebar-login-transition" mode="out-in">
@@ -180,6 +214,7 @@
           <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="false" :collapsed="false"></Login>
         </div>
         <div v-else-if="username" class="user-info">
+          <UserAvatar :avatar-url="profileAvatarUrl" :name="username" :size="48" />
           <p class="user-detail">{{ username }}</p>
           <p class="user-role">{{ userRole }}</p>
           <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="true" :collapsed="false"></Login>
