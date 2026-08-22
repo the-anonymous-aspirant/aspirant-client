@@ -75,6 +75,13 @@
           route="jobs"
           @card-click="goToApplication"
         />
+        <application-card
+          :image-url="appImages.scratchpad"
+          title="Scratchpad"
+          description="A personal note that syncs live across your devices"
+          route="scratchpad"
+          @card-click="goToApplication"
+        />
       </div>
     </div>
   </div>
@@ -101,6 +108,7 @@
           valuation: '',
           pappas: '',
           jobs: '',
+          scratchpad: '',
         },
       };
     },
@@ -120,6 +128,7 @@
           valuation: 'home_icon',
           pappas: 'home_icon',
           jobs: 'home_icon',
+          scratchpad: 'home_icon',
         };
         await Promise.all(
           Object.entries(assets).map(async ([key, assetName]) => {
