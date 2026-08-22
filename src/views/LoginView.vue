@@ -33,17 +33,30 @@
     },
     created() {
       // Already logged in (display state; the credential itself is the
-      // HttpOnly cookie): a login page has nothing to offer, move along.
+      // HttpOnly cookie): a login page has nothing to offer, so a stray visit
+      // to /login moves along home.
       //
-      // A FULL-PAGE navigation, not `this.$router.replace` (#4081, #4065): the
-      // redirect target is frequently a proxied admin surface (e.g.
-      // /admin/apps/system_3/) that this SPA's router has no route for, so a
-      // client-side route falls through to the NotFound catch-all and
-      // manufactures the very 404 the operator saw while logged in. A full GET
-      // re-runs nginx's auth_request — landing on the real proxied surface when
-      // the cookie is valid, or cleanly re-bouncing to /login when it is not —
-      // and never the SPA 404. This matches onLogin()'s existing precedent.
-      if (localStorage.getItem('user_name')) {
+      // But do NOT auto-forward to a `redirect` target (system_3 #4155). The
+      // ONLY way to arrive at /login?redirect=<x> is nginx's auth_request
+      // having just REJECTED this session for <x> and 302'd us here
+      // (default.conf @browser_flows_login / @penpot_login). `user_name` is
+      // cached display state that OUTLIVES the HttpOnly session cookie, so it
+      // is routinely truthy on a dead session. Forwarding back to <x> on that
+      // stale flag re-runs auth_request, gets the same 401/403, 302s to /login,
+      // and re-fires this guard — an infinite full-page-reload loop the
+      // operator sees as a flickering, shaking screen with an unclickable
+      // sidebar. #4081's assumption that the re-GET would "land on the real
+      // surface when the cookie is valid" does not hold: a cookie valid for <x>
+      // never bounces to /login in the first place. So when bounced here, show
+      // the login form and let onLogin() do the full-page forward once the
+      // fresh credential is actually valid for the target.
+      //
+      // The forward itself stays a FULL-PAGE navigation, not
+      // `this.$router.replace` (#4081, #4065): a `redirect` target is
+      // frequently a proxied admin surface this SPA has no client route for,
+      // and a full GET re-runs nginx's auth_request instead of falling through
+      // to the SPA NotFound. This matches onLogin()'s precedent.
+      if (localStorage.getItem('user_name') && !this.$route.query.redirect) {
         window.location.assign(this.redirectTarget);
       }
     },

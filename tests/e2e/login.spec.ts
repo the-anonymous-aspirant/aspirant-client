@@ -42,37 +42,53 @@ test.describe('Dedicated /login page', () => {
     await expect(page).toHaveURL('/');
   });
 
-  test('already-logged-in visitor with a redirect target is sent there instead', async ({ page }) => {
-    await seedAdminSession(page);
-    await page.goto('/login?redirect=/trusted');
-    await expect(page).toHaveURL('/trusted');
-  });
-
-  test('already-logged-in visitor redirected to a proxied path does a full-page navigation, not a client-side route into NotFound (#4081)', async ({
+  test('a visitor bounced here with stale login display-state sees the form and does NOT loop (system_3 #4155)', async ({
     page,
   }) => {
-    // #4081 / #4065: the redirect target is frequently a proxied admin surface
-    // (e.g. /admin/apps/system_3/) that this SPA's router has NO route for. The
-    // old `this.$router.replace(target)` routed client-side, fell through to the
-    // NotFound catch-all, and manufactured a 404 while the operator was logged
-    // in. `window.location.assign` does a full-page GET instead, which nginx
-    // proxies to the real surface.
+    // The #4155 loop: nginx's auth_request bounces an INVALID session off a
+    // gated surface to /login?redirect=<surface>. `user_name` is cached
+    // display state that OUTLIVES the HttpOnly cookie, so it is still set on a
+    // dead session. The old created() auto-forwarded on that stale flag → the
+    // forwarded GET is rejected again → 302 /login → forward → an infinite
+    // full-page reload (the flickering, shaking screen with an unclickable
+    // sidebar the operator reported). The fix: a `redirect` param means this
+    // session was just rejected for the target, so show the form — never
+    // forward on stale display-state.
+    await seedAdminSession(page);
+    await page.goto('/login?redirect=/trusted');
+    await dismissMobileSidebarIfPresent(page);
+    await expect(page).toHaveURL('/login?redirect=/trusted');
+    await expect(page.locator('#username')).toBeVisible();
+  });
+
+  test('a visitor bounced here is NOT auto-forwarded to a proxied surface — the redirect-loop guard (system_3 #4155, supersedes #4081)', async ({
+    page,
+  }) => {
+    // #4081 auto-forwarded an already-"logged-in" visitor to the proxied
+    // redirect target via a full-page GET. The premise is unsound: you only
+    // reach /login?redirect=<proxied> because nginx's auth_request REJECTED the
+    // session for it, so the forwarded GET is rejected again and bounces
+    // straight back — the #4155 loop. #4081's own test masked this by stubbing
+    // the proxied target to 200, bypassing the real gate. The guard now: with a
+    // redirect param present, created() must NOT navigate — it shows the form,
+    // and onLogin() forwards once a fresh credential is valid. If created()
+    // wrongly forwarded, the stub below would fire.
     await seedAdminSession(page);
     const proxied = '/admin/apps/system_3/';
-    // A full-page navigation makes a real top-level document request; stub it so
-    // the nav lands on a marker page. A client-side route into the SPA NotFound
-    // would make NO such request and this stub would never fire.
-    await page.route(proxied, (route) =>
-      route.fulfill({
+    let forwarded = false;
+    await page.route(proxied, (route) => {
+      forwarded = true;
+      return route.fulfill({
         status: 200,
         contentType: 'text/html',
-        body: '<!doctype html><html><body><h1>proxied surface reached</h1></body></html>',
-      }),
-    );
+        body: '<!doctype html><html><body><h1>should not be reached</h1></body></html>',
+      });
+    });
     await page.goto('/login?redirect=' + encodeURIComponent(proxied));
-    // Only reachable via the full-page navigation — proves it was not a
-    // client-side $router.replace into NotFound.
-    await expect(page.locator('h1')).toHaveText('proxied surface reached');
+    await dismissMobileSidebarIfPresent(page);
+    await expect(page.locator('#username')).toBeVisible();
+    await expect(page).toHaveURL(/\/login\?redirect=/);
+    expect(forwarded).toBe(false);
   });
 
   test('successful login with no redirect param lands on home', async ({ page }) => {
