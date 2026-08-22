@@ -27,6 +27,7 @@ import EasterHuntView from '../views/applications/EasterHuntView.vue';
 import QrGeneratorView from '../views/applications/QrGenerator.vue';
 import FilesManagerView from '../views/applications/FilesManager.vue';
 import SupportView from '../views/SupportView.vue';
+import ProfileView from '../views/ProfileView.vue';
 import ThirtyYearGiftView from '../views/trusted/ThirtyYearGift.vue';
 import Translator from '../views/trusted/Translator.vue';
 import Wikipedia from '../views/trusted/Wikipedia.vue';
@@ -96,6 +97,11 @@ const routes = [
   { path: '/trusted/jobs', component: JobsView, meta: { roles: ['Trusted', 'Admin'] } },
 
   { path: '/support', component: SupportView },
+
+  // Own profile — any authenticated user (the three real roles). An anonymous
+  // visitor has no cached user_role and is bounced to '/' by the guard below;
+  // the server enforces the real boundary on /api/profile regardless.
+  { path: '/profile', component: ProfileView, meta: { roles: ['User', 'Trusted', 'Admin'] } },
 
   // Catch-all for unknown paths. Kept public (no role meta) so anonymous
   // visitors see a graceful 404 instead of being silently redirected to /.

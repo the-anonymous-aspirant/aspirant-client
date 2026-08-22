@@ -14,9 +14,15 @@
           <v-list-item
             v-for="(message, index) in messages"
             :key="index"
-            :prepend-avatar="messageUserIconUrl"
             class="rounded-list-item spaced-list-item message-item"
           >
+            <template #prepend>
+              <UserAvatar
+                :avatar-url="senderAvatarUrl(message.SenderID)"
+                :name="formatSender(message.SenderID)"
+                :size="40"
+              />
+            </template>
             <div>
               <div class="text-h6">{{ message.Content }}</div>
               <div class="text-subtitle-2">
@@ -36,8 +42,10 @@
   import { ref, onMounted } from 'vue';
   import axios from 'axios';
   import assetManager from '../asset_manager.js';
+  import UserAvatar from '../components/UserAvatar.vue';
 
   export default {
+    components: { UserAvatar },
     setup() {
       const messages = ref([]);
       const newMessage = ref('');
@@ -109,6 +117,16 @@
         return `User ${senderId}`;
       };
 
+      // The author's avatar URL (avatar_url on the public user DTO), or '' when
+      // the sender is anonymous / unknown / has no picture — in which case
+      // UserAvatar renders the initials placeholder, so no author strip is left
+      // in a mixed state.
+      const senderAvatarUrl = (senderId) => {
+        if (senderId === 0) return '';
+        const user = usersMap.value[senderId];
+        return (user && user.avatar_url) || '';
+      };
+
       onMounted(async () => {
         // Load the message user icon
         try {
@@ -128,6 +146,7 @@
         submitForm,
         formatDate,
         formatSender,
+        senderAvatarUrl,
       };
     },
   };
