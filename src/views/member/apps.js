@@ -16,6 +16,7 @@ export const SHARED_APPS = [
   { title: 'Wikipedia', description: 'Browse the English Wikipedia offline', route: 'wikipedia', icon: 'home_icon' },
   { title: 'Goal Trees', description: 'Plan and track your goals', route: 'goals', icon: 'home_icon' },
   { title: 'Remarkable PDFs', description: 'Generate PDFs for your Remarkable tablet', route: 'remarkable-pdfs', icon: 'home_icon' },
+  { title: 'Scratchpad', description: 'A personal note that syncs live across your devices', route: 'scratchpad', icon: 'home_icon' },
 ];
 
 export const PERSONAL_APPS = [
