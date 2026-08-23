@@ -78,7 +78,7 @@
 
     <div class="stats">{{ totalFiles }} files, {{ formatSize(totalSize) }} total</div>
 
-    <div v-if="deleteTarget" class="modal-overlay" @click.self="deleteTarget = null">
+    <div v-if="deleteTarget" v-overlay-history="() => (deleteTarget = null)" class="modal-overlay" @click.self="deleteTarget = null">
       <div class="modal">
         <h3>Delete asset?</h3>
         <p class="modal-path">{{ deleteTarget.key }}</p>
