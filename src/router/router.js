@@ -36,6 +36,7 @@ import GoalTreeCanvas from '../views/member/shared/GoalTreeCanvas.vue';
 import ValuationStatement from '../views/member/personal/ValuationStatement.vue';
 import PappasPushups from '../views/member/personal/PappasPushups.vue';
 import JobsView from '../views/member/personal/JobsView.vue';
+import Scratchpad from '../views/member/shared/Scratchpad.vue';
 import Advisor from '../views/admin/Advisor.vue';
 import BrowserFlows from '../views/admin/BrowserFlows.vue';
 import FlowDetail from '../views/admin/browser-flows/FlowDetail.vue';
@@ -102,6 +103,7 @@ const routes = [
   { path: '/member/shared/goals', component: Goals, meta: MEMBER_ROLES },
   { path: '/member/shared/goals/:id', component: GoalTreeCanvas, meta: MEMBER_ROLES },
   { path: '/member/shared/remarkable-pdfs', component: RemarkablePdfsView, meta: MEMBER_ROLES },
+  { path: '/member/shared/scratchpad', component: Scratchpad, meta: MEMBER_ROLES },
 
   // Personal
   { path: '/member/personal/ludde-analytics', component: LuddeAnalytics, meta: MEMBER_ROLES },
@@ -125,6 +127,7 @@ const routes = [
   { path: '/trusted/valuation-statement', redirect: '/member/personal/valuation-statement' },
   { path: '/trusted/pappas-pushups', redirect: '/member/personal/pappas-pushups' },
   { path: '/trusted/jobs', redirect: '/member/personal/jobs' },
+  { path: '/trusted/scratchpad', redirect: '/member/shared/scratchpad' },
   { path: '/applications/remarkable-pdfs', redirect: '/member/shared/remarkable-pdfs' },
 
   { path: '/support', component: SupportView },
