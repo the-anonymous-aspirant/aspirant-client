@@ -6,8 +6,11 @@
 // field was explicitly ruled out of scope for ~12 apps).
 //
 // `route` is the path suffix under `/member/<section>/`; `icon` is an
-// asset-manager key; `person` (personal apps only) is the intended user the
-// index and sidebar surface next to the app.
+// asset-manager key; `person` (personal apps only) records the intended user
+// (the app↔owner map). It is data only — intentionally NOT surfaced in the UI
+// (#4198: the operator asked that user annotations not appear on cards or in the
+// sidebar). The map is also mirrored in the aspirant-personal-app-user-map
+// memory + #4194, which enforces the per-user data scoping at the backend.
 
 export const SHARED_APPS = [
   { title: 'Files', description: 'Upload, download, and share files.', route: 'files', icon: 'home_icon' },
