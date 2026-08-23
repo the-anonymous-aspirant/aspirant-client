@@ -35,7 +35,7 @@ test.describe('Värdeutlåtande BR-flow — mobile (iPhone 13)', () => {
 });
 
 async function walkToReview(page: Page): Promise<void> {
-  await page.goto('/trusted/valuation-statement');
+  await page.goto('/member/personal/valuation-statement');
   await dismissMobileSidebarIfPresent(page);
   await expect(page.locator('h1', { hasText: 'Värdeutlåtande' })).toBeVisible();
   await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);

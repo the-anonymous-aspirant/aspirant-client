@@ -9,7 +9,7 @@ import {
 
 /**
  * #3027 — the same surface/ink collision #3014 fixed on the valuation
- * wizard card, now locked on /trusted/translator and /trusted/jobs.
+ * wizard card, now locked on /member/shared/translator and /member/personal/jobs.
  *
  * A container paints --surface-card with no ink of its own inside a view
  * whose inherited ink is --text-on-light (the same value), so text that
@@ -55,12 +55,12 @@ async function contrastRatio(locator: Locator): Promise<number> {
   });
 }
 
-test.describe('#3027 /trusted card surface/ink contrast', () => {
+test.describe('#3027 /member card surface/ink contrast', () => {
   test.beforeEach(async ({ page }) => {
     await seedTrustedSession(page);
   });
 
-  test('/trusted/translator card labels keep WCAG AA contrast', async ({ page }) => {
+  test('/member/shared/translator card labels keep WCAG AA contrast', async ({ page }) => {
     // The languages fetch feeds the .languages-card; a small valid payload
     // lets both cards render their content.
     await page.route(/\/api\/translator\/languages(\?.*)?$/, async (route: Route) => {
@@ -82,7 +82,7 @@ test.describe('#3027 /trusted card surface/ink contrast', () => {
       });
     });
 
-    await page.goto('/trusted/translator');
+    await page.goto('/member/shared/translator');
     await dismissMobileSidebarIfPresent(page);
     await expect(page.locator('.translate-card')).toBeVisible();
 
@@ -94,7 +94,7 @@ test.describe('#3027 /trusted card surface/ink contrast', () => {
     }
   });
 
-  test('/trusted/jobs panel + table headers keep WCAG AA contrast', async ({ page }) => {
+  test('/member/personal/jobs panel + table headers keep WCAG AA contrast', async ({ page }) => {
     await installJobsMocks(page);
     seedJobsSources([{ source: 'berlinstartupjobs.com', row_count: 3 }]);
     seedJobsRows([
@@ -108,7 +108,7 @@ test.describe('#3027 /trusted card surface/ink contrast', () => {
       },
     ]);
 
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
     await expect(page.locator('[data-test="jobs-table"]')).toBeVisible();
 

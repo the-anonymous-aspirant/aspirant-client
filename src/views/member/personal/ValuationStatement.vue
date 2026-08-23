@@ -1,4 +1,5 @@
 <template>
+  <!-- Intended user: sister (värdering) (personal app — #4184 IA) -->
   <div class="valuation-view">
     <h1>Värdeutlåtande</h1>
     <h2 v-if="activeTab === 'create'" class="page-subtitle">

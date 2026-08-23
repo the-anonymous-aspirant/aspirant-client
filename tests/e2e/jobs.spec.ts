@@ -9,7 +9,7 @@ import {
 } from './helpers/mockBackend';
 
 /** Per #1290 epic / #1294 F1: covers the card→page→filter→hide happy path
- *  for /trusted/jobs. The jobs API is mocked in-process via page.route()
+ *  for /member/personal/jobs. The jobs API is mocked in-process via page.route()
  *  — no aspirant-browser or aspirant-server is required to run this spec.
  *  Real-backend integration is exercised manually after PR 1 (the
  *  aspirant-server jobs proxy) and PR 2 (this view) both deploy. */
@@ -67,7 +67,7 @@ const SEED_ROWS = [
   },
 ];
 
-test.describe('/trusted/jobs — card→page→filter→hide', () => {
+test.describe('/member/personal/jobs — card→page→filter→hide', () => {
   test.beforeEach(async ({ page }) => {
     await seedTrustedSession(page);
     await installNoiseCatchAll(page);
@@ -76,14 +76,14 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
   test('Trusted card navigates to the jobs page and renders rows', async ({ page }) => {
     seedJobsRows(SEED_ROWS);
-    await page.goto('/trusted');
+    await page.goto('/member');
     await dismissMobileSidebarIfPresent(page);
 
     const card = page.locator('.application-card', { hasText: 'Jobs' });
     await expect(card).toBeVisible();
     await card.click();
 
-    await expect(page).toHaveURL(/\/trusted\/jobs$/);
+    await expect(page).toHaveURL(/\/member\/personal\/jobs$/);
     await expect(page.getByRole('heading', { name: 'Jobs', level: 1 })).toBeVisible();
 
     const table = page.locator('[data-test="jobs-table"]');
@@ -98,7 +98,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
   test('seen-on-N-sites badge renders only when count > 1', async ({ page }) => {
     seedJobsRows(SEED_ROWS);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     const multi = page.locator('[data-test-row-id="job-002"]');
@@ -112,7 +112,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
   test('all rendered rows have the same pixel height', async ({ page }) => {
     // Row-height parity is the operator's scan-friendliness contract for
-    // /trusted/jobs (#1411 Part 1). One long-title + short-title row and
+    // /member/personal/jobs (#1411 Part 1). One long-title + short-title row and
     // one short-title + long-excerpt row still render at the same height.
     const paddedRows = [
       ...SEED_ROWS,
@@ -145,7 +145,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
       },
     ];
     seedJobsRows(paddedRows);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     const rows = page.locator('[data-test="jobs-table"] tbody tr');
@@ -170,7 +170,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
   test('distance badge surfaces the per-row km value', async ({ page }) => {
     seedJobsRows(SEED_ROWS);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.locator('[data-test-row-id="job-001"] .badge-distance')).toContainText('1.8 km');
@@ -184,7 +184,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
     // element carrying the exact instant in its datetime attribute; assert
     // on that (deterministic) rather than the relative text (clock-relative).
     seedJobsRows(SEED_ROWS);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     const row = page.locator('[data-test-row-id="job-001"]');
@@ -201,7 +201,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
   test('free-text filter narrows the visible rows', async ({ page }) => {
     seedJobsRows(SEED_ROWS);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     const table = page.locator('[data-test="jobs-table"]');
@@ -217,7 +217,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
   test('Not-interested button PATCHes /hide and drops the row', async ({ page }) => {
     seedJobsRows(SEED_ROWS);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.locator('[data-test="jobs-table"] tbody tr')).toHaveCount(3);
@@ -237,7 +237,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
   test('Save button PATCHes /save; row stays in All and Save flips to Saved ✓', async ({ page }) => {
     seedJobsRows(SEED_ROWS);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.locator('[data-test="jobs-table"] tbody tr')).toHaveCount(3);
@@ -263,7 +263,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
   test('Saved tab lists only saved rows and requests filter=saved', async ({ page }) => {
     seedJobsRows(SEED_ROWS);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     // Save one row on the All tab.
@@ -294,7 +294,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
   test('Saved tab empty state guides the operator to press Save', async ({ page }) => {
     seedJobsRows(SEED_ROWS);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     await page.locator('[data-test="jobs-tab-saved"]').click();
@@ -305,10 +305,10 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
     // #1411 amendment 4718 — salary is null on 88% of rows (only
     // remotive_worldwide publishes it), so it's dropped from the default
     // table. The API still returns salary_min/max on each row (for a
-    // future detail panel) but the /trusted/jobs table no longer surfaces
+    // future detail panel) but the /member/personal/jobs table no longer surfaces
     // them, and no sort-salary control exists.
     seedJobsRows(SEED_ROWS);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.locator('[data-test="sort-salary"]')).toHaveCount(0);
@@ -321,7 +321,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
   test('empty feed renders the friendly empty state', async ({ page }) => {
     seedJobsRows([]);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.locator('[data-test="jobs-empty"]')).toBeVisible();
@@ -330,7 +330,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
   test('empty filter result reports the active query', async ({ page }) => {
     seedJobsRows(SEED_ROWS);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     await page.locator('[data-test="jobs-filter"]').fill('quantumastronomy');
@@ -360,7 +360,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
         row_count: 0,
       },
     ]);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     const panel = page.locator('[data-test="sources-panel"]');
@@ -392,7 +392,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
     seedJobsSources([
       { source: 'x', description: 'stub', row_count: 0 },
     ]);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     await page.locator('[data-test="sources-panel-summary"]').click();
@@ -405,10 +405,10 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
 
   test('about-me block renders above the sources panel with description and role lists', async ({ page }) => {
     // Per #1411-B6 — surface what the operator is optimising for so
-    // /trusted/jobs opens with a scannable target-description above the
+    // /member/personal/jobs opens with a scannable target-description above the
     // sources panel and the table. Data comes from GET /api/jobs/about.
     seedJobsRows(SEED_ROWS);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     const about = page.locator('[data-test="about-me"]');
@@ -440,7 +440,7 @@ test.describe('/trusted/jobs — card→page→filter→hide', () => {
   test('sources panel renders empty state when no scraper flows are registered', async ({ page }) => {
     seedJobsRows(SEED_ROWS);
     seedJobsSources([]);
-    await page.goto('/trusted/jobs');
+    await page.goto('/member/personal/jobs');
     await dismissMobileSidebarIfPresent(page);
 
     await page.locator('[data-test="sources-panel-summary"]').click();
