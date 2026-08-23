@@ -35,7 +35,7 @@
     </div>
 
     <!-- Create Dialog -->
-    <div v-if="showCreateDialog" class="dialog-overlay" @click.self="cancelCreate">
+    <div v-if="showCreateDialog" v-overlay-history="cancelCreate" class="dialog-overlay" @click.self="cancelCreate">
       <div class="dialog">
         <h3>Create New Tree</h3>
         <input
@@ -57,7 +57,7 @@
     </div>
 
     <!-- Rename Dialog -->
-    <div v-if="showRenameDialog" class="dialog-overlay" @click.self="cancelRename">
+    <div v-if="showRenameDialog" v-overlay-history="cancelRename" class="dialog-overlay" @click.self="cancelRename">
       <div class="dialog">
         <h3>Rename Tree</h3>
         <input
@@ -79,7 +79,7 @@
     </div>
 
     <!-- Delete Confirmation -->
-    <div v-if="showDeleteDialog" class="dialog-overlay" @click.self="cancelDelete">
+    <div v-if="showDeleteDialog" v-overlay-history="cancelDelete" class="dialog-overlay" @click.self="cancelDelete">
       <div class="dialog">
         <h3>Delete Tree</h3>
         <p class="dialog-message">
