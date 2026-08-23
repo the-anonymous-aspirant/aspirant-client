@@ -55,9 +55,9 @@ test.describe('Dedicated /login page', () => {
     // session was just rejected for the target, so show the form — never
     // forward on stale display-state.
     await seedAdminSession(page);
-    await page.goto('/login?redirect=/trusted');
+    await page.goto('/login?redirect=/member');
     await dismissMobileSidebarIfPresent(page);
-    await expect(page).toHaveURL('/login?redirect=/trusted');
+    await expect(page).toHaveURL('/login?redirect=/member');
     await expect(page.locator('#username')).toBeVisible();
   });
 
@@ -101,10 +101,10 @@ test.describe('Dedicated /login page', () => {
 
   test('successful login returns the visitor to the originally requested URL', async ({ page }) => {
     await mockLoginSuccess(page);
-    await page.goto('/login?redirect=/trusted');
+    await page.goto('/login?redirect=/member');
     await dismissMobileSidebarIfPresent(page);
     await fillAndSubmitLogin(page);
-    await expect(page).toHaveURL('/trusted');
+    await expect(page).toHaveURL('/member');
   });
 
   test('successful login updates the sidebar to the logged-in state', async ({ page }) => {

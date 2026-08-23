@@ -12,7 +12,7 @@ const HISTORY_TAB = 'Tidigare värderingar';
 const CREATE_TAB = 'Skapa';
 
 async function openHistory(page: Page): Promise<void> {
-  await page.goto('/trusted/valuation-statement');
+  await page.goto('/member/personal/valuation-statement');
   await dismissMobileSidebarIfPresent(page);
   await page.getByRole('tab', { name: HISTORY_TAB }).click();
   await expect(page.getByRole('tab', { name: HISTORY_TAB })).toHaveAttribute('aria-selected', 'true');
@@ -165,7 +165,7 @@ test.describe('Tidigare värderingar tab — list + edit + delete', () => {
 
   test('Generera persists a new row to the history store', async ({ page }) => {
     // Walk the existing wizard end-to-end then assert the seed got a row.
-    await page.goto('/trusted/valuation-statement');
+    await page.goto('/member/personal/valuation-statement');
     await dismissMobileSidebarIfPresent(page);
     await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
     await page.getByRole('button', { name: /Extrahera värden/ }).click();

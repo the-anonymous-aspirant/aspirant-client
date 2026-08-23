@@ -1,4 +1,5 @@
 <template>
+  <!-- Intended user: sister (Ludde) (personal app — #4184 IA) -->
   <div class="container">
     <h1>Ludde Meal Time Tracker (LMTT)</h1>
     <p>The date and time defaults to right now, but can be adjusted by clicking on it</p>
@@ -82,7 +83,7 @@
 
 <script>
   import axios from 'axios';
-  import assetManager from '../asset_manager';
+  import assetManager from '../../../asset_manager';
 
   export default {
     data() {

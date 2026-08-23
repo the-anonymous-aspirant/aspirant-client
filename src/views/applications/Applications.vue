@@ -51,7 +51,6 @@
           games: '',
           emotionalExcellence: '',
           transparencymapper: '',
-          remarkablePdfs: '',
           qrGenerator: '',
           home_icon: '',
         },
@@ -83,12 +82,6 @@
             imageKey: 'emotionalExcellence',
           },
           {
-            title: 'Remarkable PDFs',
-            description: 'Generate PDFs for your Remarkable tablet',
-            route: 'remarkable-pdfs',
-            imageKey: 'remarkablePdfs',
-          },
-          {
             title: 'QR Generator',
             description: 'Generate QR codes from any text or URL.',
             route: 'qr-generator',
@@ -107,7 +100,6 @@
           games: 'game_center_icon',
           emotionalExcellence: 'emotion_tracker_icon',
           transparencymapper: 'transparency_icon',
-          remarkablePdfs: 'home_icon',
           qrGenerator: 'qr_code_icon',
           home_icon: 'home_icon',
         };
