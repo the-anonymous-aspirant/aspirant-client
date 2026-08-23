@@ -43,8 +43,8 @@ test.describe('#4184 member IA — legacy redirects', () => {
 });
 
 test.describe('#4184 member IA — sidebar structure', () => {
-  test('sidebar shows Member with Shared + Personal groupings', async ({ page }, testInfo) => {
-    // The grouping is one layout; assert it once on desktop chromium (the mobile
+  test('sidebar shows a single Member link, not a per-app tree (#4198)', async ({ page }, testInfo) => {
+    // The layout is one shape; assert it once on desktop chromium (the mobile
     // sidebar is off-canvas and dismissed by the shared helper).
     test.skip(testInfo.project.name !== 'chromium', 'sidebar layout asserted on desktop only');
     await seedTrustedSession(page);
@@ -59,14 +59,13 @@ test.describe('#4184 member IA — sidebar structure', () => {
     await expect(nav.locator('a[href="/member"]')).toContainText('Member');
     await expect(nav).not.toContainText('Trusted');
 
-    // Section headings.
-    await expect(nav.locator('.member-subhead')).toHaveText(['Shared', 'Personal']);
-
-    // A shared app links under /member/shared, a personal app under
-    // /member/personal and carries its intended person.
-    await expect(nav.locator('a[href="/member/shared/wikipedia"]')).toContainText('Wikipedia');
-    const pappas = nav.locator('a[href="/member/personal/pappas-pushups"]');
-    await expect(pappas).toContainText('Pappas pushups');
-    await expect(pappas).toContainText('father');
+    // #4198: the sidebar must NOT expand into a per-app tree — the main-page
+    // cards are the app catalog. No sub-nav, no per-app links, no headings,
+    // and no user annotations in the sidebar.
+    await expect(nav.locator('.member-subnav')).toHaveCount(0);
+    await expect(nav.locator('.member-subhead')).toHaveCount(0);
+    await expect(nav.locator('a[href="/member/shared/wikipedia"]')).toHaveCount(0);
+    await expect(nav.locator('a[href="/member/personal/pappas-pushups"]')).toHaveCount(0);
+    await expect(nav).not.toContainText('father');
   });
 });

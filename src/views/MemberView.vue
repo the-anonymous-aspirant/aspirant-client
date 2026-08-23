@@ -21,8 +21,9 @@
       </section>
 
       <!-- Personal: apps built for one specific person. "Personal" is an IA
-           grouping, not a permission — every member can see all of these
-           (#4184). Each card names its intended person. -->
+           grouping, not a permission (#4184). The intended-user annotation is
+           intentionally NOT surfaced in the UI (#4198): the app↔owner map lives
+           in the aspirant-personal-app-user-map memory + #4194, not on the card. -->
       <section class="member-section">
         <h2 class="page-subtitle">Personal</h2>
         <div class="application-list">
@@ -31,7 +32,7 @@
             :key="app.route"
             :image-url="appImages[app.route] || ''"
             :title="app.title"
-            :description="`${app.description} — For ${app.person}`"
+            :description="app.description"
             :route="app.route"
             @card-click="() => goTo('personal', app.route)"
           />
