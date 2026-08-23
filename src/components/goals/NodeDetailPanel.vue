@@ -1,6 +1,6 @@
 <template>
   <transition name="panel-slide">
-    <div v-if="node" class="panel-overlay" @click.self="$emit('close')">
+    <div v-if="node" v-overlay-history="() => $emit('close')" class="panel-overlay" @click.self="$emit('close')">
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title-row">

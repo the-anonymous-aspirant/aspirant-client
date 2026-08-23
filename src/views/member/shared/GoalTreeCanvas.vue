@@ -47,7 +47,7 @@
     />
 
     <!-- Node creation dialog -->
-    <div v-if="showCreateNode" class="dialog-overlay" @click.self="showCreateNode = false">
+    <div v-if="showCreateNode" v-overlay-history="() => (showCreateNode = false)" class="dialog-overlay" @click.self="showCreateNode = false">
       <div class="dialog dialog-wide">
         <h3>Add Node</h3>
         <input

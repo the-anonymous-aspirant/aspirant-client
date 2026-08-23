@@ -31,7 +31,7 @@
     </div>
 
     <transition name="popup">
-      <div v-if="isSolved" class="popup-backdrop" :style="{ paddingLeft: sidebarWidth }" @click.self="isSolved = false">
+      <div v-if="isSolved" v-overlay-history="() => (isSolved = false)" class="popup-backdrop" :style="{ paddingLeft: sidebarWidth }" @click.self="isSolved = false">
         <div class="popup-content">
           <img :src="qrImageUrl" alt="QR Code" class="qr-image" />
         </div>

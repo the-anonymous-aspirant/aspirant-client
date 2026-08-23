@@ -8,6 +8,7 @@
 import { createApp } from 'vue';
 import App from './App.vue';
 import router from './router/router';
+import { overlayHistory } from './directives/overlayHistory';
 import './style.css';
 // Design-system (@aspirant/design-system): tokens + component styles.
 // tokens.css values mirror the App.vue :root block verbatim, so nothing changes
@@ -73,4 +74,8 @@ const vuetify = createVuetify({
   directives,
 });
 
-createApp(App).use(router).use(vuetify).mount('#app');
+const app = createApp(App);
+app.use(router).use(vuetify);
+// Back-gesture closes the top-most open overlay first (#4172).
+app.directive('overlay-history', overlayHistory);
+app.mount('#app');

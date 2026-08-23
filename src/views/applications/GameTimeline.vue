@@ -356,7 +356,7 @@
     </div>
 
     <!-- Item Details Modal -->
-    <div v-if="selectedItem" class="modal-overlay" @click="closeItemDetails">
+    <div v-if="selectedItem" v-overlay-history="closeItemDetails" class="modal-overlay" @click="closeItemDetails">
       <div class="item-modal" @click.stop>
         <div class="modal-header">
           <h3>{{ selectedItem.name }}</h3>

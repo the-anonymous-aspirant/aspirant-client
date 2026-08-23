@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { clearForNavigation } from '../directives/overlayHistory';
 import AboutView from '../views/AboutView.vue';
 import HomeView from '../views/HomeView.vue';
 import MessageBoardView from '../views/member/shared/MessageBoardView.vue';
@@ -147,6 +148,16 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+});
+
+// When the route path actually changes, tear down any overlay left open across
+// the navigation without unwinding history — the navigation restructures the
+// history stack itself, so an overlay's history.back() here would undo it. (#4172)
+router.beforeEach((to, from) => {
+  if (to.path !== from.path) {
+    clearForNavigation();
+  }
+  return true;
 });
 
 router.beforeEach((to) => {

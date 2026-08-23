@@ -11,10 +11,18 @@
           </div>
         </div>
         
-        <!-- Mobile overlay -->
-        <div 
-          v-if="isMobile && !sidebarHidden" 
-          class="mobile-overlay" 
+        <!-- Mobile overlay. Deliberately NOT wired to v-overlay-history (#4172):
+             the nav drawer is app chrome that is OPEN BY DEFAULT on a fresh
+             mobile load (checkMobile only auto-hides on a width transition, not
+             a fresh mount), so a mount-time history push would fire on every
+             page load, and there is no clean way to make a tap-opened drawer and
+             a load-open drawer behave the same under Back. Back-gesture handling
+             here targets user-opened content overlays (dialogs, modals, side
+             panels, popups); the nav-drawer's back ergonomics are a separate
+             design question (see task #4172 notes). -->
+        <div
+          v-if="isMobile && !sidebarHidden"
+          class="mobile-overlay"
           @click="toggleSidebar"
         ></div>
         

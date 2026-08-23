@@ -84,7 +84,7 @@
     </div>
 
     <!-- Schema Modal -->
-    <div class="modal-overlay" v-if="schemaModal" @click.self="schemaModal = null">
+    <div class="modal-overlay" v-if="schemaModal" v-overlay-history="() => (schemaModal = null)" @click.self="schemaModal = null">
       <div class="modal">
         <div class="modal-header">
           <h3>{{ schemaModal.name }} — CSV Schema</h3>
