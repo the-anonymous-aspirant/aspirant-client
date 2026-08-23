@@ -117,12 +117,12 @@
 <script>
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import Canvas from '../../components/goals/Canvas.vue';
-import TreeSwitcher from '../../components/goals/TreeSwitcher.vue';
-import NodeDetailPanel from '../../components/goals/NodeDetailPanel.vue';
-import TimelineFilter from '../../components/goals/TimelineFilter.vue';
-import { useGoalNodes } from '../../composables/goals/useGoalNodes.js';
-import { useTimelineFilter } from '../../composables/goals/useTimelineFilter.js';
+import Canvas from '../../../components/goals/Canvas.vue';
+import TreeSwitcher from '../../../components/goals/TreeSwitcher.vue';
+import NodeDetailPanel from '../../../components/goals/NodeDetailPanel.vue';
+import TimelineFilter from '../../../components/goals/TimelineFilter.vue';
+import { useGoalNodes } from '../../../composables/goals/useGoalNodes.js';
+import { useTimelineFilter } from '../../../composables/goals/useTimelineFilter.js';
 
 const NODE_TEMPLATES = {
   goal: `## Outcome\n\nWhat does success look like when this goal is achieved?\n\n## Motivation\n\nWhy does this goal matter? What changes if it's completed?\n\n## Key Results\n\n- [ ] \n- [ ] \n- [ ] \n`,
@@ -267,7 +267,7 @@ export default {
     }
 
     function goBack() {
-      router.push('/trusted/goals');
+      router.push('/member/shared/goals');
     }
 
     watch(showCreateNode, (val) => {

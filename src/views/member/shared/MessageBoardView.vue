@@ -41,8 +41,8 @@
 <script>
   import { ref, onMounted } from 'vue';
   import axios from 'axios';
-  import assetManager from '../asset_manager.js';
-  import UserAvatar from '../components/UserAvatar.vue';
+  import assetManager from '../../../asset_manager.js';
+  import UserAvatar from '../../../components/UserAvatar.vue';
 
   export default {
     components: { UserAvatar },

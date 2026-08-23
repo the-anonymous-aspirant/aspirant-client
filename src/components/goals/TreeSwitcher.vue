@@ -170,7 +170,7 @@ export default {
         return;
       }
       isOpen.value = false;
-      router.push(`/trusted/goals/${tree.id}`);
+      router.push(`/member/shared/goals/${tree.id}`);
       emit('tree-switched', tree.id);
     }
 
@@ -232,7 +232,7 @@ export default {
         createValue.value = '';
         await fetchTrees();
         const newTree = resp.data;
-        router.push(`/trusted/goals/${newTree.id}`);
+        router.push(`/member/shared/goals/${newTree.id}`);
         emit('tree-created', newTree.id);
       } catch (err) {
         createError.value = err.response?.data?.error?.message || err.message;
@@ -267,9 +267,9 @@ export default {
         emit('tree-deleted', deletedId);
         if (deletedId === props.activeTreeId) {
           if (trees.value.length > 0) {
-            router.push(`/trusted/goals/${trees.value[0].id}`);
+            router.push(`/member/shared/goals/${trees.value[0].id}`);
           } else {
-            router.push('/trusted/goals');
+            router.push('/member/shared/goals');
           }
         }
       } catch (err) {

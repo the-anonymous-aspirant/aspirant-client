@@ -12,7 +12,7 @@ const REVIEW_LEGEND = 'Granska och justera';
 
 /** Drive the upload step and wait for the review step to render. */
 async function walkToReview(page: Page): Promise<void> {
-  await page.goto('/trusted/valuation-statement');
+  await page.goto('/member/personal/valuation-statement');
   await dismissMobileSidebarIfPresent(page);
   await expect(page.locator('h1', { hasText: 'Värdeutlåtande' })).toBeVisible();
   // The file input is `display: none`; setInputFiles bypasses that.
@@ -30,7 +30,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
   });
 
   test('#884 dropzone signals multi-file upload', async ({ page }) => {
-    await page.goto('/trusted/valuation-statement');
+    await page.goto('/member/personal/valuation-statement');
     await dismissMobileSidebarIfPresent(page);
     await expect(page.locator('.dropzone-headline')).toContainText(/flera/i);
     const fileInput = page.locator('input[type="file"]');
@@ -246,7 +246,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     // Slow both transient endpoints so the extracting + generating steps
     // stay on screen long enough to inspect their layout.
     await installCommanderMocks(page, { extractDelayMs: 1500, generateDelayMs: 1500 });
-    await page.goto('/trusted/valuation-statement');
+    await page.goto('/member/personal/valuation-statement');
     await dismissMobileSidebarIfPresent(page);
 
     // Step 1: Upload — wrapper rendered.
@@ -293,7 +293,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     // long enough to capture the fill band's computed `left` across frames.
     await installCommanderMocks(page, { extractDelayMs: 2500 });
 
-    await page.goto('/trusted/valuation-statement');
+    await page.goto('/member/personal/valuation-statement');
     await dismissMobileSidebarIfPresent(page);
     await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
     await page.getByRole('button', { name: /Extrahera värden/ }).click();
@@ -452,7 +452,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
       void route.fulfill({ status: 599, body: 'unexpected /about call' });
     });
 
-    await page.goto('/trusted/valuation-statement');
+    await page.goto('/member/personal/valuation-statement');
     await dismissMobileSidebarIfPresent(page);
 
     // 'Om verktyget' is a top-level tab alongside 'Skapa' and 'Tidigare
@@ -504,7 +504,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     // derives from currentColor, as --text-muted does since
     // design-system #27 — rendered at 1.00:1. The card must pair its
     // surface with its own ink; this asserts the outcome, not the token.
-    await page.goto('/trusted/valuation-statement');
+    await page.goto('/member/personal/valuation-statement');
     await dismissMobileSidebarIfPresent(page);
     await expect(page.locator('.dropzone-headline')).toBeVisible();
 

@@ -1,4 +1,5 @@
 <template>
+  <!-- Intended user: Viktor (personal app — #4184 IA) -->
   <div class="jobs-view">
     <h1>Jobs</h1>
     <p class="page-subtitle">

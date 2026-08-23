@@ -47,7 +47,7 @@ test.describe('Pappas pushups graph — taller chart, 3000 ceiling, crown cadenc
 
   test('crowns: one past 1000, one more per 100 from 1500 up', async ({ page }) => {
     await mockPushups(page, CROWN_ENTRIES);
-    await page.goto('/trusted/pappas-pushups');
+    await page.goto('/member/personal/pappas-pushups');
     await dismissMobileSidebarIfPresent(page);
     await page.locator('.chart-card').waitFor();
     await openAllWeeks(page);
@@ -64,7 +64,7 @@ test.describe('Pappas pushups graph — taller chart, 3000 ceiling, crown cadenc
       { date: '2026-07-02', count: 500 }, //  running 2500 -> 12 crowns
       { date: '2026-07-03', count: 500 }, //  running 3000 -> 17 crowns (the roof)
     ]);
-    await page.goto('/trusted/pappas-pushups');
+    await page.goto('/member/personal/pappas-pushups');
     await dismissMobileSidebarIfPresent(page);
     await page.locator('.chart-card').waitFor();
     await openAllWeeks(page);
@@ -78,7 +78,7 @@ test.describe('Pappas pushups graph — taller chart, 3000 ceiling, crown cadenc
       { date: '2026-07-01', count: 1200 }, // running 1200 -> 1 crown
       { date: '2026-07-02', count: 299 }, //  running 1499 -> still 1 crown
     ]);
-    await page.goto('/trusted/pappas-pushups');
+    await page.goto('/member/personal/pappas-pushups');
     await dismissMobileSidebarIfPresent(page);
     await page.locator('.chart-card').waitFor();
     await openAllWeeks(page);
@@ -90,7 +90,7 @@ test.describe('Pappas pushups graph — taller chart, 3000 ceiling, crown cadenc
   test('chart is rendered at the doubled height (560px on desktop)', async ({ page }) => {
     await mockPushups(page, CROWN_ENTRIES);
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto('/trusted/pappas-pushups');
+    await page.goto('/member/personal/pappas-pushups');
     await dismissMobileSidebarIfPresent(page);
     const wrap = page.locator('.chart-wrap');
     await expect(wrap).toBeVisible();

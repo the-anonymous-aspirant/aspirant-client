@@ -16,6 +16,7 @@
   import Login from './Login.vue';
   import UserAvatar from '../UserAvatar.vue';
   import assetManager from '../../asset_manager';
+  import { SHARED_APPS, PERSONAL_APPS } from '../../views/member/apps.js';
 
   export default {
     name: 'Sidebar',
@@ -43,7 +44,7 @@
       // Add refs for sidebar icons - initialize as null instead of empty string
       const homeIconUrl = ref(null);
       const applicationsIconUrl = ref(null);
-      const trustedIconUrl = ref(null);
+      const memberIconUrl = ref(null);
       const adminIconUrl = ref(null);
       const supportIconUrl = ref(null);
       const defaultUserIconUrl = ref(null);
@@ -107,7 +108,7 @@
 
           applicationsIconUrl.value = await assetManager.getAsset('applications');
 
-          trustedIconUrl.value = await assetManager.getAsset('family');
+          memberIconUrl.value = await assetManager.getAsset('family');
 
           adminIconUrl.value = await assetManager.getAsset('admin');
 
@@ -147,7 +148,7 @@
         aspiringHandImageUrl,
         homeIconUrl,
         applicationsIconUrl,
-        trustedIconUrl,
+        memberIconUrl,
         adminIconUrl,
         supportIconUrl,
         defaultUserIconUrl,
@@ -156,6 +157,8 @@
         isMobile,
         sidebarHidden,
         onLoginPage,
+        sharedApps: SHARED_APPS,
+        personalApps: PERSONAL_APPS,
       };
     },
   };
@@ -179,13 +182,43 @@
       <SidebarLink :key="'apps' + imagesLoaded" :image="applicationsIconUrl" to="/applications"
         >Applications</SidebarLink
       >
-      <SidebarLink
-        v-if="userRole === 'Trusted' || userRole === 'Admin'"
-        :key="'trusted' + imagesLoaded"
-        :image="trustedIconUrl"
-        to="/trusted"
-        >Trusted</SidebarLink
-      >
+      <!-- Member area (#4184): renamed from "Trusted"; the same role gate. The
+           Member link reaches the index; beneath it a compact two-section
+           sub-nav (Shared / Personal) lists each app. Text sub-links, not the
+           icon-tile SidebarLink — a dozen 45px tiles would swamp the nav (the
+           spec leaves the sub-nav shape to the engineer). Hidden when the
+           sidebar is collapsed, matching how SidebarLink hides its own label. -->
+      <template v-if="userRole === 'Trusted' || userRole === 'Admin'">
+        <SidebarLink
+          :key="'member' + imagesLoaded"
+          :image="memberIconUrl"
+          to="/member"
+          >Member</SidebarLink
+        >
+        <div v-if="!collapsed" class="member-subnav">
+          <div class="member-subgroup">
+            <span class="member-subhead">Shared</span>
+            <router-link
+              v-for="app in sharedApps"
+              :key="'shared-' + app.route"
+              class="member-sublink"
+              :to="`/member/shared/${app.route}`"
+              >{{ app.title }}</router-link
+            >
+          </div>
+          <div class="member-subgroup">
+            <span class="member-subhead">Personal</span>
+            <router-link
+              v-for="app in personalApps"
+              :key="'personal-' + app.route"
+              class="member-sublink"
+              :to="`/member/personal/${app.route}`"
+              >{{ app.title }}
+              <span class="member-subperson">({{ app.person }})</span></router-link
+            >
+          </div>
+        </div>
+      </template>
       <SidebarLink
         v-if="userRole === 'Admin'"
         :key="'admin' + imagesLoaded"
@@ -358,6 +391,49 @@
   .sidebar-login-transition-leave-to {
     opacity: 0;
     transform: scale(0.9);
+  }
+
+  /* Member sub-nav (#4184): indented text links grouped under Shared / Personal
+     headings, sitting beneath the Member entry. Kept lightweight so a dozen
+     entries do not dominate the nav. */
+  .member-subnav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    margin-left: var(--space-md);
+    padding-left: var(--space-sm);
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  .member-subgroup {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+  }
+
+  .member-subhead {
+    color: var(--text-on-dark);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.75;
+  }
+
+  .member-sublink {
+    color: var(--brand-primary);
+    font-size: var(--text-sm);
+    text-decoration: none;
+    transition: color 0.1s linear;
+  }
+
+  .member-sublink:hover,
+  .member-sublink.router-link-active {
+    color: var(--text-on-dark);
+  }
+
+  .member-subperson {
+    color: var(--brand-accent);
+    font-size: var(--text-xs);
   }
 
   /* Mobile styles */

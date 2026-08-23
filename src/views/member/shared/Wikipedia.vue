@@ -48,7 +48,7 @@
 </template>
 
 <script>
-import { sidebarWidth } from '../../global_state_manager.js';
+import { sidebarWidth } from '../../../global_state_manager.js';
 
 const ZIM = 'wikipedia_en_all_maxi_2026-02';
 const CONTENT_BASE = `/api/wikipedia/content/${ZIM}`;

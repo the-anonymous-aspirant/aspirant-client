@@ -222,7 +222,7 @@ test.describe('Message board avatar propagation (#4170)', () => {
   test('author strips render the avatar when set and initials otherwise', async ({ page }) => {
     await seedTrustedSession(page);
     await installBoardMocks(page);
-    await page.goto('/trusted/message-board');
+    await page.goto('/member/shared/message-board');
     await dismissMobileSidebarIfPresent(page);
 
     const items = page.locator('.message-item');

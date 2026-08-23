@@ -1,4 +1,5 @@
 <template>
+  <!-- Intended user: father (personal app — #4184 IA) -->
   <div class="pappas-view">
     <h1>Pappas pushups</h1>
     <p class="page-subtitle">
@@ -102,7 +103,7 @@
     Legend,
     Filler,
   } from 'chart.js';
-  import RobbansTusen from '../../components/RobbansTusen.vue';
+  import RobbansTusen from '../../../components/RobbansTusen.vue';
 
   Chart.register(
     LineController,

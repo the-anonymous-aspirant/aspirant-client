@@ -40,8 +40,8 @@ test.describe('Robbans Tusen audio widget scoped to Pappas pushups', () => {
     await mockPushupEndpoints(page);
   });
 
-  test('renders on /trusted/pappas-pushups with play button and volume slider', async ({ page }) => {
-    await page.goto('/trusted/pappas-pushups');
+  test('renders on /member/personal/pappas-pushups with play button and volume slider', async ({ page }) => {
+    await page.goto('/member/personal/pappas-pushups');
     await dismissMobileSidebarIfPresent(page);
     const widget = page.locator('.robbans-tusen');
     await expect(widget).toBeVisible();
@@ -50,7 +50,7 @@ test.describe('Robbans Tusen audio widget scoped to Pappas pushups', () => {
   });
 
   test('volume slider input persists to localStorage', async ({ page }) => {
-    await page.goto('/trusted/pappas-pushups');
+    await page.goto('/member/personal/pappas-pushups');
     await dismissMobileSidebarIfPresent(page);
     const slider = page.locator('input.rt-volume');
     await slider.evaluate((el: HTMLInputElement) => {
@@ -68,7 +68,7 @@ test.describe('Robbans Tusen audio widget scoped to Pappas pushups', () => {
   });
 
   test('widget does NOT render on other Trusted routes', async ({ page }) => {
-    await page.goto('/trusted/goals');
+    await page.goto('/member/shared/goals');
     await dismissMobileSidebarIfPresent(page);
     await expect(page.locator('.robbans-tusen')).toHaveCount(0);
   });

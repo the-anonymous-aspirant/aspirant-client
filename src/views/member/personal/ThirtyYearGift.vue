@@ -1,4 +1,5 @@
 <template>
+  <!-- Intended user: sister Jenny (personal app — #4184 IA) -->
   <div class="gift-page">
     <h1>Den Stökiga Väggen</h1>
     <p class="subtitle">Om bara någon kunde bringa ordning i kaoset...</p>
@@ -41,8 +42,8 @@
 </template>
 
 <script>
-import AssetManager from '../../asset_manager';
-import { sidebarWidth } from '../../global_state_manager.js';
+import AssetManager from '../../../asset_manager';
+import { sidebarWidth } from '../../../global_state_manager.js';
 
 function shuffleIndices() {
   const arr = [0, 1, 2, 3, 4, 5, 6, 7, 8];

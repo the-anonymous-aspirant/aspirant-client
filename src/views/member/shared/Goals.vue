@@ -139,7 +139,7 @@ export default {
     },
 
     openTree(treeId) {
-      this.$router.push({ path: `/trusted/goals/${treeId}` });
+      this.$router.push({ path: `/member/shared/goals/${treeId}` });
     },
 
     async createTree() {
