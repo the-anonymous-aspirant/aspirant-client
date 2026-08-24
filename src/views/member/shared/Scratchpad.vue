@@ -1,22 +1,27 @@
 <template>
-  <div class="scratchpad-view" :style="viewStyle">
-    <div class="scratchpad-toolbar">
-      <span class="scratchpad-title">Scratchpad</span>
-      <span class="scratchpad-status">{{ statusText }}</span>
+  <div class="scratchpad-view">
+    <h1>Scratchpad</h1>
+    <p class="page-subtitle">
+      A personal note that syncs live across every device you're logged in on.
+    </p>
+
+    <div class="scratchpad-card">
+      <div class="scratchpad-card-header">
+        <span class="scratchpad-status">{{ statusText }}</span>
+      </div>
+      <textarea
+        ref="editor"
+        v-model="text"
+        class="scratchpad-editor"
+        spellcheck="false"
+        placeholder="Paste or type here — visible on every device you're logged in on. Stored in plain text on the server."
+        @input="onInput"
+      ></textarea>
     </div>
-    <textarea
-      ref="editor"
-      v-model="text"
-      class="scratchpad-editor"
-      spellcheck="false"
-      placeholder="Paste or type here — visible on every device you're logged in on. Stored in plain text on the server."
-      @input="onInput"
-    ></textarea>
   </div>
 </template>
 
 <script>
-import { sidebarWidth } from '../../../global_state_manager.js';
 import { getScratchpad, putScratchpad } from '../../../composables/useScratchpad.js';
 
 // Cross-device sync tuning.
@@ -40,9 +45,6 @@ export default {
     };
   },
   computed: {
-    viewStyle() {
-      return { left: sidebarWidth.value };
-    },
     dirty() {
       return this.text !== this.lastKnown;
     },
@@ -126,31 +128,47 @@ export default {
 </script>
 
 <style scoped>
+/* Match the member tool-page vocabulary (#4220): flow inside the router content
+   area with the shared padded, centered container + <h1> + .page-subtitle, and
+   shell the editor in a token-styled card — the pattern PappasPushups and the
+   other member pages use. Replaces the previous position:fixed full-bleed layout
+   that read as a one-off. */
 .scratchpad-view {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
   display: flex;
   flex-direction: column;
-  z-index: 1;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-lg);
+  min-height: 100vh;
+  color: var(--text-on-light);
 }
 
-.scratchpad-toolbar {
+.page-subtitle {
+  color: var(--text-muted);
+  font-weight: normal;
+  margin-bottom: var(--space-md);
+  text-align: center;
+}
+
+.scratchpad-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 60vh;
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.scratchpad-card-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
-  background-color: var(--surface-card);
+  justify-content: flex-end;
+  padding: var(--space-xs) var(--space-md);
   border-bottom: 1px solid var(--border-card);
   flex-shrink: 0;
-}
-
-.scratchpad-title {
-  color: var(--text-on-dark);
-  font-size: var(--text-base);
-  font-weight: 600;
 }
 
 .scratchpad-status {
@@ -165,8 +183,8 @@ export default {
   outline: none;
   resize: none;
   padding: var(--space-md);
-  background-color: var(--surface-page);
-  color: var(--text-primary, #1a1a1a);
+  background-color: transparent;
+  color: var(--text-on-light);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: var(--text-base);
   line-height: 1.5;
