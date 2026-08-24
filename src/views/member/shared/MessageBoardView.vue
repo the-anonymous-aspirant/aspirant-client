@@ -27,7 +27,7 @@
               <div class="text-h6">{{ message.Content }}</div>
               <div class="text-subtitle-2">
                 <span class="sender-info">{{ formatSender(message.SenderID) }}</span> •
-                {{ formatDate(message.SentAt) }}
+                <AspTimeSince class="message-time" :datetime="message.SentAt" />
               </div>
             </div>
             <v-divider inset></v-divider>
@@ -42,10 +42,11 @@
   import { ref, onMounted } from 'vue';
   import axios from 'axios';
   import assetManager from '../../../asset_manager.js';
+  import { AspTimeSince } from '@aspirant/design-system';
   import UserAvatar from '../../../components/UserAvatar.vue';
 
   export default {
-    components: { UserAvatar },
+    components: { UserAvatar, AspTimeSince },
     setup() {
       const messages = ref([]);
       const newMessage = ref('');
@@ -98,11 +99,6 @@
         }
       };
 
-      const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleString();
-      };
-
       const formatSender = (senderId) => {
         if (senderId === 0) return 'Anonymous';
 
@@ -144,7 +140,6 @@
         newMessage,
         messageUserIconUrl,
         submitForm,
-        formatDate,
         formatSender,
         senderAvatarUrl,
       };
@@ -247,5 +242,17 @@
   .sender-info {
     font-weight: 600;
     color: var(--brand-primary);
+  }
+
+  /* #4223 item 3: widen the gap between the author avatar and the message text
+     (Vuetify inserts a .v-list-item__spacer between #prepend and the content). */
+  .message-item :deep(.v-list-item__spacer) {
+    width: var(--space-md);
+  }
+
+  /* #4223 item 5: the relative timestamp (AspTimeSince) reads as secondary text
+     in the author strip. */
+  .message-time {
+    color: var(--text-muted);
   }
 </style>
