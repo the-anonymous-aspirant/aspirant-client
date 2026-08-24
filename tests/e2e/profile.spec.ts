@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route, type Request } from '@playwright/test';
+import { test, expect, type Page, type Route, type Request, type Locator } from '@playwright/test';
 import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 
 /** Covers #4170: the user profile surface — sidebar entry, display-name edit,
@@ -233,5 +233,70 @@ test.describe('Message board avatar propagation (#4170)', () => {
     // Second author: initials placeholder, no image.
     await expect(items.nth(1).locator('.user-avatar-initials')).toBeVisible();
     await expect(items.nth(1).locator('.user-avatar-img')).toHaveCount(0);
+  });
+});
+
+/** Computed foreground-over-effective-background contrast for `locator`.
+ *  Same measurement as tests/e2e/trusted-contrast.spec.ts (#3027 / #3014):
+ *  asserts the outcome (>= WCAG AA 4.5:1), not the token, so a regression is
+ *  caught however it is reintroduced. */
+async function contrastRatio(locator: Locator): Promise<number> {
+  return locator.first().evaluate((el) => {
+    const parse = (s: string) => {
+      let m = s.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+      if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] };
+      m = s.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)/);
+      if (m) return { r: 255 * +m[1], g: 255 * +m[2], b: 255 * +m[3], a: m[4] === undefined ? 1 : +m[4] };
+      return null;
+    };
+    const lum = (c: { r: number; g: number; b: number }) => {
+      const f = (v: number) => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+    };
+    let bg = null;
+    for (let n: Element | null = el; n && !bg; n = n.parentElement) {
+      const c = parse(getComputedStyle(n).backgroundColor);
+      if (c && c.a === 1) bg = c;
+    }
+    const fg = parse(getComputedStyle(el).color);
+    if (!fg || !bg) return 0;
+    const eff = fg.a < 1
+      ? { r: fg.r * fg.a + bg.r * (1 - fg.a), g: fg.g * fg.a + bg.g * (1 - fg.a), b: fg.b * fg.a + bg.b * (1 - fg.a) }
+      : fg;
+    const l1 = lum(eff);
+    const l2 = lum(bg);
+    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+  });
+}
+
+test.describe('Sidebar single Profile entry + display-name legibility (#4201)', () => {
+  test('the who-am-I avatar is the single, clickable Profile entry', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installProfileMocks(page);
+    await page.goto('/');
+
+    // Defect A: the redundant upper "Profile" sidebar entry is removed — there
+    // is exactly one /profile link, and it is the who-am-I avatar strip.
+    await expect(page.locator('a[href="/profile"]')).toHaveCount(1);
+    const avatarLink = page.locator('a.user-avatar-link[href="/profile"]');
+    await expect(avatarLink).toHaveCount(1);
+    // The link wraps the avatar (a real anchor → clickable navigation to /profile).
+    await expect(avatarLink.locator('.user-avatar-initials, .user-avatar-img')).toHaveCount(1);
+  });
+
+  test('the display-name input text clears WCAG AA contrast on its surface', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installProfileMocks(page, { display_name: 'Visible Name' });
+    await page.goto('/profile');
+    await dismissMobileSidebarIfPresent(page);
+
+    // Defect B: the value was white-over-white (invisible). The input text must
+    // clear AA against its own --surface-elevated background.
+    const input = page.locator('#display-name');
+    await expect(input).toHaveValue('Visible Name');
+    expect(await contrastRatio(input)).toBeGreaterThanOrEqual(4.5);
   });
 });
