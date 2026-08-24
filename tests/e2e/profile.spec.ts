@@ -180,6 +180,58 @@ test.describe('Profile surface (#4170)', () => {
   });
 });
 
+test.describe('Pixel-draw avatar (#4202)', () => {
+  test('the draw surface opens, paints a cell, and Save PUTs the rasterized PNG', async ({
+    page,
+  }) => {
+    await seedTrustedSession(page);
+    await installProfileMocks(page);
+    await page.goto('/profile');
+    await dismissMobileSidebarIfPresent(page);
+
+    // The draw surface is collapsed until the user opts in.
+    await expect(page.locator('.pixel-grid')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Draw an icon' }).click();
+    await expect(page.locator('.pixel-grid')).toBeVisible();
+
+    // Save is disabled on an empty canvas — nothing to upload yet.
+    const saveBtn = page.getByRole('button', { name: 'Save drawing' });
+    await expect(saveBtn).toBeDisabled();
+
+    // Paint two cells (default palette colour, then a second swatch).
+    await page.locator('.pixel-cell[data-idx="0"]').click();
+    await page.getByRole('button', { name: 'colour #1e88e5' }).click();
+    await page.locator('.pixel-cell[data-idx="25"]').click();
+    await expect(saveBtn).toBeEnabled();
+
+    // Save rasterizes to a PNG and PUTs it through the existing avatar endpoint.
+    const putPromise = page.waitForRequest(
+      (r) => /\/api\/profile\/avatar$/.test(r.url()) && r.method() === 'PUT',
+    );
+    await saveBtn.click();
+    await putPromise;
+
+    // On success the avatar image renders and the draw surface closes.
+    await expect(page.getByText('Profile picture updated.')).toBeVisible();
+    await expect(page.locator('.profile-card .user-avatar-img')).toBeVisible();
+    await expect(page.locator('.pixel-grid')).toHaveCount(0);
+  });
+
+  test('Clear empties the canvas and re-disables Save', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installProfileMocks(page);
+    await page.goto('/profile');
+    await dismissMobileSidebarIfPresent(page);
+
+    await page.getByRole('button', { name: 'Draw an icon' }).click();
+    await page.locator('.pixel-cell[data-idx="0"]').click();
+    await expect(page.getByRole('button', { name: 'Save drawing' })).toBeEnabled();
+
+    await page.getByRole('button', { name: 'Clear' }).click();
+    await expect(page.getByRole('button', { name: 'Save drawing' })).toBeDisabled();
+  });
+});
+
 test.describe('Message board avatar propagation (#4170)', () => {
   async function installBoardMocks(page: Page): Promise<void> {
     // Two users: one with an avatar, one without → the strip must show the

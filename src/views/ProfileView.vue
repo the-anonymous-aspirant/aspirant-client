@@ -2,6 +2,7 @@
   import { ref, computed, onMounted } from 'vue';
   import { useProfile } from '../composables/useProfile.js';
   import UserAvatar from '../components/UserAvatar.vue';
+  import PixelAvatarDraw from '../components/PixelAvatarDraw.vue';
 
   // ProfileView — the logged-in user's own profile surface (#4170). A full page
   // (the app favours pages over modals), reached from the sidebar Profile entry.
@@ -10,7 +11,7 @@
   // is the temporal display name (never the login credential).
   export default {
     name: 'ProfileView',
-    components: { UserAvatar },
+    components: { UserAvatar, PixelAvatarDraw },
     setup() {
       const { getProfile, updateDisplayName, uploadAvatar, clearAvatar } = useProfile();
 
@@ -28,6 +29,7 @@
       });
       const displayNameInput = ref('');
       const fileInput = ref(null);
+      const drawing = ref(false);
 
       const memberSince = computed(() => {
         if (!profile.value.CreatedAt) return '';
@@ -79,8 +81,10 @@
         if (fileInput.value) fileInput.value.click();
       };
 
-      const onAvatarSelected = async (event) => {
-        const file = event.target.files && event.target.files[0];
+      // Shared upload path for both the file picker and the pixel-draw surface —
+      // whatever produces the image (a chosen file or a rasterized drawing), the
+      // avatar round-trip and the success/error handling are identical.
+      const doUpload = async (file) => {
         if (!file) return;
         saving.value = true;
         error.value = '';
@@ -89,12 +93,24 @@
           const res = await uploadAvatar(file);
           profile.value = { ...profile.value, avatar_url: res.avatar_url };
           notice.value = 'Profile picture updated.';
+          return true;
         } catch (e) {
           error.value = e?.response?.data?.error?.message || 'Could not upload that image.';
+          return false;
         } finally {
           saving.value = false;
-          if (fileInput.value) fileInput.value.value = '';
         }
+      };
+
+      const onAvatarSelected = async (event) => {
+        const file = event.target.files && event.target.files[0];
+        await doUpload(file);
+        if (fileInput.value) fileInput.value.value = '';
+      };
+
+      const onDrawSaved = async (file) => {
+        const ok = await doUpload(file);
+        if (ok) drawing.value = false;
       };
 
       const removeAvatar = async () => {
@@ -126,8 +142,10 @@
         saveName,
         onPickAvatar,
         onAvatarSelected,
+        onDrawSaved,
         removeAvatar,
         fileInput,
+        drawing,
       };
     },
   };
@@ -152,6 +170,15 @@
               {{ profile.avatar_url ? 'Change picture' : 'Upload picture' }}
             </button>
             <button
+              type="button"
+              class="btn btn-ghost"
+              :disabled="saving"
+              :aria-expanded="drawing"
+              @click="drawing = !drawing"
+            >
+              {{ drawing ? 'Close drawing' : 'Draw an icon' }}
+            </button>
+            <button
               v-if="profile.avatar_url"
               type="button"
               class="btn btn-ghost"
@@ -169,6 +196,13 @@
             />
           </div>
         </div>
+
+        <PixelAvatarDraw
+          v-if="drawing"
+          :busy="saving"
+          @save="onDrawSaved"
+          @cancel="drawing = false"
+        />
 
         <form class="field" @submit.prevent="saveName">
           <label class="field-label" for="display-name">Display name</label>
