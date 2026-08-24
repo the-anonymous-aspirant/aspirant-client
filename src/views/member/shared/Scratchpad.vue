@@ -184,7 +184,9 @@ export default {
   resize: none;
   padding: var(--space-md);
   background-color: transparent;
-  color: var(--text-on-light);
+  /* The card is a dark surface (--surface-card); editor ink is the on-dark
+     token, matching the card content vocabulary in the other member pages. */
+  color: var(--text-on-dark);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: var(--text-base);
   line-height: 1.5;
