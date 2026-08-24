@@ -34,6 +34,15 @@
       const onLoginPage = computed(() => route.path === '/login');
       const username = ref(localStorage.getItem('user_name'));
       const userRole = ref(localStorage.getItem('user_role'));
+      // Display label for the who-am-I strip. The role IDENTIFIER stays
+      // 'Trusted' in code and on the wire — renaming it is a breaking change
+      // (see router.js MEMBER_ROLES) — but the area is surfaced to the user as
+      // "Member" (#4184), so the trusted tier reads "Member" under their name
+      // rather than the internal identifier (#4223 item 1, operator ask #1544).
+      // Admin/Guest keep their own labels.
+      const roleLabel = computed(() =>
+        userRole.value === 'Trusted' ? 'Member' : userRole.value
+      );
       const aspiringHandImageUrl = ref('');
       // The logged-in user's own avatar URL (#4170), used both as the Profile
       // sidebar entry's icon and in the who-am-I strip. '' ⇒ the default_user
@@ -143,6 +152,7 @@
         toggleDebugMode,
         username,
         userRole,
+        roleLabel,
         refreshUserData,
         aspiringHandImageUrl,
         homeIconUrl,
@@ -220,7 +230,7 @@
             <UserAvatar :avatar-url="profileAvatarUrl" :name="username" :size="48" />
           </router-link>
           <p class="user-detail">{{ username }}</p>
-          <p class="user-role">{{ userRole }}</p>
+          <p class="user-role">{{ roleLabel }}</p>
           <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="true" :collapsed="false"></Login>
         </div>
       </div>
