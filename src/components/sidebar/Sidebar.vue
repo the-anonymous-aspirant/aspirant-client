@@ -205,13 +205,9 @@
         to="/support"
         >Support</SidebarLink
       >
-      <SidebarLink
-        v-if="username"
-        :key="'profile' + imagesLoaded + profileAvatarUrl"
-        :image="profileAvatarUrl || defaultUserIconUrl"
-        to="/profile"
-        >Profile</SidebarLink
-      >
+      <!-- The Profile entry was removed (#4201): the same avatar already
+           appears in the who-am-I strip below, so a second copy here was
+           redundant. That bottom avatar is now the single, clickable surface. -->
     </div>
 
     <transition name="sidebar-login-transition" mode="out-in">
@@ -220,7 +216,9 @@
           <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="false" :collapsed="false"></Login>
         </div>
         <div v-else-if="username" class="user-info">
-          <UserAvatar :avatar-url="profileAvatarUrl" :name="username" :size="48" />
+          <router-link to="/profile" class="user-avatar-link" aria-label="Your profile">
+            <UserAvatar :avatar-url="profileAvatarUrl" :name="username" :size="48" />
+          </router-link>
           <p class="user-detail">{{ username }}</p>
           <p class="user-role">{{ userRole }}</p>
           <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="true" :collapsed="false"></Login>
@@ -277,6 +275,24 @@
     flex-direction: column;
     align-items: center;
     gap: var(--space-2xs);
+  }
+
+  /* The who-am-I avatar is the single Profile entry point (#4201) — clickable,
+     keyboard-focusable, with a hover/focus affordance so it reads as a link. */
+  .user-avatar-link {
+    display: inline-flex;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: opacity var(--transition-moderate);
+  }
+
+  .user-avatar-link:hover {
+    opacity: 0.85;
+  }
+
+  .user-avatar-link:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: 2px;
   }
 
   .user-detail {
