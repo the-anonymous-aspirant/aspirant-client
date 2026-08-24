@@ -274,7 +274,12 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
     background-color: var(--surface-elevated);
-    color: var(--text-on-dark);
+    /* #4201: was --text-on-dark (#fff) on the light --surface-elevated
+       (#f9f9f9) — white-over-white, invisible. The text token is resolved
+       against the input's OWN surface, not the page: --surface-elevated is a
+       light surface, so it pairs with --text-on-light (#424242 → ~9:1, clears
+       AA). Matches the canonical surface-elevated pairing (e.g. GameSql). */
+    color: var(--text-on-light);
     font-size: var(--text-md);
   }
 
