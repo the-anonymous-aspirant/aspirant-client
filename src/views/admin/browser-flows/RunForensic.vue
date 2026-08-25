@@ -335,7 +335,7 @@
     gap: 0.75rem;
   }
   h2 {
-    color: #ffb300;
+    color: var(--brand-primary);
     font-size: 1rem;
     font-weight: 600;
     margin: 1.25rem 0 0.5rem;
@@ -355,13 +355,13 @@
     padding: 0.15rem 0.55rem;
     border-radius: 999px;
     font-size: 0.75rem;
-    color: #ffffff;
+    color: var(--text-on-dark);
     text-transform: lowercase;
   }
-  .status-success { background: #2e7d32; }
+  .status-success { background: var(--feedback-success-solid); }
   .status-running { background: #f9a825; color: #212121; }
   .status-blocked { background: #ad1457; }
-  .status-failed { background: #c62828; }
+  .status-failed { background: var(--feedback-error-solid); }
   .status-cancelled { background: #5e35b1; }
   .status-skipped { background: #757575; }
   .status-unknown { background: #9e9e9e; }
@@ -382,7 +382,7 @@
   }
   .btn-cancel:hover {
     background: var(--feedback-error, #ff3739);
-    color: #ffffff;
+    color: var(--text-on-dark);
   }
   .btn[disabled] {
     color: #9e9e9e;
@@ -416,7 +416,7 @@
   .meta-value {
     font-weight: 600;
     margin-top: 0.1rem;
-    color: #ffffff;
+    color: var(--text-on-dark);
   }
   .meta-value-small {
     font-size: 0.75rem;
@@ -433,7 +433,7 @@
     margin: 0;
     white-space: pre-wrap;
     word-break: break-word;
-    color: #ffffff;
+    color: var(--text-on-dark);
     font-family: ui-monospace, SFMono-Regular, monospace;
   }
 
@@ -460,7 +460,7 @@
     margin-bottom: 0.85rem;
   }
   .step-failed {
-    border-color: #c62828;
+    border-color: var(--feedback-error-solid);
     background: #3a1f1f;
   }
   .step-head {
@@ -469,7 +469,7 @@
     align-items: baseline;
     flex-wrap: wrap;
     margin-bottom: 0.5rem;
-    color: #ffffff;
+    color: var(--text-on-dark);
   }
   .step-order {
     font-weight: 700;
@@ -483,7 +483,7 @@
   .step-selector {
     font-family: ui-monospace, SFMono-Regular, monospace;
     font-size: 0.8rem;
-    color: #82b1ff;
+    color: var(--brand-accent);
     word-break: break-all;
   }
   .step-duration {
@@ -536,7 +536,7 @@
     gap: 0.6rem;
   }
   .asset-link {
-    color: #82b1ff;
+    color: var(--brand-accent);
     text-decoration: none;
   }
   .asset-link:hover {

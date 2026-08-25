@@ -1194,7 +1194,7 @@ export default {
   padding: 2px 6px;
   border-radius: 8px;
   background: #dc3545;
-  color: #fff;
+  color: var(--text-on-dark);
   font-weight: 600;
 }
 
@@ -1264,7 +1264,7 @@ export default {
 
 .btn-primary {
   background: var(--color-primary, #007bff);
-  color: #fff;
+  color: var(--text-on-dark);
 }
 
 .btn-primary:disabled {
@@ -1274,7 +1274,7 @@ export default {
 
 .btn-secondary {
   background: var(--color-secondary, #6c757d);
-  color: #fff;
+  color: var(--text-on-dark);
 }
 
 .btn-sm {
