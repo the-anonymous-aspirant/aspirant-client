@@ -58,12 +58,24 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
   test('#877 confidence buckets paint each row and tint the input', async ({ page }) => {
     await walkToReview(page);
     // The extract fixture seeds at least one row per bucket; assert each
-    // class is present and its input carries the bucket-specific tint that
+    // class is present and its control carries the bucket-specific tint that
     // ValuationStatement.vue's scoped style applies.
+    //
+    // The selector reads `.field__control, input, select, textarea` rather than
+    // the original `input, select, textarea` because the tinted SURFACE moved,
+    // not the assertion. Rows whose value control is now an AspInput carry the
+    // fill on the component's `.field__control` wrapper; its inner <input> is
+    // transparent by design and would read rgba(0,0,0,0). Rows that still hold
+    // a native date picker, select or textarea are unchanged and match the
+    // trailing part of the selector. `.first()` takes document order, which
+    // puts `.field__control` ahead of the input it contains — so each bucket is
+    // still asserted against the element that actually paints the tint.
+    // Widening it any further (e.g. asserting "some descendant is tinted")
+    // would be the loosening this comment exists to rule out.
     const confidentRow = page.locator('.field-row.confident').first();
     await expect(confidentRow).toBeVisible();
     const confidentBg = await confidentRow
-      .locator('input, select, textarea')
+      .locator('.field__control, input, select, textarea')
       .first()
       .evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
     expect(confidentBg).toBe('rgba(72, 187, 120, 0.12)');
@@ -71,7 +83,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     const uncertainRow = page.locator('.field-row.uncertain').first();
     await expect(uncertainRow).toBeVisible();
     const uncertainBg = await uncertainRow
-      .locator('input, select, textarea')
+      .locator('.field__control, input, select, textarea')
       .first()
       .evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
     expect(uncertainBg).toBe('rgba(237, 137, 54, 0.12)');
@@ -79,7 +91,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     const manualRow = page.locator('.field-row.manual').first();
     await expect(manualRow).toBeVisible();
     const manualBg = await manualRow
-      .locator('input, select, textarea')
+      .locator('.field__control, input, select, textarea')
       .first()
       .evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
     expect(manualBg).toBe('rgba(66, 153, 225, 0.12)');
@@ -87,7 +99,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     const notFoundRow = page.locator('.field-row.not-found').first();
     await expect(notFoundRow).toBeVisible();
     const notFoundBg = await notFoundRow
-      .locator('input, select, textarea')
+      .locator('.field__control, input, select, textarea')
       .first()
       .evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
     expect(notFoundBg).toBe('rgba(245, 101, 101, 0.12)');

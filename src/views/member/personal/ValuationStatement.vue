@@ -196,19 +196,19 @@
         <legend>Värderingsobjekt</legend>
         <div class="field-row" :class="confClass('objekt')">
           <label>Objekt</label>
-          <input v-model="reviewedFields.objekt" @input="markManual('objekt')" />
+          <AspInput v-model="reviewedFields.objekt" @input="markManual('objekt')" />
         </div>
         <div class="field-row" :class="confClass('objekt_short')">
           <label>Objekt (i löptext)</label>
-          <input v-model="reviewedFields.objekt_short" @input="markManual('objekt_short')" />
+          <AspInput v-model="reviewedFields.objekt_short" @input="markManual('objekt_short')" />
         </div>
         <div class="field-row" :class="confClass('adress')">
           <label>Adress</label>
-          <input v-model="reviewedFields.adress" @input="markManual('adress')" />
+          <AspInput v-model="reviewedFields.adress" @input="markManual('adress')" />
         </div>
         <div class="field-row" :class="confClass('kommun')">
           <label>Kommun</label>
-          <input v-model="reviewedFields.kommun" @input="markManual('kommun')" />
+          <AspInput v-model="reviewedFields.kommun" @input="markManual('kommun')" />
         </div>
         <div class="field-row" :class="confClass('upplatelseform')">
           <label>Upplåtelseform</label>
@@ -251,7 +251,7 @@
         </div>
         <div class="field-row" :class="confClass('marknadsvarde_kr')">
           <label>Marknadsvärde (kr)</label>
-          <input
+          <AspInput
             inputmode="numeric"
             v-model="reviewedFields.marknadsvarde_kr"
             placeholder="3 050 000"
@@ -260,7 +260,7 @@
         </div>
         <div class="field-row" :class="confClass('intervall_kr')">
           <label>Intervall ± (kr)</label>
-          <input
+          <AspInput
             inputmode="numeric"
             v-model="reviewedFields.intervall_kr"
             placeholder="50 000"
@@ -295,7 +295,7 @@
         <legend>Utfärdare</legend>
         <div class="field-row" :class="confClass('ort')">
           <label>Ort (valfri)</label>
-          <input v-model="reviewedFields.ort" placeholder="Lämna tom för enbart datum" @input="markManual('ort')" />
+          <AspInput v-model="reviewedFields.ort" placeholder="Lämna tom för enbart datum" @input="markManual('ort')" />
         </div>
         <div class="field-row" :class="confClass('datum')">
           <label>Datum</label>
@@ -303,15 +303,15 @@
         </div>
         <div class="field-row" :class="confClass('maklare_namn')">
           <label>Mäklarens namn</label>
-          <input v-model="reviewedFields.maklare_namn" @input="markManual('maklare_namn')" />
+          <AspInput v-model="reviewedFields.maklare_namn" @input="markManual('maklare_namn')" />
         </div>
         <div class="field-row" :class="confClass('maklare_titel')">
           <label>Titel/funktion</label>
-          <input v-model="reviewedFields.maklare_titel" @input="markManual('maklare_titel')" />
+          <AspInput v-model="reviewedFields.maklare_titel" @input="markManual('maklare_titel')" />
         </div>
         <div class="field-row" :class="confClass('foretag')">
           <label>Företagets namn</label>
-          <input v-model="reviewedFields.foretag" @input="markManual('foretag')" />
+          <AspInput v-model="reviewedFields.foretag" @input="markManual('foretag')" />
         </div>
         <label class="checkbox-row">
           <input type="checkbox" v-model="saveOperatorDefaults" />
@@ -522,6 +522,7 @@
 </template>
 
 <script>
+import { AspInput } from '@aspirant/design-system';
 import axios from 'axios';
 
 import ValuationStep from '@/components/ValuationStep.vue';
@@ -580,7 +581,7 @@ const BLANK_CONFIDENCE = () => ({
 });
 
 export default {
-  components: { ValuationStep },
+  components: { AspInput, ValuationStep },
   data() {
     return {
       step: 'upload',
@@ -875,7 +876,13 @@ export default {
       // (e.g. an operator pasting '~3M') passes through untouched.
       this.markManual(key);
       const input = event && event.target;
-      const raw = String(this.reviewedFields[key] ?? '');
+      // Read the raw text from the DOM, not from `this.reviewedFields[key]`.
+      // The old read worked because a native <input>'s v-model writes BEFORE a
+      // sibling @input handler runs. AspInput binds $attrs — this handler —
+      // ahead of its own internal @input, so the model would still hold the
+      // PREVIOUS keystroke here and the grouping would lag by one character.
+      // event.target.value is current under either ordering.
+      const raw = input ? String(input.value ?? '') : String(this.reviewedFields[key] ?? '');
       const digits = raw.replace(/\s/g, '');
       if (!/^\d*$/.test(digits) || digits === '') return;
 
@@ -889,6 +896,11 @@ export default {
       const distFromEnd = input ? raw.length - (input.selectionStart ?? raw.length) : 0;
 
       this.reviewedFields = { ...this.reviewedFields, [key]: formatted };
+      // Write the grouped value back to the element too, so that AspInput's own
+      // @input — which fires after this one and emits event.target.value —
+      // carries the formatted string rather than overwriting it with the raw
+      // digits. On the native path this is a harmless no-op re-assignment.
+      if (input) input.value = formatted;
 
       if (input) {
         this.$nextTick(() => {
@@ -1479,18 +1491,32 @@ export default {
   min-width: 0;
 }
 .field-row label { font-size: var(--text-sm); color: var(--text-muted); }
+/* The controls that CANNOT migrate — the seven native date pickers the #880
+   specs pin, the two selects, and the textareas — held to the box AspInput
+   renders beside them, so the review form still reads as one form. Their old
+   `--surface-card-inner` well is also the fill AspInput's own source rejected
+   for a dark card: no flat dark-on-dark value clears the WCAG 1.4.11 3:1
+   non-text floor there (it measured 2.80:1), which is why the DS control uses
+   an elevated fill and why these now do too (§3.86). */
 .field-row input,
 .field-row select,
 .field-row textarea {
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
+  padding: 0 var(--space-sm);
+  height: var(--asp-input-height, 34px);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-control);
+  background-color: var(--surface-elevated);
+  color: var(--text-body);
   font-size: var(--text-sm);
   font-family: inherit;
   width: 100%;
   box-sizing: border-box;
+}
+
+/* A textarea is the one control that must not be pinned to the 34px canon. */
+.field-row textarea {
+  height: auto;
+  padding: var(--space-xs) var(--space-sm);
 }
 
 .checkbox-row {
@@ -1517,30 +1543,44 @@ export default {
 .chip.not-found,
 .chip.not_found   { background-color: rgba(245, 101, 101, 0.2); color: #e53e3e; }
 
+/* On a migrated row the tint lands on AspInput's `.field__control` — the
+   element that actually carries the fill — and NOT on its inner <input>, which
+   is transparent by design and sits inside it. `:deep` is required because the
+   component's internals are outside this file's scope id. The native selectors
+   stay for the date pickers, selects and textareas beside it. */
+.field-row :deep(.field__input) {
+  background-color: transparent;
+  border-left: none;
+}
+
 /* Confidence tint on the value input/select/textarea — matches the legend
    chips so the operator can scan the form by color: green = säker,
    orange = osäker, blue = manuell (operator edit), red = saknas. */
 .field-row.confident input,
 .field-row.confident select,
-.field-row.confident textarea {
+.field-row.confident textarea,
+.field-row.confident :deep(.field__control) {
   background-color: rgba(72, 187, 120, 0.12);
   border-left: 4px solid #38a169;
 }
 .field-row.uncertain input,
 .field-row.uncertain select,
-.field-row.uncertain textarea {
+.field-row.uncertain textarea,
+.field-row.uncertain :deep(.field__control) {
   background-color: rgba(237, 137, 54, 0.12);
   border-left: 4px solid #dd6b20;
 }
 .field-row.manual input,
 .field-row.manual select,
-.field-row.manual textarea {
+.field-row.manual textarea,
+.field-row.manual :deep(.field__control) {
   background-color: rgba(66, 153, 225, 0.12);
   border-left: 4px solid #3182ce;
 }
 .field-row.not-found input,
 .field-row.not-found select,
-.field-row.not-found textarea {
+.field-row.not-found textarea,
+.field-row.not-found :deep(.field__control) {
   background-color: rgba(245, 101, 101, 0.12);
   border-left: 4px solid #e53e3e;
 }
