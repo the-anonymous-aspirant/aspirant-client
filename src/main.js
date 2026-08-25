@@ -9,6 +9,7 @@ import { createApp } from 'vue';
 import App from './App.vue';
 import router from './router/router';
 import { overlayHistory } from './directives/overlayHistory';
+import { installThemeWatcher } from './theme';
 import './style.css';
 // Design-system (@aspirant/design-system): tokens + component styles.
 // tokens.css is the SINGLE SOURCE for design tokens (§3.83, task #4244): the
@@ -74,6 +75,11 @@ const vuetify = createVuetify({
   components,
   directives,
 });
+
+// Keep the theme following the OS while the user has stored no choice (#4245).
+// First paint is already themed by the inline script in index.html; this only
+// keeps an OPEN tab in sync when the system theme flips under it.
+installThemeWatcher();
 
 const app = createApp(App);
 app.use(router).use(vuetify);
