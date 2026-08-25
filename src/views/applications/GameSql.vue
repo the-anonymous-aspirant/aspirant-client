@@ -70,6 +70,7 @@
 
   // Import your questions and personalities from your resource file
   import { questions, personalities } from '../../resources/games/gameSql.js';
+  import { seriesColor, tokenColor } from '../../composables/chartSeries.js';
   import { debugMode } from '../../global_state_manager.js';
 
   export default {
@@ -168,13 +169,13 @@
               {
                 label: 'Your Score',
                 data: this.finalScores,
-                backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                borderColor: 'rgba(54, 162, 235, 1)',
+                backgroundColor: seriesColor(ctx, 2, { alpha: 0.2 }),
+                borderColor: seriesColor(ctx, 2),
                 borderWidth: 2,
-                pointBackgroundColor: 'rgba(54, 162, 235, 1)',
-                pointBorderColor: '#fff',
-                pointHoverBackgroundColor: '#fff',
-                pointHoverBorderColor: 'rgba(54, 162, 235, 1)',
+                pointBackgroundColor: seriesColor(ctx, 2),
+                pointBorderColor: tokenColor('--text-on-dark', '#ffffff'),
+                pointHoverBackgroundColor: tokenColor('--text-on-dark', '#ffffff'),
+                pointHoverBorderColor: seriesColor(ctx, 2),
               },
             ],
           },
