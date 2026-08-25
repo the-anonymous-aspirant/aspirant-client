@@ -301,7 +301,7 @@ export default {
 
 .btn-create {
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   font-weight: 600;
   padding: var(--space-xs) var(--space-lg);
   border-radius: var(--radius-lg);
@@ -455,7 +455,7 @@ export default {
 
 .btn-confirm {
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   font-weight: 600;
   padding: var(--space-xs) var(--space-lg);
   border-radius: var(--radius-lg);

@@ -184,7 +184,7 @@ onMounted(async () => {
   align-items: center;
   gap: var(--space-xs);
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   font-size: var(--text-lg);
   font-weight: 600;
   padding: var(--space-sm) var(--space-lg);

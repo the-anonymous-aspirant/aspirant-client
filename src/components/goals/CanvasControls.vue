@@ -42,6 +42,6 @@ export default {
 
 .control-btn:hover {
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
 }
 </style>

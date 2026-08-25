@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Route } from '@playwright/test';
+import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 
 /**
  * #4245 (#4240-B2) — theme activation, audit #4241 report #72 finding F3.
@@ -116,5 +117,142 @@ test.describe('#4245 theme activation', () => {
     });
     expect(probe.color).toBe('rgb(224, 224, 224)');
     expect(probe.background).toBe('rgb(42, 42, 42)');
+  });
+});
+
+/**
+ * The second half of #4245: activation is only correct if what it activates is
+ * legible. `--brand-primary` (#ffb300) is the SAME amber in both themes, but
+ * `--text-on-light` INVERTS under `[data-theme='dark']` — so every primary
+ * button in this app painted its label #e0e0e0 on #ffb300 (~1.34:1) the moment
+ * dark became reachable. The design system marks `--text-on-light` deprecated
+ * for exactly this reason (Task-#2417) and ships `--text-on-fixed-light`, which
+ * carries no dark override; this suite is the outcome check on that swap.
+ *
+ * The assertion is DARK-VS-LIGHT PARITY, not an absolute AA floor, and the
+ * distinction is deliberate. An absolute floor would also fail on ink that is
+ * equally poor in both themes — `.login-button` paints `--text-on-dark`
+ * (#ffffff, no dark override) on amber at 1.79:1 and did so long before dark
+ * was reachable. That is real, and it is not this task's defect; failing on it
+ * here would either force an unrelated light-mode change into a theme-
+ * activation PR or push someone to bolt an exclusion list onto the test, which
+ * is where the next genuine regression would hide. Parity fails exactly when
+ * activation makes something WORSE than it was in light — which is the claim
+ * #4245 actually owes — and it needs no selector list, so a button added
+ * tomorrow is covered too.
+ */
+
+/** Every element painting `background` with its own visible label, with the
+ *  contrast of its ink. Same luminance maths as tests/e2e/trusted-contrast
+ *  .spec.ts (#3014/#3027). */
+async function amberLabelContrast(page: Page) {
+  return page.evaluate((bgWanted) => {
+    const parse = (s: string) => {
+      const m = s.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+      return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
+    };
+    const lum = (c: { r: number; g: number; b: number }) => {
+      const f = (v: number) => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+    };
+    const out: Record<string, number> = {};
+    for (const el of Array.from(document.querySelectorAll('*'))) {
+      const cs = getComputedStyle(el);
+      if (cs.backgroundColor !== bgWanted) continue;
+      const text = (el.textContent || '').trim();
+      // Only elements carrying their own label: a bare amber bar has no ink
+      // that could become unreadable. A button wrapping its label in a <span>
+      // still counts — the span inherits `color`, so the button's own ink IS
+      // the label's ink — but a container that merely encloses another opaque
+      // surface does not, or the parent would be scored on ink it never paints.
+      if (!text) continue;
+      const paintsOwnSurface = (n: Element) => {
+        const c = parse(getComputedStyle(n).backgroundColor);
+        return !!c && c.a === 1;
+      };
+      if (Array.from(el.querySelectorAll('*')).some(paintsOwnSurface)) continue;
+      const fg = parse(cs.color);
+      const bg = parse(cs.backgroundColor);
+      if (!fg || !bg) continue;
+      const l1 = lum(fg);
+      const l2 = lum(bg);
+      const key = `${el.tagName.toLowerCase()}.${(el.className || '').toString().slice(0, 40)} "${text.slice(0, 30)}"`;
+      out[key] = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+    }
+    return out;
+  }, 'rgb(255, 179, 0)');
+}
+
+/** Measure the page's amber labels in light, then in dark, on one navigation
+ *  each. Theme is set through the same localStorage key the app reads, so this
+ *  exercises the shipped mechanism rather than a test-only hook. */
+async function amberContrastBothThemes(page: Page, url: string, ready: string) {
+  await page.goto(url);
+  await dismissMobileSidebarIfPresent(page);
+  await expect(page.locator(ready).first()).toBeVisible();
+  const light = await amberLabelContrast(page);
+
+  await page.evaluate(() => localStorage.setItem('theme', 'dark'));
+  await page.reload();
+  await dismissMobileSidebarIfPresent(page);
+  await expect(page.locator(ready).first()).toBeVisible();
+  const dark = await amberLabelContrast(page);
+
+  return { light, dark };
+}
+
+test.describe('#4245 activating dark does not degrade brand-amber labels', () => {
+  test.beforeEach(async ({ page }) => {
+    await seedTrustedSession(page);
+    await page.emulateMedia({ colorScheme: 'light' });
+  });
+
+  test('/about swatches hold their light-theme contrast in dark', async ({ page }) => {
+    const { light, dark } = await amberContrastBothThemes(page, '/about', '.swatches p');
+
+    expect(Object.keys(light).length, 'no amber-painted labels found — the probe went blind').toBeGreaterThan(0);
+    for (const [key, lightRatio] of Object.entries(light)) {
+      expect(dark[key], `${key} vanished from the dark render`).toBeDefined();
+      // 0.05 absorbs float noise only; a flipping ink token loses ~10x, not 5%.
+      expect(dark[key], `${key} degraded in dark (light ${lightRatio.toFixed(2)}:1)`)
+        .toBeGreaterThanOrEqual(lightRatio - 0.05);
+    }
+  });
+
+  test('/member/shared/translator primary action holds its contrast in dark', async ({ page }) => {
+    await page.route(/\/api\/translator\/languages(\?.*)?$/, async (route: Route) => {
+      if (route.request().method() !== 'GET') {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          installed_pairs: 1,
+          total_pairs: 2,
+          languages: [
+            { code: 'en', name: 'English', targets: [{ code: 'sv', name: 'Swedish', installed: true }] },
+            { code: 'sv', name: 'Swedish', targets: [{ code: 'en', name: 'English', installed: false }] },
+          ],
+        }),
+      });
+    });
+
+    const { light, dark } = await amberContrastBothThemes(page, '/member/shared/translator', '.translate-card');
+
+    // .btn-translate is one of the 41 swept declarations; assert it is actually
+    // in the sample rather than trusting the probe found something.
+    const translate = Object.keys(light).find((k) => k.includes('btn-translate'));
+    expect(translate, 'the swept .btn-translate was not among the amber labels measured').toBeTruthy();
+
+    for (const [key, lightRatio] of Object.entries(light)) {
+      expect(dark[key], `${key} vanished from the dark render`).toBeDefined();
+      expect(dark[key], `${key} degraded in dark (light ${lightRatio.toFixed(2)}:1)`)
+        .toBeGreaterThanOrEqual(lightRatio - 0.05);
+    }
   });
 });

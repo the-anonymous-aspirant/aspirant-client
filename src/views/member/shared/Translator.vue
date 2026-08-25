@@ -389,7 +389,7 @@ export default {
 
 .btn-translate {
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   font-weight: 600;
   padding: var(--space-sm) var(--space-lg);
   border-radius: var(--radius-lg);
@@ -490,7 +490,7 @@ export default {
 
 .btn-install {
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   font-weight: 600;
   padding: var(--space-xs) var(--space-lg);
   border-radius: var(--radius-lg);

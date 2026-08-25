@@ -167,7 +167,7 @@ export default {
 
 .mode-btn.active {
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   font-weight: 600;
 }
 
@@ -186,7 +186,7 @@ export default {
   border-radius: var(--radius-sm);
   border: none;
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
