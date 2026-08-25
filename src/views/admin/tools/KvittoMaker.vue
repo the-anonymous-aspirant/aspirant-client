@@ -4,29 +4,41 @@
     <h2 class="page-subtitle">Generate 12-month rent receipt PDFs</h2>
 
     <div class="form-container">
+      <!-- Every field in this form migrates, so the hand-rolled <label for>
+           elements give way to AspInput's own `label` prop rather than being
+           kept as siblings: with no un-migratable field left to look wrong
+           beside, the DS label is simply the better one. -->
       <div class="form-field">
-        <label for="year">Year</label>
-        <input id="year" v-model.number="form.year" type="number" min="2000" max="2100" />
+        <AspInput
+          label="Year"
+          type="number"
+          min="2000"
+          max="2100"
+          :model-value="form.year"
+          @update:model-value="form.year = looseNumber($event)"
+        />
       </div>
 
       <div class="form-field">
-        <label for="address">Address (BETALNING AVSER)</label>
-        <input id="address" v-model="form.address" type="text" />
+        <AspInput v-model="form.address" label="Address (BETALNING AVSER)" />
       </div>
 
       <div class="form-field">
-        <label for="amount">Monthly amount (BELOPP)</label>
-        <input id="amount" v-model.number="form.amount" type="number" min="0" />
+        <AspInput
+          label="Monthly amount (BELOPP)"
+          type="number"
+          min="0"
+          :model-value="form.amount"
+          @update:model-value="form.amount = looseNumber($event)"
+        />
       </div>
 
       <div class="form-field">
-        <label for="recipient">Recipient (BETALNINGSMOTTAGARE)</label>
-        <input id="recipient" v-model="form.recipient" type="text" />
+        <AspInput v-model="form.recipient" label="Recipient (BETALNINGSMOTTAGARE)" />
       </div>
 
       <div class="form-field">
-        <label for="payer">Payer (BETALARE)</label>
-        <input id="payer" v-model="form.payer" type="text" />
+        <AspInput v-model="form.payer" label="Payer (BETALARE)" />
       </div>
 
       <button class="generate-btn" @click="generatePdf">Generate PDF</button>
@@ -35,6 +47,7 @@
 </template>
 
 <script>
+  import { AspInput } from '@aspirant/design-system';
   import pdfMake from 'pdfmake/build/pdfmake';
   import pdfFonts from 'pdfmake/build/vfs_fonts';
 
@@ -44,7 +57,20 @@
     return new Date(year, month, 0).getDate();
   }
 
+  // Vue's own `looseToNumber`, reimplemented at the call site. `v-model.number`
+  // does NOT coerce on a component — Vue passes the modifier down as
+  // `modelModifiers` and leaves the conversion to the child, and AspInput emits
+  // `event.target.value`, a string even for type="number". Reimplementing the
+  // exact semantics (parse; keep the original when the parse fails, so a
+  // half-typed "-" or "" is not turned into NaN) keeps the behaviour identical
+  // to what the modifier gave these two fields before.
+  function looseNumber(value) {
+    const parsed = parseFloat(value);
+    return Number.isNaN(parsed) ? value : parsed;
+  }
+
   export default {
+    components: { AspInput },
     data() {
       return {
         form: {
@@ -58,6 +84,9 @@
     },
 
     methods: {
+      // Exposed on the instance because the template calls it; the
+      // implementation is module-scope so it is written once.
+      looseNumber,
       generatePdf() {
         const pages = [];
 
@@ -132,21 +161,18 @@
   .form-field {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     gap: var(--space-xs);
   }
 
-  .form-field label {
-    font-weight: bold;
-    font-size: var(--text-sm);
-  }
-
-  .form-field input {
+  /* Both rules gone with the natives they styled. The label is AspInput's now,
+     and the control's border/radius/size come from the component — including a
+     `--border-control` boundary, which clears the WCAG 1.4.11 3:1 non-text
+     floor that the old `--color-border, #ccc` fallback did not.
+     `.form-field` is a stretch flex column, so the field fills it without a
+     width rule of its own. */
+  .form-field > * {
     width: 100%;
-    padding: var(--space-sm);
-    border: 1px solid var(--color-border, #ccc);
-    border-radius: 4px;
-    font-size: var(--text-base);
   }
 
   .generate-btn {
