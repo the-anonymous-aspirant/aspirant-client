@@ -315,6 +315,7 @@
 <script>
 import axios from 'axios';
 import { Chart, registerables } from 'chart.js';
+import { seriesColor } from '../../composables/chartSeries.js';
 
 Chart.register(...registerables);
 
@@ -749,23 +750,22 @@ export default {
       const data = sorted.map(([, val]) => Math.round(val));
       const selectedCategory = this.chartFilter?.type === 'category' ? this.chartFilter.value : null;
 
-      const palette = [
-        '#dc3545', '#007bff', '#28a745', '#ffc107', '#6f42c1', '#17a2b8',
-        '#fd7e14', '#20c997', '#e83e8c', '#6610f2', '#343a40', '#adb5bd',
-        '#795548', '#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff',
-      ];
-
+      // Categorical slice colours come from the DS `--chart-series-*` tokens
+      // (CVD-safe Okabe-Ito, surface-resolved on the pie's own canvas per
+      // §3.78/§3.79); seriesColor wraps 1-based, so cap the index at the 10-token
+      // set. Dimmed (non-selected under a cross-filter) rides the same hue at low
+      // alpha instead of the old hex+'30' suffix.
+      const canvas = this.$refs.categoryPieCanvas;
       const pieVm = this;
-      this.categoryPieChart = new Chart(this.$refs.categoryPieCanvas, {
+      this.categoryPieChart = new Chart(canvas, {
         type: 'doughnut',
         data: {
           labels,
           datasets: [{
             data,
             backgroundColor: labels.map((cat, i) => {
-              const base = palette[i % palette.length];
-              if (selectedCategory && cat !== selectedCategory) return base + '30';
-              return base;
+              const dimmed = selectedCategory && cat !== selectedCategory;
+              return seriesColor(canvas, (i % 10) + 1, { alpha: dimmed ? 0.19 : 1 });
             }),
             borderWidth: labels.map(cat => selectedCategory && cat === selectedCategory ? 3 : 1),
           }],
