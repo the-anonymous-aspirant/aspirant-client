@@ -105,8 +105,10 @@
         const user = usersMap.value[senderId];
 
         if (user) {
-          const username = user.username;
-          return username || `User ${senderId}`;
+          // #4223 item 4: prefer the display name over the raw username; fall
+          // back to username (then a generic label) so a user whose display
+          // name the server hasn't sent yet still renders a name, not a blank.
+          return user.display_name || user.username || `User ${senderId}`;
         }
 
         console.log(`No user found for ID: ${senderId}`);
