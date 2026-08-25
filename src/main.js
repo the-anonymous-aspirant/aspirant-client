@@ -11,11 +11,12 @@ import router from './router/router';
 import { overlayHistory } from './directives/overlayHistory';
 import './style.css';
 // Design-system (@aspirant/design-system): tokens + component styles.
-// tokens.css values mirror the App.vue :root block verbatim, so nothing changes
-// visually today; it's the seam that lets aspirant-client's inline token block
-// be retired later. styles.css carries the component CSS (.card, .sidebar, …) —
-// the Vite lib build ships it separately and does not inject it, so consuming
-// AspCard without this import renders it unstyled.
+// tokens.css is the SINGLE SOURCE for design tokens (§3.83, task #4244): the
+// former inline `:root` block in App.vue has been retired, so every token now
+// resolves from here — no local re-declaration to drift out of sync. styles.css
+// carries the component CSS (.card, .sidebar, …) — the Vite lib build ships it
+// separately and does not inject it, so consuming AspCard without this import
+// renders it unstyled.
 import '@aspirant/design-system/tokens.css';
 import '@aspirant/design-system/styles.css';
 import axios from 'axios';
