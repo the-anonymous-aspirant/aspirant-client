@@ -8,6 +8,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#ffb300" />
     <title>The Aspirant</title>
+    <script>
+      // Theme activation (#4245, audit #4241 report #72 finding F3, corpus
+      // §3.83). The design-system dark palette already ships in this bundle —
+      // tokens.css carries a [data-theme='dark'] override block — but nothing
+      // in this app ever set the attribute, so those values were unreachable
+      // and the site was effectively light-only while system_3's admin console
+      // at /admin/apps/system_3/ was dark-capable. Same origin, two different
+      // apps.
+      //
+      // Deliberately the SAME mechanism and the SAME storage key as the
+      // system_3 frontends (frontend-vue/index.html and frontend/templates/
+      // base.html): the console and this app are served from one origin, so
+      // localStorage.theme is literally shared — flipping dark in the console
+      // now lands dark here, which is the parity the finding asks for. A new
+      // key would have re-created the split under a different name.
+      //
+      // Inline and pre-module so the first paint is already themed: a deferred
+      // setter would paint the light default first and flash.
+      (function () {
+        var stored = null;
+        try {
+          stored = localStorage.getItem('theme');
+        } catch (e) {
+          // Storage blocked (private mode / disabled cookies): fall through to
+          // the OS preference rather than failing the boot.
+        }
+        if (stored === 'dark' || stored === 'light') {
+          document.documentElement.setAttribute('data-theme', stored);
+        } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

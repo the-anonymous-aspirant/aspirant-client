@@ -107,7 +107,7 @@
     padding: var(--space-md);
     border: 3px solid var(--surface-card);
     border-radius: var(--radius-lg);
-    color: var(--text-on-light);
+    color: var(--text-on-fixed-light);
     background-color: var(--brand-primary);
   }
 
@@ -115,6 +115,23 @@
     cursor: pointer;
     max-width: 40%;
     height: auto;
+  }
+
+  /* The hero is black stipple ink on a TRANSPARENT ground, drawn to sit on a
+     light page. Activating dark (#4245) put it on --surface-page #1a1a1a and
+     measured it invisible: over the hero region the rendered luminance ran
+     0..26 against a page of 26 — the art's brightest pixel equalled the
+     background, ~1.2:1 at best, where the same region spans 0..228 in light.
+
+     Inverting is the correct treatment rather than swapping in a second asset:
+     the ink is monochrome and the ground is alpha, so invert(1) flips the ink
+     to white and leaves the transparency untouched, reproducing the light
+     theme's polarity instead of approximating it. Scoped-CSS note: the
+     [data-theme] attribute lives on <html>, outside this component, and Vue
+     hashes only the LAST selector — this compiles to
+     `[data-theme='dark'] .aspiring-hand[data-v-…]`, which is what we want. */
+  [data-theme='dark'] .aspiring-hand {
+    filter: invert(1);
   }
 
   @media (max-width: 768px) {

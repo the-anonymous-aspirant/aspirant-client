@@ -324,7 +324,7 @@
     cursor: pointer;
     border: none;
     background-color: var(--brand-primary);
-    color: var(--text-on-light);
+    color: var(--text-on-fixed-light);
     font-size: var(--text-lg);
     border-radius: var(--radius-md);
     transition: background-color var(--transition-moderate), transform var(--transition-moderate);
@@ -361,7 +361,7 @@
 
   .confirm-btn {
     background-color: var(--brand-primary);
-    color: var(--text-on-light);
+    color: var(--text-on-fixed-light);
     border: none;
     font-size: var(--text-2xl);
     width: 100%;
