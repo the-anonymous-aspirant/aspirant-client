@@ -78,78 +78,6 @@
 </script>
 
 <style>
-  :root {
-    /* === Surfaces (60% — dominant neutral) === */
-    --surface-page: #e4e4e4;
-    --surface-card: #424242;
-    --surface-card-inner: rgba(0, 0, 0, 0.3);
-    --surface-elevated: #f9f9f9;
-
-    /* === Brand (30%) === */
-    --brand-primary: #ffb300;
-    --brand-primary-alpha: #ffb30082;
-    --brand-primary-hover: #e07800;
-    --brand-accent: #82b1ff;
-
-    /* === Text === */
-    --text-on-light: #424242;
-    --text-on-dark: #ffffff;
-    --text-heading-card: #ffb300;
-    --text-muted: #6c757d;
-    --text-hint: #82b1ff;
-
-    /* === Feedback === */
-    --feedback-error: #ff3739;
-    --feedback-success: #00b74a;
-    --feedback-info: #00d3ee;
-
-    /* === Borders === */
-    --border-card: #ffb300;
-    --border-subtle: #cccccc;
-
-    /* === Typography === */
-    --font-family-base: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-
-    /* === Spacing scale (rem-based) === */
-    --space-2xs: 0.25rem;
-    --space-xs: 0.5rem;
-    --space-sm: 0.75rem;
-    --space-md: 1rem;
-    --space-lg: 1.5rem;
-    --space-xl: 2rem;
-    --space-2xl: 3rem;
-    --space-3xl: 4rem;
-
-    /* === Typography scale === */
-    --text-xs: 0.75rem;
-    --text-sm: 0.85rem;
-    --text-base: 1rem;
-    --text-md: 1.05rem;
-    --text-lg: 1.2rem;
-    --text-xl: 1.4rem;
-    --text-2xl: 1.8rem;
-    --text-3xl: 2.5rem;
-
-    /* === Border radius === */
-    --radius-sm: 4px;
-    --radius-md: 8px;
-    --radius-lg: 12px;
-    --radius-xl: 16px;
-    --radius-2xl: 20px;
-    --radius-pill: 40px;
-    --radius-full: 50%;
-
-    /* === Transitions === */
-    --transition-fast: 0.15s ease;
-    --transition-base: 0.2s ease;
-    --transition-moderate: 0.3s ease;
-    --transition-layout: 0.5s ease;
-
-    /* === Shadows === */
-    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
-    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.12);
-    --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.15);
-  }
 
   .app-container {
     display: flex;
@@ -205,7 +133,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: var(--surface-scrim);
     z-index: 999;
     display: none;
   }
