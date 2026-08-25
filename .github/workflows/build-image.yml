@@ -27,6 +27,13 @@ jobs:
       uses: actions/checkout@v4
       with:
         path: aspirant-client
+    # Build-integrity backstop (not a test suite — those stay local per #107):
+    # fail loudly if a node_modules path or a symlink targeting node_modules was
+    # committed, which breaks every fresh checkout / npm ci / vite build / this
+    # image build. See the #191/#4288 incident and scripts/ header.
+    - name: Guard against tracked node_modules
+      working-directory: aspirant-client
+      run: bash scripts/check-no-tracked-node-modules.sh
     # Dockerfile-Client compiles the design system FROM SOURCE via a BuildKit
     # named build context called `designsystem` (see that file's header). CI
     # never supplied it, so BuildKit fell back to treating `designsystem` as an
