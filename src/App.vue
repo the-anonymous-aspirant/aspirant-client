@@ -1,7 +1,6 @@
 <template>
-  <v-app id="myVapp">
-    <v-content>
-      <div class="app-container">
+  <div id="myVapp">
+    <div class="app-container">
         <!-- Mobile hamburger menu -->
         <div v-if="isMobile" class="mobile-menu-toggle" @click="toggleSidebar">
           <div class="hamburger-icon">
@@ -34,8 +33,7 @@
         <!-- Persistent Back Button -->
         <BackButton></BackButton>
       </div>
-    </v-content>
-  </v-app>
+  </div>
 </template>
 
 <script>
@@ -140,6 +138,9 @@
 
   #myVapp {
     background-color: var(--surface-page);
+    /* v-app used to provide the full-viewport min-height that let the page
+       background fill the screen; it is retired (#4294), so set it here. */
+    min-height: 100vh;
   }
 
   /* Mobile styles */
