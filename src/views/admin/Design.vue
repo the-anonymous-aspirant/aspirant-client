@@ -15,11 +15,7 @@
       <h2>Inputs</h2>
       <div class="input-group">
         <label for="textInput">Text Input:</label>
-        <!-- The <label for> stays a sibling: the colour-picker and range rows
-             below keep hand-rolled labels, and a DS label on only this row
-             would look wrong beside them. `id` rides $attrs and overrides
-             AspInput's generated one, so `for` still points at the control. -->
-        <AspInput id="textInput" v-model="sampleText" placeholder="Enter text" />
+        <input id="textInput" type="text" placeholder="Enter text" class="text-input" />
       </div>
       <div class="input-group">
         <label for="colorPicker">Color Picker:</label>
@@ -42,17 +38,8 @@
 </template>
 
 <script>
-  import { AspInput } from '@aspirant/design-system';
-
   export default {
-    components: { AspInput },
-    data() {
-      return {
-        // The page is a live showcase, so the field needs somewhere to put
-        // what you type into it; the old native input had no binding at all.
-        sampleText: '',
-      };
-    },
+    components: {},
   };
 </script>
 
