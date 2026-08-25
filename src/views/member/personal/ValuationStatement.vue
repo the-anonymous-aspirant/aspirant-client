@@ -1553,6 +1553,16 @@ export default {
   border-left: none;
 }
 
+/* The tint is MIXED INTO the control fill rather than laid over it as a
+   translucent wash. A `background-color: rgba(…, 0.12)` REPLACES the elevated
+   fill instead of sitting on top of it, so the 12% colour composited straight
+   onto the dark card: measured fill rgb(87,75,65) under ink rgb(66,66,66),
+   a contrast of 1.18:1 — text invisible in every field. The whole e2e suite
+   passed in that state, including the #877 tint test, because the assertions
+   read colours and none of them reads a ratio. color-mix keeps the fill opaque
+   and light, so the DS ink stays legible AND the colour code survives; the
+   mix resolves per theme because the second operand is the token, not a hex.
+
 /* Confidence tint on the value input/select/textarea — matches the legend
    chips so the operator can scan the form by color: green = säker,
    orange = osäker, blue = manuell (operator edit), red = saknas. */
@@ -1560,28 +1570,44 @@ export default {
 .field-row.confident select,
 .field-row.confident textarea,
 .field-row.confident :deep(.field__control) {
-  background-color: rgba(72, 187, 120, 0.12);
+  /* Fallback for an engine without color-mix: the plain elevated fill. It
+     loses the colour code and keeps the text readable, which is the right way
+     round to degrade. */
+  background-color: var(--surface-elevated);
+  background-color: color-mix(in srgb, #38a169 12%, var(--surface-elevated));
   border-left: 4px solid #38a169;
 }
 .field-row.uncertain input,
 .field-row.uncertain select,
 .field-row.uncertain textarea,
 .field-row.uncertain :deep(.field__control) {
-  background-color: rgba(237, 137, 54, 0.12);
+  /* Fallback for an engine without color-mix: the plain elevated fill. It
+     loses the colour code and keeps the text readable, which is the right way
+     round to degrade. */
+  background-color: var(--surface-elevated);
+  background-color: color-mix(in srgb, #dd6b20 12%, var(--surface-elevated));
   border-left: 4px solid #dd6b20;
 }
 .field-row.manual input,
 .field-row.manual select,
 .field-row.manual textarea,
 .field-row.manual :deep(.field__control) {
-  background-color: rgba(66, 153, 225, 0.12);
+  /* Fallback for an engine without color-mix: the plain elevated fill. It
+     loses the colour code and keeps the text readable, which is the right way
+     round to degrade. */
+  background-color: var(--surface-elevated);
+  background-color: color-mix(in srgb, #3182ce 12%, var(--surface-elevated));
   border-left: 4px solid #3182ce;
 }
 .field-row.not-found input,
 .field-row.not-found select,
 .field-row.not-found textarea,
 .field-row.not-found :deep(.field__control) {
-  background-color: rgba(245, 101, 101, 0.12);
+  /* Fallback for an engine without color-mix: the plain elevated fill. It
+     loses the colour code and keeps the text readable, which is the right way
+     round to degrade. */
+  background-color: var(--surface-elevated);
+  background-color: color-mix(in srgb, #e53e3e 12%, var(--surface-elevated));
   border-left: 4px solid #e53e3e;
 }
 
