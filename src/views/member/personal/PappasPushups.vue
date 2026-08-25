@@ -104,6 +104,7 @@
     Filler,
   } from 'chart.js';
   import RobbansTusen from '../../../components/RobbansTusen.vue';
+  import { seriesColor, tokenColor } from '../../../composables/chartSeries.js';
 
   Chart.register(
     LineController,
@@ -118,13 +119,12 @@
 
   const TARGET = 1000;
   // Roof raised to 3000 (operator #2848); the earlier #2759 change took it to
-  // 2000. Two reference markings live inside this range: a violet line at 2000
-  // and a red line at the 3000 roof.
+  // 2000. Two reference markings live inside this range: a line at 2000 and a
+  // line at the 3000 roof. Colours are the DS CVD-safe series palette, resolved
+  // at render time against the chart's surface (see renderChart / chartSeries.js).
   const CHART_CEILING = 3000;
   const LINE_2000 = 2000;
   const LINE_3000 = 3000;
-  const COLOR_LINE_2000 = '#b388ff'; // violet
-  const COLOR_LINE_3000 = '#ff5252'; // red (the roof)
   const EDIT_WINDOW_DAYS = 2;
 
   // Crowns: one for passing the 1000 goal, then one more per 100 from 1500 up
@@ -368,8 +368,8 @@
               {
                 label: 'Kumulativ',
                 data: cumulative,
-                borderColor: '#ffb300',
-                backgroundColor: 'rgba(255, 179, 0, 0.15)',
+                borderColor: seriesColor(canvas, 1),
+                backgroundColor: seriesColor(canvas, 1, { alpha: 0.15 }),
                 fill: true,
                 tension: 0.15,
                 pointRadius: 2,
@@ -377,7 +377,7 @@
               {
                 label: `Mål (${this.target})`,
                 data: targetLine,
-                borderColor: '#82b1ff',
+                borderColor: seriesColor(canvas, 10),
                 borderDash: [6, 4],
                 pointRadius: 0,
                 fill: false,
@@ -385,7 +385,7 @@
               {
                 label: '2000',
                 data: line2000,
-                borderColor: COLOR_LINE_2000,
+                borderColor: seriesColor(canvas, 5),
                 borderDash: [6, 4],
                 pointRadius: 0,
                 fill: false,
@@ -393,7 +393,7 @@
               {
                 label: 'Tak (3000)',
                 data: line3000,
-                borderColor: COLOR_LINE_3000,
+                borderColor: seriesColor(canvas, 4),
                 borderDash: [6, 4],
                 pointRadius: 0,
                 fill: false,
@@ -407,7 +407,10 @@
               y: { beginAtZero: true, suggestedMax: CHART_CEILING, max: CHART_CEILING },
             },
             plugins: {
-              legend: { position: 'bottom', labels: { color: '#e4e4e4' } },
+              legend: {
+                position: 'bottom',
+                labels: { color: tokenColor('--text-on-dark', '#e4e4e4') },
+              },
               tooltip: { mode: 'index', intersect: false },
             },
           },
