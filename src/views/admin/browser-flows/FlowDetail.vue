@@ -131,6 +131,7 @@
 <script>
   import { Chart, LineController, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Filler } from 'chart.js';
   import { useBrowserFlows } from '../../../composables/useBrowserFlows.js';
+  import { seriesColor } from '../../../composables/chartSeries.js';
 
   Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Filler);
 
@@ -289,15 +290,16 @@
       renderSparkline() {
         if (!this.$refs.sparklineCanvas || !this.sparklineData.length) return;
         if (this.chart) this.chart.destroy();
-        this.chart = new Chart(this.$refs.sparklineCanvas, {
+        const canvas = this.$refs.sparklineCanvas;
+        this.chart = new Chart(canvas, {
           type: 'line',
           data: {
             labels: this.sparklineData.map((_, i) => String(i + 1)),
             datasets: [
               {
                 data: this.sparklineData,
-                borderColor: 'rgba(46, 125, 50, 1)',
-                backgroundColor: 'rgba(46, 125, 50, 0.15)',
+                borderColor: seriesColor(canvas, 3),
+                backgroundColor: seriesColor(canvas, 3, { alpha: 0.15 }),
                 borderWidth: 2,
                 pointRadius: 2,
                 pointHoverRadius: 4,
