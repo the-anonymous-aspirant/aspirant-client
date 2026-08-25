@@ -81,6 +81,15 @@
         route="/admin/apps/system_3/"
         @card-click="openInNewTab"
       />
+      <!-- nginx-served like Penpot/System 3 above: encrypted data lake explorer
+           (explorer over Garage + catalog). -->
+      <application-card
+        :image-url="appImages.default"
+        title="Data Lake"
+        description="Browse encrypted lake — explorer over Garage + catalog. Opens in a new tab"
+        route="/admin/explorer/"
+        @card-click="openInNewTab"
+      />
     </div>
 
     <h2 class="section-title">Tools</h2>
