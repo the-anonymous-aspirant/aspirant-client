@@ -134,7 +134,7 @@ export default {
 .generator-selector button.active {
   background-color: var(--brand-primary);
   border-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
 }
 
 .generator-card {
@@ -193,7 +193,7 @@ export default {
 
 .download-btn {
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
 }
 
 .download-btn:hover {

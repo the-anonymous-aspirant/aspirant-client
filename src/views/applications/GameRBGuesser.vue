@@ -402,7 +402,7 @@
     padding: var(--space-sm) var(--space-xl);
     font-size: var(--text-lg);
     font-weight: 600;
-    color: var(--text-on-light);
+    color: var(--text-on-fixed-light);
     background-color: var(--brand-primary);
     border: none;
     border-radius: var(--radius-lg);

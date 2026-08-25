@@ -464,7 +464,7 @@
 
   .action-button {
     background-color: var(--brand-primary);
-    color: var(--text-on-light);
+    color: var(--text-on-fixed-light);
     border: none;
     padding: var(--space-sm) var(--space-lg);
     border-radius: var(--radius-md);

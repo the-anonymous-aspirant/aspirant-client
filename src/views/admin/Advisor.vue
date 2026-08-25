@@ -591,7 +591,7 @@ export default {
 
 .chat-message.user .message-content {
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
   max-width: 80%;
 }
@@ -718,7 +718,7 @@ export default {
 
 .btn-send {
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   font-weight: 600;
   padding: var(--space-sm) var(--space-lg);
   border-radius: var(--radius-lg);
@@ -805,7 +805,7 @@ export default {
 
 .btn-upload {
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   font-weight: 600;
   padding: var(--space-sm) var(--space-lg);
   border-radius: var(--radius-lg);

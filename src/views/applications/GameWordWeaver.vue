@@ -1028,7 +1028,7 @@
 
   .control-btn:active {
     background-color: var(--brand-primary);
-    color: var(--text-on-light);
+    color: var(--text-on-fixed-light);
     transform: scale(0.95);
   }
 

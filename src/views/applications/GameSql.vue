@@ -290,7 +290,7 @@
     margin: var(--space-lg) auto;
     padding: var(--space-sm) var(--space-lg);
     background-color: var(--brand-primary);
-    color: var(--text-on-light);
+    color: var(--text-on-fixed-light);
     border: none;
     border-radius: var(--radius-lg);
     cursor: pointer;
@@ -359,13 +359,13 @@
 
   .progress-step.active {
     background-color: var(--brand-primary);
-    color: var(--text-on-light);
+    color: var(--text-on-fixed-light);
     transform: scale(1.1);
   }
 
   .progress-step.completed {
     background-color: var(--brand-primary-alpha);
-    color: var(--text-on-light);
+    color: var(--text-on-fixed-light);
   }
 
   .chart-container {

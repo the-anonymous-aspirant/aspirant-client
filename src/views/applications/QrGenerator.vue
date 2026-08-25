@@ -240,7 +240,7 @@ select:focus {
 
 .download-btn {
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   border: 1px solid var(--brand-primary);
 }
 

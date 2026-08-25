@@ -1348,7 +1348,7 @@ export default {
 }
 .btn-primary {
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
 }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.15); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }

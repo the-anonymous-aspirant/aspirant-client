@@ -919,7 +919,7 @@ h1 {
 
 .tab-btn.active {
   background: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   font-weight: 600;
   box-shadow: var(--shadow-md);
 }
@@ -1457,7 +1457,7 @@ h1 {
 .submit-btn {
   padding: var(--space-sm) var(--space-lg);
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   border: none;
   border-radius: var(--radius-lg);
   cursor: pointer;
@@ -1638,7 +1638,7 @@ h1 {
 .btn-primary {
   padding: var(--space-sm) var(--space-xl);
   background: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   border: none;
   border-radius: var(--radius-lg);
   cursor: pointer;

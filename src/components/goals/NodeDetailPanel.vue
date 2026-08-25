@@ -724,7 +724,7 @@ export default {
 
 .btn-confirm {
   background-color: var(--brand-primary);
-  color: var(--text-on-light);
+  color: var(--text-on-fixed-light);
   font-weight: 600;
   padding: var(--space-xs) var(--space-md);
   border-radius: var(--radius-sm);

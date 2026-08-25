@@ -367,7 +367,7 @@
 
   .tabs button.active {
     background-color: var(--brand-primary);
-    color: var(--text-on-light);
+    color: var(--text-on-fixed-light);
   }
 
   .tabs button:not(.active):hover {
@@ -516,7 +516,7 @@
 
   .intensity-buttons button.active {
     background-color: var(--brand-primary);
-    color: var(--text-on-light);
+    color: var(--text-on-fixed-light);
   }
 
   .save-button {
@@ -525,7 +525,7 @@
     border-radius: var(--radius-md);
     background-color: var(--brand-primary);
     border: none;
-    color: var(--text-on-light);
+    color: var(--text-on-fixed-light);
     cursor: pointer;
     transition: filter var(--transition-moderate), transform var(--transition-moderate);
     font-weight: bold;
