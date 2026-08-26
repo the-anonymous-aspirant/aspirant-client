@@ -9,22 +9,14 @@
       <p class="storage-total">
         Total: {{ formatSize(storageUsage.total_size) }} across {{ storageUsage.total_files }} files
       </p>
-      <table>
-        <thead>
-          <tr>
-            <th>Folder</th>
-            <th>Files</th>
-            <th>Size</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="folder in storageUsage.folders" :key="folder.name">
-            <td>{{ folder.name }}</td>
-            <td>{{ folder.file_count }}</td>
-            <td>{{ formatSize(folder.total_size) }} / {{ formatSize(folderLimit(folder.name)) }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <AspDataTable
+        class="storage-table"
+        :columns="storageColumns"
+        :rows="storageUsage.folders"
+        row-key="name"
+      >
+        <template #cell-size="{ row }">{{ formatSize(row.total_size) }} / {{ formatSize(folderLimit(row.name)) }}</template>
+      </AspDataTable>
     </div>
 
     <div class="tabs">
@@ -152,12 +144,22 @@
 <script>
   import { AspInput } from '@aspirant/design-system';
   import axios from 'axios';
+  import { AspDataTable } from '@aspirant/design-system';
 
   export default {
     name: 'FilesManager',
-    components: { AspInput },
+    components: {
+      AspInput,
+      AspDataTable,
+    },
     data() {
       return {
+        // sortable:false — the native storage table had no sort; preserve parity.
+        storageColumns: [
+          { key: 'name', label: 'Folder', sortable: false },
+          { key: 'file_count', label: 'Files', sortable: false },
+          { key: 'size', label: 'Size', sortable: false },
+        ],
         activeTab: 'my',
         files: [],
         selectedFiles: [],
@@ -371,6 +373,15 @@
     padding: var(--space-xl);
     margin-bottom: var(--space-xl);
     text-align: left;
+    /* Dark card surface: declare the ink here so the nested AspDataTable — which
+       inherits `color` rather than setting an absolute ink — renders legibly. */
+    color: var(--text-on-dark);
+  }
+
+  /* Top separation from the storage-total line (the native table carried this
+     via the shared `table` margin, which no longer reaches AspDataTable). */
+  .storage-table {
+    margin-top: var(--space-lg);
   }
 
   .storage-panel h3 {
@@ -385,7 +396,9 @@
     margin-bottom: var(--space-sm);
   }
 
-  /* Tables (shared pattern for files and storage) */
+  /* Native table chrome for the bespoke .files-table (browse surface, kept per
+     §3.87). The admin storage table migrated to AspDataTable, which owns its own
+     chrome, so the .storage-panel td/th overrides that lived here are gone. */
   table {
     width: 100%;
     border-collapse: collapse;
@@ -406,15 +419,6 @@
 
   td {
     color: var(--text-on-light);
-  }
-
-  .storage-panel td,
-  .storage-panel th {
-    color: var(--text-on-dark);
-  }
-
-  .storage-panel th {
-    background-color: var(--surface-card-inner);
   }
 
   /* Breadcrumbs */
