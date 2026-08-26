@@ -132,8 +132,8 @@
     <!-- Game Stats -->
     <div class="game-stats" v-if="gameStarted">
       <div class="game-buttons">
-        <button @click="resetGame" class="reset-btn">New Game</button>
-        <button @click="quitGame" class="quit-btn">Quit & Save Score</button>
+        <AspButton variant="secondary" @click="resetGame">New Game</AspButton>
+        <AspButton variant="destructive" @click="quitGame">Quit &amp; Save Score</AspButton>
       </div>
       <div class="stats-row">
         <div class="stat-chip">
@@ -282,7 +282,7 @@
                 />
               </div>
               <div class="guess-submit-row">
-                <button @click="submitGuess" class="submit-btn" :disabled="showingResult">Guess!</button>
+                <AspButton variant="primary" @click="submitGuess" :disabled="showingResult">Guess!</AspButton>
               </div>
             </div>
           </div>
@@ -341,7 +341,7 @@
           Your rank: #{{ leaderboardRank }}
         </div>
         <div class="completion-actions">
-          <button @click="resetGame" class="btn-primary">Play Again</button>
+          <AspButton variant="primary" @click="resetGame">Play Again</AspButton>
         </div>
       </div>
     </div>
@@ -376,11 +376,12 @@
 import { sidebarWidth } from '@/global_state_manager.js';
 import AssetManager from '@/asset_manager.js';
 import axios from 'axios';
-import { AspDataTable } from '@aspirant/design-system';
+import { AspButton, AspDataTable } from '@aspirant/design-system';
 
 export default {
   name: 'GameTimeline',
   components: {
+    AspButton,
     AspDataTable,
   },
   props: {
@@ -1028,40 +1029,7 @@ h1 {
   gap: var(--space-md);
 }
 
-.reset-btn {
-  background-color: var(--surface-elevated);
-  color: var(--text-on-light);
-  border: none;
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-weight: 600;
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
-}
 
-.reset-btn:hover {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.quit-btn {
-  background: var(--feedback-error);
-  color: var(--text-on-dark);
-  border: none;
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-weight: 600;
-  font-size: var(--text-sm);
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
-  box-shadow: var(--shadow-md);
-}
-
-.quit-btn:hover {
-  filter: brightness(1.15);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-}
 
 .stats-row {
   display: flex;
@@ -1458,26 +1426,6 @@ h1 {
   justify-content: center;
 }
 
-.submit-btn {
-  padding: var(--space-sm) var(--space-lg);
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  border: none;
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  font-weight: 600;
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
-}
-
-.submit-btn:hover:not(:disabled) {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.submit-btn:disabled {
-  background: var(--text-muted);
-  cursor: not-allowed;
-}
 
 /* Previous Guesses */
 .previous-guesses {
@@ -1639,21 +1587,6 @@ h1 {
   justify-content: center;
 }
 
-.btn-primary {
-  padding: var(--space-sm) var(--space-xl);
-  background: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  border: none;
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  font-weight: bold;
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
-}
-
-.btn-primary:hover {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
 
 /* Modal */
 .modal-overlay {

@@ -41,13 +41,13 @@
         <AspInput v-model="form.payer" label="Payer (BETALARE)" />
       </div>
 
-      <button class="generate-btn" @click="generatePdf">Generate PDF</button>
+      <AspButton variant="primary" @click="generatePdf">Generate PDF</AspButton>
     </div>
   </div>
 </template>
 
 <script>
-  import { AspInput } from '@aspirant/design-system';
+  import { AspButton, AspInput } from '@aspirant/design-system';
   import pdfMake from 'pdfmake/build/pdfmake';
   import pdfFonts from 'pdfmake/build/vfs_fonts';
 
@@ -70,7 +70,7 @@
   }
 
   export default {
-    components: { AspInput },
+    components: { AspButton, AspInput },
     data() {
       return {
         form: {
@@ -175,21 +175,6 @@
     width: 100%;
   }
 
-  .generate-btn {
-    margin-top: var(--space-md);
-    padding: var(--space-sm) var(--space-lg);
-    background: var(--color-primary, #1976d2);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-size: var(--text-base);
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
-  .generate-btn:hover {
-    background: var(--color-primary-dark, #1565c0);
-  }
 
   @media (max-width: 767px) {
     .kvitto-maker {
