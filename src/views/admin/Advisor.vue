@@ -97,14 +97,14 @@
           @keydown.enter.exact.prevent="askQuestion"
           maxlength="2000"
         ></textarea>
-        <button
-          class="btn-send"
+        <AspButton
+          variant="primary"
           @click="askQuestion"
           :disabled="querying || !question.trim()"
         >
           <span v-if="querying">Thinking...</span>
           <span v-else>Send</span>
-        </button>
+        </AspButton>
       </div>
     </div>
 
@@ -146,14 +146,15 @@
               @change="onFilesSelected"
             />
           </div>
-          <button
+          <AspButton
             class="btn-upload"
+            variant="primary"
             @click="uploadDocuments"
             :disabled="uploading || selectedFiles.length === 0 || !uploadDomain"
           >
             <span v-if="uploading">Uploading {{ uploadProgress }}...</span>
             <span v-else>Upload{{ selectedFiles.length > 1 ? ` (${selectedFiles.length} files)` : '' }}</span>
-          </button>
+          </AspButton>
           <div v-if="uploadMessage" class="upload-message" :class="uploadMessageClass">
             {{ uploadMessage }}
           </div>
@@ -174,9 +175,9 @@
               <span class="doc-chunks">{{ doc.chunk_count }} chunks</span>
             </div>
             <div class="doc-actions">
-              <button class="btn-small btn-danger" @click="deleteDocument(doc.id)" :disabled="deleting === doc.id">
+              <AspButton variant="destructive" size="sm" @click="deleteDocument(doc.id)" :disabled="deleting === doc.id">
                 {{ deleting === doc.id ? '...' : 'Delete' }}
-              </button>
+              </AspButton>
             </div>
           </div>
         </div>
@@ -187,8 +188,12 @@
 
 <script>
 import axios from 'axios';
+import { AspButton } from '@aspirant/design-system';
 
 export default {
+  components: {
+    AspButton,
+  },
   data() {
     return {
       // Sources
@@ -716,28 +721,9 @@ export default {
   resize: none;
 }
 
-.btn-send {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-weight: 600;
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-sm);
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
-  white-space: nowrap;
-}
-
-.btn-send:hover:not(:disabled) {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.btn-send:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+/* .btn-send/.btn-upload/.btn-small/.btn-danger visuals now come from AspButton
+   (primary / primary / destructive size="sm"); only .btn-upload's layout
+   (align-self) is kept below. */
 
 /* Documents Card */
 .documents-card {
@@ -803,27 +789,9 @@ export default {
   font-size: var(--text-sm);
 }
 
+/* Layout only — visuals from AspButton (variant="primary"). */
 .btn-upload {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-weight: 600;
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-sm);
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
   align-self: flex-start;
-}
-
-.btn-upload:hover:not(:disabled) {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.btn-upload:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .upload-message {
@@ -876,29 +844,6 @@ export default {
   border-radius: var(--radius-sm);
   background-color: rgba(255, 255, 255, 0.05);
   color: var(--text-muted);
-}
-
-.btn-small {
-  padding: var(--space-2xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
-
-.btn-danger {
-  background-color: var(--feedback-error);
-  color: white;
-}
-
-.btn-danger:hover:not(:disabled) {
-  filter: brightness(1.15);
-}
-
-.btn-danger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Mobile */

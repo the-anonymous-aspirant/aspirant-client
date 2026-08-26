@@ -151,14 +151,18 @@
       </div>
     </template>
 
-    <button class="btn-refresh" @click="fetchAll">Refresh</button>
+    <AspButton class="btn-refresh" variant="secondary" @click="fetchAll">Refresh</AspButton>
   </div>
 </template>
 
 <script>
 import axios from 'axios';
+import { AspButton } from '@aspirant/design-system';
 
 export default {
+  components: {
+    AspButton,
+  },
   data() {
     return {
       loading: true,
@@ -587,22 +591,9 @@ export default {
 }
 
 /* Refresh button */
+/* Layout only — visuals from AspButton (variant="secondary"). */
 .btn-refresh {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-weight: 600;
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-base);
   margin-top: var(--space-md);
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
-}
-
-.btn-refresh:hover {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
 }
 
 /* Mobile */
