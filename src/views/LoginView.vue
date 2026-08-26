@@ -86,18 +86,16 @@
   .login-view-card {
     width: 100%;
     max-width: 24rem;
-    /* An explicit theme-aware ink, because what this card would otherwise
-       inherit is Vuetify's `.v-application { color: rgba(0,0,0,.87) }` — a
-       pinned near-black that does not flip with the theme. Measured on the
-       rendered page: 16.52:1 in light and 1.21:1 in dark, i.e. the captions
-       vanish in dark. That is a property of the global Vuetify mount (#4294 is
-       retiring it), not of this view, but this view is where it lands, and the
-       Login form's captions are `color: inherit` by design (AspInput's
-       .field__label takes the ink of whatever surface it is dropped onto) so
-       the surface has to declare one. --text-body is the token that resolves
-       per theme. The sidebar mount of the same component needs no such line:
-       the sidebar already declares --brand-primary, which measures 5.6:1 light
-       / 8.0:1 dark there. */
+    /* An explicit theme-aware ink, because no ancestor declares one: neither
+       :root nor body sets `color` (src/style.css), so `.field__label`'s
+       `color: inherit` (AspInput takes the ink of whatever surface it is
+       dropped onto, by design) falls through to the browser's UA-default
+       text color, which does not flip with the theme. Re-measured on
+       origin/main after #4294 retired Vuetify: still 1.21:1 in dark without
+       this line. --text-body is the token that resolves per theme. The
+       sidebar mount of the same component needs no such line: the sidebar
+       already declares --brand-primary, which measures 5.6:1 light / 8.0:1
+       dark there. */
     color: var(--text-body);
   }
 
