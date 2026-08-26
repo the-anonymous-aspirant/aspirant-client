@@ -1,16 +1,16 @@
 <template>
   <div class="canvas-controls">
     <AspTooltip content="Zoom in" position="left">
-      <button class="control-btn" @click="$emit('zoom-in')">+</button>
+      <button class="control-btn" aria-label="Zoom in" @click="$emit('zoom-in')">+</button>
     </AspTooltip>
     <AspTooltip content="Zoom out" position="left">
-      <button class="control-btn" @click="$emit('zoom-out')">&minus;</button>
+      <button class="control-btn" aria-label="Zoom out" @click="$emit('zoom-out')">&minus;</button>
     </AspTooltip>
     <AspTooltip content="Fit view" position="left">
-      <button class="control-btn" @click="$emit('fit-view')">&#8862;</button>
+      <button class="control-btn" aria-label="Fit view" @click="$emit('fit-view')">&#8862;</button>
     </AspTooltip>
     <AspTooltip content="Reset" position="left">
-      <button class="control-btn" @click="$emit('reset')">&#8634;</button>
+      <button class="control-btn" aria-label="Reset" @click="$emit('reset')">&#8634;</button>
     </AspTooltip>
   </div>
 </template>

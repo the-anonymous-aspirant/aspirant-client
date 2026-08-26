@@ -17,10 +17,10 @@
           <span class="item-name">{{ tree.name }}</span>
           <div class="item-actions" @click.stop>
             <AspTooltip content="Rename">
-              <button class="btn-item-action" @click="startRename(tree)">&#9998;</button>
+              <button class="btn-item-action" aria-label="Rename" @click="startRename(tree)">&#9998;</button>
             </AspTooltip>
             <AspTooltip content="Delete">
-              <button class="btn-item-action btn-item-delete" @click="startDelete(tree)">&#10005;</button>
+              <button class="btn-item-action btn-item-delete" aria-label="Delete" @click="startDelete(tree)">&#10005;</button>
             </AspTooltip>
           </div>
         </div>

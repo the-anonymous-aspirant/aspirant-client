@@ -21,7 +21,7 @@
             />
             <span v-if="!node.color" class="inherited-badge">inherited</span>
             <AspTooltip v-if="node.color" content="Revert to inherited color">
-              <button class="btn-clear-color" @click="clearColor">&times;</button>
+              <button class="btn-clear-color" aria-label="Revert to inherited color" @click="clearColor">&times;</button>
             </AspTooltip>
           </div>
 
