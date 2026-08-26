@@ -114,26 +114,17 @@
         <div v-else-if="leaderboard.length === 0" class="leaderboard-empty">
           No scores yet. Be the first to play!
         </div>
-        <table v-else class="leaderboard-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Player</th>
-              <th>Score</th>
-              <th>Accuracy</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(entry, index) in leaderboard" :key="index">
-              <td class="rank-cell">{{ index + 1 }}</td>
-              <td>{{ entry.username }}</td>
-              <td class="score-cell">{{ entry.score }}</td>
-              <td>{{ entry.metadata && entry.metadata.accuracy ? entry.metadata.accuracy + '%' : '-' }}</td>
-              <td>{{ entry.created_at ? new Date(entry.created_at).toLocaleDateString() : '-' }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <AspDataTable
+          v-else
+          class="leaderboard-table"
+          :columns="leaderboardColumns"
+          :rows="leaderboard"
+        >
+          <template #cell-rank="{ index }"><span class="rank-cell">{{ index + 1 }}</span></template>
+          <template #cell-score="{ row }"><span class="score-cell">{{ row.score }}</span></template>
+          <template #cell-accuracy="{ row }">{{ row.metadata && row.metadata.accuracy ? row.metadata.accuracy + '%' : '-' }}</template>
+          <template #cell-date="{ row }">{{ row.created_at ? new Date(row.created_at).toLocaleDateString() : '-' }}</template>
+        </AspDataTable>
         <p v-if="!isLoggedIn" class="login-hint">Log in to save your scores and appear on the leaderboard.</p>
       </div>
     </div>
@@ -385,9 +376,13 @@
 import { sidebarWidth } from '@/global_state_manager.js';
 import AssetManager from '@/asset_manager.js';
 import axios from 'axios';
+import { AspDataTable } from '@aspirant/design-system';
 
 export default {
   name: 'GameTimeline',
+  components: {
+    AspDataTable,
+  },
   props: {
     title: { type: String, required: true },
     items: { type: Array, required: true },
@@ -401,6 +396,15 @@ export default {
   },
   data() {
     return {
+      // sortable:false throughout — the native leaderboard had no sort; preserve
+      // parity (the DS AspDataTable defaults to client-side sort otherwise).
+      leaderboardColumns: [
+        { key: 'rank', label: '#', sortable: false },
+        { key: 'username', label: 'Player', sortable: false },
+        { key: 'score', label: 'Score', sortable: false },
+        { key: 'accuracy', label: 'Accuracy', sortable: false },
+        { key: 'date', label: 'Date', sortable: false },
+      ],
       gameMode: null,
       gameStarted: false,
       gameComplete: false,
@@ -1775,27 +1779,10 @@ h1 {
   font-size: var(--text-lg);
 }
 
+/* Native table chrome (border-collapse/th/td padding+border) now belongs to
+   AspDataTable; only the top separation from the tab row is kept on the wrapper. */
 .leaderboard-table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
   margin-top: var(--space-lg);
-}
-
-.leaderboard-table th {
-  background-color: var(--surface-elevated);
-  color: var(--text-on-light);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  padding: var(--space-xs);
-  border: 1px solid var(--border-subtle);
-}
-
-.leaderboard-table td {
-  color: var(--text-on-light);
-  font-size: var(--text-sm);
-  padding: var(--space-xs);
-  border: 1px solid var(--border-subtle);
 }
 
 .rank-cell {
