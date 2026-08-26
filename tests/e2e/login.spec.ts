@@ -166,10 +166,16 @@ test.describe('Dedicated /login page', () => {
         // by the app's own rules, and measures a page that never exists.
         await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
         await page.goto(path);
-        await dismissMobileSidebarIfPresent(page);
+        // The sidebar mount is only on screen while the sidebar is: on mobile
+        // the strip starts as an overlay that dismissMobileSidebarIfPresent
+        // closes, which would leave this measuring a form nobody can see. The
+        // /login mount is a page and needs the dismissal, because there the
+        // overlay covers the form instead.
+        if (container !== '.login-card') await dismissMobileSidebarIfPresent(page);
         await expect
           .poll(() => page.evaluate(() => document.documentElement.getAttribute('data-theme')))
           .toBe(theme);
+        await expect(page.locator(`${container} .field__label`).first()).toBeVisible();
 
         const captions = page.locator(`${container} .field__label`);
         await expect(captions).toHaveCount(2);
