@@ -38,13 +38,17 @@
     <div v-if="showCreateDialog" v-overlay-history="cancelCreate" class="dialog-overlay" @click.self="cancelCreate">
       <div class="dialog">
         <h3>Create New Tree</h3>
-        <input
+        <!-- ref kept verbatim: `this.$refs.createInput?.focus()` reaches the
+             inner <input> through AspInput's defineExpose (#4303). Without it
+             the ref resolves to the component instance and the call is a silent
+             no-op — the affordance disappears with nothing going red. -->
+        <AspInput
           ref="createInput"
           v-model="newTreeName"
           placeholder="Tree name"
+          maxlength="100"
           @keyup.enter="createTree"
           @keyup.escape="cancelCreate"
-          maxlength="100"
         />
         <div v-if="createError" class="error-text">{{ createError }}</div>
         <div class="dialog-actions">
@@ -60,13 +64,13 @@
     <div v-if="showRenameDialog" v-overlay-history="cancelRename" class="dialog-overlay" @click.self="cancelRename">
       <div class="dialog">
         <h3>Rename Tree</h3>
-        <input
+        <AspInput
           ref="renameInput"
           v-model="renameValue"
           placeholder="New name"
+          maxlength="100"
           @keyup.enter="renameTree"
           @keyup.escape="cancelRename"
-          maxlength="100"
         />
         <div v-if="renameError" class="error-text">{{ renameError }}</div>
         <div class="dialog-actions">
@@ -99,9 +103,12 @@
 </template>
 
 <script>
+import { AspInput } from '@aspirant/design-system';
+
 import axios from 'axios';
 
 export default {
+  components: { AspInput },
   data() {
     return {
       trees: [],
@@ -412,16 +419,13 @@ export default {
   margin: 0 0 var(--space-md) 0;
 }
 
-.dialog input {
-  width: 100%;
-  padding: var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
-  font-size: var(--text-base);
-  box-sizing: border-box;
-}
+/* §3.86: an always-live data-entry control on a dark card adopts the DS
+   control fill. The rule that used to paint this dialog's well by hand is gone
+   rather than retuned — both fields are AspInput now, so there is no native
+   <input> left in the dialog for it to reach. The DS box is also the more
+   correct one here: no flat dark-on-dark border clears the WCAG 1.4.11 3:1
+   non-text floor on a card (measured 2.80:1), which the old --border-card
+   boundary did not. */
 
 .dialog-message {
   color: var(--text-on-dark);

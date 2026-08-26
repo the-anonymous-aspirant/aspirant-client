@@ -32,13 +32,19 @@
     <div v-if="showRename" v-overlay-history="cancelRename" class="dialog-overlay" @click.self="cancelRename">
       <div class="dialog">
         <h3>Rename Tree</h3>
-        <input
+        <!-- The ref stays exactly as it was, and that is the point: with
+             AspInput's defineExpose (#4303) `renameInput.value.focus()` and
+             `.select()` reach the inner <input> unchanged. Without it the ref
+             would resolve to the component instance and both calls would be
+             silent no-ops — the caret would simply stop landing here, and no
+             assertion in this repo would have noticed. There is one now. -->
+        <AspInput
           ref="renameInput"
           v-model="renameValue"
           placeholder="New name"
+          maxlength="100"
           @keyup.enter="submitRename"
           @keyup.escape="cancelRename"
-          maxlength="100"
         />
         <div v-if="renameError" class="error-text">{{ renameError }}</div>
         <div class="dialog-actions">
@@ -58,13 +64,13 @@
     <div v-if="showCreate" v-overlay-history="cancelCreate" class="dialog-overlay" @click.self="cancelCreate">
       <div class="dialog">
         <h3>New Tree</h3>
-        <input
+        <AspInput
           ref="createInput"
           v-model="createValue"
           placeholder="Tree name"
+          maxlength="100"
           @keyup.enter="submitCreate"
           @keyup.escape="cancelCreate"
-          maxlength="100"
         />
         <div v-if="createError" class="error-text">{{ createError }}</div>
         <div class="dialog-actions">
@@ -102,9 +108,12 @@
 <script>
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
+import { AspInput } from '@aspirant/design-system';
+
 import axios from 'axios';
 
 export default {
+  components: { AspInput },
   props: {
     activeTreeId: { type: String, default: null },
   },
@@ -513,16 +522,14 @@ export default {
   margin: 0 0 var(--space-md) 0;
 }
 
-.dialog input {
-  width: 100%;
-  padding: var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
-  font-size: var(--text-base);
-  box-sizing: border-box;
-}
+/* §3.86: an always-live data-entry control on a dark card adopts the DS
+   control fill, and this dialog's old well was exactly the fill AspInput's
+   source rejected for that surface — no flat dark-on-dark border value clears
+   the WCAG 1.4.11 3:1 non-text floor there (measured 2.80:1), which is why
+   --border-control is a near-white on a card and the fill is --surface-elevated.
+   The migrated fields carry that box now, so the rule that used to paint it by
+   hand is gone rather than retuned: there is no native <input> left in this
+   dialog to paint. */
 
 .dialog-message {
   color: var(--text-on-dark);
