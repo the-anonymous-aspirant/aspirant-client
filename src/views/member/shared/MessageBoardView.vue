@@ -3,36 +3,34 @@
     <div class="messageboard-content">
       <div class="messageboard-header">
         <h1>Anything to say?</h1>
-        <v-form @submit.prevent="submitForm" class="message-form">
-          <v-text-field v-model="newMessage" label="New Message"></v-text-field>
-          <v-btn type="submit" color="var(--brand-primary)" class="submit-btn" rounded="l">Submit</v-btn>
-        </v-form>
+        <form @submit.prevent="submitForm" class="message-form">
+          <AspInput v-model="newMessage" label="New Message" />
+          <AspButton type="submit" class="submit-btn">Submit</AspButton>
+        </form>
       </div>
 
       <div class="messages-container">
-        <v-list class="messageboard-list">
-          <v-list-item
+        <ul class="messageboard-list">
+          <li
             v-for="(message, index) in messages"
             :key="index"
             class="rounded-list-item spaced-list-item message-item"
           >
-            <template #prepend>
-              <UserAvatar
-                :avatar-url="senderAvatarUrl(message.SenderID)"
-                :name="formatSender(message.SenderID)"
-                :size="40"
-              />
-            </template>
-            <div>
+            <UserAvatar
+              class="message-avatar"
+              :avatar-url="senderAvatarUrl(message.SenderID)"
+              :name="formatSender(message.SenderID)"
+              :size="40"
+            />
+            <div class="message-body">
               <div class="text-h6">{{ message.Content }}</div>
               <div class="text-subtitle-2">
                 <span class="sender-info">{{ formatSender(message.SenderID) }}</span> •
                 <AspTimeSince class="message-time" :datetime="message.SentAt" />
               </div>
             </div>
-            <v-divider inset></v-divider>
-          </v-list-item>
-        </v-list>
+          </li>
+        </ul>
       </div>
     </div>
   </div>
@@ -42,11 +40,11 @@
   import { ref, onMounted } from 'vue';
   import axios from 'axios';
   import assetManager from '../../../asset_manager.js';
-  import { AspTimeSince } from '@aspirant/design-system';
+  import { AspTimeSince, AspInput, AspButton } from '@aspirant/design-system';
   import UserAvatar from '../../../components/UserAvatar.vue';
 
   export default {
-    components: { UserAvatar, AspTimeSince },
+    components: { UserAvatar, AspTimeSince, AspInput, AspButton },
     setup() {
       const messages = ref([]);
       const newMessage = ref('');
@@ -203,6 +201,10 @@
     background-color: transparent;
     color: var(--text-on-light);
     text-align: left;
+    /* Native <ul> reset (was a Vuetify <v-list>, #4294). */
+    list-style: none;
+    margin: 0;
+    padding: 0;
   }
 
   .message-form {
@@ -231,25 +233,20 @@
     background-color: var(--surface-elevated);
   }
 
-  .message-item :deep(.v-avatar) {
-    width: 30px !important;
-    height: 30px !important;
-  }
-
-  .message-item :deep(.v-avatar img) {
-    width: 30px !important;
-    height: 30px !important;
+  /* #4294: native <li> row layout replaces v-list-item. The avatar sits left of
+     the message body with a fixed gap. #4223 item 3 kept: the gap between the
+     author avatar and the message text (previously the Vuetify
+     .v-list-item__spacer, now a native flex gap). */
+  .message-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-sm);
   }
 
   .sender-info {
     font-weight: 600;
     color: var(--brand-primary);
-  }
-
-  /* #4223 item 3: widen the gap between the author avatar and the message text
-     (Vuetify inserts a .v-list-item__spacer between #prepend and the content). */
-  .message-item :deep(.v-list-item__spacer) {
-    width: var(--space-md);
   }
 
   /* #4223 item 5: the relative timestamp (AspTimeSince) reads as secondary text
