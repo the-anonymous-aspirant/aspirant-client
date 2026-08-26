@@ -1,5 +1,5 @@
 <script>
-  import { AspInput } from '@aspirant/design-system';
+  import { AspInput, AspButton } from '@aspirant/design-system';
   import { ref, computed, onMounted } from 'vue';
 
   import { useProfile } from '../composables/useProfile.js';
@@ -13,7 +13,7 @@
   // is the temporal display name (never the login credential).
   export default {
     name: 'ProfileView',
-    components: { AspInput, UserAvatar, PixelAvatarDraw },
+    components: { AspInput, AspButton, UserAvatar, PixelAvatarDraw },
     setup() {
       const { getProfile, updateDisplayName, uploadAvatar, clearAvatar } = useProfile();
 
@@ -168,27 +168,27 @@
             :size="96"
           />
           <div class="avatar-actions">
-            <button type="button" class="btn" :disabled="saving" @click="onPickAvatar">
+            <AspButton type="button" variant="primary" :disabled="saving" @click="onPickAvatar">
               {{ profile.avatar_url ? 'Change picture' : 'Upload picture' }}
-            </button>
-            <button
+            </AspButton>
+            <AspButton
               type="button"
-              class="btn btn-ghost"
+              variant="ghost"
               :disabled="saving"
               :aria-expanded="drawing"
               @click="drawing = !drawing"
             >
               {{ drawing ? 'Close drawing' : 'Draw an icon' }}
-            </button>
-            <button
+            </AspButton>
+            <AspButton
               v-if="profile.avatar_url"
               type="button"
-              class="btn btn-ghost"
+              variant="ghost"
               :disabled="saving"
               @click="removeAvatar"
             >
               Remove
-            </button>
+            </AspButton>
             <input
               ref="fileInput"
               type="file"
@@ -228,7 +228,7 @@
               maxlength="50"
               autocomplete="off"
             />
-            <button type="submit" class="btn" :disabled="saving || !nameDirty">Save</button>
+            <AspButton type="submit" variant="primary" :disabled="saving || !nameDirty">Save</AspButton>
           </div>
         </form>
 
@@ -332,42 +332,21 @@
      root element carries this file's scope attribute, so a plain scoped
      selector reaches it without :deep(). */
   .field-row > .field {
+    /* The AspInput default is 34px (the §3.10 filter canon) and the Save button
+       beside it is now an AspButton (size="md"), which also measures 34px
+       (0.5rem × 2 padding + 1rem line at line-height:1 + 1px × 2 border, both
+       verified by rendering the DS build). The pair reads as one row at the
+       shared 34px default, so the old --asp-input-height override that matched
+       the native 36px button is dropped. This selector now only makes the input
+       take the row's leftover width beside Save. */
     flex: 1;
-    /* The DS control is 34px by default (the §3.10 filter canon); the Save
-       button beside it measures 36px. Left alone the row renders two controls
-       at different heights with the shorter one vertically centred against the
-       taller — measured 34 vs 36 in the render walk. --asp-input-height is the
-       per-call-site override the component declares for exactly this, so the
-       pair reads as one row. */
-    --asp-input-height: 36px;
   }
 
-  .btn {
-    padding: var(--space-xs) var(--space-md);
-    border: none;
-    border-radius: var(--radius-sm);
-    background-color: var(--brand-primary);
-    color: var(--text-on-dark);
-    cursor: pointer;
-    font-size: var(--text-sm);
-    transition: background-color var(--transition-moderate);
-  }
-
-  .btn:hover:not(:disabled) {
-    background-color: var(--brand-accent);
-  }
-
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .btn-ghost {
-    background-color: transparent;
-    color: var(--brand-primary);
-    border: 1px solid var(--border-subtle);
-  }
-
+  /* The avatar actions (Change/Upload = primary, Draw/Remove = ghost) and the
+     display-name Save (submit = primary) are AspButtons now — DS owns their
+     fill, ink, radius, focus, hover and disabled state (#4295 button-of-record
+     family), so the old .btn / .btn-ghost visual blocks are gone. .avatar-actions
+     above still lays the cluster out; .field-row below still positions Save. */
   .file-hidden {
     display: none;
   }
