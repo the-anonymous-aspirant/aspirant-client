@@ -239,29 +239,29 @@
     font-weight: 600;
   }
   .meta {
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted);
     font-size: 0.9rem;
     margin-bottom: 1.25rem;
   }
   .load-error {
-    color: var(--feedback-error, #ff3739);
+    color: var(--feedback-error);
     font-weight: 600;
   }
   .loading {
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted);
     font-style: italic;
   }
   .empty-state {
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted);
     font-style: italic;
     padding: 2rem 0;
   }
   .matrix-card {
-    background: var(--surface-card, #ffffff);
-    border: 1px solid var(--brand-primary, #ffb300);
+    background: var(--surface-card);
+    border: 1px solid var(--brand-primary);
     border-radius: 8px;
     padding: 1rem 1.25rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-sm);
     overflow-x: auto;
   }
   table {
@@ -272,7 +272,7 @@
   td {
     padding: 0.5rem 0.6rem;
     text-align: left;
-    border-bottom: 1px solid #cccccc;
+    border-bottom: 1px solid var(--border-subtle);
     vertical-align: middle;
   }
   th {
@@ -285,7 +285,7 @@
   th.grid-head {
     text-align: center;
     font-weight: normal;
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted);
     font-size: 0.75rem;
   }
   th.actions-col {
@@ -296,7 +296,7 @@
     font-weight: 600;
   }
   .flow-name a {
-    color: var(--brand-primary, #ffb300);
+    color: var(--brand-primary);
     text-decoration: none;
   }
   .flow-name a:hover {
@@ -326,10 +326,10 @@
     cursor: default;
     pointer-events: none;
   }
-  .cell-success { background: #2e7d32; }
+  .cell-success { background: var(--feedback-success-solid); }
   .cell-running { background: #f9a825; }
   .cell-blocked { background: #ad1457; }
-  .cell-failed { background: #c62828; }
+  .cell-failed { background: var(--feedback-error-solid); }
   .cell-unknown { background: #9e9e9e; }
   .cell-cancelled { background: #5e35b1; }
   .row-actions {
@@ -340,8 +340,8 @@
   }
   .btn {
     background: none;
-    border: 1px solid var(--brand-primary, #ffb300);
-    color: var(--brand-primary, #ffb300);
+    border: 1px solid var(--brand-primary);
+    color: var(--brand-primary);
     padding: 0.25rem 0.7rem;
     font-size: 0.78rem;
     font-family: inherit;
@@ -350,8 +350,8 @@
     transition: background 0.15s ease, color 0.15s ease;
   }
   .btn:hover {
-    background: var(--brand-primary, #ffb300);
-    color: #ffffff;
+    background: var(--brand-primary);
+    color: var(--text-on-dark);
   }
   .btn[disabled] {
     color: #9e9e9e;
@@ -360,17 +360,17 @@
     background: none;
   }
   .btn-cancel {
-    border-color: var(--feedback-error, #ff3739);
-    color: var(--feedback-error, #ff3739);
+    border-color: var(--feedback-error);
+    color: var(--feedback-error);
   }
   .btn-cancel:hover {
-    background: var(--feedback-error, #ff3739);
-    color: #ffffff;
+    background: var(--feedback-error);
+    color: var(--text-on-dark);
   }
   .legend {
     margin-top: 1.5rem;
     font-size: 0.8rem;
-    color: var(--text-muted, #6c757d);
+    color: var(--text-muted);
     display: flex;
     gap: 1rem;
     align-items: center;
