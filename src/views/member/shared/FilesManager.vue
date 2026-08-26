@@ -62,17 +62,17 @@
       />
       <span v-if="selectedFiles.length === 1" class="selected-filename">{{ selectedFiles[0].name }}</span>
       <span v-else-if="selectedFiles.length > 1" class="selected-filename">{{ selectedFiles.length }} files selected</span>
-      <button
+      <AspButton
         v-if="selectedFiles.length > 0"
-        class="btn btn-confirm"
+        variant="primary"
         :disabled="uploading"
         @click="uploadFiles"
       >
         {{ uploading ? `Uploading (${uploadProgress}/${selectedFiles.length})...` : 'Upload' }}
-      </button>
-      <button class="btn btn-folder" @click="showNewFolderInput = !showNewFolderInput">
+      </AspButton>
+      <AspButton variant="secondary" @click="showNewFolderInput = !showNewFolderInput">
         New Folder
-      </button>
+      </AspButton>
     </div>
 
     <!-- New folder input -->
@@ -87,8 +87,8 @@
           @keyup.enter="createFolder"
         />
       </div>
-      <button class="btn btn-confirm" @click="createFolder">Create</button>
-      <button class="btn btn-cancel" @click="showNewFolderInput = false; newFolderName = ''">Cancel</button>
+      <AspButton variant="primary" @click="createFolder">Create</AspButton>
+      <AspButton variant="secondary" @click="showNewFolderInput = false; newFolderName = ''">Cancel</AspButton>
     </div>
 
     <div v-if="error" class="error-message">{{ error }}</div>
@@ -124,16 +124,17 @@
           <td>{{ file.is_dir ? 'Folder' : formatSize(file.size) }}</td>
           <td>{{ formatDate(file.mod_time) }}</td>
           <td class="actions-cell" @click.stop>
-            <button v-if="!file.is_dir" class="btn btn-action" @click="downloadFile(file.name)">
+            <AspButton v-if="!file.is_dir" variant="secondary" size="sm" @click="downloadFile(file.name)">
               Download
-            </button>
-            <button
+            </AspButton>
+            <AspButton
               v-if="activeTab === 'my' || (activeTab === 'shared' && isAdmin)"
-              class="btn btn-delete"
+              variant="destructive"
+              size="sm"
               @click="deleteFile(file.name, file.is_dir)"
             >
               Delete
-            </button>
+            </AspButton>
           </td>
         </tr>
       </tbody>
@@ -142,13 +143,14 @@
 </template>
 
 <script>
-  import { AspInput } from '@aspirant/design-system';
+  import { AspButton, AspInput } from '@aspirant/design-system';
   import axios from 'axios';
   import { AspDataTable } from '@aspirant/design-system';
 
   export default {
     name: 'FilesManager',
     components: {
+      AspButton,
       AspInput,
       AspDataTable,
     },
@@ -554,37 +556,14 @@
     display: inline-block;
   }
 
-  .btn-confirm {
-    background-color: var(--feedback-success);
-    color: var(--text-on-dark);
-  }
+  /* .btn-confirm / .btn-cancel / .btn-folder / .btn-action / .btn-delete are
+     gone — all six of their usages are AspButtons now.
 
-  .btn-cancel {
-    background-color: var(--surface-card);
-    color: var(--text-on-dark);
-    border: 2px solid var(--border-card);
-  }
-
-  .btn-folder {
-    background-color: var(--surface-card);
-    color: var(--text-on-dark);
-    border: 2px solid var(--border-card);
-    border-radius: var(--radius-md);
-    padding: var(--space-sm) var(--space-lg);
-  }
-
-  .btn-action {
-    background-color: var(--brand-accent);
-    color: var(--text-on-dark);
-    padding: var(--space-2xs) var(--space-sm);
-  }
-
-  .btn-delete {
-    background-color: var(--feedback-error);
-    color: var(--text-on-dark);
-    padding: var(--space-2xs) var(--space-sm);
-    font-weight: bold;
-  }
+     The base .btn block above STAYS, and deleting it with them would be the
+     trap in this file: .btn-upload at the rule below is on a <label> (:53, the
+     hidden file-input trigger), not a <button>, so it still needs .btn's box.
+     Nothing that reaches an AspButton is left here — a consumer class lands on
+     the DS <button> and would paint over .btn--*. */
 
   /* Folder row styling */
   .folder-row {
