@@ -156,9 +156,13 @@
     </div>
     <div v-if="userRole === 'Admin'" class="admin-visualization">
       <h3>Admin Visualization</h3>
-      <div>
-        <label for="seed">Seed:</label>
-        <input id="seed" v-model="seed" @change="updateSeed($event.target.value)" />
+      <div class="seed-field">
+        <!-- The hand-rolled <label for> goes away rather than being kept as a
+             sibling: nothing in this file styles it, so AspInput's own label is
+             a strict improvement here, and its generated id keeps the
+             label/control association that `for="seed"` provided. Nothing else
+             in the repo referenced #seed. -->
+        <AspInput v-model="seed" label="Seed" @change="updateSeed($event.target.value)" />
       </div>
       <div>
         <h4>Letters Sequence:</h4>
@@ -169,6 +173,7 @@
 </template>
 
 <script>
+  import { AspInput } from '@aspirant/design-system';
   import axios from 'axios';
 
   const BOARD_CONFIG = {
@@ -289,6 +294,7 @@
 
   export default {
     name: 'WordWeaver',
+    components: { AspInput },
     data() {
       return {
         board: Array.from({ length: BOARD_CONFIG.ROWS }, () =>
@@ -1352,6 +1358,13 @@
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius-sm);
     background-color: var(--surface-elevated);
+  }
+
+  /* AspInput's wrapper is a block-level flex column, so it would otherwise
+     stretch to the full panel width where the native input sat at its default
+     size. The cap keeps the seed field the same rough shape it had. */
+  .seed-field {
+    max-width: 240px;
   }
 
   .word-cards {

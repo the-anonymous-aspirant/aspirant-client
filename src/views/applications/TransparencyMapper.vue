@@ -27,15 +27,22 @@
         </div>
         <div class="tolerance-container">
           <label for="toleranceInput">Tolerance</label>
-          <input
-            id="toleranceInput"
-            type="number"
-            v-model.number="tolerance"
-            min="0"
-            max="255"
-            @input="processAllImages"
-            class="tolerance-input"
-          />
+          <div class="tolerance-field">
+            <!-- The label stays a sibling rather than moving to AspInput's own
+                 `label` prop: the colour picker beside it keeps a plain
+                 `<label>`, and a DS-styled label next to a hand-styled one is
+                 the inconsistency this migration is supposed to remove, not
+                 introduce. Passing `id` through keeps `for` pointing at the
+                 real control. -->
+            <AspInput
+              id="toleranceInput"
+              type="number"
+              :model-value="tolerance"
+              min="0"
+              max="255"
+              @update:model-value="setTolerance"
+            />
+          </div>
         </div>
       </div>
 
@@ -56,13 +63,13 @@
           <div class="file-path-container">
             <label :for="`filePath-${index}`">File Name</label>
             <div class="path-input-group">
-              <input
-                :id="`filePath-${index}`"
-                type="text"
-                v-model="imageData.fileName"
-                placeholder="filename"
-                class="file-path-input"
-              />
+              <div class="file-path-field">
+                <AspInput
+                  :id="`filePath-${index}`"
+                  v-model="imageData.fileName"
+                  placeholder="filename"
+                />
+              </div>
             </div>
           </div>
           <div class="button-group">
@@ -75,9 +82,11 @@
   </div>
 </template>
 <script>
+  import { AspInput } from '@aspirant/design-system';
   import axios from 'axios';
 
   export default {
+    components: { AspInput },
     data() {
       return {
         images: [], // Array to store multiple images
@@ -88,6 +97,16 @@
       };
     },
     methods: {
+      // `v-model.number` does not coerce on a component — Vue hands the
+      // modifier to the child as `modelModifiers` and leaves the conversion to
+      // it, and AspInput emits `event.target.value`, which is a string even for
+      // `type="number"`. Tolerance is compared numerically (`<=` at
+      // `colorsMatch`, `> 0` at `processImage`), and `'10' <= 9` is a string
+      // comparison that quietly answers wrong, so the coercion moves here.
+      setTolerance(value) {
+        this.tolerance = value === '' ? 0 : Number(value);
+        this.processAllImages();
+      },
       triggerFileInput() {
         this.$refs.fileInput.click();
       },
@@ -420,14 +439,12 @@
     cursor: pointer;
   }
 
-  .tolerance-input {
-    width: 60px;
-    padding: var(--space-2xs);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border-subtle);
-    background-color: var(--surface-elevated);
-    color: var(--text-on-light);
-    text-align: center;
+  /* The control itself is AspInput's now; only the box it sits in is ours.
+     A class on <AspInput> would land on the inner <input> (inheritAttrs is
+     false there), which the parent's scope attribute does not reach — hence
+     the wrapper. */
+  .tolerance-field {
+    width: 80px;
   }
 
   .path-input-group {
@@ -446,13 +463,8 @@
     border-right: none;
   }
 
-  .file-path-input {
+  .file-path-field {
     flex: 1;
-    padding: var(--space-2xs);
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    border: 1px solid var(--border-subtle);
-    background-color: var(--surface-elevated);
-    color: var(--text-on-light);
   }
 
   .button-group {
