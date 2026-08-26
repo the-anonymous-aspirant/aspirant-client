@@ -50,12 +50,16 @@
     <div v-if="showCreateNode" v-overlay-history="() => (showCreateNode = false)" class="dialog-overlay" @click.self="showCreateNode = false">
       <div class="dialog dialog-wide">
         <h3>Add Node</h3>
-        <input
+        <!-- ref kept verbatim: `createNodeInput.value?.focus()` (L~274) reaches
+             the inner <input> through AspInput's defineExpose (#4303). Without
+             it the ref resolves to the component instance and opening this
+             dialog would silently stop putting the caret in the name field. -->
+        <AspInput
+          ref="createNodeInput"
           v-model="newNode.name"
           placeholder="Node name"
-          @keyup.escape="showCreateNode = false"
           maxlength="255"
-          ref="createNodeInput"
+          @keyup.escape="showCreateNode = false"
         />
         <div class="form-row">
           <label>Type</label>
@@ -117,6 +121,8 @@
 <script>
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { AspInput } from '@aspirant/design-system';
+
 import Canvas from '../../../components/goals/Canvas.vue';
 import TreeSwitcher from '../../../components/goals/TreeSwitcher.vue';
 import NodeDetailPanel from '../../../components/goals/NodeDetailPanel.vue';
@@ -133,7 +139,7 @@ const NODE_TEMPLATES = {
 const MAX_RECOMMENDED_DEPTH = 5;
 
 export default {
-  components: { Canvas, TreeSwitcher, NodeDetailPanel, TimelineFilter },
+  components: { AspInput, Canvas, TreeSwitcher, NodeDetailPanel, TimelineFilter },
   setup() {
     const route = useRoute();
     const router = useRouter();
@@ -427,15 +433,36 @@ export default {
   margin: 0 0 var(--space-md) 0;
 }
 
-.dialog input[type="text"],
-.dialog input:not([type="color"]):not([type="date"]) {
-  width: 100%;
-  padding: var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
-  font-size: var(--text-base);
+/* The name field is AspInput now, so the rule that used to paint it is gone.
+   What remains in this dialog is two <select>s (a primitive family #4278 does
+   not cover), two `date` pickers and one `color` picker (native-widget types
+   the §3.85 ruling excludes from AspInput's contract on purpose), and one
+   <textarea>. None of them can migrate — so instead of leaving five natives at
+   a different height, radius, fill and boundary beside one DS control, they are
+   held to the box AspInput renders. §3.86: an always-live data-entry control on
+   a dark card adopts the DS control fill.
+
+   Measured on the built page, all six controls in this dialog now agree on
+   `34px | 8px radius | --surface-elevated | --border-control`, and the boundary
+   clears WCAG 1.4.11's 3:1 non-text floor in both themes by different means —
+   in light the near-white fill against the #424242 card carries it at 9.55:1
+   (the border alone is 2.21:1); in dark the fill drops to 1.14:1 and the
+   #cccccc border carries it at 8.94:1. The box being replaced was legible too
+   (a 1px amber --border-card at 5.6:1 light / 8.0:1 dark), so the reason for
+   this change is uniformity under the ruling, not a contrast defect. Value ink
+   is 9.55:1 / 9.57:1.
+
+   The `color` swatch keeps its own 40×30 box: it is a swatch, not a field, and
+   stretching it to a 34px text-control box would claim it is one. */
+
+/* AspInput's .field__control declares height but not box-sizing, so it
+   rendered content-box (34px content + 2px border = 36px) once #4294 removed
+   Vuetify's global `box-sizing: border-box` reset that had masked this for
+   every AspInput on the page. The select/date rules above set box-sizing
+   explicitly, which is why only the DS control disagreed. Filed as its own
+   task (system_3 task #4330) since the gap is DS-wide, not local to this
+   dialog; scoped here so this dialog's box stays correct in the meantime. */
+:deep(.dialog .field__control) {
   box-sizing: border-box;
 }
 
@@ -452,31 +479,25 @@ export default {
   min-width: 90px;
 }
 
-.form-row select {
-  flex: 1;
-  padding: var(--space-xs);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
-  font-size: var(--text-sm);
-}
-
+.form-row select,
 .form-row input[type="date"] {
   flex: 1;
-  padding: var(--space-xs);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
+  height: 34px;
+  padding: 0 var(--space-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-control);
+  background-color: var(--surface-elevated);
+  color: var(--text-body);
+  font-family: inherit;
   font-size: var(--text-sm);
+  box-sizing: border-box;
 }
 
 .form-row input[type="color"] {
   width: 40px;
   height: 30px;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
   cursor: pointer;
   padding: 0;
 }
@@ -494,12 +515,14 @@ export default {
 
 .description-textarea {
   width: 100%;
-  padding: var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-control);
+  background-color: var(--surface-elevated);
+  color: var(--text-body);
   font-size: var(--text-sm);
+  /* Monospace is kept deliberately — this field takes Markdown, and the
+     fixed advance is what makes a fenced block or a table line up as typed. */
   font-family: monospace;
   resize: vertical;
   box-sizing: border-box;
