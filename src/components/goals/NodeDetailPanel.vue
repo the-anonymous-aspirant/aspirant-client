@@ -20,12 +20,9 @@
               @change="onColorChange"
             />
             <span v-if="!node.color" class="inherited-badge">inherited</span>
-            <button
-              v-if="node.color"
-              class="btn-clear-color"
-              @click="clearColor"
-              title="Revert to inherited color"
-            >&times;</button>
+            <AspTooltip v-if="node.color" content="Revert to inherited color">
+              <button class="btn-clear-color" @click="clearColor">&times;</button>
+            </AspTooltip>
           </div>
 
           <!-- Planned dates -->
@@ -151,6 +148,7 @@
 import { ref, computed, watch } from 'vue';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { AspTooltip } from '@aspirant/design-system';
 import { useGoalComments } from '../../composables/goals/useGoalComments.js';
 
 marked.setOptions({ breaks: true, gfm: true });
@@ -161,6 +159,7 @@ function renderMarkdown(text) {
 }
 
 export default {
+  components: { AspTooltip },
   props: {
     node: { type: Object, default: null },
     treeId: { type: [String, Number], required: true },
