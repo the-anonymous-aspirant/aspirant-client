@@ -1,12 +1,16 @@
 <template>
   <div class="wikipedia-view" :style="viewStyle">
     <div class="wikipedia-toolbar">
-      <button class="toolbar-btn" title="Home" @click="goHome">
-        <span class="toolbar-icon">&#x1F3E0;</span>
-      </button>
-      <button class="toolbar-btn" title="Random article" @click="goRandom">
-        <span class="toolbar-icon">&#x1F3B2;</span>
-      </button>
+      <AspTooltip content="Home">
+        <button class="toolbar-btn" aria-label="Home" @click="goHome">
+          <span class="toolbar-icon">&#x1F3E0;</span>
+        </button>
+      </AspTooltip>
+      <AspTooltip content="Random article">
+        <button class="toolbar-btn" aria-label="Random article" @click="goRandom">
+          <span class="toolbar-icon">&#x1F3B2;</span>
+        </button>
+      </AspTooltip>
       <div class="search-wrapper">
         <!-- Kept as `text` rather than switched to `search`, even though this
              is plainly a search box: in Chromium, Escape in a type="search"
@@ -57,15 +61,14 @@
 </template>
 
 <script>
-import { AspInput } from '@aspirant/design-system';
-
+import { AspInput, AspTooltip } from '@aspirant/design-system';
 import { sidebarWidth } from '../../../global_state_manager.js';
 
 const ZIM = 'wikipedia_en_all_maxi_2026-02';
 const CONTENT_BASE = `/api/wikipedia/content/${ZIM}`;
 
 export default {
-  components: { AspInput },
+  components: { AspInput, AspTooltip },
   data() {
     return {
       ready: false,
