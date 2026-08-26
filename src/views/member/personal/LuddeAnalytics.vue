@@ -56,26 +56,13 @@
 
     <div v-if="currentView === 'showData'" class="feeding-times">
       <h3>Saved Feeding Times</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Time</th>
-            <th>Comment</th>
-            <th>Actions</th>
-            <!-- Added Actions column -->
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(time, index) in feedingTimes" :key="index">
-            <td>{{ formatDate(time.timestamp) }}</td>
-            <td>{{ formatTime(time.timestamp) }}</td>
-            <td>{{ time.comment }}</td>
-            <td><button class="delete-btn" @click="deleteFeedingTime(index)">Delete</button></td>
-            <!-- Added delete button with class -->
-          </tr>
-        </tbody>
-      </table>
+      <AspDataTable :columns="feedingColumns" :rows="feedingTimes">
+        <template #cell-date="{ row }">{{ formatDate(row.timestamp) }}</template>
+        <template #cell-time="{ row }">{{ formatTime(row.timestamp) }}</template>
+        <template #cell-actions="{ index }">
+          <button class="delete-btn" @click="deleteFeedingTime(index)">Delete</button>
+        </template>
+      </AspDataTable>
     </div>
     <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
   </div>
@@ -83,14 +70,26 @@
 
 <script>
   import axios from 'axios';
+  import { AspDataTable } from '@aspirant/design-system';
   import assetManager from '../../../asset_manager';
 
   export default {
+    components: {
+      AspDataTable,
+    },
     data() {
       return {
         confirmationVisible: false,
         selectedDateTime: this.getLocalDateTime(),
         comment: '',
+        // Non-sortable so AspDataTable renders rows in feedingTimes order and the
+        // cell-slot `index` matches the feedingTimes index deleteFeedingTime() uses.
+        feedingColumns: [
+          { key: 'date', label: 'Date', sortable: false },
+          { key: 'time', label: 'Time', sortable: false },
+          { key: 'comment', label: 'Comment', sortable: false },
+          { key: 'actions', label: 'Actions', sortable: false },
+        ],
         feedingTimes: [],
         feedingTimesVisible: false,
         currentView: 'enterData',
@@ -412,21 +411,9 @@
     text-align: left;
   }
 
-  .feeding-times table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  .feeding-times th,
-  .feeding-times td {
-    border: 1px solid var(--border-subtle);
-    padding: var(--space-xs);
-  }
-
-  .feeding-times th {
-    background-color: var(--surface-elevated);
-    text-align: left;
-  }
+  /* Table styling now comes from AspDataTable (DS); the former
+     .feeding-times table/th/td rules were scoped and no longer reach the
+     component's internal markup, so they are removed as dead. */
 
   .delete-btn {
     background-color: var(--feedback-error);
