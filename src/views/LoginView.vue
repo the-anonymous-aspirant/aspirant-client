@@ -86,6 +86,17 @@
   .login-view-card {
     width: 100%;
     max-width: 24rem;
+    /* An explicit theme-aware ink, because no ancestor declares one: neither
+       :root nor body sets `color` (src/style.css), so `.field__label`'s
+       `color: inherit` (AspInput takes the ink of whatever surface it is
+       dropped onto, by design) falls through to the browser's UA-default
+       text color, which does not flip with the theme. Re-measured on
+       origin/main after #4294 retired Vuetify: still 1.21:1 in dark without
+       this line. --text-body is the token that resolves per theme. The
+       sidebar mount of the same component needs no such line: the sidebar
+       already declares --brand-primary, which measures 5.6:1 light / 8.0:1
+       dark there. */
+    color: var(--text-body);
   }
 
   .login-view-card h1 {
