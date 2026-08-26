@@ -273,10 +273,24 @@
             </td>
             <td class="col-action">
               <div class="action-buttons">
-                <button
+                <!-- Save is the affirmative row action, "Not interested" the
+                     neutral one. These are per-ROW actions, so the §3.89
+                     confirm->primary mapping is deliberately NOT taken
+                     literally here: a solid amber button on every row of a
+                     paginated table is the same §1 accent over-spend the
+                     ruling itself cited when it declined the tab variant-flip.
+                     secondary/ghost keeps the original's emphasis ordering
+                     (Save was accent-OUTLINED, not filled) at the row scale.
+                     The `saved` and `btn-hide` class tokens that used to ride
+                     here matched no rule in this file; the state that reads is
+                     the label plus :disabled, so they are dropped rather than
+                     carried onto the DS call. data-test-save / data-test-hide
+                     ride $attrs onto the DS <button> — jobs.spec.ts binds
+                     those, not the classes. -->
+                <AspButton
                   type="button"
-                  class="btn-action btn-save"
-                  :class="{ saved: !!job.saved_at }"
+                  variant="secondary"
+                  size="sm"
                   :disabled="actingIds.has(job.id) || !!job.saved_at"
                   :data-test-save="job.id"
                   @click="onSave(job)"
@@ -284,17 +298,18 @@
                   <span v-if="actingIds.has(job.id)">…</span>
                   <span v-else-if="job.saved_at">Saved ✓</span>
                   <span v-else>Save</span>
-                </button>
-                <button
+                </AspButton>
+                <AspButton
                   type="button"
-                  class="btn-action btn-hide"
+                  variant="ghost"
+                  size="sm"
                   :disabled="actingIds.has(job.id)"
                   :data-test-hide="job.id"
                   @click="onHide(job)"
                 >
                   <span v-if="actingIds.has(job.id)">…</span>
                   <span v-else>Not interested</span>
-                </button>
+                </AspButton>
               </div>
             </td>
           </tr>
@@ -303,16 +318,16 @@
     </div>
 
     <div v-if="totalPages > 1" class="pagination" data-test="jobs-pagination">
-      <button type="button" :disabled="page <= 1 || loading" @click="changePage(page - 1)">‹ Prev</button>
+      <AspButton type="button" variant="secondary" size="sm" :disabled="page <= 1 || loading" @click="changePage(page - 1)">‹ Prev</AspButton>
       <span class="page-indicator">Page {{ page }} of {{ totalPages }}</span>
-      <button type="button" :disabled="page >= totalPages || loading" @click="changePage(page + 1)">Next ›</button>
+      <AspButton type="button" variant="secondary" size="sm" :disabled="page >= totalPages || loading" @click="changePage(page + 1)">Next ›</AspButton>
     </div>
   </div>
 </template>
 
 <script>
   import axios from 'axios';
-  import { AspInput, AspTimeSince } from '@aspirant/design-system';
+  import { AspButton, AspInput, AspTimeSince } from '@aspirant/design-system';
 
   const PER_PAGE = 25;
   const FILTER_DEBOUNCE_MS = 300;
@@ -335,7 +350,7 @@
 
   export default {
     name: 'JobsView',
-    components: { AspInput, AspTimeSince },
+    components: { AspButton, AspInput, AspTimeSince },
     data() {
       return {
         jobs: [],
@@ -967,30 +982,11 @@
     align-items: stretch;
   }
 
-  .btn-action {
-    padding: var(--space-2xs) var(--space-sm);
-    background-color: transparent;
-    border: 1px solid var(--border-card, #444);
-    border-radius: var(--radius-sm, 4px);
-    color: inherit;
-    cursor: pointer;
-    font-size: var(--text-xs);
-    white-space: nowrap;
-  }
-
-  .btn-action:hover:not(:disabled) {
-    background-color: var(--surface-hover, rgba(255, 255, 255, 0.05));
-  }
-
-  .btn-action:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .btn-save {
-    border-color: var(--brand-accent, #6cf);
-    color: var(--brand-accent, #6cf);
-  }
+  /* The row actions are AspButtons now (Save=secondary, Not interested=ghost,
+     both size="sm" for the table row — see the template comment on why the
+     confirm->primary mapping is not taken literally at row scale). DS owns
+     fill, border, hover and the disabled state; .action-buttons above still
+     stacks them. */
 
   .empty-cell {
     text-align: center;
@@ -1010,19 +1006,11 @@
     margin-top: var(--space-md);
   }
 
-  .pagination button {
-    padding: var(--space-xs) var(--space-sm);
-    background-color: transparent;
-    border: 1px solid var(--border-card, #444);
-    border-radius: var(--radius-sm, 4px);
-    color: inherit;
-    cursor: pointer;
-  }
-
-  .pagination button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
+  /* No `.pagination button` rule here any more, and it must not come back: a
+     wrapper-descendant selector (0,1,1) still matches the <button> AspButton
+     renders and outranks .btn--secondary (0,1,0) on background-color and
+     border, so it would silently repaint the DS pager. The strip's own layout
+     lives in .pagination above; the buttons are secondary/sm (§3.89 Q3). */
 
   .page-indicator {
     font-size: var(--text-sm);
