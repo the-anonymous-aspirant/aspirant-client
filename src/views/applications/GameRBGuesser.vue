@@ -18,40 +18,53 @@
         <div class="color-input">
           <label for="r-slider">R:</label>
           <input id="r-slider" type="range" min="0" max="255" v-model="temp_r" />
-          <input
-            type="number"
-            v-model.number="temp_r"
-            min="0"
-            max="255"
-            @input="validateInput('temp_r')"
-            class="number-input"
-          />
+          <!-- The clamp moved from @input to the update handler, and that is a
+               behaviour fix, not a style choice. On a native <input>, v-model
+               writes the new value BEFORE a sibling @input handler runs, so
+               validateInput clamped the value just typed. On a component,
+               AspInput binds $attrs (the caller's @input) ahead of its own
+               internal @input, so a caller-side @input would fire FIRST and
+               clamp the PREVIOUS value — after which the new, unclamped one
+               would land. Assigning and clamping in one handler restores the
+               original order. The paired range slider stays native: `range` is
+               out of AspInput's contract by the §3.85 ruling. -->
+          <div class="channel-field">
+            <AspInput
+              type="number"
+              min="0"
+              max="255"
+              :model-value="temp_r"
+              @update:model-value="setChannel('temp_r', $event)"
+            />
+          </div>
           <span class="hint">{{ hints.r }}</span>
         </div>
         <div class="color-input">
           <label for="g-slider">G:</label>
           <input id="g-slider" type="range" min="0" max="255" v-model="temp_g" />
-          <input
-            type="number"
-            v-model.number="temp_g"
-            min="0"
-            max="255"
-            @input="validateInput('temp_g')"
-            class="number-input"
-          />
+          <div class="channel-field">
+            <AspInput
+              type="number"
+              min="0"
+              max="255"
+              :model-value="temp_g"
+              @update:model-value="setChannel('temp_g', $event)"
+            />
+          </div>
           <span class="hint">{{ hints.g }}</span>
         </div>
         <div class="color-input">
           <label for="b-slider">B:</label>
           <input id="b-slider" type="range" min="0" max="255" v-model="temp_b" />
-          <input
-            type="number"
-            v-model.number="temp_b"
-            min="0"
-            max="255"
-            @input="validateInput('temp_b')"
-            class="number-input"
-          />
+          <div class="channel-field">
+            <AspInput
+              type="number"
+              min="0"
+              max="255"
+              :model-value="temp_b"
+              @update:model-value="setChannel('temp_b', $event)"
+            />
+          </div>
           <span class="hint">{{ hints.b }}</span>
         </div>
       </div>
@@ -103,11 +116,14 @@
 </template>
 
 <script>
+  import { AspInput } from '@aspirant/design-system';
   import { defineComponent } from 'vue';
+
   import { debugMode, toggleDebugMode } from '../../global_state_manager.js';
 
   export default defineComponent({
     name: 'GameRBGuesser',
+    components: { AspInput },
     data() {
       return {
         debugMode,
@@ -153,6 +169,17 @@
       this.initializeGame();
     },
     methods: {
+      // Assign, then clamp — the order a native v-model gave us for free.
+      // parseFloat-then-keep-the-original is Vue's own `looseToNumber`, the
+      // semantics `v-model.number` applied here before the swap; a component's
+      // `.number` modifier is passed down as `modelModifiers` and coerces
+      // nothing on its own, and AspInput emits `event.target.value`, a string
+      // even for type="number".
+      setChannel(color, value) {
+        const parsed = parseFloat(value);
+        this[color] = Number.isNaN(parsed) ? value : parsed;
+        this.validateInput(color);
+      },
       validateInput(color) {
         if (this[color] < 0) this[color] = 0;
         if (this[color] > 255) this[color] = 255;
@@ -378,14 +405,16 @@
     box-shadow: var(--shadow-sm);
   }
 
-  .number-input {
+  /* Width and text alignment only — fill, border, radius and ink are the
+     component's. `:deep` because a class on <AspInput> lands on the inner
+     <input> (inheritAttrs is false there), which this file's data-v scope
+     attribute does not reach, so the wrapper is the only thing a scoped rule
+     can hold on to. */
+  .channel-field {
     width: 60px;
-    padding: var(--space-2xs) var(--space-xs);
-    background: var(--surface-card-inner);
-    border: 1px solid var(--border-card);
-    border-radius: var(--radius-sm);
-    color: var(--text-on-dark);
-    font-size: var(--text-sm);
+  }
+
+  .channel-field :deep(.field__input) {
     text-align: center;
   }
 
@@ -558,10 +587,8 @@
       margin: var(--space-sm) 0;
     }
 
-    .number-input {
+    .channel-field {
       width: 80px;
-      padding: var(--space-sm);
-      font-size: var(--text-base);
       margin: 0 auto;
     }
 
@@ -628,8 +655,12 @@
       height: 44px;
     }
 
-    .number-input {
-      min-height: 44px;
+    /* The 44px touch target, kept. AspInput publishes --asp-input-height as
+       the per-call-site override, but declares it on its own root, so the
+       override has to land there too — a wrapper declaration would be shadowed
+       by the component's own. */
+    .channel-field :deep(.field) {
+      --asp-input-height: 44px;
     }
   }
 </style>

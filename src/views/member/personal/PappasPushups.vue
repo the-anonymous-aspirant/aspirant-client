@@ -65,15 +65,21 @@
                   <span class="date-label">{{ row.dateLabel }}</span>
                 </td>
                 <td class="count-cell">
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    :value="row.count"
-                    :disabled="!row.editable || savingDates.has(row.date)"
-                    @change="onCountChange(row, $event)"
-                    :aria-label="`Antal armhävningar för ${row.dateLabel}`"
-                  />
+                  <!-- @change still receives the native event: AspInput binds
+                       $attrs onto the inner <input>, so `event.target` is the
+                       real control and onCountChange's write-back on invalid
+                       input (`event.target.value = row.count`) still lands. -->
+                  <div class="count-field">
+                    <AspInput
+                      type="number"
+                      min="0"
+                      step="1"
+                      :model-value="row.count ?? ''"
+                      :disabled="!row.editable || savingDates.has(row.date)"
+                      @change="onCountChange(row, $event)"
+                      :aria-label="`Antal armhävningar för ${row.dateLabel}`"
+                    />
+                  </div>
                   <span v-if="savingDates.has(row.date)" class="saving-pill">sparar…</span>
                   <span v-else-if="errorDates.has(row.date)" class="error-pill">fel</span>
                 </td>
@@ -91,6 +97,7 @@
 </template>
 
 <script>
+  import { AspInput } from '@aspirant/design-system';
   import axios from 'axios';
   import {
     Chart,
@@ -186,7 +193,7 @@
 
   export default {
     name: 'PappasPushups',
-    components: { RobbansTusen },
+    components: { AspInput, RobbansTusen },
     data() {
       return {
         target: TARGET,
@@ -605,12 +612,6 @@
   opacity: 1;
 }
 
-.entries-table tr.locked td.count-cell input:disabled {
-  background-color: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-  -webkit-text-fill-color: #ffffff;
-}
-
 .entries-table tr.today {
   background-color: rgba(255, 179, 0, 0.06);
 }
@@ -626,26 +627,30 @@
   text-transform: lowercase;
 }
 
-.count-cell input {
+/* Width, flow and the numeric alignment stay ours; the fill, border, ink,
+   focus ring and disabled treatment are the component's now. The three rules
+   this replaces existed to hand-build what AspInput already ships — including
+   the `-webkit-text-fill-color: #fff` override on a locked row, which was there
+   only because a browser greys out a disabled <input>'s text and the old
+   translucent fill left nothing behind it. `inline-block`, because AspInput's
+   root is a block-level flex column and the saving/error pill is its sibling
+   inside the same cell. */
+.count-field {
+  display: inline-block;
+  /* 5em, but 5em of WHAT: the old rule sat on the <input>, which set its own
+     --text-base font-size, so the em resolved against that. On the wrapper the
+     em would resolve against the cell's smaller font and the field would come
+     out at 54px instead of 80px. Restating the font-size here keeps the column
+     width identical across the swap. */
+  font-size: var(--text-base);
   width: 5em;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background-color: rgba(255, 255, 255, 0.05);
-  color: #ffffff;
+  vertical-align: middle;
+}
+
+.count-field :deep(.field__input) {
+  text-align: right;
   font-weight: 700;
   font-size: var(--text-base);
-  text-align: right;
-}
-
-.count-cell input:disabled {
-  cursor: not-allowed;
-  background-color: rgba(0, 0, 0, 0.15);
-}
-
-.count-cell input:focus {
-  outline: 2px solid var(--brand-primary);
-  outline-offset: 1px;
 }
 
 .saving-pill,
