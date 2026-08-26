@@ -455,6 +455,17 @@ export default {
    The `color` swatch keeps its own 40×30 box: it is a swatch, not a field, and
    stretching it to a 34px text-control box would claim it is one. */
 
+/* AspInput's .field__control declares height but not box-sizing, so it
+   rendered content-box (34px content + 2px border = 36px) once #4294 removed
+   Vuetify's global `box-sizing: border-box` reset that had masked this for
+   every AspInput on the page. The select/date rules above set box-sizing
+   explicitly, which is why only the DS control disagreed. Filed as its own
+   task (system_3 task #4330) since the gap is DS-wide, not local to this
+   dialog; scoped here so this dialog's box stays correct in the meantime. */
+:deep(.dialog .field__control) {
+  box-sizing: border-box;
+}
+
 .form-row {
   display: flex;
   align-items: center;
