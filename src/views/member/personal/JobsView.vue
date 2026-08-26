@@ -172,14 +172,20 @@
     </div>
 
     <div class="filter-bar">
-      <input
-        v-model="query"
-        type="search"
-        placeholder="Filter by title, company, or description…"
-        class="filter-input"
-        data-test="jobs-filter"
-        @input="onQueryInput"
-      />
+      <div class="filter-field">
+        <!-- Stays `search`, which it already was: this field has no caption,
+             only a placeholder, so the leading magnifier AspInput renders for
+             the search type is the affordance rather than a duplicate of one.
+             `data-test` rides $attrs onto the inner <input>, which is what
+             jobs.spec.ts drives. -->
+        <AspInput
+          v-model="query"
+          type="search"
+          placeholder="Filter by title, company, or description…"
+          data-test="jobs-filter"
+          @input="onQueryInput"
+        />
+      </div>
       <span v-if="loading" class="filter-status">Laddar…</span>
       <span v-else-if="loadError" class="filter-status error">{{ loadError }}</span>
       <span v-else class="filter-status muted">{{ total }} hits</span>
@@ -306,7 +312,7 @@
 
 <script>
   import axios from 'axios';
-  import { AspTimeSince } from '@aspirant/design-system';
+  import { AspInput, AspTimeSince } from '@aspirant/design-system';
 
   const PER_PAGE = 25;
   const FILTER_DEBOUNCE_MS = 300;
@@ -329,7 +335,7 @@
 
   export default {
     name: 'JobsView',
-    components: { AspTimeSince },
+    components: { AspInput, AspTimeSince },
     data() {
       return {
         jobs: [],
@@ -784,14 +790,12 @@
     margin-bottom: var(--space-md);
   }
 
-  .filter-input {
+  /* Only the flex share is ours now; the border, fill, radius and ink are
+     AspInput's. A class ON the component would land on the inner <input>
+     (inheritAttrs is false there), which this file's data-v scope attribute
+     does not reach — hence a wrapper. */
+  .filter-field {
     flex: 1;
-    padding: var(--space-sm);
-    font-size: var(--text-base);
-    border: 1px solid var(--border-card, #444);
-    border-radius: var(--radius-sm, 4px);
-    background-color: var(--surface-input, transparent);
-    color: inherit;
   }
 
   .filter-status {
