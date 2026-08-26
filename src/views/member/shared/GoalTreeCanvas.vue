@@ -440,10 +440,17 @@ export default {
    <textarea>. None of them can migrate — so instead of leaving five natives at
    a different height, radius, fill and boundary beside one DS control, they are
    held to the box AspInput renders. §3.86: an always-live data-entry control on
-   a dark card adopts the DS control fill, and the old --surface-card-inner well
-   with a --border-card boundary is exactly what that ruling rejected there (no
-   flat dark-on-dark value clears the WCAG 1.4.11 3:1 non-text floor on a card —
-   measured 2.80:1).
+   a dark card adopts the DS control fill.
+
+   Measured on the built page, all six controls in this dialog now agree on
+   `34px | 8px radius | --surface-elevated | --border-control`, and the boundary
+   clears WCAG 1.4.11's 3:1 non-text floor in both themes by different means —
+   in light the near-white fill against the #424242 card carries it at 9.55:1
+   (the border alone is 2.21:1); in dark the fill drops to 1.14:1 and the
+   #cccccc border carries it at 8.94:1. The box being replaced was legible too
+   (a 1px amber --border-card at 5.6:1 light / 8.0:1 dark), so the reason for
+   this change is uniformity under the ruling, not a contrast defect. Value ink
+   is 9.55:1 / 9.57:1.
 
    The `color` swatch keeps its own 40×30 box: it is a swatch, not a field, and
    stretching it to a 34px text-control box would claim it is one. */

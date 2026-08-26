@@ -419,13 +419,21 @@ export default {
   margin: 0 0 var(--space-md) 0;
 }
 
-/* §3.86: an always-live data-entry control on a dark card adopts the DS
-   control fill. The rule that used to paint this dialog's well by hand is gone
-   rather than retuned — both fields are AspInput now, so there is no native
-   <input> left in the dialog for it to reach. The DS box is also the more
-   correct one here: no flat dark-on-dark border clears the WCAG 1.4.11 3:1
-   non-text floor on a card (measured 2.80:1), which the old --border-card
-   boundary did not. */
+/* §3.86: an always-live data-entry control on a dark card adopts the DS control
+   fill. Both fields are AspInput now, so the rule that painted this dialog's
+   well by hand is gone rather than retuned — there is no native <input> left in
+   the dialog for it to reach.
+
+   What actually changes, measured on the built page rather than assumed: the
+   old box was a 1px --border-card (#ffb300, amber) around a translucent
+   --surface-card-inner well; the new one is the DS control, --surface-elevated
+   behind --text-body. Both clear the WCAG 1.4.11 3:1 non-text floor, and they
+   clear it by DIFFERENT mechanisms in each theme — in light the near-white fill
+   carries the boundary against the #424242 card at 9.55:1 while the border
+   alone is 2.21:1; in dark the fill goes to 1.14:1 and the #cccccc border
+   carries it at 8.94:1. So this is a design-of-record adoption, not a contrast
+   fix: the old boundary was legible too. Value ink measures 9.55:1 light /
+   9.57:1 dark either way. */
 
 .dialog-message {
   color: var(--text-on-dark);
