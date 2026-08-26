@@ -149,7 +149,7 @@
       <span v-if="filterSearch" class="filter-chip" @click="removeFilter('search')">
         Search: "{{ filterSearch }}" <span class="chip-x">&times;</span>
       </span>
-      <button class="btn-clear-all" @click="clearAllFilters">Clear all</button>
+      <AspButton class="btn-clear-all" variant="secondary" @click="clearAllFilters">Clear all</AspButton>
     </div>
 
     <!-- Filters -->
@@ -195,9 +195,9 @@
 
       <!-- Pagination -->
       <div class="pagination" v-if="transactions.total > pageSize">
-        <button @click="prevPage" :disabled="currentPage <= 1" class="btn btn-sm">Previous</button>
+        <AspButton @click="prevPage" :disabled="currentPage <= 1" variant="secondary" size="sm">Previous</AspButton>
         <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
-        <button @click="nextPage" :disabled="currentPage >= totalPages" class="btn btn-sm">Next</button>
+        <AspButton @click="nextPage" :disabled="currentPage >= totalPages" variant="secondary" size="sm">Next</AspButton>
       </div>
     </div>
 
@@ -265,12 +265,12 @@
     <div class="section">
       <h3>Actions</h3>
       <div class="actions-row">
-        <button @click="importLocal" :disabled="importingLocal" class="btn btn-primary">
+        <AspButton @click="importLocal" :disabled="importingLocal" variant="primary">
           {{ importingLocal ? 'Importing...' : 'Import Local CSVs' }}
-        </button>
-        <button @click="reEnrich" :disabled="reEnriching" class="btn btn-secondary">
+        </AspButton>
+        <AspButton @click="reEnrich" :disabled="reEnriching" variant="secondary">
           {{ reEnriching ? 'Re-enriching...' : 'Re-enrich All Transactions' }}
-        </button>
+        </AspButton>
       </div>
       <div v-if="importLocalResult" class="action-result-block" :class="importLocalResult.error ? 'error' : 'success'">
         <div>{{ importLocalResult.summary }}</div>
@@ -292,12 +292,13 @@ import { AspInput } from '@aspirant/design-system';
 import axios from 'axios';
 import { Chart, registerables } from 'chart.js';
 import { AspDataTable } from '@aspirant/design-system';
+import { AspButton } from '@aspirant/design-system';
 import { seriesColor } from '../../composables/chartSeries.js';
 
 Chart.register(...registerables);
 
 export default {
-  components: { AspInput, AspDataTable },
+  components: { AspInput, AspDataTable, AspButton },
   data() {
     return {
       // AspDataTable column defs — all non-sortable (the native tables were
@@ -1268,36 +1269,8 @@ export default {
   color: var(--text-body);
 }
 
-/* Buttons */
-.btn {
-  padding: 6px 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
-.btn-primary {
-  background: var(--color-primary, #007bff);
-  color: var(--text-on-dark);
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: var(--color-secondary, #6c757d);
-  color: var(--text-on-dark);
-}
-
-.btn-sm {
-  padding: 4px 12px;
-  font-size: 0.85rem;
-  background: var(--bg-card, #f0f0f0);
-  border: 1px solid var(--border-color, #ccc);
-}
+/* .btn/.btn-primary/.btn-secondary/.btn-sm visuals now come from AspButton
+   (secondary size="sm" for the pager, primary/secondary for the actions row). */
 
 /* Transaction table */
 .table-container {
@@ -1509,21 +1482,9 @@ th {
   opacity: 1;
 }
 
+/* Layout only — visuals from AspButton (variant="secondary"). */
 .btn-clear-all {
   margin-left: auto;
-  background: none;
-  border: 1px solid var(--border-subtle, #ccc);
-  border-radius: var(--radius-sm);
-  padding: 2px 10px;
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: color var(--transition-fast), border-color var(--transition-fast);
-}
-
-.btn-clear-all:hover {
-  color: var(--brand-primary, #ffb300);
-  border-color: var(--brand-primary, #ffb300);
 }
 
 /* Outliers */
