@@ -10,13 +10,37 @@
       <!-- Expanded state: show full login form -->
       <div v-else key="expanded" class="login-card">
         <form @submit.prevent="login">
+          <!-- Both fields carry AspInput's own `label` prop rather than the
+               hand-rolled <label for>: the component mints the id and wires
+               `for` to the inner <input> itself, so the association cannot
+               drift the way a hand-maintained pair can. That is also why
+               neither field passes an `id` — an id arriving through $attrs
+               lands on the inner input AFTER the component's own `:id`
+               (mergeProps: later wins), which would leave `for` pointing at a
+               node that no longer carries that id. The e2e selectors move to
+               `input[name=...]` for the same reason.
+
+               `name` + `autocomplete` are the caller's to set through the
+               $attrs fallthrough seam (design ruling §3.85) — they are what
+               makes a password manager offer to fill and to save this pair. -->
           <div class="form-group">
-            <label for="username">Username:</label>
-            <input type="text" v-model="username" id="username" required />
+            <AspInput
+              v-model="username"
+              label="Username"
+              name="username"
+              autocomplete="username"
+              required
+            />
           </div>
           <div class="form-group">
-            <label for="password">Password:</label>
-            <input type="password" v-model="password" id="password" required />
+            <AspInput
+              v-model="password"
+              type="password"
+              label="Password"
+              name="password"
+              autocomplete="current-password"
+              required
+            />
           </div>
           <button type="submit" class="login-button">Login</button>
         </form>
@@ -31,9 +55,12 @@
 </template>
 
 <script>
+  import { AspInput } from '@aspirant/design-system';
+
   import { toggleSidebar } from '../../global_state_manager.js';
 
   export default {
+    components: { AspInput },
     props: {
       loggedIn: {
         type: Boolean,
@@ -136,42 +163,28 @@
     transition: all var(--transition-moderate);
   }
 
-  .form-group input {
-    background-color: var(--text-on-dark);
-  }
-
   .login-card h1 {
     margin-bottom: var(--space-lg);
     font-size: var(--text-lg);
     color: var(--text-on-light);
   }
 
+  /* AspInput owns both the control and its label now, so the three native-input
+     rules that used to live here are gone: the box (border, radius, padding,
+     full width) and the focus treatment are the component's, and its focus ring
+     clears the WCAG 1.4.11 3:1 non-text floor that the old bare
+     `border-color: var(--brand-primary)` swap did not.
+
+     The label rule is retuned rather than deleted. AspInput's `.field__label`
+     is `color: inherit` by design (it sets no background of its own, so it must
+     take the ink of whatever surface it is dropped onto), and this card sits in
+     the sidebar where the inherited ink is the sidebar's. Setting the ink on
+     the .form-group wrapper hands the component the brand ink the hand-rolled
+     label used to carry, without reaching into the component's internals. */
   .form-group {
     margin-bottom: var(--space-xs);
     text-align: left;
-  }
-
-  .form-group label {
-    display: block;
-    margin-bottom: var(--space-2xs);
     color: var(--brand-primary);
-    font-size: var(--text-base);
-  }
-
-  .form-group input {
-    width: 100%;
-    padding: var(--space-xs);
-    border: 1px var(--brand-primary) solid;
-    border-radius: var(--radius-sm);
-    box-sizing: border-box;
-    transition: border-color var(--transition-moderate);
-    font-size: var(--text-base);
-    direction: ltr;
-  }
-
-  .form-group input:focus {
-    border-color: var(--brand-primary);
-    outline: none;
   }
 
   .login-button {

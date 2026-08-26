@@ -1,5 +1,7 @@
 <script>
+  import { AspInput } from '@aspirant/design-system';
   import { ref, computed, onMounted } from 'vue';
+
   import { useProfile } from '../composables/useProfile.js';
   import UserAvatar from '../components/UserAvatar.vue';
   import PixelAvatarDraw from '../components/PixelAvatarDraw.vue';
@@ -11,7 +13,7 @@
   // is the temporal display name (never the login credential).
   export default {
     name: 'ProfileView',
-    components: { UserAvatar, PixelAvatarDraw },
+    components: { AspInput, UserAvatar, PixelAvatarDraw },
     setup() {
       const { getProfile, updateDisplayName, uploadAvatar, clearAvatar } = useProfile();
 
@@ -207,12 +209,23 @@
         <form class="field" @submit.prevent="saveName">
           <label class="field-label" for="display-name">Display name</label>
           <div class="field-row">
-            <input
+            <!-- Unlike the credential forms in this cluster, this field keeps
+                 its hand-rolled <label for> instead of taking AspInput's `label`
+                 prop: the caption sits OUTSIDE .field-row, above the
+                 input-and-Save pair, and moving it into the component would put
+                 it inside the row, stacking label-over-control as one flex item
+                 beside a vertically-centred Save button. The discriminator is
+                 positional — the DS label prop where the caption belongs to the
+                 control's own box, the external label where the surrounding
+                 layout positions it. Keeping the caption external is also why
+                 `id` is passed here: `for="display-name"` has to resolve, and an
+                 id arriving through $attrs lands on the inner <input> after the
+                 component's own `:id` (mergeProps: later wins), so `for` finds
+                 the real control. -->
+            <AspInput
               id="display-name"
               v-model="displayNameInput"
-              type="text"
               maxlength="50"
-              class="text-input"
               autocomplete="off"
             />
             <button type="submit" class="btn" :disabled="saving || !nameDirty">Save</button>
@@ -302,19 +315,24 @@
     font-size: var(--text-md);
   }
 
-  .text-input {
+  /* The box, the fill and the ink that used to live in `.text-input` are
+     AspInput's now — including the #4201 fix (the value was --text-on-dark on
+     the light --surface-elevated, white-over-white and invisible): the
+     component resolves --text-body against its own --surface-elevated control,
+     which is the same pairing by construction rather than by a comment asking
+     the next editor to remember. profile.spec.ts still measures the outcome
+     (>= AA on the effective background), not the token, so the regression stays
+     caught however it is reintroduced.
+
+     What is left is the one thing the component cannot know: that this control
+     is a flex item that must take the row's leftover width next to Save. It is
+     set on the component's ROOT rather than through a `class`, because AspInput
+     is inheritAttrs:false — a class on the tag would fall through to the inner
+     <input> and put a second box inside the DS control box. A child component's
+     root element carries this file's scope attribute, so a plain scoped
+     selector reaches it without :deep(). */
+  .field-row > .field {
     flex: 1;
-    padding: var(--space-xs) var(--space-sm);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    background-color: var(--surface-elevated);
-    /* #4201: was --text-on-dark (#fff) on the light --surface-elevated
-       (#f9f9f9) — white-over-white, invisible. The text token is resolved
-       against the input's OWN surface, not the page: --surface-elevated is a
-       light surface, so it pairs with --text-on-light (#424242 → ~9:1, clears
-       AA). Matches the canonical surface-elevated pairing (e.g. GameSql). */
-    color: var(--text-on-light);
-    font-size: var(--text-md);
   }
 
   .btn {

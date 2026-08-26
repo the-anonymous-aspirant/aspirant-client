@@ -1,20 +1,28 @@
 <template>
   <div class="user-form">
     <form @submit.prevent="handleSubmit">
-      <!-- Username input field -->
+      <!-- The three hand-rolled <label for="..."> pairs that used to caption
+           these fields were already broken: none of the inputs carried an
+           `id`, so `for="username"` pointed at nothing and clicking the caption
+           focused no control. AspInput's `label` prop mints the id and wires
+           `for` itself, so the association is correct by construction rather
+           than by two strings agreeing. `autocomplete="new-password"` marks
+           this as an admin creating/editing SOMEONE ELSE'S credential, which is
+           what stops a password manager offering the operator's own saved
+           password here. -->
       <div>
-        <label for="username">Username:</label>
-        <input type="text" v-model="localUser.username" required />
+        <AspInput v-model="localUser.username" label="Username" required />
       </div>
-      <!-- Email input field -->
       <div>
-        <label for="email">Email:</label>
-        <input type="email" v-model="localUser.email" required />
+        <AspInput v-model="localUser.email" type="email" label="Email" required />
       </div>
-      <!-- Password input field -->
       <div>
-        <label for="password">Password:</label>
-        <input type="password" v-model="localUser.password" />
+        <AspInput
+          v-model="localUser.password"
+          type="password"
+          label="Password"
+          autocomplete="new-password"
+        />
       </div>
       <!-- Access Role dropdown menu -->
       <div>
@@ -40,9 +48,12 @@
 </template>
 
 <script>
+  import { AspInput } from '@aspirant/design-system';
+
   import axios from 'axios';
 
   export default {
+    components: { AspInput },
     props: {
       user: Object, // The 'user' prop is declared here, indicating that the parent component can pass a user object to this component
     },
@@ -104,28 +115,51 @@
     margin-bottom: var(--space-md);
   }
 
+  /* Only the <select> and the <textarea> still take a hand-rolled caption, and
+     they are retuned to read as the same caption AspInput renders for the three
+     migrated fields — DS `.field__label` is --text-sm at --font-weight-medium,
+     where this was --text-base at `bold`. Left alone, one form would have
+     carried two different label treatments, which is the mixed-contract
+     regression #4296 forbids in its label lane rather than its control lane. */
   .user-form label {
     display: block;
     margin-bottom: var(--space-2xs);
-    font-weight: bold;
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.3;
     color: var(--text-on-light);
   }
 
-  .user-form input[type='text'],
-  .user-form input[type='email'],
-  .user-form input[type='password'],
+  /* `select` and `textarea` are primitive families #4278 does not cover (its
+     four lanes are button / input / tooltip / table), and AspSelect/AspTextarea
+     adoption is therefore out of this slice's scope — but leaving them at the
+     old box would put two natives at a different height, radius and fill beside
+     three DS controls in one form. So they are held to the box AspInput
+     renders: 34px for the single-line control (the §3.10 filter canon),
+     --radius-md, --border-control (which carries the WCAG 1.4.11 3:1 non-text
+     floor that decorative --border-subtle does not), and the --surface-elevated
+     / --text-body pairing resolved against the control's own surface rather
+     than the page's. The textarea keeps a vertical padding instead of a fixed
+     height, because a multi-line box that cannot grow is not the same control. */
   .user-form select,
   .user-form textarea {
     width: 100%;
-    padding: var(--space-sm);
     box-sizing: border-box;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    background-color: var(--text-on-dark);
-    font-size: var(--text-base);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-md);
+    background-color: var(--surface-elevated);
+    color: var(--text-body);
+    font-family: inherit;
+    font-size: var(--text-sm);
+  }
+
+  .user-form select {
+    height: 34px;
+    padding: 0 var(--space-sm);
   }
 
   .user-form textarea {
+    padding: var(--space-xs) var(--space-sm);
     resize: vertical;
   }
 

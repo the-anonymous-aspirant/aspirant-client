@@ -21,9 +21,15 @@ async function mockLoginSuccess(page: Page, role = 'Admin'): Promise<void> {
   });
 }
 
+// The two fields are selected by `name`, not by `id`. Login.vue's controls are
+// AspInput now, and AspInput mints its own id so it can wire its `label` prop's
+// `for` to the inner <input>; an id passed in from the call site would land on
+// that input AFTER the component's own and break the association it exists to
+// guarantee. `name` is the caller's attribute either way (it is what the
+// password manager keys on), so it is the stable hook here.
 async function fillAndSubmitLogin(page: Page): Promise<void> {
-  await page.locator('#username').fill('e2e-tester');
-  await page.locator('#password').fill('hunter2');
+  await page.locator('input[name="username"]').fill('e2e-tester');
+  await page.locator('input[name="password"]').fill('hunter2');
   await page.getByRole('button', { name: 'Login' }).click();
 }
 
@@ -31,8 +37,8 @@ test.describe('Dedicated /login page', () => {
   test('anonymous visitor sees the shared login form', async ({ page }) => {
     await page.goto('/login');
     await dismissMobileSidebarIfPresent(page);
-    await expect(page.locator('#username')).toBeVisible();
-    await expect(page.locator('#password')).toBeVisible();
+    await expect(page.locator('input[name="username"]')).toBeVisible();
+    await expect(page.locator('input[name="password"]')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Login' })).toBeVisible();
   });
 
@@ -58,7 +64,7 @@ test.describe('Dedicated /login page', () => {
     await page.goto('/login?redirect=/member');
     await dismissMobileSidebarIfPresent(page);
     await expect(page).toHaveURL('/login?redirect=/member');
-    await expect(page.locator('#username')).toBeVisible();
+    await expect(page.locator('input[name="username"]')).toBeVisible();
   });
 
   test('a visitor bounced here is NOT auto-forwarded to a proxied surface — the redirect-loop guard (system_3 #4155, supersedes #4081)', async ({
@@ -86,7 +92,7 @@ test.describe('Dedicated /login page', () => {
     });
     await page.goto('/login?redirect=' + encodeURIComponent(proxied));
     await dismissMobileSidebarIfPresent(page);
-    await expect(page.locator('#username')).toBeVisible();
+    await expect(page.locator('input[name="username"]')).toBeVisible();
     await expect(page).toHaveURL(/\/login\?redirect=/);
     expect(forwarded).toBe(false);
   });
@@ -134,5 +140,36 @@ test.describe('Dedicated /login page', () => {
     await dismissMobileSidebarIfPresent(page);
     await fillAndSubmitLogin(page);
     await expect(page).toHaveURL('/');
+  });
+
+  // The AspInput migration (#4304) replaced two hand-rolled <label for> pairs
+  // with the component's own `label` prop. Nothing in this file asserted the
+  // association before — the pair could have pointed at nothing and every test
+  // above would still pass, which is exactly what the pre-migration markup did
+  // (`for="username"` against an input carrying `id="username"` worked, but the
+  // same shape in UserForm.vue pointed at inputs with no id at all). Assert the
+  // outcome the migration is supposed to guarantee, not the markup that
+  // produces it: clicking the caption focuses the control it captions.
+  test('each credential field is reachable by its visible caption', async ({ page }) => {
+    await page.goto('/login');
+    await dismissMobileSidebarIfPresent(page);
+
+    for (const [caption, name, type] of [
+      ['Username', 'username', 'text'],
+      ['Password', 'password', 'password'],
+    ] as const) {
+      const control = page.locator(`input[name="${name}"]`);
+      await expect(control).toHaveAttribute('type', type);
+
+      // Clicking the label — not the input — must land the caret in the field.
+      await page.getByText(caption, { exact: true }).click();
+      await expect(control).toBeFocused();
+
+      // ...and the value still round-trips through v-model, which is the other
+      // half a wrong-prop DS mount would silently drop (#4182: a blank control
+      // renders and the suite stays green).
+      await control.fill('typed-' + name);
+      await expect(control).toHaveValue('typed-' + name);
+    }
   });
 });
