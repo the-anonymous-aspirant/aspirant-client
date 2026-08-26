@@ -23,12 +23,16 @@
             <span class="tree-date">{{ formatDate(tree.updated_at) }}</span>
           </div>
           <div class="tree-actions" @click.stop>
-            <button class="btn-action" @click="startRename(tree)" title="Rename">
-              &#9998;
-            </button>
-            <button class="btn-action btn-delete" @click="confirmDelete(tree)" title="Delete">
-              &#10005;
-            </button>
+            <AspTooltip content="Rename">
+              <button class="btn-action" aria-label="Rename" @click="startRename(tree)">
+                &#9998;
+              </button>
+            </AspTooltip>
+            <AspTooltip content="Delete">
+              <button class="btn-action btn-delete" aria-label="Delete" @click="confirmDelete(tree)">
+                &#10005;
+              </button>
+            </AspTooltip>
           </div>
         </div>
       </div>
@@ -106,9 +110,10 @@
 import { AspInput } from '@aspirant/design-system';
 
 import axios from 'axios';
+import { AspTooltip } from '@aspirant/design-system';
 
 export default {
-  components: { AspInput },
+  components: { AspInput, AspTooltip },
   data() {
     return {
       trees: [],

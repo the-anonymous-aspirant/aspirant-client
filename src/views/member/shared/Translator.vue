@@ -19,9 +19,11 @@
             </select>
           </div>
 
-          <button class="btn-swap" @click="swapLanguages" :disabled="translating" title="Swap languages">
-            &#8646;
-          </button>
+          <AspTooltip content="Swap languages">
+            <button class="btn-swap" aria-label="Swap languages" @click="swapLanguages" :disabled="translating">
+              &#8646;
+            </button>
+          </AspTooltip>
 
           <div class="lang-group">
             <label for="target-lang">To</label>
@@ -137,8 +139,10 @@
 
 <script>
 import axios from 'axios';
+import { AspTooltip } from '@aspirant/design-system';
 
 export default {
+  components: { AspTooltip },
   data() {
     return {
       // Translation state

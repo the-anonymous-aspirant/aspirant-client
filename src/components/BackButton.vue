@@ -4,39 +4,43 @@
     class="back-button-container"
     :class="{ 'mobile': isMobile }"
   >
-    <button 
-      @click="goBack" 
-      class="back-button"
-      :title="getBackButtonTitle()"
-    >
-      <svg 
-        width="16" 
-        height="16" 
-        viewBox="0 0 24 24" 
-        fill="none" 
-        xmlns="http://www.w3.org/2000/svg"
-        class="back-icon"
+    <AspTooltip :content="getBackButtonTitle()" position="right">
+      <button
+        @click="goBack"
+        class="back-button"
+        :aria-label="getBackButtonTitle()"
       >
-        <path 
-          d="M15 18L9 12L15 6" 
-          stroke="currentColor" 
-          stroke-width="2" 
-          stroke-linecap="round" 
-          stroke-linejoin="round"
-        />
-      </svg>
-      <span class="back-text" v-if="!isMobile"></span>
-    </button>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          class="back-icon"
+        >
+          <path
+            d="M15 18L9 12L15 6"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <span class="back-text" v-if="!isMobile"></span>
+      </button>
+    </AspTooltip>
   </div>
 </template>
 
 <script>
 import { computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import { AspTooltip } from '@aspirant/design-system';
 import { isMobile } from '@/global_state_manager.js';
 
 export default {
   name: 'BackButton',
+  components: { AspTooltip },
   setup() {
     const router = useRouter();
     const route = useRoute();
