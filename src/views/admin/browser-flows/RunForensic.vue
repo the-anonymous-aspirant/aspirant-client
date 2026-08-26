@@ -15,14 +15,14 @@
       <span :class="['status-pill', `status-${statusClass(run.status)}`]" data-test="run-status">
         {{ run.status }}
       </span>
-      <button
+      <AspButton
         v-if="run.status === 'running'"
         type="button"
-        class="btn btn-cancel"
+        variant="secondary"
         data-test="run-cancel"
         :disabled="cancelling"
         @click="onCancel"
-      >✕ Cancel</button>
+      >✕ Cancel</AspButton>
     </h1>
     <h1 v-else data-test="run-header">Run</h1>
 
@@ -150,6 +150,7 @@
 
 <script>
   import { useBrowserFlows } from '../../../composables/useBrowserFlows.js';
+  import { AspButton } from '@aspirant/design-system';
 
   const KNOWN_STATUSES = new Set([
     'success',
@@ -172,6 +173,9 @@
 
   export default {
     name: 'RunForensic',
+    components: {
+      AspButton,
+    },
     data() {
       return {
         flow: null,
@@ -366,29 +370,8 @@
   .status-skipped { background: #757575; }
   .status-unknown { background: #9e9e9e; }
 
-  .btn {
-    background: none;
-    border: 1px solid var(--brand-primary, #ffb300);
-    color: var(--brand-primary, #ffb300);
-    padding: 0.25rem 0.7rem;
-    border-radius: 4px;
-    font-family: inherit;
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-  .btn-cancel {
-    border-color: var(--feedback-error, #ff3739);
-    color: var(--feedback-error, #ff3739);
-  }
-  .btn-cancel:hover {
-    background: var(--feedback-error, #ff3739);
-    color: var(--text-on-dark);
-  }
-  .btn[disabled] {
-    color: #9e9e9e;
-    border-color: #9e9e9e;
-    cursor: not-allowed;
-  }
+  /* The run-cancel control is now an AspButton (variant="secondary"); DS owns
+     its visuals + disabled state. The former .btn/.btn-cancel rules are removed. */
 
   .meta {
     display: flex;
