@@ -16,8 +16,12 @@
         >
           <span class="item-name">{{ tree.name }}</span>
           <div class="item-actions" @click.stop>
-            <button class="btn-item-action" @click="startRename(tree)" title="Rename">&#9998;</button>
-            <button class="btn-item-action btn-item-delete" @click="startDelete(tree)" title="Delete">&#10005;</button>
+            <AspTooltip content="Rename">
+              <button class="btn-item-action" aria-label="Rename" @click="startRename(tree)">&#9998;</button>
+            </AspTooltip>
+            <AspTooltip content="Delete">
+              <button class="btn-item-action btn-item-delete" aria-label="Delete" @click="startDelete(tree)">&#10005;</button>
+            </AspTooltip>
           </div>
         </div>
         <div v-if="trees.length === 0 && !loadingTrees" class="dropdown-empty">
@@ -111,9 +115,10 @@ import { useRouter } from 'vue-router';
 import { AspInput } from '@aspirant/design-system';
 
 import axios from 'axios';
+import { AspTooltip } from '@aspirant/design-system';
 
 export default {
-  components: { AspInput },
+  components: { AspInput, AspTooltip },
   props: {
     activeTreeId: { type: String, default: null },
   },
