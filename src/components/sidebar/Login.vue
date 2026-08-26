@@ -175,16 +175,23 @@
      clears the WCAG 1.4.11 3:1 non-text floor that the old bare
      `border-color: var(--brand-primary)` swap did not.
 
-     The label rule is retuned rather than deleted. AspInput's `.field__label`
-     is `color: inherit` by design (it sets no background of its own, so it must
-     take the ink of whatever surface it is dropped onto), and this card sits in
-     the sidebar where the inherited ink is the sidebar's. Setting the ink on
-     the .form-group wrapper hands the component the brand ink the hand-rolled
-     label used to carry, without reaching into the component's internals. */
+     The label rule is deleted rather than retuned, and the `--brand-primary`
+     ink it carried is deliberately NOT handed to the component. This form has
+     two mounts — the sidebar strip and the dedicated /login page (#3342) — and
+     the amber was only ever legible on one of them: measured on /login it
+     rendered at 1.41:1 against the light page, under the 4.5:1 AA floor and
+     barely visible. That predates this migration; the render walk is what
+     surfaced it, because the suite reads colours and counts, never a ratio.
+
+     AspInput's `.field__label` is `color: inherit` precisely for this case: it
+     sets no background of its own, so the only ink that is correct on BOTH
+     mounts is the one the surrounding surface already declared. Overriding it
+     here would re-pin a single ink across two surfaces and reintroduce the
+     defect on whichever one it does not suit. Measurements for both mounts are
+     in the PR body. */
   .form-group {
     margin-bottom: var(--space-xs);
     text-align: left;
-    color: var(--brand-primary);
   }
 
   .login-button {

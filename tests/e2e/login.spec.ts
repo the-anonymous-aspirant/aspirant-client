@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from '@playwright/test';
+import { test, expect, type Locator, type Page, type Route } from '@playwright/test';
 import { seedAdminSession, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 
 /** Covers system_3 #3342: a dedicated /login page for visitors bounced off a
@@ -142,6 +142,51 @@ test.describe('Dedicated /login page', () => {
     await expect(page).toHaveURL('/');
   });
 
+  // Both mounts of this form, measured as a RATIO rather than as a token.
+  //
+  // The captions are `color: inherit` (AspInput's .field__label sets no
+  // background of its own, so it must take the ink of the surface it is dropped
+  // onto), which means their legibility is a property of the mount, not of the
+  // component — and it was wrong on the /login mount in BOTH directions before
+  // this was measured. The pre-migration `--brand-primary` caption rendered at
+  // 1.41:1 on the light page; letting it inherit instead picked up Vuetify's
+  // pinned `rgba(0,0,0,.87)` and rendered at 1.21:1 in dark. An assertion on
+  // the colour VALUE would have been satisfied by either. The suite reads
+  // ratios here for the same reason #877 was rewritten to (#4310): a field can
+  // be exactly the colour the test demands and still be invisible.
+  for (const [mount, path, container] of [
+    ['dedicated /login page', '/login', '.login-view-card'],
+    ['sidebar strip', '/', '.login-card'],
+  ] as const) {
+    for (const theme of ['light', 'dark'] as const) {
+      test(`credential captions clear AA on the ${mount} in ${theme}`, async ({ page }) => {
+        // Activate the theme the way the app does — the `theme` key, read at
+        // boot, which is what sets [data-theme] (#4245). Poking the attribute
+        // after load flips the DS tokens without flipping the surfaces painted
+        // by the app's own rules, and measures a page that never exists.
+        await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
+        await page.goto(path);
+        await dismissMobileSidebarIfPresent(page);
+        await expect
+          .poll(() => page.evaluate(() => document.documentElement.getAttribute('data-theme')))
+          .toBe(theme);
+
+        const captions = page.locator(`${container} .field__label`);
+        await expect(captions).toHaveCount(2);
+        for (let i = 0; i < 2; i++) {
+          expect(await contrastRatio(captions.nth(i)), `caption ${i} on ${mount}/${theme}`)
+            .toBeGreaterThanOrEqual(4.5);
+        }
+        // The value ink too — a field whose caption is legible and whose typed
+        // text is not is the #4201 defect one level down.
+        const control = page.locator(`${container} input[name="username"]`);
+        await control.fill('legible?');
+        expect(await contrastRatio(control), `value ink on ${mount}/${theme}`)
+          .toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+
   // The AspInput migration (#4304) replaced two hand-rolled <label for> pairs
   // with the component's own `label` prop. Nothing in this file asserted the
   // association before — the pair could have pointed at nothing and every test
@@ -162,7 +207,11 @@ test.describe('Dedicated /login page', () => {
       await expect(control).toHaveAttribute('type', type);
 
       // Clicking the label — not the input — must land the caret in the field.
-      await page.getByText(caption, { exact: true }).click();
+      // Matched by hasText rather than exact text: AspInput renders the
+      // required marker as a `*` span INSIDE the label, so the caption's text
+      // content is "Username *", not "Username". The walk that migrated this
+      // file found that by clicking and missing.
+      await page.locator('.login-card label', { hasText: caption }).click();
       await expect(control).toBeFocused();
 
       // ...and the value still round-trips through v-model, which is the other
@@ -173,3 +222,42 @@ test.describe('Dedicated /login page', () => {
     }
   });
 });
+
+/** Computed foreground-over-effective-background contrast for `locator` — the
+ *  same measurement as tests/e2e/profile.spec.ts and trusted-contrast.spec.ts
+ *  (#3027 / #3014): walks up to the first opaque background and composites a
+ *  translucent foreground over it, so the number is what a reader sees rather
+ *  than what a token declares. */
+async function contrastRatio(locator: Locator): Promise<number> {
+  return locator.first().evaluate((el) => {
+    const parse = (s: string) => {
+      const m = s.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+      return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
+    };
+    const lum = (c: { r: number; g: number; b: number }) => {
+      const f = (v: number) => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+    };
+    let bg: { r: number; g: number; b: number; a: number } | null = null;
+    for (let n: Element | null = el; n && !bg; n = n.parentElement) {
+      const c = parse(getComputedStyle(n).backgroundColor);
+      if (c && c.a === 1) bg = c;
+    }
+    const fg = parse(getComputedStyle(el).color);
+    if (!fg || !bg) return 0;
+    const eff =
+      fg.a < 1
+        ? {
+            r: fg.r * fg.a + bg.r * (1 - fg.a),
+            g: fg.g * fg.a + bg.g * (1 - fg.a),
+            b: fg.b * fg.a + bg.b * (1 - fg.a),
+          }
+        : fg;
+    const l1 = lum(eff);
+    const l2 = lum(bg);
+    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+  });
+}

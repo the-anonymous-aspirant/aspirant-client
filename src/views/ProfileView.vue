@@ -333,6 +333,13 @@
      selector reaches it without :deep(). */
   .field-row > .field {
     flex: 1;
+    /* The DS control is 34px by default (the §3.10 filter canon); the Save
+       button beside it measures 36px. Left alone the row renders two controls
+       at different heights with the shorter one vertically centred against the
+       taller — measured 34 vs 36 in the render walk. --asp-input-height is the
+       per-call-site override the component declares for exactly this, so the
+       pair reads as one row. */
+    --asp-input-height: 36px;
   }
 
   .btn {

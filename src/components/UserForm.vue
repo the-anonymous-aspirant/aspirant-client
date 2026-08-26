@@ -26,7 +26,7 @@
       </div>
       <!-- Access Role dropdown menu -->
       <div>
-        <label for="accessRole">Access Role:</label>
+        <label for="accessRole">Access Role</label>
         <select v-model="localUser.access_role">
           <option v-for="role in roles" :key="role.ID" :value="role.role_name">
             {{ role.role_name }}
@@ -35,7 +35,7 @@
       </div>
       <!-- Comment input field -->
       <div>
-        <label for="comment">Comment:</label>
+        <label for="comment">Comment</label>
         <textarea v-model="localUser.comment"></textarea>
       </div>
       <!-- Save and Cancel buttons -->
