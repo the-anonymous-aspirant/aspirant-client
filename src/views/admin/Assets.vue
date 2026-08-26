@@ -355,7 +355,7 @@
 
   .btn-upload {
     background-color: var(--feedback-success);
-    color: #fff;
+    color: var(--text-on-dark);
   }
 
   .file-input-hidden {
@@ -372,20 +372,20 @@
   }
 
   .message.success {
-    background: #d4edda;
-    color: #155724;
+    background: var(--feedback-success-bg);
+    color: var(--feedback-success-text);
   }
 
   .message.error {
-    background: #f8d7da;
-    color: #721c24;
+    background: var(--feedback-error-bg);
+    color: var(--feedback-error-text);
   }
 
   .upload-bar {
     width: 100%;
     padding: var(--space-xs) var(--space-md);
-    background: #cfe2ff;
-    color: #084298;
+    background: var(--feedback-info-bg);
+    color: var(--feedback-info-text);
     border-radius: var(--radius-md);
     font-size: var(--text-sm);
     margin-bottom: var(--space-sm);
@@ -506,7 +506,7 @@
   .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--surface-scrim);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -550,7 +550,7 @@
 
   .btn-confirm-delete {
     background: var(--feedback-error);
-    color: #fff;
+    color: var(--text-on-dark);
   }
 
   @media (max-width: 768px) {
