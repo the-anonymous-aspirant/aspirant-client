@@ -11,12 +11,12 @@
         <p><strong>Player 2:</strong> Press <kbd>↑</kbd> (Up Arrow) to flap</p>
       </template>
       <p>Survive as long as possible to set a high score!</p>
-      <button class="start-button" @click="startGame">Start Game</button>
+      <AspButton class="start-button" variant="primary" @click="startGame">Start Game</AspButton>
     </div>
     <div class="game-over" v-if="gameOver">
       <h2>Game Over!</h2>
       <p>Time Survived: {{ formatTime(survivedTime) }}</p>
-      <button class="start-button" @click="restartGame">Play Again</button>
+      <AspButton class="start-button" variant="primary" @click="restartGame">Play Again</AspButton>
     </div>
     <!-- Add audio element for background music -->
     <audio ref="bgMusic" :src="bgMusicUrl" loop></audio>
@@ -96,9 +96,13 @@
 
 <script>
   import AssetManager from '../../asset_manager.js';
+  import { AspButton } from '@aspirant/design-system';
 
   export default {
     name: 'GameFlappyDuo',
+    components: {
+      AspButton,
+    },
     data() {
       return {
         gameWidth: 1200,
@@ -905,22 +909,9 @@
     font-family: monospace;
   }
 
+  /* Layout only — visuals now come from AspButton (variant="primary"). */
   .start-button {
     margin-top: var(--space-lg);
-    padding: 12px 24px;
-    font-size: var(--text-base);
-    background-color: var(--brand-primary);
-    border: 2px solid #e65100;
-    border-radius: 4px;
-    color: var(--text-on-dark);
-    cursor: pointer;
-    font-family: 'Press Start 2P', 'Courier New', monospace;
-    transition: filter var(--transition-moderate), transform var(--transition-moderate);
-  }
-
-  .start-button:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
   }
 
   .game-area::after {
@@ -1049,10 +1040,6 @@
       border-width: 2px;
     }
 
-    .start-button {
-      padding: 10px 20px;
-      font-size: var(--text-sm);
-    }
 
     .difficulty-message {
       font-size: var(--text-sm);
@@ -1117,9 +1104,5 @@
       font-size: var(--text-xs);
     }
 
-    .start-button {
-      padding: 8px 16px;
-      font-size: var(--text-xs);
-    }
   }
 </style>

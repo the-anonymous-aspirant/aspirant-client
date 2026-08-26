@@ -30,7 +30,7 @@
           {{ i }}
         </button>
       </div>
-      <button class="save-button" @click="saveEmotion">Save</button>
+      <AspButton class="save-button" variant="primary" @click="saveEmotion">Save</AspButton>
     </div>
     <div v-if="activeTab === 'current'" class="content-wrapper">
       <h2>Emotion Picker</h2>
@@ -109,9 +109,9 @@
             <p><strong>Emotion:</strong> {{ getMostGranularEmotion(entry) }}</p>
             <p><strong>Intensity:</strong> {{ entry.intensity }}</p>
             <p><strong>Comment:</strong> {{ entry.comment }}</p>
-            <button class="delete-button" @click="deleteEntry(date, index)">
+            <AspButton class="delete-button" variant="destructive" size="sm" @click="deleteEntry(date, index)">
               Delete
-            </button>
+            </AspButton>
           </div>
         </div>
       </div>
@@ -147,9 +147,13 @@
 
 <script>
   import emotions from '../../resources/games/emotions.js';
+  import { AspButton } from '@aspirant/design-system';
 
   export default {
     name: 'EmotionalExcellence',
+    components: {
+      AspButton,
+    },
     data() {
       return {
         emotions,
@@ -519,23 +523,10 @@
     color: var(--text-on-fixed-light);
   }
 
+  /* Layout only — visuals now come from AspButton (variant="primary"). */
   .save-button {
     width: 100%;
-    padding: var(--space-md);
-    border-radius: var(--radius-md);
-    background-color: var(--brand-primary);
-    border: none;
-    color: var(--text-on-fixed-light);
-    cursor: pointer;
-    transition: filter var(--transition-moderate), transform var(--transition-moderate);
-    font-weight: bold;
-    font-size: var(--text-base);
     margin-top: var(--space-sm);
-  }
-
-  .save-button:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
   }
 
   /* Data view */
@@ -607,24 +598,11 @@
     margin: 0;
   }
 
+  /* Layout only — visuals now come from AspButton (variant="destructive"). */
   .delete-button {
     position: absolute;
     right: var(--space-sm);
     top: var(--space-sm);
-    background-color: var(--feedback-error);
-    color: var(--text-on-dark);
-    border: none;
-    padding: var(--space-2xs) var(--space-sm);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-size: var(--text-sm);
-    font-weight: bold;
-    transition: filter var(--transition-moderate), transform var(--transition-moderate);
-  }
-
-  .delete-button:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
   }
 
   /* Heatmap */

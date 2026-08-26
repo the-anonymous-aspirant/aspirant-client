@@ -25,20 +25,25 @@
       </div>
 
       <div class="actions">
-        <button class="open-btn" @click="openInNewTab" :disabled="!htmlContent">
+        <AspButton variant="secondary" @click="openInNewTab" :disabled="!htmlContent">
           Open in New Tab
-        </button>
-        <button class="download-btn" @click="downloadPDF" :disabled="!htmlContent">
+        </AspButton>
+        <AspButton variant="primary" @click="downloadPDF" :disabled="!htmlContent">
           Download as PDF
-        </button>
+        </AspButton>
       </div>
     </div>
   </div>
 </template>
 
 <script>
+import { AspButton } from '@aspirant/design-system';
+
 export default {
   name: 'RemarkablePdfs',
+  components: {
+    AspButton,
+  },
   data() {
     return {
       currentGenerator: 'planner',
@@ -181,33 +186,8 @@ export default {
   margin-top: var(--space-lg);
 }
 
-.actions button {
-  padding: var(--space-sm) var(--space-xl);
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: var(--text-base);
-  font-weight: bold;
-  transition: all var(--transition-moderate);
-}
-
-.download-btn {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-}
-
-.download-btn:hover {
-  background-color: var(--brand-accent);
-  color: var(--text-on-dark);
-}
-
-.open-btn {
-  background-color: var(--surface-elevated);
-  color: var(--text-on-light);
-}
-
-.open-btn:hover {
-  background-color: var(--brand-accent);
-  color: var(--text-on-dark);
-}
+/* Open/Download are now AspButtons (secondary/primary); DS owns their visuals.
+   The .actions flex row still positions them; the former `.actions button`,
+   `.open-btn`, `.download-btn` visual rules are removed (that bare `.actions
+   button` selector would otherwise reach the AspButton root and override DS). */
 </style>

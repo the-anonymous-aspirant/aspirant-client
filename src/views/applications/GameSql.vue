@@ -28,9 +28,9 @@
           {{ option.text }}
         </label>
       </div>
-      <button @click="nextQuestion" :disabled="!answers[currentQuestionIndex]">Next</button>
+      <AspButton variant="primary" @click="nextQuestion" :disabled="!answers[currentQuestionIndex]">Next</AspButton>
       <div v-if="debugMode" class="debug-info">
-        <button @click="calculateResult">Calculate Result</button>
+        <AspButton variant="primary" @click="calculateResult">Calculate Result</AspButton>
         <div v-if="intermediateResults">
           <h3>Current Scores:</h3>
           <ul>
@@ -72,9 +72,13 @@
   import { questions, personalities } from '../../resources/games/gameSql.js';
   import { seriesColor, tokenColor } from '../../composables/chartSeries.js';
   import { debugMode } from '../../global_state_manager.js';
+  import { AspButton } from '@aspirant/design-system';
 
   export default {
     name: 'SqlPersonalityQuiz',
+    components: {
+      AspButton,
+    },
     data() {
       return {
         debugMode,
@@ -285,28 +289,13 @@
     margin-right: var(--space-sm);
   }
 
+  /* The two quiz buttons are AspButtons (variant="primary"); DS owns their
+     visuals and disabled state. Keep only the block-centre layout — this bare
+     `button` selector reaches the AspButton root (it carries this component's
+     scope attr), so it must stay visual-free to avoid overriding the DS style. */
   button {
     display: block;
     margin: var(--space-lg) auto;
-    padding: var(--space-sm) var(--space-lg);
-    background-color: var(--brand-primary);
-    color: var(--text-on-fixed-light);
-    border: none;
-    border-radius: var(--radius-lg);
-    cursor: pointer;
-    font-size: var(--text-base);
-    font-weight: 600;
-    transition: filter var(--transition-moderate), transform var(--transition-moderate);
-  }
-
-  button:hover:not(:disabled) {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
-  }
-
-  button:disabled {
-    background-color: var(--border-subtle);
-    cursor: not-allowed;
   }
 
   blockquote {
@@ -467,10 +456,7 @@
     }
 
     button {
-      padding: var(--space-md) var(--space-xl);
-      font-size: var(--text-lg);
       margin: var(--space-xl) auto;
-      border-radius: var(--radius-lg);
     }
 
     blockquote {

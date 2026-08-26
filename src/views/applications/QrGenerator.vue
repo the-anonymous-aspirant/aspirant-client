@@ -42,9 +42,9 @@
         <a :href="qrUrl" download="qrcode.png" class="action-btn download-btn">
           Download PNG
         </a>
-        <button class="action-btn copy-btn" @click="copyUrl">
+        <AspButton variant="secondary" @click="copyUrl">
           {{ copied ? 'Copied!' : 'Copy Image URL' }}
-        </button>
+        </AspButton>
       </div>
 
       <div class="encoded-text">
@@ -57,6 +57,7 @@
 
 <script setup>
 import { ref } from 'vue';
+import { AspButton } from '@aspirant/design-system';
 
 const inputText = ref('');
 const encodedText = ref('');
@@ -244,11 +245,9 @@ select:focus {
   border: 1px solid var(--brand-primary);
 }
 
-.copy-btn {
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
-  border: 1px solid var(--border-card);
-}
+/* .copy-btn removed — the copy action is now an AspButton (variant="secondary").
+   The sibling Download remains an <a class="action-btn download-btn"> link (link-styled
+   family, held pending the #4295 design ruling). */
 
 .action-btn:hover {
   filter: brightness(1.15);
