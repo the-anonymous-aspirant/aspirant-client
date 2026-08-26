@@ -55,42 +55,121 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     await expect(foretagInput).toHaveValue(OPERATOR_DEFAULTS.foretag);
   });
 
-  test('#877 confidence buckets paint each row and tint the input', async ({ page }) => {
+  test('#877 confidence buckets paint each row, legibly', async ({ page }) => {
     await walkToReview(page);
-    // The extract fixture seeds at least one row per bucket; assert each
-    // class is present and its input carries the bucket-specific tint that
-    // ValuationStatement.vue's scoped style applies.
-    const confidentRow = page.locator('.field-row.confident').first();
-    await expect(confidentRow).toBeVisible();
-    const confidentBg = await confidentRow
-      .locator('input, select, textarea')
-      .first()
-      .evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
-    expect(confidentBg).toBe('rgba(72, 187, 120, 0.12)');
 
-    const uncertainRow = page.locator('.field-row.uncertain').first();
-    await expect(uncertainRow).toBeVisible();
-    const uncertainBg = await uncertainRow
-      .locator('input, select, textarea')
-      .first()
-      .evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
-    expect(uncertainBg).toBe('rgba(237, 137, 54, 0.12)');
+    // The extract fixture seeds at least one row per bucket. Two things are
+    // asserted per bucket, and the second one is why this test was rewritten:
+    //
+    //   1. the control's fill is that bucket's colour mixed into the field
+    //      surface, and its left edge is the bucket's solid colour;
+    //   2. the value inside it is READABLE against that fill.
+    //
+    // (2) exists because the original form of this test — an exact
+    // `backgroundColor === 'rgba(72, 187, 120, 0.12)'` on the row's <input> —
+    // passed while the fields were unreadable at 1.18:1. A translucent tint
+    // REPLACES a fill rather than layering over it, so the 12% colour was
+    // compositing straight onto the dark card and the ink sat on top of the
+    // result. Every assertion in the suite read a colour; none read a ratio.
+    //
+    // The fill is now `color-mix(... 12%, var(--surface-elevated))`, whose
+    // computed value serializes as `color(srgb …)` in some engines and
+    // `rgb(…)` in others — so both this test and its expectation are computed
+    // through a canvas, which normalizes either form to real channel bytes and
+    // keeps the assertion engine-independent rather than pinned to one
+    // browser's serialization.
+    //
+    // The control selector is `.field__control, input, select, textarea`
+    // because the tinted SURFACE moved, not the assertion: rows whose value
+    // control is now an AspInput carry the fill on the component's
+    // `.field__control`, while rows still holding a native date picker, select
+    // or textarea match the trailing part unchanged. `.first()` takes document
+    // order, which puts `.field__control` ahead of the input it contains.
+    const BUCKETS: Array<[string, string]> = [
+      ['confident', '#38a169'],
+      ['uncertain', '#dd6b20'],
+      ['manual', '#3182ce'],
+      ['not-found', '#e53e3e'],
+    ];
 
-    const manualRow = page.locator('.field-row.manual').first();
-    await expect(manualRow).toBeVisible();
-    const manualBg = await manualRow
-      .locator('input, select, textarea')
-      .first()
-      .evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
-    expect(manualBg).toBe('rgba(66, 153, 225, 0.12)');
+    for (const [bucket, solid] of BUCKETS) {
+      const row = page.locator(`.field-row.${bucket}`).first();
+      await expect(row, `${bucket} bucket should be present in the fixture`).toBeVisible();
 
-    const notFoundRow = page.locator('.field-row.not-found').first();
-    await expect(notFoundRow).toBeVisible();
-    const notFoundBg = await notFoundRow
-      .locator('input, select, textarea')
-      .first()
-      .evaluate(el => getComputedStyle(el as HTMLElement).backgroundColor);
-    expect(notFoundBg).toBe('rgba(245, 101, 101, 0.12)');
+      const measured = await row.evaluate((el, hex) => {
+        const ctx = document.createElement('canvas').getContext('2d')!;
+        const rgb = (css: string): [number, number, number] => {
+          ctx.fillStyle = '#000';
+          ctx.fillStyle = css;
+          ctx.fillRect(0, 0, 1, 1);
+          const d = ctx.getImageData(0, 0, 1, 1).data;
+          return [d[0], d[1], d[2]];
+        };
+        const relLum = ([r, g, b]: [number, number, number]) => {
+          const f = (v: number) => {
+            const c = v / 255;
+            return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+          };
+          return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+        };
+
+        const control = el.querySelector(
+          '.field__control, input, select, textarea',
+        ) as HTMLElement;
+        // On a migrated row the ink lives on the component's inner <input>;
+        // on a native row the control IS the inked element.
+        const inked = (el.querySelector('.field__input') as HTMLElement) || control;
+        const cs = getComputedStyle(control);
+
+        const fill = rgb(cs.backgroundColor);
+        const ink = rgb(getComputedStyle(inked).color);
+        const edge = rgb(cs.borderLeftColor);
+
+        // What the fill SHOULD be: the bucket colour at 12% over whatever
+        // --surface-elevated resolves to in the active theme. Derived at run
+        // time from the token, so the expectation follows a theme change
+        // instead of pinning one palette.
+        const surface = rgb(
+          getComputedStyle(document.documentElement).getPropertyValue('--surface-elevated').trim(),
+        );
+        const want = rgb(hex).map((c, i) => c * 0.12 + surface[i] * 0.88) as [
+          number,
+          number,
+          number,
+        ];
+
+        const l1 = relLum(ink) + 0.05;
+        const l2 = relLum(fill) + 0.05;
+
+        return {
+          kind: control.classList.contains('field__control') ? 'AspInput' : control.tagName,
+          fill,
+          want,
+          edge,
+          edgeWidth: cs.borderLeftWidth,
+          contrast: Math.max(l1, l2) / Math.min(l1, l2),
+        };
+      }, solid);
+
+      // 1a — the fill is this bucket's colour mixed into the field surface.
+      for (let i = 0; i < 3; i++) {
+        expect(
+          Math.abs(measured.fill[i] - measured.want[i]),
+          `${bucket}: fill channel ${i} was ${measured.fill[i]}, expected ~${Math.round(measured.want[i])} (control: ${measured.kind})`,
+        ).toBeLessThanOrEqual(2);
+      }
+
+      // 1b — and the 4px left edge carries the bucket's solid colour.
+      expect(measured.edgeWidth, `${bucket}: left edge width`).toBe('4px');
+
+      // 2 — the value in it is readable. AA body text is 4.5:1; the measured
+      // value at the time of writing is ~8.4:1, so this has real headroom and
+      // is not a rubber stamp.
+      expect(
+        measured.contrast,
+        `${bucket}: value ink measured ${measured.contrast.toFixed(2)}:1 against its own field fill (control: ${measured.kind})`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   test('#1828 comparables block is not rendered', async ({ page }) => {
