@@ -20,11 +20,14 @@
         </div>
       </section>
 
-      <!-- Personal: apps built for one specific person. "Personal" is an IA
-           grouping, not a permission (#4184). The intended-user annotation is
-           intentionally NOT surfaced in the UI (#4198): the app↔owner map lives
-           in the aspirant-personal-app-user-map memory + #4194, not on the card. -->
-      <section class="member-section">
+      <!-- Personal: apps built for one specific person, and since #4331 only
+           the ones this identity owns (an admin sees all, mirroring the
+           server's ValidateUserOrAdmin). The owner map lives in
+           member/apps.js, next to the routes.go constants it is derived from;
+           the intended-user annotation is still NOT surfaced on the card
+           (#4198). A member who owns none gets no section at all rather than an
+           empty heading. -->
+      <section v-if="personalApps.length" class="member-section" data-test="member-personal-section">
         <h2 class="page-subtitle">Personal</h2>
         <div class="application-list">
           <application-card
@@ -45,7 +48,7 @@
 <script>
   import AssetManager from '../asset_manager';
   import ApplicationCard from '../components/ApplicationCard.vue';
-  import { SHARED_APPS, PERSONAL_APPS } from './member/apps.js';
+  import { SHARED_APPS, visiblePersonalApps } from './member/apps.js';
 
   export default {
     components: {
@@ -54,7 +57,14 @@
     data() {
       return {
         sharedApps: SHARED_APPS,
-        personalApps: PERSONAL_APPS,
+        // #4331: the personal roster narrowed to this identity. Read once at
+        // construction from the same localStorage keys Login.vue writes — the
+        // page remounts on login/logout (authVersion), so there is nothing to
+        // keep reactive here.
+        personalApps: visiblePersonalApps(
+          localStorage.getItem('user_name'),
+          localStorage.getItem('user_role')
+        ),
         // Keyed by route so the template can look each icon up regardless of
         // which section the card is in.
         appImages: {},
@@ -65,7 +75,7 @@
         this.$router.push({ path: `/member/${section}/${route}` });
       },
       async loadImages() {
-        const all = [...SHARED_APPS, ...PERSONAL_APPS];
+        const all = [...SHARED_APPS, ...this.personalApps];
         await Promise.all(
           all.map(async (app) => {
             try {

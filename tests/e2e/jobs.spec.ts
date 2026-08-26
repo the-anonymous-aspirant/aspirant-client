@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import {
-  seedTrustedSession,
+  seedTrustedSessionAs,
   dismissMobileSidebarIfPresent,
   installJobsMocks,
   seedJobsRows,
@@ -69,7 +69,11 @@ const SEED_ROWS = [
 
 test.describe('/member/personal/jobs — card→page→filter→hide', () => {
   test.beforeEach(async ({ page }) => {
-    await seedTrustedSession(page);
+    // #4331: the /member index shows a personal card only to its owner, and
+    // Jobs belongs to `vinoly` (routes.go jobsOwnerUsername). The generic
+    // `e2e-tester` this file used to seed no longer sees the card — which is
+    // the point of that change — so this suite is now the owner's journey.
+    await seedTrustedSessionAs(page, 'vinoly');
     await installNoiseCatchAll(page);
     await installJobsMocks(page);
   });
