@@ -7,21 +7,22 @@
     <div class="record-card">
       <h3>Record</h3>
       <div class="record-controls">
-        <button
+        <AspButton
           class="btn-record"
-          :class="{ recording: recordState === 'recording' }"
           :disabled="recordState === 'uploading'"
+          :variant="recordState === 'recording' ? 'destructive' : 'primary'"
           @click="toggleRecording"
         >
           <span v-if="recordState === 'idle'">Start Recording</span>
           <span v-else-if="recordState === 'recording'">Stop & Send</span>
           <span v-else-if="recordState === 'uploading'">Uploading...</span>
-        </button>
-        <button
+        </AspButton>
+        <AspButton
           v-if="recordState === 'recording'"
           class="btn-cancel-record"
+          variant="secondary"
           @click="cancelRecording"
-        >Cancel</button>
+        >Cancel</AspButton>
         <span v-if="recordState === 'recording'" class="recording-indicator">
           <span class="pulse-dot"></span>
           {{ recordingDuration }}s
@@ -109,10 +110,10 @@
             @input="debouncedFetch"
           />
         </div>
-        <button class="btn-process" @click="processNow" :disabled="processing">
+        <AspButton class="btn-process" variant="primary" @click="processNow" :disabled="processing">
           <span v-if="processing">Processing...</span>
           <span v-else>Process Now</span>
-        </button>
+        </AspButton>
       </div>
     </div>
 
@@ -205,9 +206,9 @@
 
       <!-- Pagination -->
       <div v-if="totalPages > 1" class="pagination">
-        <button class="btn-page" :disabled="page <= 1" @click="goToPage(page - 1)">&laquo; Prev</button>
+        <AspButton variant="secondary" size="sm" :disabled="page <= 1" @click="goToPage(page - 1)">&laquo; Prev</AspButton>
         <span class="page-info">Page {{ page }} of {{ totalPages }}</span>
-        <button class="btn-page" :disabled="page >= totalPages" @click="goToPage(page + 1)">Next &raquo;</button>
+        <AspButton variant="secondary" size="sm" :disabled="page >= totalPages" @click="goToPage(page + 1)">Next &raquo;</AspButton>
       </div>
     </div>
 
@@ -241,9 +242,9 @@
 
       <!-- Notes Pagination -->
       <div v-if="notesTotalPages > 1" class="pagination">
-        <button class="btn-page" :disabled="notesPage <= 1" @click="goToNotesPage(notesPage - 1)">&laquo; Prev</button>
+        <AspButton variant="secondary" size="sm" :disabled="notesPage <= 1" @click="goToNotesPage(notesPage - 1)">&laquo; Prev</AspButton>
         <span class="page-info">Page {{ notesPage }} of {{ notesTotalPages }}</span>
-        <button class="btn-page" :disabled="notesPage >= notesTotalPages" @click="goToNotesPage(notesPage + 1)">Next &raquo;</button>
+        <AspButton variant="secondary" size="sm" :disabled="notesPage >= notesTotalPages" @click="goToNotesPage(notesPage + 1)">Next &raquo;</AspButton>
       </div>
     </div>
 
@@ -304,11 +305,11 @@
 </template>
 
 <script>
-import { AspInput } from '@aspirant/design-system';
+import { AspInput, AspButton } from '@aspirant/design-system';
 import axios from 'axios';
 
 export default {
-  components: { AspInput },
+  components: { AspInput, AspButton },
   data() {
     return {
       // Recording state
@@ -739,49 +740,8 @@ export default {
   flex-wrap: wrap;
 }
 
-.btn-record {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-weight: 600;
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-base);
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
-}
-
-.btn-record:hover:not(:disabled) {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.btn-record:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-record.recording {
-  background-color: var(--feedback-success);
-  color: var(--text-on-dark);
-}
-
-.btn-cancel-record {
-  background-color: transparent;
-  color: var(--text-muted);
-  font-weight: 600;
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-lg);
-  border: 2px solid var(--border-card);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  transition: filter var(--transition-moderate), color var(--transition-moderate), border-color var(--transition-moderate);
-}
-
-.btn-cancel-record:hover {
-  color: var(--feedback-error);
-  border-color: var(--feedback-error);
-}
+/* .btn-record/.btn-cancel-record visuals now come from AspButton
+   (:variant="recordState === 'recording' ? 'destructive' : 'primary'" / secondary). */
 
 .recording-indicator {
   display: flex;
@@ -945,27 +905,9 @@ export default {
   font-size: var(--text-sm);
 }
 
+/* Layout only — visuals from AspButton (variant="primary"). */
 .btn-process {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-weight: 600;
-  padding: var(--space-xs) var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-sm);
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
   margin-left: auto;
-}
-
-.btn-process:hover:not(:disabled) {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.btn-process:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 /* Tasks Card */
@@ -1158,27 +1100,7 @@ export default {
   margin-top: var(--space-lg);
 }
 
-.btn-page {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-weight: 600;
-  padding: var(--space-xs) var(--space-md);
-  border-radius: var(--radius-sm);
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-sm);
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
-}
-
-.btn-page:hover:not(:disabled) {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.btn-page:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+/* .btn-page visuals now come from AspButton (variant="secondary" size="sm"). */
 
 .page-info {
   font-size: var(--text-sm);
