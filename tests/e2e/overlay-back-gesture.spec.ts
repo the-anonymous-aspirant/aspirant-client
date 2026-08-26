@@ -98,8 +98,11 @@ test.describe('overlay back-gesture (#4172)', () => {
   test('the same behavior applies to another overlay (delete-confirm dialog)', async ({ page }) => {
     await openGoals(page, [{ id: 1, name: 'Tree A', updated_at: '2026-08-01T00:00:00Z' }]);
 
-    // Open the delete-confirm dialog from the tree row.
-    await page.locator('button[title="Delete"]').click();
+    // Open the delete-confirm dialog from the tree row. The row's Delete control
+    // is an icon-only button; its accessible name comes from `aria-label` (the
+    // DS AspTooltip migration, #4297, moved the visible tooltip off the native
+    // `title=` and kept the name on aria-label), so select it by role+name.
+    await page.getByRole('button', { name: 'Delete' }).click();
     await expect(page.locator('.dialog-overlay')).toBeVisible();
     await expect(page.locator('.dialog-overlay')).toContainText('Tree A');
 
