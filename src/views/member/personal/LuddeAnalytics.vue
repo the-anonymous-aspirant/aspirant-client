@@ -355,15 +355,16 @@
      renders and outranks .btn--size-lg (0,1,0) on padding, so it would silently
      re-pad the DS control. .button-group above still centres it.
 
-     .confirm-btn keeps only width and its oversized type scale — this view is
-     built for a one-handed tap, and text-2xl is louder than any DS size. Fill,
-     ink, border, radius and hover are AspButton's (primary / size="lg").
+     .confirm-btn keeps only its width. It used to force --text-2xl; that is
+     dropped rather than re-specified at a higher specificity, because a
+     consumer class outshouting the DS type scale is the §3.83 pattern this
+     sweep exists to remove. size="lg" is the DS's largest, and the full-width
+     box is what actually carries the one-handed tap target this view wants.
 
      .reset-btn and .cancel-btn are gone: grep for either token returns no
      template use anywhere in this file. Dead before this diff, deleted with it. */
   .confirm-btn {
     width: 100%;
-    font-size: var(--text-2xl);
   }
 
   .datetime-input {

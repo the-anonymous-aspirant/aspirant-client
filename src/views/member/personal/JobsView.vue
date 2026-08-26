@@ -279,8 +279,11 @@
                      literally here: a solid amber button on every row of a
                      paginated table is the same §1 accent over-spend the
                      ruling itself cited when it declined the tab variant-flip.
-                     secondary/ghost keeps the original's emphasis ordering
-                     (Save was accent-OUTLINED, not filled) at the row scale.
+                     Both are secondary: the render walk showed ghost dropping
+                     the box entirely, which made "Not interested" read as a
+                     caption under a button rather than the other half of a
+                     pair. The original was two OUTLINED buttons of equal
+                     weight, and two secondaries is that, at the row scale.
                      The `saved` and `btn-hide` class tokens that used to ride
                      here matched no rule in this file; the state that reads is
                      the label plus :disabled, so they are dropped rather than
@@ -301,7 +304,7 @@
                 </AspButton>
                 <AspButton
                   type="button"
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   :disabled="actingIds.has(job.id)"
                   :data-test-hide="job.id"
@@ -982,8 +985,7 @@
     align-items: stretch;
   }
 
-  /* The row actions are AspButtons now (Save=secondary, Not interested=ghost,
-     both size="sm" for the table row — see the template comment on why the
+  /* The row actions are AspButtons now (both secondary, size="sm" for the row — see the template comment on why the
      confirm->primary mapping is not taken literally at row scale). DS owns
      fill, border, hover and the disabled state; .action-buttons above still
      stacks them. */
