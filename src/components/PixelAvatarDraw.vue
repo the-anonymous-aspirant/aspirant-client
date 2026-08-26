@@ -1,5 +1,6 @@
 <script>
   import { ref, computed } from 'vue';
+  import { AspButton } from '@aspirant/design-system';
 
   // PixelAvatarDraw — a small in-browser pixel-drawing surface for the profile
   // avatar (#4202, operator ask on #3617: "draw their own icons in a little
@@ -35,6 +36,9 @@
 
   export default {
     name: 'PixelAvatarDraw',
+    components: {
+      AspButton,
+    },
     props: {
       // Grid is square: gridSize × gridSize cells.
       gridSize: { type: Number, default: 24 },
@@ -184,13 +188,13 @@
     </div>
 
     <div class="pixel-actions">
-      <button type="button" class="btn btn-ghost" :disabled="busy" @click="clearAll">Clear</button>
-      <button type="button" class="btn btn-ghost" :disabled="busy" @click="$emit('cancel')">
+      <AspButton type="button" variant="ghost" :disabled="busy" @click="clearAll">Clear</AspButton>
+      <AspButton type="button" variant="ghost" :disabled="busy" @click="$emit('cancel')">
         Cancel
-      </button>
-      <button type="button" class="btn" :disabled="busy || !hasDrawing" @click="save">
+      </AspButton>
+      <AspButton type="button" variant="primary" :disabled="busy || !hasDrawing" @click="save">
         Save drawing
-      </button>
+      </AspButton>
     </div>
   </div>
 </template>
@@ -258,29 +262,8 @@
     gap: var(--space-sm);
   }
 
-  .btn {
-    padding: var(--space-xs) var(--space-md);
-    border: none;
-    border-radius: var(--radius-sm);
-    background-color: var(--brand-primary);
-    color: var(--text-on-dark);
-    cursor: pointer;
-    font-size: var(--text-sm);
-    transition: background-color var(--transition-moderate);
-  }
-
-  .btn:hover:not(:disabled) {
-    background-color: var(--brand-accent);
-  }
-
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .btn-ghost {
-    background-color: transparent;
-    color: var(--brand-primary);
-    border: 1px solid var(--border-subtle);
-  }
+  /* The action buttons are AspButtons now (Save=primary, Clear/Cancel=ghost);
+     DS owns their visuals + disabled state. .pixel-actions above still lays them
+     out. The drawing swatches stay native (they are the drawing tool, not chrome
+     — §3.44 note above). */
 </style>

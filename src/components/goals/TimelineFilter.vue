@@ -37,12 +37,12 @@
     </div>
 
     <div class="filter-actions">
-      <button class="btn-apply" @click="$emit('apply')" :disabled="localPeriod === 'custom' && (!localCustomStart || !localCustomEnd)">
+      <AspButton variant="primary" @click="$emit('apply')" :disabled="localPeriod === 'custom' && (!localCustomStart || !localCustomEnd)">
         Apply
-      </button>
-      <button class="btn-clear" @click="$emit('clear')" :disabled="!active">
+      </AspButton>
+      <AspButton variant="secondary" @click="$emit('clear')" :disabled="!active">
         Clear
-      </button>
+      </AspButton>
     </div>
 
     <span v-if="active" class="filter-active-badge">Filtering active</span>
@@ -51,8 +51,12 @@
 
 <script>
 import { computed } from 'vue';
+import { AspButton } from '@aspirant/design-system';
 
 export default {
+  components: {
+    AspButton,
+  },
   props: {
     period: { type: String, required: true },
     customStart: { type: String, default: '' },
@@ -181,47 +185,9 @@ export default {
   margin-left: auto;
 }
 
-.btn-apply {
-  padding: var(--space-2xs) var(--space-md);
-  border-radius: var(--radius-sm);
-  border: none;
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  cursor: pointer;
-  transition: filter var(--transition-fast);
-}
-
-.btn-apply:hover:not(:disabled) {
-  filter: brightness(1.15);
-}
-
-.btn-apply:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-clear {
-  padding: var(--space-2xs) var(--space-md);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background: none;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: color var(--transition-fast);
-}
-
-.btn-clear:hover:not(:disabled) {
-  color: var(--text-on-dark);
-  border-color: var(--text-on-dark);
-}
-
-.btn-clear:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+/* Apply/Clear are AspButtons now (primary/secondary); DS owns their visuals +
+   disabled state. .filter-actions above lays them out. The mode-btn segmented
+   group stays native (held pending the #4295 design ruling). */
 
 .filter-active-badge {
   font-size: var(--text-xs);
