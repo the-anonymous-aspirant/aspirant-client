@@ -103,7 +103,10 @@ test.describe('#4305 goal-tree inline fields (AspInput)', () => {
 
   test('Goals: opening Rename focuses AND selects the existing name', async ({ page }) => {
     await openGoals(page);
-    await page.locator('.btn-action[title="Rename"]').first().click();
+    // #4297 replaced the icon button's native title= with an AspTooltip +
+    // aria-label, so locate the control by its accessible name rather than the
+    // (now-absent) title attribute.
+    await page.getByRole('button', { name: 'Rename' }).first().click();
 
     const field = page.locator('.dialog input.field__input');
     await expect(field).toBeVisible();
@@ -124,7 +127,9 @@ test.describe('#4305 goal-tree inline fields (AspInput)', () => {
   test('TreeSwitcher: the in-canvas rename focuses and selects', async ({ page }) => {
     await openCanvas(page);
     await page.locator('.tree-switcher .switcher-trigger, .tree-switcher button').first().click();
-    const rename = page.locator('.tree-switcher [title="Rename"], .tree-switcher .btn-rename');
+    // #4297: the in-canvas rename control is an aria-labelled icon button under
+    // an AspTooltip now, not a title= attribute.
+    const rename = page.locator('.tree-switcher').getByRole('button', { name: 'Rename' });
     if (!(await rename.count())) test.skip(true, 'no rename affordance rendered for the seeded tree');
     await rename.first().click();
 
