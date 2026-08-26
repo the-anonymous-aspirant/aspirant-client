@@ -1,8 +1,7 @@
 /**
  * @fileoverview This file serves as the main entry point for the Vue.js application.
  * It initializes the Vue app, sets up routing, applies global styles, and configures
- * Axios interceptors to attach a user token to request headers. Additionally, it
- * integrates Vuetify for UI components and directives. The session token is
+ * Axios interceptors to attach a user token to request headers. The session token is
  * NOT handled here: it lives solely in the server's HttpOnly cookie.
  */
 import { createApp } from 'vue';
@@ -21,10 +20,6 @@ import './style.css';
 import '@aspirant/design-system/tokens.css';
 import '@aspirant/design-system/styles.css';
 import axios from 'axios';
-import 'vuetify/styles';
-import { createVuetify } from 'vuetify';
-import * as components from 'vuetify/components';
-import * as directives from 'vuetify/directives';
 
 /*
 The main.js file is executed in initialization.
@@ -71,18 +66,13 @@ axios.interceptors.response.use(
   }
 );
 
-const vuetify = createVuetify({
-  components,
-  directives,
-});
-
 // Keep the theme following the OS while the user has stored no choice (#4245).
 // First paint is already themed by the inline script in index.html; this only
 // keeps an OPEN tab in sync when the system theme flips under it.
 installThemeWatcher();
 
 const app = createApp(App);
-app.use(router).use(vuetify);
+app.use(router);
 // Back-gesture closes the top-most open overlay first (#4172).
 app.directive('overlay-history', overlayHistory);
 app.mount('#app');
