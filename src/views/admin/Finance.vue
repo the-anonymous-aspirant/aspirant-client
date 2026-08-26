@@ -177,7 +177,15 @@
         </select>
         <input type="date" v-model="filterDateFrom" @change="resetAndLoad" class="date-input" />
         <input type="date" v-model="filterDateTo" @change="resetAndLoad" class="date-input" />
-        <input type="text" v-model="filterSearch" @input="debounceSearch" placeholder="Search..." class="text-input" />
+        <!-- The two <select>s and the two date pickers beside this field cannot
+             migrate: `select` is a primitive family #4278 does not cover, and
+             `date` is out of AspInput's contract by the §3.85 ruling. Their
+             shared rule below is therefore retuned to the DS control tokens so
+             the row reads as one row rather than one DS control among four
+             natives. -->
+        <div class="search-field">
+          <AspInput v-model="filterSearch" type="search" placeholder="Search..." @input="debounceSearch" />
+        </div>
       </div>
 
       <!-- Transaction Table -->
@@ -313,6 +321,7 @@
 </template>
 
 <script>
+import { AspInput } from '@aspirant/design-system';
 import axios from 'axios';
 import { Chart, registerables } from 'chart.js';
 import { seriesColor } from '../../composables/chartSeries.js';
@@ -320,6 +329,7 @@ import { seriesColor } from '../../composables/chartSeries.js';
 Chart.register(...registerables);
 
 export default {
+  components: { AspInput },
   data() {
     return {
       overview: null,
@@ -1244,13 +1254,28 @@ export default {
   margin-bottom: var(--space-md);
 }
 
-.select-input, .date-input, .text-input {
-  padding: 6px 10px;
-  border: 1px solid var(--border-color, #ccc);
-  border-radius: 4px;
-  font-size: 0.9rem;
-  background: var(--bg-input, #fff);
-  color: var(--text-on-light);
+/* AspInput's wrapper is a block-level flex column, so as a bare flex item in
+   this row it would size to its content and collapse the field. A class ON the
+   component would land on the inner <input> (inheritAttrs is false there),
+   which this file's data-v scope attribute does not reach — hence a wrapper.
+   220px is roughly the width the native input took at its default size. */
+.search-field {
+  width: 220px;
+}
+
+/* The natives that remain in the filter row, held to the same box AspInput
+   renders: 34px (the §3.10 filter canon), --radius-md, and --border-control,
+   which carries the WCAG 1.4.11 3:1 non-text floor that the old
+   `--border-color, #ccc` fallback did not. `.text-input` is gone from the
+   selector because that control is AspInput's now. */
+.select-input, .date-input {
+  height: 34px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  background: var(--surface-elevated);
+  color: var(--text-body);
 }
 
 /* Buttons */

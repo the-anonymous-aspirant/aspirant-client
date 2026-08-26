@@ -91,7 +91,17 @@
         </div>
         <div class="filter-group">
           <label for="label-filter">Label</label>
-          <input
+          <!-- Same call as Finance: the two <select>s beside this field are a
+               primitive family #4278 does not cover, so their half of the
+               shared rule below is retuned to the DS control box instead of
+               being left at a different height and fill.
+
+               Kept as `text` rather than `search`, unlike Finance's field: the
+               `search` type renders a leading magnifier, which reads as a
+               second caption under a control the row already captions "LABEL".
+               Finance's field has no caption and a "Search..." placeholder, so
+               there the glyph is the affordance rather than a duplicate. -->
+          <AspInput
             id="label-filter"
             v-model="labelFilter"
             type="text"
@@ -294,9 +304,11 @@
 </template>
 
 <script>
+import { AspInput } from '@aspirant/design-system';
 import axios from 'axios';
 
 export default {
+  components: { AspInput },
   data() {
     return {
       // Recording state
@@ -918,13 +930,18 @@ export default {
   font-weight: 600;
 }
 
-.filter-group select,
-.filter-group input {
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
+/* `.filter-group input` is dropped from the selector, and not because it was
+   tidied: AspInput sets inheritAttrs false and renders the real <input> inside
+   its own root, where this file's data-v scope attribute does not reach, so the
+   rule could no longer match it. What is left is the two <select>s, held to the
+   box AspInput renders beside them. */
+.filter-group select {
+  height: 34px;
+  padding: 0 var(--space-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-control);
+  background-color: var(--surface-elevated);
+  color: var(--text-body);
   font-size: var(--text-sm);
 }
 
