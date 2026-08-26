@@ -8,10 +8,19 @@
         <span class="toolbar-icon">&#x1F3B2;</span>
       </button>
       <div class="search-wrapper">
-        <input
-          ref="searchInput"
+        <!-- Kept as `text` rather than switched to `search`, even though this
+             is plainly a search box: in Chromium, Escape in a type="search"
+             input clears the value, which would collide with
+             @keydown.escape="closeSuggestions" — today Escape dismisses the
+             dropdown and LEAVES the query in the field. The magnifier is not
+             worth changing what Escape does. Measured, not assumed: see the
+             probe in the task's walk transcript.
+
+             ref="searchInput" is dropped rather than carried: `grep -n
+             searchInput` over this file returns only the declaration, so
+             nothing ever read it. -->
+        <AspInput
           v-model="searchQuery"
-          class="search-input"
           type="text"
           placeholder="Search Wikipedia..."
           @input="onSearchInput"
@@ -48,12 +57,15 @@
 </template>
 
 <script>
+import { AspInput } from '@aspirant/design-system';
+
 import { sidebarWidth } from '../../../global_state_manager.js';
 
 const ZIM = 'wikipedia_en_all_maxi_2026-02';
 const CONTENT_BASE = `/api/wikipedia/content/${ZIM}`;
 
 export default {
+  components: { AspInput },
   data() {
     return {
       ready: false,
@@ -192,26 +204,6 @@ export default {
   max-width: 500px;
 }
 
-.search-input {
-  width: 100%;
-  padding: var(--space-2xs) var(--space-sm);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
-  font-size: var(--text-sm);
-  outline: none;
-  transition: border-color var(--transition-base);
-}
-
-.search-input:focus {
-  border-color: var(--brand-primary);
-}
-
-.search-input::placeholder {
-  color: var(--text-on-dark);
-  opacity: 0.5;
-}
 
 .suggestions-list {
   position: absolute;
@@ -223,7 +215,9 @@ export default {
   list-style: none;
   background-color: var(--surface-card);
   border: 1px solid var(--border-card);
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  /* --radius-md, matching the control the list now hangs off; --radius-sm was
+     chosen to meet the old hand-rolled input's corners. */
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
   z-index: 10;
   max-height: 320px;
   overflow-y: auto;

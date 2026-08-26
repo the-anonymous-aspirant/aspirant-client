@@ -85,13 +85,16 @@
 
     <!-- New folder input -->
     <div v-if="showNewFolderInput" class="new-folder-section">
-      <input
-        v-model="newFolderName"
-        type="text"
-        placeholder="Folder name"
-        class="folder-name-input"
-        @keyup.enter="createFolder"
-      />
+      <div class="folder-name-field">
+        <!-- `text`, not `search`: this names a folder, it does not search for
+             one, so the leading magnifier would be a lie about what the field
+             does. @keyup.enter rides $attrs onto the inner <input>. -->
+        <AspInput
+          v-model="newFolderName"
+          placeholder="Folder name"
+          @keyup.enter="createFolder"
+        />
+      </div>
       <button class="btn btn-confirm" @click="createFolder">Create</button>
       <button class="btn btn-cancel" @click="showNewFolderInput = false; newFolderName = ''">Cancel</button>
     </div>
@@ -147,10 +150,12 @@
 </template>
 
 <script>
+  import { AspInput } from '@aspirant/design-system';
   import axios from 'axios';
 
   export default {
     name: 'FilesManager',
+    components: { AspInput },
     data() {
       return {
         activeTab: 'my',
@@ -506,19 +511,12 @@
     justify-content: center;
   }
 
-  .folder-name-input {
-    padding: var(--space-sm);
-    border: 2px solid var(--border-card);
-    border-radius: var(--radius-sm);
-    background-color: var(--surface-card);
-    color: var(--text-on-dark);
-    font-size: var(--text-sm);
+  /* Width only. The border, fill, ink and the placeholder treatment are
+     AspInput's now — including the placeholder rule, which existed here
+     because a bare <input> gets the browser's washed-out default and the DS
+     control does not. */
+  .folder-name-field {
     width: 200px;
-  }
-
-  .folder-name-input::placeholder {
-    color: var(--text-on-dark);
-    opacity: 0.5;
   }
 
   /* Buttons */
@@ -646,7 +644,7 @@
       padding: var(--space-md);
     }
 
-    .folder-name-input {
+    .folder-name-field {
       width: 150px;
     }
   }
