@@ -72,39 +72,24 @@
         <div v-else-if="!runs.length" class="empty-inline" data-test="runs-empty">
           No runs yet.
         </div>
-        <table v-else class="runs-table" data-test="runs-table">
-          <thead>
-            <tr>
-              <th>Started</th>
-              <th>Status</th>
-              <th>Duration</th>
-              <th>Rows</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="run in runs"
-              :key="run.id"
-              :data-test="`run-row-${run.id}`"
-            >
-              <td>{{ formatDate(run.started_at) }}</td>
-              <td>
-                <span :class="['status-pill', `status-${statusClass(run.status)}`]">
-                  {{ run.status }}
-                </span>
-              </td>
-              <td>{{ formatDuration(runDurationMs(run)) }}</td>
-              <td>{{ run.output_rows_count ?? 0 }}</td>
-              <td>
-                <router-link
-                  :to="`/admin/browser-flows/${flowId}/runs/${run.id}`"
-                  :data-test="`run-link-${run.id}`"
-                >open →</router-link>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else class="runs-table" data-test="runs-table">
+          <AspDataTable :columns="runColumns" :rows="runs" row-key="id">
+            <template #cell-started="{ row }">{{ formatDate(row.started_at) }}</template>
+            <template #cell-status="{ row }">
+              <span :class="['status-pill', `status-${statusClass(row.status)}`]">
+                {{ row.status }}
+              </span>
+            </template>
+            <template #cell-duration="{ row }">{{ formatDuration(runDurationMs(row)) }}</template>
+            <template #cell-rows="{ row }">{{ row.output_rows_count ?? 0 }}</template>
+            <template #cell-link="{ row }">
+              <router-link
+                :to="`/admin/browser-flows/${flowId}/runs/${row.id}`"
+                :data-test="`run-link-${row.id}`"
+              >open →</router-link>
+            </template>
+          </AspDataTable>
+        </div>
 
         <div v-if="totalRuns > runsPerPage" class="pagination" data-test="runs-pagination">
           <button
@@ -130,6 +115,7 @@
 
 <script>
   import { Chart, LineController, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Filler } from 'chart.js';
+  import { AspDataTable } from '@aspirant/design-system';
   import { useBrowserFlows } from '../../../composables/useBrowserFlows.js';
   import { seriesColor } from '../../../composables/chartSeries.js';
 
@@ -147,8 +133,20 @@
 
   export default {
     name: 'FlowDetail',
+    components: {
+      AspDataTable,
+    },
     data() {
       return {
+        // sortable:false throughout — runs are server-paginated (§3.28), so
+        // client-side reordering would fight the fetch order; preserve parity.
+        runColumns: [
+          { key: 'started', label: 'Started', sortable: false },
+          { key: 'status', label: 'Status', sortable: false },
+          { key: 'duration', label: 'Duration', sortable: false },
+          { key: 'rows', label: 'Rows', sortable: false },
+          { key: 'link', label: '', sortable: false },
+        ],
         flow: null,
         health: null,
         runs: [],
@@ -451,19 +449,6 @@
   }
   .runs-table {
     width: 100%;
-    border-collapse: collapse;
-  }
-  .runs-table th,
-  .runs-table td {
-    padding: 0.4rem 0.6rem;
-    text-align: left;
-    border-bottom: 1px solid rgba(255, 179, 0, 0.15);
-    color: #ffffff;
-  }
-  .runs-table th {
-    font-weight: 600;
-    color: #ffffff;
-    font-size: 0.85rem;
   }
   .status-pill {
     display: inline-block;

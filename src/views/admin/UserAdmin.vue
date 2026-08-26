@@ -11,46 +11,30 @@
 
     <h2>Existing Users</h2>
     <div class="table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Username</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Comment</th>
-            <th>Created</th>
-            <th>Updated</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="user in users" :key="user.ID">
-            <td>{{ user.ID }}</td>
-            <td>{{ user.username }}</td>
-            <td>{{ user.email }}</td>
-            <td>{{ user.access_role }}</td>
-            <td>{{ user.comment }}</td>
-            <td>{{ formatDate(user.CreatedAt) }}</td>
-            <td>{{ formatDate(user.UpdatedAt) }}</td>
-            <td class="actions-cell">
-              <button @click="editUser(user)" class="btn btn-edit">Edit</button>
-              <button @click="deleteUser(user)" class="btn btn-delete">Delete</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <AspDataTable :columns="columns" :rows="users" row-key="ID">
+        <template #cell-CreatedAt="{ row }">{{ formatDate(row.CreatedAt) }}</template>
+        <template #cell-UpdatedAt="{ row }">{{ formatDate(row.UpdatedAt) }}</template>
+        <template #cell-actions="{ row }">
+          <div class="actions-cell">
+            <button @click="editUser(row)" class="btn btn-edit">Edit</button>
+            <button @click="deleteUser(row)" class="btn btn-delete">Delete</button>
+          </div>
+        </template>
+        <template #empty>No users.</template>
+      </AspDataTable>
     </div>
   </div>
 </template>
 
 <script>
   import axios from 'axios';
+  import { AspDataTable } from '@aspirant/design-system';
   import UserForm from '../../components/UserForm.vue';
 
   export default {
     components: {
       UserForm,
+      AspDataTable,
     },
 
     data() {
@@ -64,6 +48,17 @@
         },
         users: [],
         showUserForm: false,
+        // sortable:false throughout — the native table had no sort; preserve parity.
+        columns: [
+          { key: 'ID', label: 'ID', sortable: false },
+          { key: 'username', label: 'Username', sortable: false },
+          { key: 'email', label: 'Email', sortable: false },
+          { key: 'access_role', label: 'Role', sortable: false },
+          { key: 'comment', label: 'Comment', sortable: false },
+          { key: 'CreatedAt', label: 'Created', sortable: false },
+          { key: 'UpdatedAt', label: 'Updated', sortable: false },
+          { key: 'actions', label: 'Actions', sortable: false },
+        ],
       };
     },
     methods: {
@@ -152,25 +147,6 @@
   .table-wrapper {
     width: 100%;
     overflow-x: auto;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: var(--space-lg);
-  }
-
-  th,
-  td {
-    border: 1px solid var(--border-subtle);
-    padding: var(--space-xs);
-    text-align: left;
-  }
-
-  th {
-    background-color: var(--surface-elevated);
-    color: var(--text-on-light);
-    font-weight: 600;
   }
 
   .actions-cell {
