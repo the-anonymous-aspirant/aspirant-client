@@ -104,29 +104,18 @@
             </div>
           </div>
 
-          <table class="schema-table">
-            <thead>
-              <tr>
-                <th>Column</th>
-                <th>Required</th>
-                <th>Description</th>
-                <th>Aliases</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="col in schemaModal.columns" :key="col.name">
-                <td><code>{{ col.name }}</code></td>
-                <td><span :class="col.required ? 'badge-required' : 'badge-optional'">{{ col.required ? 'Required' : 'Optional' }}</span></td>
-                <td>{{ col.description }}</td>
-                <td>
-                  <span v-if="col.aliases && col.aliases.length">
-                    <code v-for="(a, i) in col.aliases" :key="a">{{ a }}<span v-if="i < col.aliases.length - 1">, </span></code>
-                  </span>
-                  <span v-else class="text-muted">—</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <AspDataTable class="schema-table" :columns="schemaColumns" :rows="schemaModal.columns" row-key="name">
+            <template #cell-name="{ row }"><code>{{ row.name }}</code></template>
+            <template #cell-required="{ row }">
+              <span :class="row.required ? 'badge-required' : 'badge-optional'">{{ row.required ? 'Required' : 'Optional' }}</span>
+            </template>
+            <template #cell-aliases="{ row }">
+              <span v-if="row.aliases && row.aliases.length">
+                <code v-for="(a, i) in row.aliases" :key="a">{{ a }}<span v-if="i < row.aliases.length - 1">, </span></code>
+              </span>
+              <span v-else class="text-muted">—</span>
+            </template>
+          </AspDataTable>
 
           <div v-if="schemaModal.sample_row" class="schema-sample">
             <strong>Example row:</strong>
@@ -190,30 +179,18 @@
 
       <!-- Transaction Table -->
       <div class="table-container">
-        <table v-if="transactions.items.length">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Payee</th>
-              <th>Amount (EUR)</th>
-              <th>Original</th>
-              <th>Category</th>
-              <th>Bank</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="t in transactions.items" :key="t.id">
-              <td>{{ t.transaction_date }}</td>
-              <td>{{ t.normalized_payee || t.payee }}</td>
-              <td :class="t.flow_direction">{{ formatAmount(t.amount_eur || t.amount) }}</td>
-              <td v-if="t.currency !== 'EUR'" class="text-muted">{{ formatAmount(t.amount) }} {{ t.currency }}</td>
-              <td v-else></td>
-              <td><span class="category-tag">{{ t.category || 'other' }}</span></td>
-              <td>{{ t.source_bank.toUpperCase() }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div v-else class="empty-state">No transactions found.</div>
+        <AspDataTable :columns="transactionColumns" :rows="transactions.items" row-key="id">
+          <template #cell-payee="{ row }">{{ row.normalized_payee || row.payee }}</template>
+          <template #cell-amount="{ row }">
+            <span class="amount-cell" :class="row.flow_direction">{{ formatAmount(row.amount_eur || row.amount) }}</span>
+          </template>
+          <template #cell-original="{ row }">
+            <span v-if="row.currency !== 'EUR'" class="text-muted">{{ formatAmount(row.amount) }} {{ row.currency }}</span>
+          </template>
+          <template #cell-category="{ row }"><span class="category-tag">{{ row.category || 'other' }}</span></template>
+          <template #cell-bank="{ row }">{{ row.source_bank.toUpperCase() }}</template>
+          <template #empty><span class="empty-state">No transactions found.</span></template>
+        </AspDataTable>
       </div>
 
       <!-- Pagination -->
@@ -265,31 +242,21 @@
       <div class="outliers-grid">
         <div class="outlier-col" v-if="outliers.top_expenses.length">
           <h4>Largest Expenses</h4>
-          <table class="recurring-table">
-            <thead><tr><th>Date</th><th>Payee</th><th>Amount (EUR)</th><th>Category</th></tr></thead>
-            <tbody>
-              <tr v-for="(t, i) in outliers.top_expenses" :key="'exp-' + i">
-                <td class="text-muted">{{ t.transaction_date }}</td>
-                <td>{{ t.payee }}</td>
-                <td class="expense">{{ formatAmount(Math.abs(t.amount_eur)) }}</td>
-                <td><span class="category-tag">{{ t.category || 'other' }}</span></td>
-              </tr>
-            </tbody>
-          </table>
+          <AspDataTable class="recurring-table" :columns="outlierColumns" :rows="outliers.top_expenses">
+            <template #cell-transaction_date="{ row }"><span class="text-muted">{{ row.transaction_date }}</span></template>
+            <template #cell-payee="{ row }">{{ row.payee }}</template>
+            <template #cell-amount="{ row }"><span class="amount-cell expense">{{ formatAmount(Math.abs(row.amount_eur)) }}</span></template>
+            <template #cell-category="{ row }"><span class="category-tag">{{ row.category || 'other' }}</span></template>
+          </AspDataTable>
         </div>
         <div class="outlier-col" v-if="outliers.top_income.length">
           <h4>Largest Income</h4>
-          <table class="recurring-table">
-            <thead><tr><th>Date</th><th>Payee</th><th>Amount (EUR)</th><th>Category</th></tr></thead>
-            <tbody>
-              <tr v-for="(t, i) in outliers.top_income" :key="'inc-' + i">
-                <td class="text-muted">{{ t.transaction_date }}</td>
-                <td>{{ t.payee }}</td>
-                <td class="income">{{ formatAmount(t.amount_eur) }}</td>
-                <td><span class="category-tag">{{ t.category || 'other' }}</span></td>
-              </tr>
-            </tbody>
-          </table>
+          <AspDataTable class="recurring-table" :columns="outlierColumns" :rows="outliers.top_income">
+            <template #cell-transaction_date="{ row }"><span class="text-muted">{{ row.transaction_date }}</span></template>
+            <template #cell-payee="{ row }">{{ row.payee }}</template>
+            <template #cell-amount="{ row }"><span class="amount-cell income">{{ formatAmount(row.amount_eur) }}</span></template>
+            <template #cell-category="{ row }"><span class="category-tag">{{ row.category || 'other' }}</span></template>
+          </AspDataTable>
         </div>
       </div>
     </div>
@@ -324,14 +291,37 @@
 import { AspInput } from '@aspirant/design-system';
 import axios from 'axios';
 import { Chart, registerables } from 'chart.js';
+import { AspDataTable } from '@aspirant/design-system';
 import { seriesColor } from '../../composables/chartSeries.js';
 
 Chart.register(...registerables);
 
 export default {
-  components: { AspInput },
+  components: { AspInput, AspDataTable },
   data() {
     return {
+      // AspDataTable column defs — all non-sortable (the native tables were
+      // unsorted; row order is preserved). Custom cells render via #cell-* slots.
+      schemaColumns: [
+        { key: 'name', label: 'Column', sortable: false },
+        { key: 'required', label: 'Required', sortable: false },
+        { key: 'description', label: 'Description', sortable: false },
+        { key: 'aliases', label: 'Aliases', sortable: false },
+      ],
+      transactionColumns: [
+        { key: 'transaction_date', label: 'Date', sortable: false },
+        { key: 'payee', label: 'Payee', sortable: false },
+        { key: 'amount', label: 'Amount (EUR)', sortable: false, align: 'right' },
+        { key: 'original', label: 'Original', sortable: false },
+        { key: 'category', label: 'Category', sortable: false },
+        { key: 'bank', label: 'Bank', sortable: false },
+      ],
+      outlierColumns: [
+        { key: 'transaction_date', label: 'Date', sortable: false },
+        { key: 'payee', label: 'Payee', sortable: false },
+        { key: 'amount', label: 'Amount (EUR)', sortable: false, align: 'right' },
+        { key: 'category', label: 'Category', sortable: false },
+      ],
       overview: null,
       sources: [],
       transactions: { items: [], total: 0, page: 1, page_size: 20 },
@@ -1332,8 +1322,11 @@ th {
   background: var(--bg-card, #f8f9fa);
 }
 
-td.income { color: #28a745; }
-td.expense { color: #dc3545; }
+/* Amount colour now rides a .amount-cell span inside the AspDataTable cell slot
+   (the component owns the <td>, so the former td.income/td.expense selectors
+   can no longer reach it). Compound selectors keep the colour off .stat-card.income. */
+.amount-cell.income { color: #28a745; }
+.amount-cell.expense { color: #dc3545; }
 
 .category-tag {
   background: var(--bg-card, #e9ecef);
