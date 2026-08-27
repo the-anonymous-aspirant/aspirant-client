@@ -10,7 +10,7 @@
     </p>
     <div class="drag-drop-area" @drop.prevent="handleDrop" @dragover.prevent>
       <input type="file" @change="handleFileChange" ref="fileInput" style="display: none" multiple accept="image/png,image/jpeg" />
-      <button @click="triggerFileInput" class="action-button">Select Files</button>
+      <AspButton variant="primary" @click="triggerFileInput">Select Files</AspButton>
       <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
       
       <!-- Global Controls -->
@@ -48,8 +48,8 @@
 
       <!-- Batch Actions -->
       <div v-if="images.length > 1" class="batch-actions">
-        <button @click="downloadAllImages" class="action-button">Download All</button>
-        <button @click="uploadAllImages" class="action-button">Upload All</button>
+        <AspButton variant="secondary" @click="downloadAllImages">Download All</AspButton>
+        <AspButton variant="secondary" @click="uploadAllImages">Upload All</AspButton>
       </div>
 
       <!-- Individual Images -->
@@ -57,7 +57,7 @@
         <div v-for="(imageData, index) in images" :key="imageData.id" class="image-item">
           <div class="image-header">
             <h3>{{ imageData.originalFileName }}</h3>
-            <button @click="removeImage(index)" class="remove-button">Remove</button>
+            <AspButton variant="destructive" size="sm" @click="removeImage(index)">Remove</AspButton>
           </div>
           <img :src="imageData.processedSrc" :alt="`Image ${index + 1}`" class="uploaded-image" />
           <div class="file-path-container">
@@ -73,8 +73,8 @@
             </div>
           </div>
           <div class="button-group">
-            <button @click="downloadImageById(imageData)" class="action-button">Download</button>
-            <button @click="uploadImageById(imageData)" class="action-button">Upload</button>
+            <AspButton variant="secondary" size="sm" @click="downloadImageById(imageData)">Download</AspButton>
+            <AspButton variant="secondary" size="sm" @click="uploadImageById(imageData)">Upload</AspButton>
           </div>
         </div>
       </div>
@@ -82,11 +82,11 @@
   </div>
 </template>
 <script>
-  import { AspInput } from '@aspirant/design-system';
+  import { AspButton, AspInput } from '@aspirant/design-system';
   import axios from 'axios';
 
   export default {
-    components: { AspInput },
+    components: { AspButton, AspInput },
     data() {
       return {
         images: [], // Array to store multiple images
@@ -382,22 +382,6 @@
     word-break: break-all;
   }
 
-  .remove-button {
-    background-color: var(--feedback-error);
-    color: var(--text-on-dark);
-    border: none;
-    border-radius: var(--radius-md);
-    padding: var(--space-2xs) var(--space-sm);
-    cursor: pointer;
-    font-weight: bold;
-    font-size: var(--text-sm);
-    transition: filter var(--transition-moderate), transform var(--transition-moderate);
-  }
-
-  .remove-button:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
-  }
 
   .batch-actions {
     display: flex;
@@ -474,21 +458,6 @@
     justify-content: center;
   }
 
-  .action-button {
-    background-color: var(--brand-primary);
-    color: var(--text-on-fixed-light);
-    border: none;
-    padding: var(--space-sm) var(--space-lg);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-weight: bold;
-    transition: filter var(--transition-moderate), transform var(--transition-moderate);
-  }
-
-  .action-button:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
-  }
 
   .error-message {
     color: var(--feedback-error);

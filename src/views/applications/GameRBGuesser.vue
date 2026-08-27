@@ -68,7 +68,9 @@
           <span class="hint">{{ hints.b }}</span>
         </div>
       </div>
-      <button @click="submitColor" class="guess-button">Guess!</button>
+      <div class="guess-button-row">
+        <AspButton variant="primary" size="lg" @click="submitColor">Guess!</AspButton>
+      </div>
     </div>
 
     <!-- Game Over -->
@@ -110,20 +112,20 @@
       <p>RGB: {{ r }}, {{ g }}, {{ b }}</p>
       <p>Is Winner: {{ isWinner }}</p>
       <p>Is Loser: {{ !isWinner && gameOver }}</p>
-      <button @click="resetGame" class="reset-button">Reset Game</button>
+      <AspButton variant="secondary" @click="resetGame">Reset Game</AspButton>
     </div>
   </div>
 </template>
 
 <script>
-  import { AspInput } from '@aspirant/design-system';
+  import { AspButton, AspInput } from '@aspirant/design-system';
   import { defineComponent } from 'vue';
 
   import { debugMode, toggleDebugMode } from '../../global_state_manager.js';
 
   export default defineComponent({
     name: 'GameRBGuesser',
-    components: { AspInput },
+    components: { AspButton, AspInput },
     data() {
       return {
         debugMode,
@@ -425,23 +427,11 @@
     font-size: var(--text-xs);
   }
 
-  .guess-button {
-    display: block;
-    margin: 0 auto;
-    padding: var(--space-sm) var(--space-xl);
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--text-on-fixed-light);
-    background-color: var(--brand-primary);
-    border: none;
-    border-radius: var(--radius-lg);
-    cursor: pointer;
-    transition: filter var(--transition-moderate), transform var(--transition-moderate);
-  }
-
-  .guess-button:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
+  /* #4327: the paint moved to AspButton; the centring did not — the
+     control sits alone in its row and centres itself. */
+  .guess-button-row {
+    display: flex;
+    justify-content: center;
   }
 
   /* Game Over Card */
@@ -516,22 +506,6 @@
     border-radius: var(--radius-lg);
   }
 
-  .reset-button {
-    margin-top: var(--space-md);
-    padding: var(--space-sm) var(--space-lg);
-    background: var(--surface-card);
-    color: var(--text-on-dark);
-    border: 2px solid var(--border-card);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-weight: 600;
-    transition: filter var(--transition-moderate), transform var(--transition-moderate);
-  }
-
-  .reset-button:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
-  }
 
   /* Hide number spinners */
   input[type='number']::-webkit-outer-spin-button,
