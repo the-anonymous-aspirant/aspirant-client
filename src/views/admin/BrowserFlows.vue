@@ -68,8 +68,9 @@
             </td>
             <td>
               <div class="row-actions">
-                <button
-                  class="btn"
+                <AspButton
+                  variant="secondary"
+                  size="sm"
                   type="button"
                   :disabled="!row.flow.enabled || acting.has(row.flow.id)"
                   :title="row.flow.enabled ? 'trigger this flow' : 'flow disabled'"
@@ -77,10 +78,11 @@
                   @click="onTrigger(row.flow.id)"
                 >
                   ▶ Start
-                </button>
-                <button
+                </AspButton>
+                <AspButton
                   v-if="row.latestRun && row.latestRun.status === 'running'"
-                  class="btn btn-cancel"
+                  variant="destructive"
+                  size="sm"
                   type="button"
                   :disabled="acting.has(row.flow.id)"
                   title="signal the driver to stop"
@@ -88,7 +90,7 @@
                   @click="onCancel(row.flow.id, row.latestRun.id)"
                 >
                   ✕ Cancel
-                </button>
+                </AspButton>
               </div>
             </td>
           </tr>
@@ -108,6 +110,7 @@
 </template>
 
 <script>
+  import { AspButton } from '@aspirant/design-system';
   import { useBrowserFlows } from '../../composables/useBrowserFlows.js';
 
   const MAX_RUNS = 20;
@@ -121,6 +124,7 @@
 
   export default {
     name: 'BrowserFlows',
+    components: { AspButton },
     data() {
       return {
         flows: [],
@@ -337,35 +341,6 @@
     gap: 0.4rem;
     justify-content: flex-end;
     align-items: center;
-  }
-  .btn {
-    background: none;
-    border: 1px solid var(--brand-primary);
-    color: var(--brand-primary);
-    padding: 0.25rem 0.7rem;
-    font-size: 0.78rem;
-    font-family: inherit;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease;
-  }
-  .btn:hover {
-    background: var(--brand-primary);
-    color: var(--text-on-dark);
-  }
-  .btn[disabled] {
-    color: #9e9e9e;
-    border-color: #9e9e9e;
-    cursor: not-allowed;
-    background: none;
-  }
-  .btn-cancel {
-    border-color: var(--feedback-error);
-    color: var(--feedback-error);
-  }
-  .btn-cancel:hover {
-    background: var(--feedback-error);
-    color: var(--text-on-dark);
   }
   .legend {
     margin-top: 1.5rem;

@@ -84,8 +84,8 @@
         <p class="modal-path">{{ deleteTarget.key }}</p>
         <p>This cannot be undone.</p>
         <div class="modal-actions">
-          <button class="btn btn-cancel" @click="deleteTarget = null">Cancel</button>
-          <button class="btn btn-confirm-delete" @click="deleteAsset">Delete</button>
+          <AspButton variant="secondary" @click="deleteTarget = null">Cancel</AspButton>
+          <AspButton variant="destructive" @click="deleteAsset">Delete</AspButton>
         </div>
       </div>
     </div>
@@ -94,8 +94,10 @@
 
 <script>
   import axios from 'axios';
+  import { AspButton } from '@aspirant/design-system';
 
   export default {
+    components: { AspButton },
     data() {
       return {
         assets: [],
@@ -543,15 +545,7 @@
     margin-top: var(--space-lg);
   }
 
-  .btn-cancel {
-    background: var(--border-subtle);
-    color: var(--text-on-light);
-  }
 
-  .btn-confirm-delete {
-    background: var(--feedback-error);
-    color: var(--text-on-dark);
-  }
 
   @media (max-width: 768px) {
     .assets-view {

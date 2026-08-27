@@ -3,9 +3,9 @@
     <h1>User Management</h1>
     <h2 class="page-subtitle">User accounts and permissions</h2>
 
-    <button @click="resetForm(); showUserForm = true;" class="btn btn-add">
+    <AspButton variant="primary" @click="resetForm(); showUserForm = true;">
       Add New User
-    </button>
+    </AspButton>
 
     <UserForm v-if="showUserForm" @save="handleSaveUser" @cancel="resetForm" :user="user" />
 
@@ -16,8 +16,8 @@
         <template #cell-UpdatedAt="{ row }">{{ formatDate(row.UpdatedAt) }}</template>
         <template #cell-actions="{ row }">
           <div class="actions-cell">
-            <button @click="editUser(row)" class="btn btn-edit">Edit</button>
-            <button @click="deleteUser(row)" class="btn btn-delete">Delete</button>
+            <AspButton variant="secondary" size="sm" @click="editUser(row)">Edit</AspButton>
+            <AspButton variant="destructive" size="sm" @click="deleteUser(row)">Delete</AspButton>
           </div>
         </template>
         <template #empty>No users.</template>
@@ -28,12 +28,13 @@
 
 <script>
   import axios from 'axios';
-  import { AspDataTable } from '@aspirant/design-system';
+  import { AspButton, AspDataTable } from '@aspirant/design-system';
   import UserForm from '../../components/UserForm.vue';
 
   export default {
     components: {
       UserForm,
+      AspButton,
       AspDataTable,
     },
 
@@ -150,42 +151,14 @@
   }
 
   .actions-cell {
+    display: inline-flex;
+    gap: var(--space-2xs);
     white-space: nowrap;
   }
 
-  .btn {
-    padding: var(--space-2xs) var(--space-sm);
-    border: none;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-weight: 600;
-    font-size: var(--text-sm);
-    transition: filter var(--transition-moderate), transform var(--transition-moderate);
-  }
 
-  .btn:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
-  }
 
-  .btn-add {
-    background-color: var(--feedback-success);
-    color: var(--text-on-dark);
-    padding: var(--space-sm) var(--space-lg);
-    border-radius: var(--radius-lg);
-    font-size: var(--text-base);
-  }
 
-  .btn-edit {
-    background-color: var(--brand-accent);
-    color: var(--text-on-dark);
-    margin-right: var(--space-2xs);
-  }
-
-  .btn-delete {
-    background-color: var(--feedback-error);
-    color: var(--text-on-dark);
-  }
 
   @media (max-width: 768px) {
     .user-admin-view {
