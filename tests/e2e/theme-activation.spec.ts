@@ -244,10 +244,15 @@ test.describe('#4245 activating dark does not degrade brand-amber labels', () =>
 
     const { light, dark } = await amberContrastBothThemes(page, '/member/shared/translator', '.translate-card');
 
-    // .btn-translate is one of the 41 swept declarations; assert it is actually
-    // in the sample rather than trusting the probe found something.
-    const translate = Object.keys(light).find((k) => k.includes('btn-translate'));
-    expect(translate, 'the swept .btn-translate was not among the amber labels measured').toBeTruthy();
+    // The Translate action is an AspButton variant="primary" now (#4338): the
+    // amber it paints is the DS .btn--primary, and the .btn-translate class it
+    // still carries is layout-only (align-self). Anchor on the DS class, so
+    // this keeps asserting "the probe actually sampled the primary action"
+    // rather than "an app class happens to still be on the element".
+    const translate = Object.keys(light).find(
+      (k) => k.includes('btn--primary') && k.includes('Translate'),
+    );
+    expect(translate, 'the primary Translate action was not among the amber labels measured').toBeTruthy();
 
     for (const [key, lightRatio] of Object.entries(light)) {
       expect(dark[key], `${key} vanished from the dark render`).toBeDefined();
