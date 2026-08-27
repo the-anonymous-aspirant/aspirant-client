@@ -82,10 +82,10 @@
         <div class="panel admin-panel" v-if="isAdmin">
           <h3>Admin</h3>
           <div class="admin-buttons">
-            <button @click="resetGame" class="btn btn-danger">Reset Game</button>
-            <button @click="toggleReveal" class="btn">
+            <AspButton variant="destructive" @click="resetGame">Reset Game</AspButton>
+            <AspButton variant="secondary" @click="toggleReveal">
               {{ showReveal ? 'Hide Eggs' : 'Reveal All Eggs' }}
-            </button>
+            </AspButton>
           </div>
         </div>
       </div>
@@ -133,6 +133,7 @@
 
 <script>
 import axios from 'axios';
+import { AspButton } from '@aspirant/design-system';
 
 const BOARD_SIZE = 128;
 const CELL_SIZE = 10;
@@ -265,6 +266,7 @@ function generateOverlay(seed) {
 
 export default {
   name: 'EasterHuntView',
+  components: { AspButton },
   data() {
     return {
       gameState: null,
@@ -925,37 +927,6 @@ canvas.locked {
   gap: var(--space-xs);
 }
 
-.btn {
-  padding: var(--space-xs) var(--space-sm);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--surface-card);
-  color: var(--text-on-dark);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  font-weight: 500;
-  font-family: var(--font-family-base);
-  transition:
-    border-color var(--transition-base),
-    filter var(--transition-base),
-    transform var(--transition-base);
-}
-
-.btn:hover {
-  border-color: var(--brand-primary);
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.btn-danger {
-  border-color: var(--feedback-error);
-  color: var(--feedback-error);
-}
-
-.btn-danger:hover {
-  border-color: var(--feedback-error);
-  background: rgba(255, 55, 57, 0.15);
-}
 
 /* ================================================
    Toast notifications

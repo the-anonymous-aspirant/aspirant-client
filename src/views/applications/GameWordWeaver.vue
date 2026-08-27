@@ -24,9 +24,9 @@
           {{ lang.label }}
         </button>
       </div>
-      <button @click="toggleGame" :class="isPlaying ? 'stop-button' : 'start-button'">
+      <AspButton :variant="isPlaying ? 'destructive' : 'primary'" @click="toggleGame">
         {{ isPlaying ? 'Stop Game' : 'Start Game' }}
-      </button>
+      </AspButton>
       <button class="sound-toggle" @click="toggleMute" :title="isMuted ? 'Unmute' : 'Mute'">
         <svg v-if="!isMuted" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
@@ -173,7 +173,7 @@
 </template>
 
 <script>
-  import { AspInput } from '@aspirant/design-system';
+  import { AspButton, AspInput } from '@aspirant/design-system';
   import axios from 'axios';
 
   const BOARD_CONFIG = {
@@ -294,7 +294,7 @@
 
   export default {
     name: 'WordWeaver',
-    components: { AspInput },
+    components: { AspButton, AspInput },
     data() {
       return {
         board: Array.from({ length: BOARD_CONFIG.ROWS }, () =>
@@ -1151,29 +1151,6 @@
     margin: var(--space-2xs) 0;
   }
 
-  .start-button,
-  .stop-button {
-    background-color: var(--brand-primary);
-    font-weight: bold;
-    color: var(--surface-card);
-    border: none;
-    border-radius: var(--radius-md);
-    padding: var(--space-sm) var(--space-xl);
-    font-size: var(--text-base);
-    cursor: pointer;
-    transition: filter var(--transition-fast), transform var(--transition-fast);
-  }
-
-  .start-button:hover,
-  .stop-button:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
-  }
-
-  .stop-button {
-    background-color: var(--feedback-error);
-    color: var(--text-on-dark);
-  }
 
   .score {
     margin-top: var(--space-lg);
