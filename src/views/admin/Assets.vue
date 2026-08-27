@@ -61,12 +61,16 @@
             <td class="nowrap">{{ formatSize(file.size) }}</td>
             <td class="mono">{{ file.content_type }}</td>
             <td class="col-actions">
-              <button class="btn-icon btn-download" @click="downloadAsset(file)" title="Download">
-                <span>&#8615;</span>
-              </button>
-              <button class="btn-icon btn-delete" @click="confirmDelete(file)" title="Delete">
-                <span>&times;</span>
-              </button>
+              <AspTooltip content="Download">
+                <AspButton variant="ghost" size="icon" aria-label="Download" @click="downloadAsset(file)">
+                  <span>&#8615;</span>
+                </AspButton>
+              </AspTooltip>
+              <AspTooltip content="Delete">
+                <AspButton variant="ghost" size="icon" aria-label="Delete" @click="confirmDelete(file)">
+                  <span>&times;</span>
+                </AspButton>
+              </AspTooltip>
             </td>
           </tr>
           <tr v-if="sortedFolders.length === 0 && sortedFiles.length === 0">
@@ -94,10 +98,10 @@
 
 <script>
   import axios from 'axios';
-  import { AspButton } from '@aspirant/design-system';
+  import { AspButton, AspTooltip } from '@aspirant/design-system';
 
   export default {
-    components: { AspButton },
+    components: { AspButton, AspTooltip },
     data() {
       return {
         assets: [],
@@ -471,29 +475,13 @@
     font-style: italic;
   }
 
-  /* Icon buttons */
-  .btn-icon {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: var(--text-lg);
-    line-height: 1;
-    padding: var(--space-2xs);
-    border-radius: var(--radius-sm);
-    transition: background-color var(--transition-fast);
-  }
-
-  .btn-icon:hover {
-    background-color: var(--border-subtle);
-  }
-
-  .btn-download {
-    color: var(--brand-accent);
-  }
-
-  .btn-delete {
-    color: var(--feedback-error);
-  }
+  /* The row actions are AspButton variant="ghost" size="icon" — the DS owns
+     their paint, hover, focus ring and the 44px square target (§3.23 rule-4),
+     so the former .btn-icon / .btn-download / .btn-delete rules are deleted
+     rather than reduced. A scoped rule here would land on the DS root and
+     override the component the port just adopted (#4323/#4324 measured that
+     live). The resting --brand-accent / --feedback-error hues go with them;
+     see the tone question filed from this task. */
 
   /* Stats */
   .stats {

@@ -58,9 +58,11 @@
               {{ msg.transcription || '—' }}
             </td>
             <td>
-              <button class="btn-delete" @click="deleteMessage(msg.id)" title="Delete">
-                &times;
-              </button>
+              <AspTooltip content="Delete">
+                <AspButton variant="ghost" size="icon" aria-label="Delete" @click="deleteMessage(msg.id)">
+                  &times;
+                </AspButton>
+              </AspTooltip>
             </td>
           </tr>
         </tbody>
@@ -151,25 +153,31 @@
               <td>{{ formatDate(task.due_date) }}</td>
               <td>{{ formatDate(task.created_at) }}</td>
               <td class="actions-cell" @click.stop>
-                <button
-                  v-if="task.status !== 'closed'"
-                  class="btn-action btn-close-task"
-                  @click="closeTask(task.id)"
-                  title="Close task"
-                >
-                  &#10003;
-                </button>
-                <button
-                  v-if="task.status === 'closed'"
-                  class="btn-action btn-reopen-task"
-                  @click="reopenTask(task.id)"
-                  title="Reopen task"
-                >
-                  &#8634;
-                </button>
-                <button class="btn-delete" @click="deleteTask(task.id)" title="Delete">
-                  &times;
-                </button>
+                <AspTooltip v-if="task.status !== 'closed'" content="Close task">
+                  <AspButton
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Close task"
+                    @click="closeTask(task.id)"
+                  >
+                    &#10003;
+                  </AspButton>
+                </AspTooltip>
+                <AspTooltip v-if="task.status === 'closed'" content="Reopen task">
+                  <AspButton
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Reopen task"
+                    @click="reopenTask(task.id)"
+                  >
+                    &#8634;
+                  </AspButton>
+                </AspTooltip>
+                <AspTooltip content="Delete">
+                  <AspButton variant="ghost" size="icon" aria-label="Delete" @click="deleteTask(task.id)">
+                    &times;
+                  </AspButton>
+                </AspTooltip>
               </td>
             </tr>
             <tr v-if="expandedTaskId === task.id" class="detail-row">
@@ -226,9 +234,11 @@
               <span v-if="note.mood" class="mood-badge" :class="note.mood">{{ note.mood }}</span>
               <span v-if="note.tag" class="tag-badge">{{ note.tag }}</span>
             </div>
-            <button class="btn-delete" @click.stop="deleteNote(note.id)" title="Delete">
-              &times;
-            </button>
+            <AspTooltip content="Delete">
+              <AspButton variant="ghost" size="icon" aria-label="Delete" @click.stop="deleteNote(note.id)">
+                &times;
+              </AspButton>
+            </AspTooltip>
           </div>
           <div class="note-title" v-if="note.title">{{ note.title }}</div>
           <div class="note-content" :class="{ expanded: expandedNoteId === note.id }">
@@ -305,11 +315,11 @@
 </template>
 
 <script>
-import { AspInput, AspButton } from '@aspirant/design-system';
+import { AspInput, AspButton, AspTooltip } from '@aspirant/design-system';
 import axios from 'axios';
 
 export default {
-  components: { AspInput, AspButton },
+  components: { AspInput, AspButton, AspTooltip },
   data() {
     return {
       // Recording state
@@ -1050,46 +1060,15 @@ export default {
   white-space: nowrap;
 }
 
-.btn-action {
-  background: none;
-  border: none;
-  font-size: var(--text-lg);
-  cursor: pointer;
-  padding: 0 var(--space-xs);
-  line-height: 1;
-  transition: color var(--transition-moderate);
-}
-
-.btn-close-task {
-  color: var(--feedback-success);
-}
-
-.btn-close-task:hover {
-  color: var(--text-on-dark);
-}
-
-.btn-reopen-task {
-  color: #3b82f6;
-}
-
-.btn-reopen-task:hover {
-  color: var(--text-on-dark);
-}
-
-.btn-delete {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: var(--text-xl);
-  cursor: pointer;
-  padding: 0 var(--space-xs);
-  line-height: 1;
-  transition: color var(--transition-moderate);
-}
-
-.btn-delete:hover {
-  color: var(--feedback-error);
-}
+/* The row actions (message delete, task close/reopen/delete, note delete) are
+   AspButton variant="ghost" size="icon" — the DS owns paint, hover, focus ring
+   and the 44px square target, so the former .btn-action / .btn-close-task /
+   .btn-reopen-task / .btn-delete rules are deleted rather than reduced: a
+   scoped rule here lands on the DS root and overrides the component the port
+   just adopted. Two resting hues go with them — --feedback-success on close
+   and a hardcoded #3b82f6 on reopen (off-token, which is its own reason to
+   drop it). Whether an icon button should carry a semantic tone at all is the
+   DS question filed from this task. */
 
 /* Pagination */
 .pagination {
