@@ -8,9 +8,13 @@
     </div>
 
     <nav class="top-nav">
-      <button class="toggle-btn" @click="toggleView">
+      <!-- Not a segmented strip: one button whose label names the destination
+           view, with no selected state to encode. Role is a page action, and
+           it already paints --brand-primary today, so primary is also the
+           no-regression choice. .toggle-btn is reduced to its layout width. -->
+      <AspButton class="toggle-btn" variant="primary" size="lg" @click="toggleView">
         {{ currentView === 'enterData' ? 'Show Data' : 'Enter Data' }}
-      </button>
+      </AspButton>
     </nav>
 
     <div v-if="currentView === 'enterData'">
@@ -19,7 +23,9 @@
       <textarea v-model="comment" placeholder="Add a comment" class="comment-input"></textarea>
 
       <div class="button-group">
-        <button class="confirm-btn" @click="confirmDateTime">Save Meal Time</button>
+        <AspButton class="confirm-btn" variant="primary" size="lg" @click="confirmDateTime">
+          Save Meal Time
+        </AspButton>
       </div>
 
       <div class="info-boxes">
@@ -60,7 +66,7 @@
         <template #cell-date="{ row }">{{ formatDate(row.timestamp) }}</template>
         <template #cell-time="{ row }">{{ formatTime(row.timestamp) }}</template>
         <template #cell-actions="{ index }">
-          <button class="delete-btn" @click="deleteFeedingTime(index)">Delete</button>
+          <AspButton variant="destructive" size="sm" @click="deleteFeedingTime(index)">Delete</AspButton>
         </template>
       </AspDataTable>
     </div>
@@ -70,11 +76,12 @@
 
 <script>
   import axios from 'axios';
-  import { AspDataTable } from '@aspirant/design-system';
+  import { AspButton, AspDataTable } from '@aspirant/design-system';
   import assetManager from '../../../asset_manager';
 
   export default {
     components: {
+      AspButton,
       AspDataTable,
     },
     data() {
@@ -317,21 +324,11 @@
     margin-bottom: var(--space-lg);
   }
 
+  /* Layout only. Fill, ink, radius, type scale and hover belong to AspButton
+     (primary / size="lg"); a consumer class still lands on the DS <button>, so
+     anything left here that is not layout would paint over .btn--primary. */
   .toggle-btn {
     width: 40%;
-    padding: var(--space-md);
-    cursor: pointer;
-    border: none;
-    background-color: var(--brand-primary);
-    color: var(--text-on-fixed-light);
-    font-size: var(--text-lg);
-    border-radius: var(--radius-md);
-    transition: background-color var(--transition-moderate), transform var(--transition-moderate);
-  }
-
-  .toggle-btn:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
   }
 
   .popup {
@@ -353,38 +350,21 @@
     justify-content: center;
   }
 
-  .button-group button {
-    padding: var(--space-sm) var(--space-lg);
-    cursor: pointer;
-  }
+  /* No `.button-group button` rule here any more, and it must not come back:
+     a wrapper-descendant selector (0,1,1) still matches the <button> AspButton
+     renders and outranks .btn--size-lg (0,1,0) on padding, so it would silently
+     re-pad the DS control. .button-group above still centres it.
 
+     .confirm-btn keeps only its width. It used to force --text-2xl; that is
+     dropped rather than re-specified at a higher specificity, because a
+     consumer class outshouting the DS type scale is the §3.83 pattern this
+     sweep exists to remove. size="lg" is the DS's largest, and the full-width
+     box is what actually carries the one-handed tap target this view wants.
+
+     .reset-btn and .cancel-btn are gone: grep for either token returns no
+     template use anywhere in this file. Dead before this diff, deleted with it. */
   .confirm-btn {
-    background-color: var(--brand-primary);
-    color: var(--text-on-fixed-light);
-    border: none;
-    font-size: var(--text-2xl);
     width: 100%;
-    padding: var(--space-md);
-    border-radius: var(--radius-md);
-    transition: background-color var(--transition-moderate), transform var(--transition-moderate);
-  }
-
-  .confirm-btn:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
-  }
-
-  .reset-btn {
-    background-color: var(--feedback-error);
-    color: var(--text-on-dark);
-    border: none;
-    margin-left: var(--space-sm);
-  }
-
-  .cancel-btn {
-    background-color: var(--text-muted);
-    color: var(--text-on-dark);
-    border: none;
   }
 
   .datetime-input {
@@ -415,13 +395,9 @@
      .feeding-times table/th/td rules were scoped and no longer reach the
      component's internal markup, so they are removed as dead. */
 
-  .delete-btn {
-    background-color: var(--feedback-error);
-    color: var(--text-on-dark);
-    border: none;
-    padding: var(--space-2xs) var(--space-sm);
-    cursor: pointer;
-  }
+  /* The row Delete is an AspButton (destructive / size="sm") — it was already
+     a solid --feedback-error fill per row, so the DS destructive variant is the
+     no-regression mapping here, not an accent escalation. */
 
   .info-boxes {
     display: flex;
