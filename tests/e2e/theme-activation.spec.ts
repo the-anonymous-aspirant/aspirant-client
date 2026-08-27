@@ -133,10 +133,14 @@ test.describe('#4245 theme activation', () => {
  * distinction is deliberate. An absolute floor would also fail on ink that is
  * equally poor in both themes — `.login-button` paints `--text-on-dark`
  * (#ffffff, no dark override) on amber at 1.79:1 and did so long before dark
- * was reachable. That is real, and it is not this task's defect; failing on it
- * here would either force an unrelated light-mode change into a theme-
- * activation PR or push someone to bolt an exclusion list onto the test, which
- * is where the next genuine regression would hide. Parity fails exactly when
+ * was reachable. That was real, and it was not this task's defect; failing on
+ * it here would either have forced an unrelated light-mode change into a
+ * theme-activation PR or pushed someone to bolt an exclusion list onto the
+ * test, which is where the next genuine regression would hide. (Fixed since:
+ * `.login-button` moved to AspButton's `.btn--primary`, which pairs
+ * `--brand-primary` with `--text-on-fixed-light` — #4282, trusted-contrast
+ * .spec.ts now carries the absolute-floor lock for this button.) Parity fails
+ * exactly when
  * activation makes something WORSE than it was in light — which is the claim
  * #4245 actually owes — and it needs no selector list, so a button added
  * tomorrow is covered too.

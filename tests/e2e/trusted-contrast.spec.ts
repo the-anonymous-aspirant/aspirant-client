@@ -124,3 +124,36 @@ test.describe('#3027 /member card surface/ink contrast', () => {
     }
   });
 });
+
+/**
+ * #4282 — the sidebar Login/Logout button pairs the fixed-light
+ * `--brand-primary` surface with `--text-on-dark` ink (1.79:1), the SAME
+ * class of defect #3014/#3027 fixed for surface/ink pairing, one step over:
+ * here the surface is fixed but the ink is the wrong FIXED ink rather than a
+ * flipping one, so `theme-activation.spec.ts`'s dark/light PARITY probe
+ * cannot catch it (it fails identically, and always has, in both themes).
+ * This is the absolute-floor complement that parity intentionally does not
+ * assert. The button is an AspButton now (`Login.vue`, migrated in #219),
+ * so this also locks in that `.btn--primary`'s `--text-on-fixed-light` ink
+ * (design-system Task-#2417) reaches this call site.
+ */
+test.describe('#4282 sidebar Login/Logout button contrast', () => {
+  test('anonymous sidebar Login button clears WCAG AA', async ({ page }) => {
+    await page.goto('/');
+    await dismissMobileSidebarIfPresent(page);
+    const button = page.getByRole('button', { name: 'Login' }).locator('visible=true');
+    await expect(button.first()).toBeVisible();
+    const ratio = await contrastRatio(button);
+    expect(ratio, 'sidebar Login button contrast').toBeGreaterThanOrEqual(4.5);
+  });
+
+  test('logged-in sidebar Logout button clears WCAG AA', async ({ page }) => {
+    await seedTrustedSession(page);
+    await page.goto('/');
+    await dismissMobileSidebarIfPresent(page);
+    const button = page.getByRole('button', { name: 'Logout' }).locator('visible=true');
+    await expect(button.first()).toBeVisible();
+    const ratio = await contrastRatio(button);
+    expect(ratio, 'sidebar Logout button contrast').toBeGreaterThanOrEqual(4.5);
+  });
+});
