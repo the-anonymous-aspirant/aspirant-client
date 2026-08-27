@@ -20,9 +20,16 @@
           </div>
 
           <AspTooltip content="Swap languages">
-            <button class="btn-swap" aria-label="Swap languages" @click="swapLanguages" :disabled="translating">
+            <AspButton
+              class="btn-swap"
+              variant="ghost"
+              size="icon"
+              aria-label="Swap languages"
+              :disabled="translating"
+              @click="swapLanguages"
+            >
               &#8646;
-            </button>
+            </AspButton>
           </AspTooltip>
 
           <div class="lang-group">
@@ -346,27 +353,11 @@ export default {
   font-size: var(--text-sm);
 }
 
-.btn-swap {
-  background: none;
-  border: 2px solid var(--border-card);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-size: var(--text-xl);
-  cursor: pointer;
-  padding: var(--space-xs) var(--space-sm);
-  transition: color var(--transition-moderate), border-color var(--transition-moderate);
-  flex-shrink: 0;
-}
-
-.btn-swap:hover:not(:disabled) {
-  color: var(--text-on-dark);
-  border-color: var(--text-on-dark);
-}
-
-.btn-swap:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+/* .btn-swap survives only as the hook for the mobile rotate below — every
+   paint rule it carried is deleted, including the :disabled opacity, which is
+   exactly the class of rule #4324 measured repainting the DS disabled cue.
+   AspButton owns the resting paint, the hover, the disabled state and the
+   44px square. */
 
 .input-area {
   position: relative;
@@ -522,6 +513,8 @@ export default {
     align-items: stretch;
   }
 
+  /* Layout only: the strip of language selectors stacks on mobile, so the
+     swap arrow turns to point along the new axis. */
   .btn-swap {
     align-self: center;
     transform: rotate(90deg);

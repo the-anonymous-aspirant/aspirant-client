@@ -19,21 +19,18 @@
       </AspDataTable>
     </div>
 
+    <!-- as="radiogroup", not "tabs": both members drive the SAME file list —
+         there is no per-member panel to name, so this is a source filter, not
+         a tab pattern. switchTab does more than assign (it clears the path and
+         the pending folder name, then refetches), so it stays as the
+         update:modelValue handler rather than collapsing into v-model. -->
     <div class="tabs">
-      <button
-        class="tab-btn"
-        :class="{ active: activeTab === 'my' }"
-        @click="switchTab('my')"
-      >
-        My Files
-      </button>
-      <button
-        class="tab-btn"
-        :class="{ active: activeTab === 'shared' }"
-        @click="switchTab('shared')"
-      >
-        Shared Files
-      </button>
+      <AspSegmented
+        :options="tabOptions"
+        :model-value="activeTab"
+        aria-label="File source"
+        @update:model-value="switchTab"
+      />
     </div>
 
     <!-- Breadcrumb navigation -->
@@ -143,7 +140,7 @@
 </template>
 
 <script>
-  import { AspButton, AspInput } from '@aspirant/design-system';
+  import { AspButton, AspInput, AspSegmented } from '@aspirant/design-system';
   import axios from 'axios';
   import { AspDataTable } from '@aspirant/design-system';
 
@@ -153,9 +150,15 @@
       AspButton,
       AspInput,
       AspDataTable,
+      AspSegmented,
     },
     data() {
       return {
+        // AspSegmented members for the file-source filter (#4448).
+        tabOptions: [
+          { value: 'my', label: 'My Files' },
+          { value: 'shared', label: 'Shared Files' },
+        ],
         // sortable:false — the native storage table had no sort; preserve parity.
         storageColumns: [
           { key: 'name', label: 'Folder', sortable: false },
@@ -462,27 +465,10 @@
     margin-bottom: var(--space-lg);
   }
 
-  .tab-btn {
-    padding: var(--space-sm) var(--space-lg);
-    background-color: var(--surface-card);
-    color: var(--text-on-dark);
-    border: 2px solid var(--border-card);
-    border-radius: var(--radius-md);
-    font-size: var(--text-base);
-    cursor: pointer;
-    transition: filter var(--transition-moderate), transform var(--transition-moderate);
-  }
-
-  .tab-btn.active {
-    background-color: var(--brand-primary);
-    color: var(--text-on-fixed-light);
-    font-weight: 600;
-  }
-
-  .tab-btn:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
-  }
+  /* The members are AspSegmented's. The former .tab-btn rules are deleted
+     rather than reduced — including .tab-btn.active, which painted the
+     selected member in --brand-primary, the accent-budget spend §3.89 Q1
+     built the primitive to stop. .tabs keeps its layout role only. */
 
   /* Upload section */
   .upload-section {

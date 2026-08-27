@@ -2,14 +2,14 @@
   <div class="wikipedia-view" :style="viewStyle">
     <div class="wikipedia-toolbar">
       <AspTooltip content="Home">
-        <button class="toolbar-btn" aria-label="Home" @click="goHome">
+        <AspButton variant="ghost" size="icon" aria-label="Home" @click="goHome">
           <span class="toolbar-icon">&#x1F3E0;</span>
-        </button>
+        </AspButton>
       </AspTooltip>
       <AspTooltip content="Random article">
-        <button class="toolbar-btn" aria-label="Random article" @click="goRandom">
+        <AspButton variant="ghost" size="icon" aria-label="Random article" @click="goRandom">
           <span class="toolbar-icon">&#x1F3B2;</span>
-        </button>
+        </AspButton>
       </AspTooltip>
       <div class="search-wrapper">
         <!-- Kept as `text` rather than switched to `search`, even though this
@@ -61,14 +61,14 @@
 </template>
 
 <script>
-import { AspInput, AspTooltip } from '@aspirant/design-system';
+import { AspButton, AspInput, AspTooltip } from '@aspirant/design-system';
 import { sidebarWidth } from '../../../global_state_manager.js';
 
 const ZIM = 'wikipedia_en_all_maxi_2026-02';
 const CONTENT_BASE = `/api/wikipedia/content/${ZIM}`;
 
 export default {
-  components: { AspInput, AspTooltip },
+  components: { AspButton, AspInput, AspTooltip },
   data() {
     return {
       ready: false,
@@ -177,24 +177,22 @@ export default {
   gap: var(--space-xs);
   padding: var(--space-xs) var(--space-sm);
   background-color: var(--surface-card);
+  /* #3027/§3.18: the toolbar paints a dark surface and must pair it with its
+     own ink. It never did — the deleted .toolbar-btn rule was carrying
+     --text-on-dark for the two buttons and nothing else here, so currentColor
+     under this surface was the page's black. AspButton's ghost ink is a
+     currentColor mix, so the ink belongs on the surface owner, not on a
+     scoped rule aimed at the DS root. */
+  color: var(--text-on-dark);
   border-bottom: 1px solid var(--border-card);
   flex-shrink: 0;
 }
 
-.toolbar-btn {
-  background: none;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2xs) var(--space-xs);
-  cursor: pointer;
-  color: var(--text-on-dark);
-  font-size: var(--text-base);
-  transition: background-color var(--transition-base);
-}
-
-.toolbar-btn:hover {
-  background-color: var(--surface-card-inner);
-}
+/* The two toolbar controls are AspButton variant="ghost" size="icon" — #4326
+   dropped them from its own sweep as out-of-contract residue and this child is
+   the release of that hold. .toolbar-btn is deleted rather than reduced: it
+   would land on the DS root and paint over .btn--ghost. .toolbar-icon stays —
+   it is on the inner span that rides the slot, not on the DS element. */
 
 .toolbar-icon {
   display: inline-block;
