@@ -233,7 +233,12 @@
 
   .collapsed-login-button {
     background-color: var(--brand-primary);
-    color: var(--text-on-dark);
+    /* --brand-primary is a fixed-light surface in both themes (same #ffb300
+       amber); its ink must be the fixed-light ink, not --text-on-dark, which
+       measures 1.79:1 here. Same defect and fix as AspButton's .btn--primary
+       (#4295) — this native button is the one instance the migration left
+       out of scope (residue). Task-#4282. */
+    color: var(--text-on-fixed-light);
     border: none;
     height: 40px;
     cursor: pointer;
