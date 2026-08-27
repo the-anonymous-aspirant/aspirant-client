@@ -1,4 +1,35 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'node:path';
+
+/**
+ * Per-worktree preview port (#4335). Concurrent aspirant-client e2e runs come
+ * from sibling git worktrees (/home/aspirant/aspirant-client-<task_id>). A
+ * single shared `:4173 --strictPort` + `reuseExistingServer` meant a second
+ * concurrent run either bind-collided or silently REUSED another worktree's
+ * preview and asserted against *its* build — and that shared server vanished
+ * when the owning worktree rebuilt or finished, surfacing as a burst of
+ * `Connection refused` / cross-asserted failures (not the diff under test).
+ * Deriving the port from this worktree's own directory name gives every
+ * concurrent run its own isolated preview. The bare main checkout
+ * ("aspirant-client") and CI keep 4173 for continuity; `E2E_PORT` overrides.
+ *
+ * Isolation invariant: distinct worktree dir ⇒ distinct name ⇒ distinct port,
+ * so no two concurrent worktree runs share a preview server.
+ */
+function previewPort(): number {
+  const override = process.env.E2E_PORT;
+  if (override) return Number(override);
+  const name = path.basename(process.cwd());
+  if (name === 'aspirant-client') return 4173;
+  // Stable hash of the worktree name into 4174–5173 (1000 slots, disjoint from
+  // main's 4173).
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return 4174 + (h % 1000);
+}
+
+const PREVIEW_PORT = previewPort();
+const PREVIEW_URL = `http://127.0.0.1:${PREVIEW_PORT}`;
 
 /**
  * Locks the 7 fixed Värdeutlåtande surfaces against regression. The desktop
@@ -23,7 +54,7 @@ export default defineConfig({
   workers: 1,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: PREVIEW_URL,
     trace: 'on-first-retry',
     video: 'retain-on-failure',
   },
@@ -38,8 +69,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run build && npm run preview -- --host 127.0.0.1 --port 4173 --strictPort',
-    url: 'http://127.0.0.1:4173',
+    command: `npm run build && npm run preview -- --host 127.0.0.1 --port ${PREVIEW_PORT} --strictPort`,
+    url: PREVIEW_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     stdout: 'ignore',
