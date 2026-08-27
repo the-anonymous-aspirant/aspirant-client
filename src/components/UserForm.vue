@@ -40,20 +40,20 @@
       </div>
       <!-- Save and Cancel buttons -->
       <div class="form-actions">
-        <button type="submit" class="btn btn-save">Save User</button>
-        <button type="button" class="btn btn-cancel" @click="cancel">Cancel</button>
+        <AspButton type="submit" variant="primary">Save User</AspButton>
+        <AspButton type="button" variant="secondary" @click="cancel">Cancel</AspButton>
       </div>
     </form>
   </div>
 </template>
 
 <script>
-  import { AspInput } from '@aspirant/design-system';
+  import { AspInput, AspButton } from '@aspirant/design-system';
 
   import axios from 'axios';
 
   export default {
-    components: { AspInput },
+    components: { AspInput, AspButton },
     props: {
       user: Object, // The 'user' prop is declared here, indicating that the parent component can pass a user object to this component
     },
@@ -163,36 +163,15 @@
     resize: vertical;
   }
 
+  /* Save (confirm) and Cancel (neutral) are AspButtons now — DS owns their fill,
+     ink, radius, focus and hover (#4295 button-of-record family). The old
+     bespoke green/red pair is deliberately dropped: the DS variants carry the
+     confirm/neutral semantics through `variant="primary"`/`"secondary"`, not
+     through a hand-picked feedback colour. This container only lays them out;
+     `gap` replaces the per-button `margin-left` that used to space the pair. */
   .user-form .form-actions {
     display: flex;
     justify-content: flex-end;
-  }
-
-  .user-form .btn {
-    padding: var(--space-sm) var(--space-lg);
-    border: none;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: var(--text-base);
-  }
-
-  .user-form .btn-save {
-    background-color: var(--feedback-success);
-    color: var(--text-on-dark);
-  }
-
-  .user-form .btn-cancel {
-    background-color: var(--feedback-error);
-    color: var(--text-on-dark);
-    margin-left: var(--space-sm);
-  }
-
-  .user-form .btn {
-    transition: filter var(--transition-moderate), transform var(--transition-moderate);
-  }
-
-  .user-form .btn:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
+    gap: var(--space-sm);
   }
 </style>

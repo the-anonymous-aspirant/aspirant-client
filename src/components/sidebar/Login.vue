@@ -42,7 +42,7 @@
               required
             />
           </div>
-          <button type="submit" class="login-button">Login</button>
+          <AspButton type="submit" class="login-button">Login</AspButton>
         </form>
         <p v-if="error" class="error-message">{{ error }}</p>
         <p v-if="success" class="success-message">{{ success }}</p>
@@ -50,17 +50,17 @@
     </transition>
   </div>
   <div class="logout-card" v-else @click="toggleSidebar">
-    <button class="login-button" @click.stop="logout">Logout</button>
+    <AspButton class="login-button" @click.stop="logout">Logout</AspButton>
   </div>
 </template>
 
 <script>
-  import { AspInput } from '@aspirant/design-system';
+  import { AspInput, AspButton } from '@aspirant/design-system';
 
   import { toggleSidebar } from '../../global_state_manager.js';
 
   export default {
-    components: { AspInput },
+    components: { AspInput, AspButton },
     props: {
       loggedIn: {
         type: Boolean,
@@ -194,21 +194,16 @@
     text-align: left;
   }
 
+  /* The Login (submit) and Logout buttons are the button-of-record family and
+     are AspButtons now — DS owns their fill, ink, radius, focus and hover
+     (#4295). The class falls through to the DS <button> root and is reduced to
+     the one thing DS cannot know: this button spans its card's full width and
+     keeps the small top gap from the field above it. The collapsed-sidebar
+     trigger below is a bespoke fixed-height strip affordance, not the standard
+     button-of-record shape, and is held out of this slice (residue). */
   .login-button {
     width: 100%;
-    padding: var(--space-xs);
-    background-color: var(--brand-primary);
-    color: var(--text-on-dark);
-    border: none;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: var(--text-base);
-    transition: background-color var(--transition-moderate);
     margin-top: var(--space-2xs);
-  }
-
-  .login-button:hover {
-    background-color: var(--brand-primary-hover);
   }
 
   .error-message {
