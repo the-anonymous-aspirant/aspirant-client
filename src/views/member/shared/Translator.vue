@@ -47,14 +47,15 @@
           <span class="char-counter">{{ inputText.length }} / 5000</span>
         </div>
 
-        <button
+        <AspButton
           class="btn-translate"
+          variant="primary"
           @click="doTranslate"
           :disabled="translating || !inputText.trim() || !sourceLang || !targetLang"
         >
           <span v-if="translating">Translating...</span>
           <span v-else>Translate</span>
-        </button>
+        </AspButton>
 
         <div v-if="translateError" class="error-text">{{ translateError }}</div>
 
@@ -108,14 +109,15 @@
                 </option>
               </select>
             </div>
-            <button
-              class="btn-install"
+            <AspButton
+              variant="primary"
+              size="sm"
               @click="installPair"
               :disabled="installing || !installSource || !installTarget"
             >
               <span v-if="installing">Installing...</span>
               <span v-else>Install</span>
-            </button>
+            </AspButton>
           </div>
           <div v-if="installMessage" class="install-message" :class="installMessageClass">
             {{ installMessage }}
@@ -139,10 +141,10 @@
 
 <script>
 import axios from 'axios';
-import { AspTooltip } from '@aspirant/design-system';
+import { AspButton, AspTooltip } from '@aspirant/design-system';
 
 export default {
-  components: { AspTooltip },
+  components: { AspButton, AspTooltip },
   data() {
     return {
       // Translation state
@@ -391,27 +393,12 @@ export default {
   color: var(--text-muted);
 }
 
+/* Layout only, and the class is KEPT for exactly that: without align-self the
+   button stretches to the flex column's full width. Fill, ink, radius, weight,
+   hover and the disabled state are AspButton's (variant="primary") — anything
+   else left here would land on the DS <button> and paint over .btn--primary. */
 .btn-translate {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-weight: 600;
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-base);
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
   align-self: flex-start;
-}
-
-.btn-translate:hover:not(:disabled) {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.btn-translate:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 /* Result Area */
@@ -492,27 +479,8 @@ export default {
   flex-wrap: wrap;
 }
 
-.btn-install {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-weight: 600;
-  padding: var(--space-xs) var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-sm);
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
-}
-
-.btn-install:hover:not(:disabled) {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.btn-install:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+/* .btn-install is gone: the install action is an AspButton (primary / size="sm",
+   which carries its --text-sm type scale). It needed no layout of its own. */
 
 .install-message {
   font-size: var(--text-sm);
