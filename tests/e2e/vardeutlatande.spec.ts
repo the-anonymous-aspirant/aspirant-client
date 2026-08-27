@@ -427,8 +427,13 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     // between them.
     const primaryLinks = page.locator('a.btn-primary', { hasText: /Ladda ner/ });
     const lastPrimary = await primaryLinks.nth((await primaryLinks.count()) - 1).boundingBox();
+    // Located by role+name, not by class: 'Skapa ett nytt' is an AspButton now
+    // (#4337), so its class is the DS .btn--secondary, and pinning either app
+    // class here would just re-break on the next primitive swap. The contract
+    // this test owns is the GAP, not the styling hook.
     const secondary = await page
-      .locator('.done-actions button.btn-secondary')
+      .locator('.done-actions')
+      .getByRole('button', { name: 'Skapa ett nytt' })
       .boundingBox();
     expect(lastPrimary).toBeTruthy();
     expect(secondary).toBeTruthy();

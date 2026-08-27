@@ -150,13 +150,13 @@
       <div v-if="uploadError" class="error-text">{{ uploadError }}</div>
 
       <div class="step-actions step-actions--centered">
-        <button
-          class="btn-primary"
+        <AspButton
+          variant="primary"
           @click="doExtract"
           :disabled="!uploadedFiles.length"
         >
           Extrahera värden →
-        </button>
+        </AspButton>
       </div>
     </ValuationStep>
 
@@ -340,10 +340,10 @@
       <div v-if="generateError" class="error-text">{{ generateError }}</div>
 
       <div class="action-row">
-        <button class="btn-secondary" @click="resetFlow">Avbryt</button>
-        <button class="btn-primary" @click="doGenerate">
+        <AspButton variant="secondary" @click="resetFlow">Avbryt</AspButton>
+        <AspButton variant="primary" @click="doGenerate">
           Generera värdeutlåtande →
-        </button>
+        </AspButton>
       </div>
     </ValuationStep>
 
@@ -377,7 +377,7 @@
         >
           Ladda ner .docx
         </a>
-        <button class="btn-secondary" @click="resetFlow">Skapa ett nytt</button>
+        <AspButton variant="secondary" @click="resetFlow">Skapa ett nytt</AspButton>
       </div>
     </ValuationStep>
 
@@ -389,22 +389,22 @@
          decision 2026-06-24 — no history snapshots). -->
     <div v-if="activeTab === 'history'" class="history-tab">
       <div class="history-toolbar">
-        <button
+        <AspButton
           type="button"
-          class="btn-secondary"
+          variant="secondary"
           :disabled="!processedRows.length"
           @click="exportCsv"
         >
           Exportera alla till CSV
-        </button>
-        <button
+        </AspButton>
+        <AspButton
           type="button"
-          class="btn-secondary"
+          variant="secondary"
           @click="loadProcessed"
           :aria-label="'Ladda om listan'"
         >
           ⟳ Ladda om
-        </button>
+        </AspButton>
       </div>
 
       <p v-if="processedLoading" class="muted">Laddar…</p>
@@ -522,7 +522,7 @@
 </template>
 
 <script>
-import { AspInput } from '@aspirant/design-system';
+import { AspButton, AspInput } from '@aspirant/design-system';
 import axios from 'axios';
 
 import ValuationStep from '@/components/ValuationStep.vue';
@@ -581,7 +581,7 @@ const BLANK_CONFIDENCE = () => ({
 });
 
 export default {
-  components: { AspInput, ValuationStep },
+  components: { AspButton, AspInput, ValuationStep },
   data() {
     return {
       step: 'upload',
@@ -1346,29 +1346,37 @@ export default {
   color: #e53e3e;
 }
 
-.btn-primary,
-.btn-secondary {
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: none;
+/* .btn-secondary is gone entirely — all four of its usages were <button>s and
+   they are AspButton variant="secondary" now.
+
+   .btn-primary SURVIVES, and deleting it would be the trap in this file: two of
+   its three usages are the Done-step <a download> links (:365, :373), not
+   buttons. AspButton renders a <button>, which cannot carry href/download, so
+   those anchors stay native and keep needing a rule.
+
+   What changed is the metrics: they are re-pointed at AspButton's size="md" box
+   (--space-xs/--space-md padding, --radius-md) because they now sit in
+   .done-actions directly beside a DS secondary button, and a link 8px taller
+   with a rounder corner than the button next to it reads as a mistake. §3.83 —
+   the outlier adopts. Fill and ink are unchanged. */
+.btn-primary {
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
   cursor: pointer;
   font-size: var(--text-base);
-  font-weight: 600;
-  transition: filter var(--transition-moderate);
-  display: inline-block;
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   text-decoration: none;
-}
-.btn-primary {
+  transition: filter var(--transition-moderate);
   background-color: var(--brand-primary);
   color: var(--text-on-fixed-light);
 }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.15); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-secondary {
-  background-color: transparent;
-  color: var(--text-on-dark);
-  border: 2px solid var(--border-card);
-}
 
 .action-row {
   display: flex;
