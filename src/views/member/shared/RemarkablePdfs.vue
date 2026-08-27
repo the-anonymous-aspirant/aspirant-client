@@ -3,11 +3,16 @@
     <h1>Remarkable PDFs</h1>
     <h2>Generate PDFs for your remarkable tablet</h2>
 
-    <div class="generator-selector">
-      <button @click="loadGenerator('planner')" :class="{ active: currentGenerator === 'planner' }">
-        Planner Generator
-      </button>
-    </div>
+    <!-- A label, not a control. This was a one-member "strip": `generators` has
+         exactly one key, `currentGenerator` initialises to it, and `mounted()`
+         has already loaded it — so the button was permanently in its `.active`
+         state and clicking it re-fetched what was on screen, blanking the
+         preview on the way. A one-member segmented control offers a choice the
+         user cannot make, so this is NOT an AspSegmented; it is the only text
+         naming which generator is showing, so it is not nothing either. The
+         `currentGenerator` / `loadGenerator(type)` seam stays for the second
+         generator. #4460. -->
+    <p class="generator-name">{{ generatorNames[currentGenerator] }}</p>
 
     <div class="generator-card">
       <div class="preview-container">
@@ -47,6 +52,11 @@ export default {
   data() {
     return {
       currentGenerator: 'planner',
+      // Display names, kept beside `generators` so a second generator adds one
+      // entry to each rather than a string literal in the template.
+      generatorNames: {
+        planner: 'Planner Generator',
+      },
       htmlContent: '',
       previewUrl: '',
       generators: {
@@ -114,32 +124,17 @@ export default {
   margin: 0 auto;
 }
 
-.generator-selector {
-  display: flex;
-  gap: var(--space-sm);
-  justify-content: center;
+/* Reads as the caption it is. The former selector's fill/hover/active rules are
+   gone with the button: an amber pill is the app's pressed-control treatment,
+   and wearing it here would keep promising the affordance the markup just
+   dropped. Ink is the ambient body ink so it stays legible on whatever surface
+   the page gives it, rather than pinning an absolute colour. */
+.generator-name {
+  text-align: center;
   margin: var(--space-lg) 0;
-}
-
-.generator-selector button {
-  padding: var(--space-sm) var(--space-lg);
-  border: 2px solid var(--surface-card);
-  border-radius: var(--radius-md);
-  background-color: var(--surface-card);
-  color: var(--text-on-dark);
-  cursor: pointer;
-  transition: all var(--transition-moderate);
-}
-
-.generator-selector button:hover {
-  background-color: var(--brand-accent);
-  border-color: var(--brand-accent);
-}
-
-.generator-selector button.active {
-  background-color: var(--brand-primary);
-  border-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-medium);
+  color: inherit;
 }
 
 .generator-card {

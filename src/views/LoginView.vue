@@ -2,7 +2,7 @@
   <div class="login-view">
     <div class="login-view-card">
       <h1>Login</h1>
-      <Login :loggedIn="false" :collapsed="false" @login="onLogin" />
+      <Login :loggedIn="false" @login="onLogin" />
     </div>
   </div>
 </template>
