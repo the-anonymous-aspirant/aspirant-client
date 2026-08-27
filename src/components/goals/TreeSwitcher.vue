@@ -52,14 +52,14 @@
         />
         <div v-if="renameError" class="error-text">{{ renameError }}</div>
         <div class="dialog-actions">
-          <button class="btn-cancel" @click="cancelRename">Cancel</button>
-          <button
-            class="btn-confirm"
+          <AspButton variant="secondary" @click="cancelRename">Cancel</AspButton>
+          <AspButton
+            variant="primary"
             @click="submitRename"
             :disabled="renaming || !renameValue.trim()"
           >
             {{ renaming ? 'Saving...' : 'Rename' }}
-          </button>
+          </AspButton>
         </div>
       </div>
     </div>
@@ -78,14 +78,14 @@
         />
         <div v-if="createError" class="error-text">{{ createError }}</div>
         <div class="dialog-actions">
-          <button class="btn-cancel" @click="cancelCreate">Cancel</button>
-          <button
-            class="btn-confirm"
+          <AspButton variant="secondary" @click="cancelCreate">Cancel</AspButton>
+          <AspButton
+            variant="primary"
             @click="submitCreate"
             :disabled="creating || !createValue.trim()"
           >
             {{ creating ? 'Creating...' : 'Create' }}
-          </button>
+          </AspButton>
         </div>
       </div>
     </div>
@@ -99,10 +99,10 @@
         </p>
         <div v-if="deleteError" class="error-text">{{ deleteError }}</div>
         <div class="dialog-actions">
-          <button class="btn-cancel" @click="cancelDelete">Cancel</button>
-          <button class="btn-confirm btn-danger" @click="submitDelete" :disabled="deleting">
+          <AspButton variant="secondary" @click="cancelDelete">Cancel</AspButton>
+          <AspButton variant="destructive" @click="submitDelete" :disabled="deleting">
             {{ deleting ? 'Deleting...' : 'Delete' }}
-          </button>
+          </AspButton>
         </div>
       </div>
     </div>
@@ -115,10 +115,10 @@ import { useRouter } from 'vue-router';
 import { AspInput } from '@aspirant/design-system';
 
 import axios from 'axios';
-import { AspTooltip } from '@aspirant/design-system';
+import { AspButton, AspTooltip } from '@aspirant/design-system';
 
 export default {
-  components: { AspInput, AspTooltip },
+  components: { AspButton, AspInput, AspTooltip },
   props: {
     activeTreeId: { type: String, default: null },
   },
@@ -563,44 +563,5 @@ export default {
   margin-top: var(--space-lg);
 }
 
-.btn-cancel {
-  background: none;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-lg);
-  color: var(--text-muted);
-  padding: var(--space-xs) var(--space-lg);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  transition: color var(--transition-moderate), border-color var(--transition-moderate);
-}
 
-.btn-cancel:hover {
-  color: var(--text-on-dark);
-  border-color: var(--text-on-dark);
-}
-
-.btn-confirm {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-weight: 600;
-  padding: var(--space-xs) var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-sm);
-  transition: filter var(--transition-moderate);
-}
-
-.btn-confirm:hover:not(:disabled) {
-  filter: brightness(1.15);
-}
-
-.btn-confirm:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-confirm.btn-danger {
-  background-color: var(--feedback-error);
-}
 </style>

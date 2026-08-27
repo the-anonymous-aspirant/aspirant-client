@@ -8,7 +8,7 @@
         @tree-switched="onTreeSwitched"
       />
       <div class="toolbar-spacer"></div>
-      <button class="btn-add-node" @click="openCreateDialog(null)">+ Add Node</button>
+      <AspButton variant="primary" @click="openCreateDialog(null)">+ Add Node</AspButton>
     </div>
 
     <TimelineFilter
@@ -104,14 +104,14 @@
         </div>
         <div v-if="createError" class="error-text">{{ createError }}</div>
         <div class="dialog-actions">
-          <button class="btn-cancel" @click="showCreateNode = false">Cancel</button>
-          <button
-            class="btn-confirm"
+          <AspButton variant="secondary" @click="showCreateNode = false">Cancel</AspButton>
+          <AspButton
+            variant="primary"
             @click="createNode"
             :disabled="creating || !newNode.name.trim()"
           >
             {{ creating ? 'Creating...' : 'Create' }}
-          </button>
+          </AspButton>
         </div>
       </div>
     </div>
@@ -121,7 +121,7 @@
 <script>
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AspInput } from '@aspirant/design-system';
+import { AspButton, AspInput } from '@aspirant/design-system';
 
 import Canvas from '../../../components/goals/Canvas.vue';
 import TreeSwitcher from '../../../components/goals/TreeSwitcher.vue';
@@ -139,7 +139,7 @@ const NODE_TEMPLATES = {
 const MAX_RECOMMENDED_DEPTH = 5;
 
 export default {
-  components: { AspInput, Canvas, TreeSwitcher, NodeDetailPanel, TimelineFilter },
+  components: { AspButton, AspInput, Canvas, TreeSwitcher, NodeDetailPanel, TimelineFilter },
   setup() {
     const route = useRoute();
     const router = useRouter();
@@ -365,21 +365,6 @@ export default {
   flex: 1;
 }
 
-.btn-add-node {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-weight: 600;
-  padding: var(--space-xs) var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-sm);
-  transition: filter var(--transition-moderate);
-}
-
-.btn-add-node:hover {
-  filter: brightness(1.15);
-}
 
 .canvas-wrapper {
   flex: 1;
@@ -546,38 +531,5 @@ export default {
   margin-top: var(--space-lg);
 }
 
-.btn-cancel {
-  background: none;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-lg);
-  color: var(--text-muted);
-  padding: var(--space-xs) var(--space-lg);
-  cursor: pointer;
-  font-size: var(--text-sm);
-}
 
-.btn-cancel:hover {
-  color: var(--text-on-dark);
-  border-color: var(--text-on-dark);
-}
-
-.btn-confirm {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-weight: 600;
-  padding: var(--space-xs) var(--space-lg);
-  border-radius: var(--radius-lg);
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-sm);
-}
-
-.btn-confirm:hover:not(:disabled) {
-  filter: brightness(1.15);
-}
-
-.btn-confirm:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 </style>
