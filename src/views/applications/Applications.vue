@@ -14,7 +14,7 @@
         :key="app.route"
         class="app-card"
         variant="default"
-        padding="lg"
+        padding="sm"
         interactive
         @click="goToApplication(app.route)"
       >
@@ -146,13 +146,25 @@
     padding: var(--space-sm);
   }
 
+  /* The card fills its grid column but is content-height, not row-stretched:
+     `height: 100%` stretched every card to the tallest row's height, producing
+     the over-tall cards with a large empty body. `min-width: 0` lets the 1fr /
+     auto-fill columns shrink below the card's intrinsic content width — without
+     it the grid items kept their min-content width and overflowed the viewport
+     on the 2-column mobile layout (the "too wide + overlapping" report). This
+     matches the /member grid, whose ApplicationCard is content-sized the same
+     way. */
   .application-list .app-card {
     width: 100%;
-    height: 100%;
+    min-width: 0;
   }
 
-  /* Tighten the DS card's default padding="lg" spacing for this dense tile
-     grid. AspCard exposes header/body/footer sub-parts via :deep. */
+  /* AspCard runs at padding="sm" for this dense tile grid: at padding="lg" the
+     DS `.card--padding-lg .card__*` rules (which out-specify a consumer :deep
+     override) inflated every section — header/footer 69px each, a 393px card
+     with a stretched-empty body that read as the "too tall / too wide" tiles.
+     The horizontal md padding below keeps the header/footer captions off the
+     card edge; the DS `sm` vertical padding is what compacts the tile. */
   .application-list :deep(.card__header) {
     font-size: var(--text-sm);
     padding: var(--space-sm) var(--space-md);
