@@ -92,21 +92,25 @@
         </div>
 
         <div v-if="totalRuns > runsPerPage" class="pagination" data-test="runs-pagination">
-          <button
+          <AspButton
+            variant="secondary"
+            size="sm"
             type="button"
             :disabled="offset === 0 || runsLoading"
             data-test="runs-prev"
             @click="prevPage"
-          >‹ Newer</button>
+          >‹ Newer</AspButton>
           <span class="page-indicator" data-test="runs-page-indicator">
             {{ offset + 1 }}–{{ Math.min(offset + runsPerPage, totalRuns) }} of {{ totalRuns }}
           </span>
-          <button
+          <AspButton
+            variant="secondary"
+            size="sm"
             type="button"
             :disabled="offset + runsPerPage >= totalRuns || runsLoading"
             data-test="runs-next"
             @click="nextPage"
-          >Older ›</button>
+          >Older ›</AspButton>
         </div>
       </section>
     </template>
@@ -115,7 +119,7 @@
 
 <script>
   import { Chart, LineController, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Filler } from 'chart.js';
-  import { AspDataTable } from '@aspirant/design-system';
+  import { AspButton, AspDataTable } from '@aspirant/design-system';
   import { useBrowserFlows } from '../../../composables/useBrowserFlows.js';
   import { seriesColor } from '../../../composables/chartSeries.js';
 
@@ -134,6 +138,7 @@
   export default {
     name: 'FlowDetail',
     components: {
+      AspButton,
       AspDataTable,
     },
     data() {
@@ -471,20 +476,6 @@
     justify-content: center;
     gap: 1rem;
     margin-top: 1rem;
-  }
-  .pagination button {
-    background: none;
-    border: 1px solid var(--brand-primary, #ffb300);
-    color: var(--brand-primary, #ffb300);
-    padding: 0.25rem 0.7rem;
-    border-radius: 4px;
-    font-family: inherit;
-    cursor: pointer;
-  }
-  .pagination button[disabled] {
-    color: #9e9e9e;
-    border-color: #9e9e9e;
-    cursor: not-allowed;
   }
   .page-indicator {
     color: var(--text-muted, #6c757d);
