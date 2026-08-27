@@ -64,9 +64,9 @@
           <div class="description-section">
             <div class="description-header">
               <label>Description</label>
-              <button class="btn-toggle-edit" @click="toggleEdit">
+              <AspButton variant="secondary" size="sm" @click="toggleEdit">
                 {{ editing ? 'Preview' : 'Edit' }}
-              </button>
+              </AspButton>
             </div>
             <div v-if="editing" class="edit-mode">
               <textarea
@@ -77,10 +77,10 @@
                 @keydown.meta.enter="saveDescription"
               ></textarea>
               <div class="edit-actions">
-                <button class="btn-cancel" @click="cancelEdit">Cancel</button>
-                <button class="btn-confirm" @click="saveDescription" :disabled="saving">
+                <AspButton variant="secondary" @click="cancelEdit">Cancel</AspButton>
+                <AspButton variant="primary" @click="saveDescription" :disabled="saving">
                   {{ saving ? 'Saving...' : 'Save' }}
-                </button>
+                </AspButton>
               </div>
             </div>
             <div v-else class="markdown-body" v-html="renderedMarkdown"></div>
@@ -104,12 +104,13 @@
                     class="comment-textarea"
                   ></textarea>
                   <div class="comment-edit-actions">
-                    <button class="btn-cancel btn-sm" @click="cancelCommentEdit">Cancel</button>
-                    <button
-                      class="btn-confirm btn-sm"
+                    <AspButton variant="secondary" size="sm" @click="cancelCommentEdit">Cancel</AspButton>
+                    <AspButton
+                      variant="primary"
+                      size="sm"
                       @click="saveCommentEdit(comment.id)"
                       :disabled="!editCommentBody.trim()"
-                    >Save</button>
+                    >Save</AspButton>
                   </div>
                 </div>
                 <div v-else>
@@ -131,11 +132,12 @@
                 rows="2"
                 class="comment-textarea"
               ></textarea>
-              <button
-                class="btn-confirm btn-sm"
+              <AspButton
+                variant="primary"
+                size="sm"
                 @click="submitComment"
                 :disabled="!newCommentBody.trim()"
-              >Post</button>
+              >Post</AspButton>
             </div>
           </div>
         </div>
@@ -148,7 +150,7 @@
 import { ref, computed, watch } from 'vue';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { AspTooltip } from '@aspirant/design-system';
+import { AspButton, AspTooltip } from '@aspirant/design-system';
 import { useGoalComments } from '../../composables/goals/useGoalComments.js';
 
 marked.setOptions({ breaks: true, gfm: true });
@@ -159,7 +161,7 @@ function renderMarkdown(text) {
 }
 
 export default {
-  components: { AspTooltip },
+  components: { AspButton, AspTooltip },
   props: {
     node: { type: Object, default: null },
     treeId: { type: [String, Number], required: true },
@@ -560,16 +562,6 @@ export default {
   font-size: var(--text-sm);
   font-weight: 600;
 }
-.btn-toggle-edit {
-  background: none;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  padding: 2px 10px;
-  cursor: pointer;
-  font-size: var(--text-xs, 0.75rem);
-}
-.btn-toggle-edit:hover { color: var(--text-on-dark); border-color: var(--text-on-dark); }
 
 .description-textarea {
   width: 100%;
@@ -705,34 +697,8 @@ export default {
 }
 .add-comment .comment-textarea { width: 100%; }
 
-.btn-sm {
-  padding: 2px 10px;
-  font-size: var(--text-xs, 0.75rem);
-}
 
-.btn-cancel {
-  background: none;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  padding: var(--space-xs) var(--space-md);
-  cursor: pointer;
-  font-size: var(--text-sm);
-}
-.btn-cancel:hover { color: var(--text-on-dark); border-color: var(--text-on-dark); }
 
-.btn-confirm {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-weight: 600;
-  padding: var(--space-xs) var(--space-md);
-  border-radius: var(--radius-sm);
-  border: none;
-  cursor: pointer;
-  font-size: var(--text-sm);
-}
-.btn-confirm:hover:not(:disabled) { filter: brightness(1.15); }
-.btn-confirm:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .loading-text, .empty-text {
   color: var(--text-muted);
