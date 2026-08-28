@@ -1,9 +1,25 @@
 <template>
   <div class="tree-switcher" ref="switcherRef">
-    <button class="switcher-trigger" @click="toggleDropdown">
-      <span class="trigger-label">{{ activeTreeName || 'Select tree' }}</span>
-      <span class="trigger-arrow" :class="{ open: isOpen }">&#9662;</span>
-    </button>
+    <!-- Ported from a hand-painted native <button> (#4513). The native set
+         --surface-card-inner / --border-card / --text-on-dark by hand, which is
+         a consumer-side re-draw of variant="secondary" — so the port hands the
+         paint back to the DS and keeps only the 240px cap, which is layout the
+         DS cannot know. The disclosure arrow rides #iconRight (the DS slot for
+         exactly this), so `.btn__label` still owns the name and the arrow stays
+         out of the accessible name. The port also ADDS aria-haspopup and
+         aria-expanded: the native announced nothing about the menu it opens. -->
+    <AspButton
+      variant="secondary"
+      class="switcher-trigger"
+      aria-haspopup="menu"
+      :aria-expanded="isOpen"
+      @click="toggleDropdown"
+    >
+      {{ activeTreeName || 'Select tree' }}
+      <template #iconRight>
+        <span class="trigger-arrow" :class="{ open: isOpen }">&#9662;</span>
+      </template>
+    </AspButton>
 
     <div v-if="isOpen" class="switcher-dropdown">
       <div class="dropdown-list">
@@ -29,6 +45,15 @@
         </div>
         <div v-if="loadingTrees" class="dropdown-empty">Loading...</div>
       </div>
+      <!-- HELD native, and the reason is the box, not the label (#4513). This
+           is the footer row of .dropdown-list: full-bleed, left-aligned, and
+           separated by a border-top from the rows above it — a menu affordance,
+           the same shape as ValuationStatement's .row-menu-item set. AspButton
+           is a centred inline-flex pill with its own radius and padding; every
+           one of its four variants draws that box (the variant validator is a
+           closed set, AspButton.vue:8), so the port would put a pill inside a
+           list of rows. The DS has no menu/menuitem primitive — that gap, not
+           this call site, is what has to close first. -->
       <button class="btn-new-tree" @click="startCreate">+ New Tree</button>
     </div>
 
@@ -354,27 +379,21 @@ export default {
   position: relative;
 }
 
+/* Layout only — the paint left with the native (#4513). AspButton
+   variant="secondary" brings an opaque --surface-elevated fill and --text-body
+   ink, so it resolves in both themes on its own and needs nothing from here;
+   what it cannot know is that a tree name is user-entered and unbounded, hence
+   the cap. .btn is inline-flex and .btn__label carries no DS rule at all, so
+   the ellipsis has to be set on that span: a flex item will not shrink below
+   its content without min-width: 0, and without the shrink there is nothing
+   for text-overflow to clip. `.trigger-label` is gone with it — the name now
+   rides the default slot, i.e. .btn__label itself. */
 .switcher-trigger {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-md);
-  background-color: var(--surface-card-inner);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-lg);
-  color: var(--text-on-dark);
-  font-size: var(--text-base);
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color var(--transition-moderate);
   max-width: 240px;
 }
 
-.switcher-trigger:hover {
-  border-color: var(--text-muted);
-}
-
-.trigger-label {
+.switcher-trigger :deep(.btn__label) {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

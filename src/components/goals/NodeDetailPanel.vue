@@ -134,6 +134,20 @@
                   <div class="comment-body" v-html="renderComment(comment.body)"></div>
                   <div class="comment-meta">
                     <span class="comment-date">{{ formatDate(comment.created_at) }}</span>
+                    <!-- HELD native, both of them, and the gap is named rather
+                         than worked around (#4513). These are text links, not
+                         controls with a box: --text-muted ink at --text-xs,
+                         padding: 0, underlined, sitting in the same run as the
+                         date beside them. AspButton's variant validator is a
+                         closed set — primary | secondary | ghost | destructive
+                         (AspButton.vue:8) — and all four draw a padded box;
+                         ghost is nearest and is still --space-2xs/--space-sm at
+                         size="sm" with a --brand-primary-alpha hover fill. So
+                         the port would swap two underlined words for two pills
+                         inside a metadata line. What is missing is a `link`
+                         variant in the DS; until it exists this is a decision,
+                         not an unfinished migration. The file's other five
+                         controls ARE AspButton — see the Save above. -->
                     <button class="btn-link" @click="startCommentEdit(comment)">edit</button>
                     <button class="btn-link btn-danger" @click="removeComment(comment.id)">delete</button>
                   </div>

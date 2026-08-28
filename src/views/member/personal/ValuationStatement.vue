@@ -96,6 +96,15 @@
               {{ uploadedFiles.length }}
               {{ uploadedFiles.length === 1 ? 'fil vald' : 'filer valda' }}
             </span>
+            <!-- HELD native (#4513), same gap as NodeDetailPanel's .btn-link
+                 pair: this is a text link in a header run, --brand-primary ink
+                 at --text-sm with padding: 0 and no box. AspButton's four
+                 variants (AspButton.vue:8, a closed validator) each draw a
+                 padded box, so the port would put a pill next to the "N filer
+                 valda" count. Needs a `link` variant in the DS. Note the row
+                 BELOW this one is already ported — the per-file remove control
+                 is AspButton variant="ghost" size="icon" — so the stopping
+                 point here is the shape of the control, not the file. -->
             <button
               type="button"
               class="link-button"
@@ -467,6 +476,18 @@
                   role="menu"
                   @click.stop
                 >
+                  <!-- HELD native, all four (#4513). Each carries
+                       role="menuitem" inside the role="menu" popover above, and
+                       they render as full-width left-aligned rows. AspButton
+                       would take the role fine (attrs fall through to its root
+                       <button>), but it is a centred inline-flex pill with its
+                       own radius and padding — four of them would be four pills
+                       stacked in a 140px popover, not a menu. The DS has no
+                       menu/menuitem primitive; that gap is what has to close,
+                       and #4246 is app-side only. Same call as TreeSwitcher's
+                       .btn-new-tree footer row. The TRIGGER for this menu is
+                       already AspButton variant="ghost" size="icon" — see the
+                       kebab above. -->
                   <button type="button" role="menuitem" class="row-menu-item" @click="runRowAction(row, 'edit')">Redigera</button>
                   <button type="button" role="menuitem" class="row-menu-item" @click="runRowAction(row, 'docx')">.docx</button>
                   <button type="button" role="menuitem" class="row-menu-item" @click="runRowAction(row, 'pdf')">.pdf</button>
