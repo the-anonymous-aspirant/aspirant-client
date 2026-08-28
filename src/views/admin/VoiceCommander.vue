@@ -73,33 +73,38 @@
     <div class="filter-card">
       <h3>Filters</h3>
       <div class="filter-controls">
+        <!-- The two captions here are <span>s, not <label for>s, and that is a
+             constraint AspSelect imposes rather than a preference. It leaves
+             inheritAttrs on and binds nothing to its trigger, so an `id` passed
+             from here lands on its wrapper <div> — a <label for> pointing at it
+             would reference a non-labelable element and associate with nothing.
+             The accessible name therefore rides `aria-label`, and the visible
+             caption is a span sharing the row's caption rule so all three
+             captions still read alike (the mixed-caption regression #4296
+             forbids). AspInput below keeps its real <label for>, because
+             AspInput does set inheritAttrs false and puts `id` on the real
+             <input>. -->
         <div class="filter-group">
-          <label for="status-filter">Status</label>
-          <select id="status-filter" v-model="statusFilter" @change="resetAndFetch">
-            <option value="">All</option>
-            <option value="open">Open</option>
-            <option value="in_progress">In Progress</option>
-            <option value="closed">Closed</option>
-          </select>
+          <span class="filter-caption">Status</span>
+          <AspSelect
+            :model-value="statusFilter"
+            :options="statusOptions"
+            aria-label="Status"
+            @update:model-value="v => { statusFilter = v; resetAndFetch() }"
+          />
         </div>
         <div class="filter-group">
-          <label for="priority-filter">Priority</label>
-          <select id="priority-filter" v-model="priorityFilter" @change="resetAndFetch">
-            <option value="">All</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="critical">Critical</option>
-          </select>
+          <span class="filter-caption">Priority</span>
+          <AspSelect
+            :model-value="priorityFilter"
+            :options="priorityOptions"
+            aria-label="Priority"
+            @update:model-value="v => { priorityFilter = v; resetAndFetch() }"
+          />
         </div>
         <div class="filter-group">
           <label for="label-filter">Label</label>
-          <!-- Same call as Finance: the two <select>s beside this field are a
-               primitive family #4278 does not cover, so their half of the
-               shared rule below is retuned to the DS control box instead of
-               being left at a different height and fill.
-
-               Kept as `text` rather than `search`, unlike Finance's field: the
+          <!-- Kept as `text` rather than `search`, unlike Finance's field: the
                `search` type renders a leading magnifier, which reads as a
                second caption under a control the row already captions "LABEL".
                Finance's field has no caption and a "Search..." placeholder, so
@@ -315,11 +320,11 @@
 </template>
 
 <script>
-import { AspInput, AspButton, AspTooltip } from '@aspirant/design-system';
+import { AspInput, AspButton, AspSelect, AspTooltip } from '@aspirant/design-system';
 import axios from 'axios';
 
 export default {
-  components: { AspInput, AspButton, AspTooltip },
+  components: { AspInput, AspButton, AspSelect, AspTooltip },
   data() {
     return {
       // Recording state
@@ -374,6 +379,26 @@ export default {
   computed: {
     recentMessages() {
       return this.messages.slice(0, this.recentMessageLimit);
+    },
+    // AspSelect takes `[{value,label}]` where the natives took <option> markup.
+    // '' stays a real option, not the `placeholder` prop: it is the value the
+    // filters refetch on, and a placeholder is not selectable.
+    statusOptions() {
+      return [
+        { value: '', label: 'All' },
+        { value: 'open', label: 'Open' },
+        { value: 'in_progress', label: 'In Progress' },
+        { value: 'closed', label: 'Closed' },
+      ];
+    },
+    priorityOptions() {
+      return [
+        { value: '', label: 'All' },
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' },
+        { value: 'critical', label: 'Critical' },
+      ];
     },
   },
   methods: {
@@ -864,8 +889,21 @@ export default {
 }
 
 /* Filter Card */
+/* This card declares a background, so it declares the ink that goes on it —
+   #2415 / §3.18. --surface-card is #424242 in BOTH themes, but without this
+   line the card inherits the ambient ink, which in the LIGHT theme is also
+   #424242. --text-muted is `color-mix(currentColor 88%, transparent)`, so the
+   three filter captions resolved to #424242 at 88% on a #424242 card and
+   measured 1.00:1 — invisible in the default theme, legible in dark, which is
+   why only a both-themes walk finds it. Measured on the built page: the
+   captions go 1.00:1 -> 8.23:1 in light, and 8.77:1 -> 11.44:1 in dark, where
+   the ambient ink was already light but not this card's own. The defect
+   predates this task; it is fixed here because the row it sits on is the row
+   this task rebuilt. Five sibling cards in this file set --surface-card with
+   no paired ink the same way — see #4483, which carries the measurements. */
 .filter-card {
   background-color: var(--surface-card);
+  color: var(--text-on-dark);
   border: 2px solid var(--border-card);
   border-radius: var(--radius-xl);
   padding: var(--space-xl);
@@ -892,7 +930,11 @@ export default {
   gap: var(--space-2xs);
 }
 
-.filter-group label {
+/* .filter-caption joins the selector because the two select captions had to
+   stop being <label for>s when their controls became AspSelect (see the
+   template note). Same declarations, so the three captions stay identical. */
+.filter-group label,
+.filter-caption {
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -900,20 +942,12 @@ export default {
   font-weight: 600;
 }
 
-/* `.filter-group input` is dropped from the selector, and not because it was
-   tidied: AspInput sets inheritAttrs false and renders the real <input> inside
-   its own root, where this file's data-v scope attribute does not reach, so the
-   rule could no longer match it. What is left is the two <select>s, held to the
-   box AspInput renders beside them. */
-.filter-group select {
-  height: 34px;
-  padding: 0 var(--space-sm);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-control);
-  background-color: var(--surface-elevated);
-  color: var(--text-body);
-  font-size: var(--text-sm);
-}
+/* `.filter-group input` and `.filter-group select` have both left this file.
+   Neither was tidied away: AspInput and AspSelect each render their real
+   control inside their own root, where this file's data-v scope attribute does
+   not reach, so neither selector could still match. The 34px / --radius-md /
+   --border-control box they used to hand-paint is what AspSelect's trigger
+   already paints, which is why nothing replaces them. */
 
 /* Layout only — visuals from AspButton (variant="primary"). */
 .btn-process {
