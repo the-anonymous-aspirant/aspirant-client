@@ -168,18 +168,20 @@ test.describe('#4305 goal-tree inline fields (AspInput)', () => {
     await expect(page.locator('.dialog .field__control')).not.toHaveClass(/focus/);
     await page.waitForTimeout(400); // > --transition-fast, so the border has settled
 
-    // The dialog mixes one DS control with two <select>s, two date pickers and
-    // a textarea, none of which can migrate (#4278 covers neither `select` nor
-    // `textarea`; §3.85 excludes the native-widget types on purpose). Holding
-    // them to the same box is the whole reason this dialog does not read as one
-    // DS control among five strangers — so assert the box, not the migration.
-    const boxes = await page.locator('.dialog .field__control, .dialog .form-row select, .dialog .form-row input[type="date"]').evaluateAll((els) =>
+    // The dialog mixes three DS controls (AspInput name, AspSelect type and
+    // parent — #4478) with two native date pickers, which cannot migrate
+    // (§3.85 excludes the native-widget types on purpose and the DS ships no
+    // date control). The natives are held to the box the DS renders, which is
+    // the whole reason this dialog does not read as three DS controls among
+    // strangers — so assert the box across DS and native alike. The textarea
+    // is a multi-line box and is excluded here as it always was.
+    const boxes = await page.locator('.dialog .field__control, .dialog .select__trigger, .dialog .form-row input[type="date"]').evaluateAll((els) =>
       els.map((el) => {
         const cs = getComputedStyle(el);
         return `${Math.round(el.getBoundingClientRect().height)}|${cs.borderTopLeftRadius}|${cs.backgroundColor}|${cs.borderTopColor}`;
       }),
     );
-    expect(boxes.length).toBeGreaterThanOrEqual(3);
+    expect(boxes.length).toBeGreaterThanOrEqual(5);
     expect(new Set(boxes).size, `controls disagree on the box: ${JSON.stringify(boxes)}`).toBe(1);
   });
 });

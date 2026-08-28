@@ -71,20 +71,25 @@
         />
         <div class="form-row">
           <label>Type</label>
-          <select v-model="newNode.type" @change="onTypeChange">
-            <option value="goal">Goal</option>
-            <option value="milestone">Milestone</option>
-            <option value="step">Step</option>
-          </select>
+          <!-- v-model is spelled out: the native paired v-model with @change and
+               AspSelect emits only update:modelValue, so the assignment and the
+               template swap both hang off that one event, in that order. -->
+          <AspSelect
+            class="form-row-control"
+            :model-value="newNode.type"
+            :options="typeOptions"
+            aria-label="Type"
+            @update:model-value="v => { newNode.type = v; onTypeChange(); }"
+          />
         </div>
         <div class="form-row">
           <label>Parent</label>
-          <select v-model="newNode.parent_id" @change="onParentChange">
-            <option :value="null">None (root)</option>
-            <option v-for="node in nodes" :key="node.id" :value="node.id">
-              {{ node.name }}
-            </option>
-          </select>
+          <AspSelect
+            class="form-row-control"
+            v-model="newNode.parent_id"
+            :options="parentOptions"
+            aria-label="Parent"
+          />
         </div>
         <div class="form-row">
           <label>Planned start</label>
@@ -100,12 +105,13 @@
         </div>
         <div class="form-group">
           <label>Description</label>
-          <textarea
+          <AspTextarea
             v-model="newNode.description"
-            rows="8"
-            class="description-textarea"
+            aria-label="Description"
+            :rows="8"
+            :max-rows="16"
             placeholder="Markdown description..."
-          ></textarea>
+          />
         </div>
         <div v-if="depthWarning" class="warning-banner">
           &#9888; Recommended depth reached. Adding further nesting may reduce clarity.
@@ -129,7 +135,7 @@
 <script>
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AspButton, AspInput } from '@aspirant/design-system';
+import { AspButton, AspInput, AspSelect, AspTextarea } from '@aspirant/design-system';
 
 import Canvas from '../../../components/goals/Canvas.vue';
 import TreeSwitcher from '../../../components/goals/TreeSwitcher.vue';
@@ -147,7 +153,7 @@ const NODE_TEMPLATES = {
 const MAX_RECOMMENDED_DEPTH = 5;
 
 export default {
-  components: { AspButton, AspInput, Canvas, TreeSwitcher, NodeDetailPanel, TimelineFilter },
+  components: { AspButton, AspInput, AspSelect, AspTextarea, Canvas, TreeSwitcher, NodeDetailPanel, TimelineFilter },
   setup() {
     const route = useRoute();
     const router = useRouter();
@@ -206,6 +212,20 @@ export default {
       return parentDepth + 1 >= MAX_RECOMMENDED_DEPTH;
     });
 
+    // AspSelect takes `[{value,label}]` where the natives took <option> markup.
+    // Values keep the native's types: the root entry is `null` (what the API
+    // takes for parent_id) and node ids are numbers — a <select> would have
+    // coerced the ids to strings, this does not.
+    const typeOptions = [
+      { value: 'goal', label: 'Goal' },
+      { value: 'milestone', label: 'Milestone' },
+      { value: 'step', label: 'Step' },
+    ];
+    const parentOptions = computed(() => [
+      { value: null, label: 'None (root)' },
+      ...nodes.value.map((node) => ({ value: node.id, label: node.name })),
+    ]);
+
     function openCreateDialog(parentId) {
       newNode.value = defaultNodeState();
       if (parentId) {
@@ -217,10 +237,6 @@ export default {
 
     function onTypeChange() {
       newNode.value.description = NODE_TEMPLATES[newNode.value.type] || '';
-    }
-
-    function onParentChange() {
-      // Recalculate depth warning reactively via computed
     }
 
     function onNodeContext(nodeId) {
@@ -313,6 +329,8 @@ export default {
       createNodeInput,
       newNode,
       depthWarning,
+      typeOptions,
+      parentOptions,
       filterPeriod,
       filterCustomStart,
       filterCustomEnd,
@@ -323,7 +341,6 @@ export default {
       clearFilter,
       openCreateDialog,
       onTypeChange,
-      onParentChange,
       onNodeContext,
       createNode,
       selectNode,
@@ -417,24 +434,25 @@ export default {
   margin: 0 0 var(--space-md) 0;
 }
 
-/* The name field is AspInput now, so the rule that used to paint it is gone.
-   What remains in this dialog is two <select>s (a primitive family #4278 does
-   not cover), two `date` pickers and one `color` picker (native-widget types
-   the §3.85 ruling excludes from AspInput's contract on purpose), and one
-   <textarea>. None of them can migrate — so instead of leaving five natives at
-   a different height, radius, fill and boundary beside one DS control, they are
-   held to the box AspInput renders. §3.86: an always-live data-entry control on
-   a dark card adopts the DS control fill.
+/* The name field is AspInput, the Type/Parent pickers are AspSelect and the
+   description is AspTextarea — the DS paints all four past this file's data-v
+   attribute. (An earlier note here said the selects and the textarea could not
+   migrate because `select` was a family #4278 did not cover; that was a
+   statement about that census, not about the DS — AspSelect and AspTextarea
+   have shipped throughout.) What is still native is the two `date` pickers and
+   the `color` picker: native-widget types the §3.85 ruling excludes from
+   AspInput's contract on purpose, with no DS component of their own. Instead of
+   leaving them at a different height, radius, fill and boundary beside four DS
+   controls, they are held to the box the DS renders. §3.86: an always-live
+   data-entry control on a dark card adopts the DS control fill.
 
-   Measured on the built page, all six controls in this dialog now agree on
-   `34px | 8px radius | --surface-elevated | --border-control`, and the boundary
-   clears WCAG 1.4.11's 3:1 non-text floor in both themes by different means —
-   in light the near-white fill against the #424242 card carries it at 9.55:1
-   (the border alone is 2.21:1); in dark the fill drops to 1.14:1 and the
-   #cccccc border carries it at 8.94:1. The box being replaced was legible too
-   (a 1px amber --border-card at 5.6:1 light / 8.0:1 dark), so the reason for
-   this change is uniformity under the ruling, not a contrast defect. Value ink
-   is 9.55:1 / 9.57:1.
+   The box is `34px | 8px radius | --surface-elevated | --border-control`, which
+   is what AspInput's .field__control and AspSelect's .select__trigger both
+   declare, so the retained rule below is the same values the DS uses — not a
+   guess at them. The contrast reasoning from the original measurement still
+   holds for the natives (light: near-white fill on the #424242 card carries the
+   boundary at 9.55:1; dark: the #cccccc border carries it at 8.94:1); the
+   #4478 evidence set re-measures the dialog with the DS controls in place.
 
    The `color` swatch keeps its own 40×30 box: it is a swatch, not a field, and
    stretching it to a 34px text-control box would claim it is one. */
@@ -442,8 +460,8 @@ export default {
 /* AspInput's .field__control declares height but not box-sizing, so it
    rendered content-box (34px content + 2px border = 36px) once #4294 removed
    Vuetify's global `box-sizing: border-box` reset that had masked this for
-   every AspInput on the page. The select/date rules above set box-sizing
-   explicitly, which is why only the DS control disagreed. Filed as its own
+   every AspInput on the page. The date rule below sets box-sizing explicitly,
+   which is why only the DS control disagreed. Filed as its own
    task (system_3 task #4330) since the gap is DS-wide, not local to this
    dialog; scoped here so this dialog's box stays correct in the meantime. */
 :deep(.dialog .field__control) {
@@ -463,7 +481,14 @@ export default {
   min-width: 90px;
 }
 
-.form-row select,
+/* AspSelect's root is a single node, so a class passed to it does land there
+   (with this file's scope id) — unlike AspTextarea, whose inheritAttrs:false
+   delivers a class to the inner <textarea>. flex: 1 is the only thing the DS
+   cannot know: this control shares its row with a 90px caption. */
+.form-row .form-row-control {
+  flex: 1;
+}
+
 .form-row input[type="date"] {
   flex: 1;
   height: 34px;
@@ -497,20 +522,14 @@ export default {
   margin-bottom: var(--space-xs);
 }
 
-.description-textarea {
-  width: 100%;
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-control);
-  background-color: var(--surface-elevated);
-  color: var(--text-body);
-  font-size: var(--text-sm);
-  /* Monospace is kept deliberately — this field takes Markdown, and the
-     fixed advance is what makes a fenced block or a table line up as typed. */
+/* The description box is AspTextarea's now; only the typeface is this file's
+   call. Monospace is kept deliberately — this field takes Markdown, and the
+   fixed advance is what makes a fenced block or a table line up as typed.
+   :deep() because the real <textarea> sits past this file's scope id; the
+   selector is anchored on the parent-owned .form-group so it reaches nothing
+   outside this dialog. */
+.form-group :deep(.field__textarea) {
   font-family: monospace;
-  resize: vertical;
-  box-sizing: border-box;
-  line-height: 1.5;
 }
 
 .warning-banner {

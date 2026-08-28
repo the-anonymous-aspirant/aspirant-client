@@ -9,19 +9,28 @@
       <div class="scratchpad-card-header">
         <span class="scratchpad-status">{{ statusText }}</span>
       </div>
-      <textarea
-        ref="editor"
-        v-model="text"
-        class="scratchpad-editor"
-        spellcheck="false"
-        placeholder="Paste or type here — visible on every device you're logged in on. Stored in plain text on the server."
-        @input="onInput"
-      ></textarea>
+      <!-- The wrapper is parent-owned so its scoped rule (flex + padding) can
+           reach it; AspTextarea's inheritAttrs:false delivers a class to the
+           inner <textarea> past this file's scope id, so `scratchpad-editor`
+           below is a locator for scratchpad.spec.ts, not a style hook. -->
+      <div class="scratchpad-body">
+        <AspTextarea
+          v-model="text"
+          class="scratchpad-editor"
+          aria-label="Scratchpad"
+          spellcheck="false"
+          :rows="18"
+          :max-rows="40"
+          placeholder="Paste or type here — visible on every device you're logged in on. Stored in plain text on the server."
+          @update:model-value="onInput"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <script>
+import { AspTextarea } from '@aspirant/design-system';
 import { getScratchpad, putScratchpad } from '../../../composables/useScratchpad.js';
 
 // Cross-device sync tuning.
@@ -29,6 +38,7 @@ const SAVE_DEBOUNCE_MS = 500; // debounce a write after the last keystroke
 const POLL_INTERVAL_MS = 1000; // pull remote changes ~1s
 
 export default {
+  components: { AspTextarea },
   data() {
     return {
       text: '',
@@ -154,8 +164,10 @@ export default {
 .scratchpad-card {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 60vh;
+  /* The card used to stretch (flex: 1, min-height: 60vh) so the bleed editor
+     could fill it. AspTextarea sizes itself by rows, so the card hugs the
+     field now — the #4478 evidence set showed the stretch as a dark void under
+     the field. */
   background-color: var(--surface-card);
   border: 1px solid var(--border-card);
   border-radius: var(--radius-lg);
@@ -176,24 +188,19 @@ export default {
   font-size: var(--text-xs);
 }
 
-.scratchpad-editor {
-  flex: 1;
-  width: 100%;
-  border: none;
-  outline: none;
-  resize: none;
+/* The editor was a borderless, transparent textarea bleeding to the card edge.
+   It is AspTextarea now, which paints its own box (--surface-elevated fill,
+   --text-body ink, --border-control boundary, placeholder ink) and grows to
+   content between its rows floor and maxRows ceiling; the card keeps the frame
+   and this wrapper keeps the field off the card edge. Layout only. */
+.scratchpad-body {
   padding: var(--space-md);
-  background-color: transparent;
-  /* The card is a dark surface (--surface-card); editor ink is the on-dark
-     token, matching the card content vocabulary in the other member pages. */
-  color: var(--text-on-dark);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: var(--text-base);
-  line-height: 1.5;
 }
 
-.scratchpad-editor::placeholder {
-  color: var(--text-muted);
-  opacity: 0.7;
+/* Typeface is the one thing that stays this file's call: a scratchpad takes
+   pasted plain text, and the fixed advance keeps columns as they were pasted.
+   :deep() because the real <textarea> sits past this file's scope id. */
+.scratchpad-body :deep(.field__textarea) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 </style>

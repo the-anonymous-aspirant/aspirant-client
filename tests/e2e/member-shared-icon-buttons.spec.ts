@@ -96,11 +96,18 @@ test.describe('#4448 member/shared glyph-only controls + file-source strip', () 
 
     await expectIconButton(page, 'Swap languages');
 
-    await page.selectOption('#source-lang', 'en');
-    await page.selectOption('#target-lang', 'sv');
+    // The pickers are AspSelect since #4478: a combobox trigger whose text is
+    // the selected option's label, not a <select> with a value. Choose through
+    // the listbox and read the swap back off the trigger text.
+    const from = page.getByRole('combobox', { name: 'From' });
+    const to = page.getByRole('combobox', { name: 'To' });
+    await from.click();
+    await page.getByRole('option', { name: 'English (en)' }).click();
+    await to.click();
+    await page.getByRole('option', { name: 'Swedish (sv)' }).click();
     await page.getByRole('button', { name: 'Swap languages' }).click();
-    await expect(page.locator('#source-lang')).toHaveValue('sv');
-    await expect(page.locator('#target-lang')).toHaveValue('en');
+    await expect(from).toHaveText(/Swedish \(sv\)/);
+    await expect(to).toHaveText(/English \(en\)/);
   });
 
   test('Wikipedia toolbar controls read on the dark toolbar they sit on', async ({ page }) => {
