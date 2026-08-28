@@ -1603,8 +1603,13 @@ h1 {
   padding: var(--space-lg);
 }
 
+/* The DS surface token, not a pinned `#ffffff` (#4493 D3). Both text rules
+   below read `var(--text-on-light)`, which flips to #e0e0e0 in the dark theme,
+   so a hard-coded white panel left this modal at 1.60:1 there — the same
+   arithmetic as Finance's `--bg-card` cards, reached a different way: there the
+   surface token was undefined, here it was never a token at all. */
 .item-modal {
-  background: #ffffff;
+  background: var(--surface-elevated);
   padding: var(--space-xl);
   border-radius: var(--radius-xl);
   max-width: 500px;
