@@ -11,22 +11,21 @@
       <em>No active game right now</em>
     </h2>
 
-    <!-- Tabs -->
+    <!-- Tabs. Both members switch a named panel below, so the strip declares
+         as="tabs" (§3.89 Q1) and the panels carry role="tabpanel" + the ids
+         the members reference. -->
     <div class="tab-bar">
-      <button
-        class="tab-btn"
-        :class="{ active: activeTab === 'rules' }"
-        @click="activeTab = 'rules'"
-      >Rules</button>
-      <button
-        class="tab-btn"
-        :class="{ active: activeTab === 'game' }"
-        @click="activeTab = 'game'"
-      >Game</button>
+      <AspSegmented
+        :options="tabOptions"
+        :model-value="activeTab"
+        as="tabs"
+        aria-label="Easter hunt views"
+        @update:model-value="activeTab = $event"
+      />
     </div>
 
     <!-- Rules tab -->
-    <div v-if="activeTab === 'rules'" class="rules-content">
+    <div v-if="activeTab === 'rules'" id="eh-panel-rules" role="tabpanel" class="rules-content">
       <div class="panel rules-panel">
         <h3>How to Play</h3>
         <ul class="rules-list">
@@ -41,7 +40,7 @@
     </div>
 
     <!-- Game tab -->
-    <div v-if="activeTab === 'game' && gameState" class="game-layout">
+    <div v-if="activeTab === 'game' && gameState" id="eh-panel-game" role="tabpanel" class="game-layout">
       <!-- Left panel: Eggs + Cooldown -->
       <div class="side-panel left-panel">
         <div class="panel">
@@ -133,7 +132,7 @@
 
 <script>
 import axios from 'axios';
-import { AspButton } from '@aspirant/design-system';
+import { AspButton, AspSegmented } from '@aspirant/design-system';
 
 const BOARD_SIZE = 128;
 const CELL_SIZE = 10;
@@ -266,7 +265,7 @@ function generateOverlay(seed) {
 
 export default {
   name: 'EasterHuntView',
-  components: { AspButton },
+  components: { AspButton, AspSegmented },
   data() {
     return {
       gameState: null,
@@ -280,6 +279,14 @@ export default {
       countdownTimer: null,
       timeLeft: 0,
       activeTab: 'rules',
+      // AspSegmented members. `controls` names the tabpanel each one drives.
+      // The panels are v-if'd (and the Game one additionally waits on
+      // gameState), so only the live member's reference resolves — the same
+      // trade #4447 took rather than mounting both panels.
+      tabOptions: [
+        { value: 'rules', label: 'Rules', controls: 'eh-panel-rules' },
+        { value: 'game', label: 'Game', controls: 'eh-panel-game' },
+      ],
       toast: null,
       toastTimer: null,
       showReveal: false,
@@ -656,37 +663,11 @@ export default {
 /* ================================================
    Tabs
    ================================================ */
+/* Layout only — the strip's own paint comes from AspSegmented. */
 .tab-bar {
   display: flex;
   gap: var(--space-xs);
   margin-bottom: var(--space-lg);
-}
-
-.tab-btn {
-  padding: var(--space-xs) var(--space-lg);
-  border: 2px solid var(--border-card);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  font-family: var(--font-family-base);
-  cursor: pointer;
-  transition:
-    background-color var(--transition-base),
-    color var(--transition-base),
-    border-color var(--transition-base);
-}
-
-.tab-btn:hover {
-  border-color: var(--brand-primary);
-  color: var(--text-on-dark);
-}
-
-.tab-btn.active {
-  background: var(--brand-primary);
-  border-color: var(--brand-primary);
-  color: #1a1a1a;
 }
 
 /* ================================================

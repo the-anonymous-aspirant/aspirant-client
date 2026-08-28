@@ -12,6 +12,13 @@
       <p><em>See if you can get to the top on the highscore tab... and have fun!</em></p>
     </div>
     <div class="controls">
+      <!-- Held deliberately as native buttons, not ported to AspSegmented
+           (#4446 decision H2, filed on #4450): each member carries
+           :title="lang.name" (English / Svenska / Portugues), the only
+           disclosure of what the two-letter label means. AspSegmented renders
+           its members from an options array with no per-option attribute seam,
+           so the title cannot ride; :disabled could, but the title is the part
+           that would be silently lost. Port this when the DS lands a seam. -->
       <div class="language-selector">
         <button
           v-for="lang in languages"
@@ -27,36 +34,61 @@
       <AspButton :variant="isPlaying ? 'destructive' : 'primary'" @click="toggleGame">
         {{ isPlaying ? 'Stop Game' : 'Start Game' }}
       </AspButton>
-      <button class="sound-toggle" @click="toggleMute" :title="isMuted ? 'Unmute' : 'Mute'">
-        <svg v-if="!isMuted" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-          <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-        </svg>
-        <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-          <line x1="23" y1="9" x2="17" y2="15" />
-          <line x1="17" y1="9" x2="23" y2="15" />
-        </svg>
-      </button>
+      <!-- The native :title carried BOTH the hover disclosure and (there
+           being no text content) the accessible name, so the port needs both
+           an AspTooltip and an explicit aria-label - dropping the title alone
+           would leave the control nameless.
+           NOTE (#4446 decision H4): .sound-toggle is display:none at every
+           breakpoint below, so this control is not reachable in the running
+           app today. The port is still correct; unhiding it is a product call
+           this task does not make. -->
+      <span class="sound-toggle">
+        <AspTooltip :content="isMuted ? 'Unmute' : 'Mute'">
+          <AspButton
+            variant="ghost"
+            size="icon"
+            :aria-label="isMuted ? 'Unmute' : 'Mute'"
+            @click="toggleMute"
+          >
+            <svg v-if="!isMuted" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            </svg>
+            <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <line x1="23" y1="9" x2="17" y2="15" />
+              <line x1="17" y1="9" x2="23" y2="15" />
+            </svg>
+          </AspButton>
+        </AspTooltip>
+      </span>
     </div>
     <audio ref="bgMusic" :src="bgMusicUrl" loop></audio>
     <audio ref="scoreSound" :src="scoreSoundUrl"></audio>
     <audio ref="fanfareSound" :src="fanfareSoundUrl"></audio>
+    <!-- Each member switches a named panel below, so the strip declares
+         as="tabs" (§3.89 Q1) and the panels carry role="tabpanel" + the ids
+         the members reference. setActiveTab keeps the load-on-open fetch the
+         Highscores member's @click carried. -->
     <div class="tabs">
-      <button :class="{ active: activeTab === 'game' }" @click="setActiveTab('game')">Game</button>
-      <button :class="{ active: activeTab === 'foundWords' }" @click="setActiveTab('foundWords')">
-        Valid Words
-      </button>
-      <button :class="{ active: activeTab === 'scores' }" @click="setActiveTab('scores')">
-        Highscores
-      </button>
-      <button :class="{ active: activeTab === 'about' }" @click="setActiveTab('about')">
-        About
-      </button>
+      <AspSegmented
+        :options="tabOptions"
+        :model-value="activeTab"
+        as="tabs"
+        aria-label="WordWeaver views"
+        @update:model-value="setActiveTab"
+      />
     </div>
 
-    <div v-if="activeTab === 'game'" class="board">
+    <!-- The Game tab owns three sibling blocks (board, mobile controls,
+         score), so they share one tabpanel wrapper. It is display:contents,
+         so #wordweaver's flex column still lays the three out exactly as it
+         did when they were direct children. The score block moves up to join
+         them; the blocks it moves past are all v-if'd off whenever the Game
+         tab is live, so the rendered order is unchanged. -->
+    <div v-if="activeTab === 'game'" id="ww-panel-game" role="tabpanel" class="tab-panel">
+    <div class="board">
       <div v-for="(row, rowIndex) in board" :key="rowIndex" class="row">
         <div
           v-for="(cell, cellIndex) in row"
@@ -69,29 +101,39 @@
     </div>
 
     <!-- Add mobile controls -->
-    <div v-if="activeTab === 'game' && isPlaying" class="mobile-controls">
+    <div v-if="isPlaying" class="mobile-controls">
       <div class="control-row">
-        <button
+        <AspButton
+          variant="secondary"
+          size="icon"
           class="control-btn left-btn"
           @click="movePieceHorizontal(-1)"
           aria-label="Move Left"
         >
           ←
-        </button>
-        <button class="control-btn down-btn" @click="movePieceDown()" aria-label="Move Down">
+        </AspButton>
+        <AspButton variant="secondary" size="icon" class="control-btn down-btn" @click="movePieceDown()" aria-label="Move Down">
           ↓
-        </button>
-        <button
+        </AspButton>
+        <AspButton
+          variant="secondary"
+          size="icon"
           class="control-btn right-btn"
           @click="movePieceHorizontal(1)"
           aria-label="Move Right"
         >
           →
-        </button>
+        </AspButton>
       </div>
     </div>
 
-    <div v-if="activeTab === 'foundWords'" class="winning-words">
+    <div class="score">
+      <h2>Score</h2>
+      <div class="score-display">{{ score }}</div>
+    </div>
+    </div>
+
+    <div v-if="activeTab === 'foundWords'" id="ww-panel-foundWords" role="tabpanel" class="winning-words">
       <h2>Valid Words</h2>
       <div class="word-cards">
         <div v-for="word in winningWords" :key="word.text" class="word-card">
@@ -115,7 +157,7 @@
         </div>
       </div>
     </div>
-    <div v-if="activeTab === 'scores'" class="scores">
+    <div v-if="activeTab === 'scores'" id="ww-panel-scores" role="tabpanel" class="scores">
       <h2>Todays Highscores</h2>
       <div class="score-cards">
         <div
@@ -130,7 +172,7 @@
         </div>
       </div>
     </div>
-    <div v-if="activeTab === 'about'" class="about">
+    <div v-if="activeTab === 'about'" id="ww-panel-about" role="tabpanel" class="about">
       <div>
         <h2>About WordWeaver</h2>
         <p>
@@ -145,10 +187,6 @@
         </p>
         <p><em>'Veni Vidi'</em> — by The Aspirant</p>
       </div>
-    </div>
-    <div v-if="activeTab === 'game'" class="score">
-      <h2>Score</h2>
-      <div class="score-display">{{ score }}</div>
     </div>
     <div v-if="showFanfare" class="fanfare-message">
       <h2>TOP SCORE</h2>
@@ -173,7 +211,7 @@
 </template>
 
 <script>
-  import { AspButton, AspInput } from '@aspirant/design-system';
+  import { AspButton, AspInput, AspSegmented, AspTooltip } from '@aspirant/design-system';
   import axios from 'axios';
 
   const BOARD_CONFIG = {
@@ -294,7 +332,7 @@
 
   export default {
     name: 'WordWeaver',
-    components: { AspButton, AspInput },
+    components: { AspButton, AspInput, AspSegmented, AspTooltip },
     data() {
       return {
         board: Array.from({ length: BOARD_CONFIG.ROWS }, () =>
@@ -314,6 +352,13 @@
         lettersFallen: 0,
         winningWords: [],
         activeTab: 'game',
+        // AspSegmented members; `controls` names the tabpanel each drives.
+        tabOptions: [
+          { value: 'game', label: 'Game', controls: 'ww-panel-game' },
+          { value: 'foundWords', label: 'Valid Words', controls: 'ww-panel-foundWords' },
+          { value: 'scores', label: 'Highscores', controls: 'ww-panel-scores' },
+          { value: 'about', label: 'About', controls: 'ww-panel-about' },
+        ],
         colWords: [],
         seed: null,
         scores: [],
@@ -959,6 +1004,17 @@
     cursor: not-allowed;
   }
 
+  /* Pre-existing, untouched by the #4446 port: this hides the mute control at
+     EVERY breakpoint (the max-width:768px block below repeats it and no rule
+     ever unhides it), so the control is not reachable in the running app.
+     Recorded as #4446 decision H4 and reported rather than silently changed -
+     unhiding a control is a product call. Which is why the class sits on a
+     plain <span> wrapper rather than on AspTooltip: a scoped rule compiles to
+     .sound-toggle[data-v-parent], and AspTooltip has TWO root nodes (anchor +
+     teleported chip) so Vue applies no scope id to it - the rule would silently
+     miss and the control would go from hidden to visible. The measured symptom
+     was exactly that. The span also keeps .controls' flex gap count identical
+     to before the port, which hiding only the button would not. */
   .sound-toggle {
     display: none;
   }
@@ -1000,6 +1056,12 @@
     border-radius: var(--radius-sm);
   }
 
+  /* The Game tab's tabpanel wrapper. display:contents keeps #wordweaver's flex
+     column laying out board / mobile-controls / score exactly as before. */
+  .tab-panel {
+    display: contents;
+  }
+
   /* Mobile controls */
   .mobile-controls {
     display: flex;
@@ -1016,26 +1078,20 @@
     gap: var(--space-sm);
   }
 
+  /* Layout only: paint, focus and the active nudge now come from AspButton
+     (variant="secondary" size="icon"). The box stays 60x60 rather than taking
+     the DS icon default of 44x44 - size="icon" is documented as a fixed >=44px
+     square, and this is a mobile-only thumb d-pad (.mobile-controls is hidden
+     >=769px), so shrinking the target by 27% would be a regression smuggled in
+     by a refactor. The class lands on the DS root, so min-width/min-height
+     have to move with width/height. */
   .control-btn {
     width: 60px;
     height: 60px;
+    min-width: 60px;
+    min-height: 60px;
     font-size: var(--text-xl);
-    background-color: var(--surface-card);
-    color: var(--brand-primary);
-    border: 2px solid var(--brand-primary);
     border-radius: var(--radius-full);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: var(--shadow-sm);
-    transition: background-color var(--transition-fast), transform var(--transition-fast);
-  }
-
-  .control-btn:active {
-    background-color: var(--brand-primary);
-    color: var(--text-on-fixed-light);
-    transform: scale(0.95);
   }
 
   @media (max-width: 768px) {
@@ -1068,11 +1124,6 @@
       flex-wrap: wrap;
       gap: var(--space-2xs);
       width: 100%;
-    }
-
-    .tabs button {
-      padding: var(--space-xs) var(--space-sm);
-      font-size: var(--text-sm);
     }
 
     .word-cards,
@@ -1175,34 +1226,12 @@
     color: var(--brand-primary);
   }
 
+  /* Layout only - the strip's paint comes from AspSegmented. */
   .tabs {
     display: flex;
     gap: var(--space-xs);
     justify-content: center;
     margin-bottom: var(--space-md);
-  }
-
-  .tabs button {
-    padding: var(--space-sm) var(--space-lg);
-    border: 2px solid var(--border-card);
-    background-color: var(--surface-card);
-    color: var(--text-on-dark);
-    font-weight: bold;
-    cursor: pointer;
-    font-size: var(--text-base);
-    border-radius: var(--radius-md);
-    transition: background-color var(--transition-fast), transform var(--transition-fast);
-  }
-
-  .tabs button.active {
-    background-color: var(--brand-primary);
-    color: var(--surface-card);
-    border-color: var(--brand-primary);
-  }
-
-  .tabs button:not(.active):hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
   }
 
   .winning-words,
