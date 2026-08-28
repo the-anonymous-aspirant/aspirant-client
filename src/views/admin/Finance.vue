@@ -984,8 +984,19 @@ export default {
   margin-bottom: var(--space-xl);
 }
 
+/* Surfaces here used to read `var(--bg-card, <hex>)`. `--bg-card` is not a DS
+   token -- it resolves to the empty string at the document root in BOTH themes,
+   so the hard-coded fallback always won and every card stayed light on a dark
+   page while its ink correctly flipped to #e0e0e0 (#4493 D2: the card's own
+   body text measured 1.60:1 and the migrated ghost controls on it 1.85:1).
+   The DS names are `--surface-elevated` (#f9f9f9 light / #333333 dark) for the
+   near-white panels and `--surface-page` for the subtler chip/code/header fills
+   that sit on top of them. `.chart-legend` at :1319 already used the elevated
+   token; this brings the rest of the file onto the same footing.
+   NOT `--surface-card`: that is the deliberately dark card (#424242 light), and
+   swapping it in here would restyle the view rather than repair the theme. */
 .stat-card {
-  background: var(--bg-card, #fff);
+  background: var(--surface-elevated);
   border-radius: 8px;
   padding: var(--space-lg);
   text-align: center;
@@ -1024,7 +1035,7 @@ export default {
 }
 
 .source-folder {
-  background: var(--bg-card, #fff);
+  background: var(--surface-elevated);
   border: 2px solid var(--border-color, #e0e0e0);
   border-radius: 10px;
   padding: var(--space-lg);
@@ -1084,7 +1095,7 @@ export default {
   font-size: 0.75rem;
   padding: 1px 6px;
   border-radius: 8px;
-  background: var(--bg-card, #e9ecef);
+  background: var(--surface-page);
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -1165,7 +1176,7 @@ export default {
 }
 
 .modal {
-  background: var(--bg-card, #fff);
+  background: var(--surface-elevated);
   border-radius: 12px;
   max-width: 700px;
   width: 90%;
@@ -1207,7 +1218,7 @@ export default {
 }
 
 .schema-props code {
-  background: var(--bg-card, #f0f0f0);
+  background: var(--surface-page);
   padding: 1px 5px;
   border-radius: 3px;
 }
@@ -1228,11 +1239,11 @@ export default {
 
 .schema-table th {
   font-weight: 600;
-  background: var(--bg-card, #f8f9fa);
+  background: var(--surface-page);
 }
 
 .schema-table code {
-  background: var(--bg-card, #f0f0f0);
+  background: var(--surface-page);
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 0.85rem;
@@ -1251,7 +1262,7 @@ export default {
   font-size: 0.75rem;
   padding: 2px 6px;
   border-radius: 8px;
-  background: var(--bg-card, #e9ecef);
+  background: var(--surface-page);
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -1265,7 +1276,7 @@ export default {
   display: block;
   margin-top: var(--space-xs);
   padding: 8px 12px;
-  background: var(--bg-card, #f5f5f5);
+  background: var(--surface-page);
   border-radius: 4px;
   font-size: 0.85rem;
   overflow-x: auto;
@@ -1343,7 +1354,7 @@ th, td {
 
 th {
   font-weight: 600;
-  background: var(--bg-card, #f8f9fa);
+  background: var(--surface-page);
 }
 
 /* Amount colour now rides a .amount-cell span inside the AspDataTable cell slot
@@ -1353,7 +1364,7 @@ th {
 .amount-cell.expense { color: #dc3545; }
 
 .category-tag {
-  background: var(--bg-card, #e9ecef);
+  background: var(--surface-page);
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 0.8rem;
@@ -1472,7 +1483,7 @@ th {
 
 .recurring-table th {
   font-weight: 600;
-  background: var(--bg-card, #f8f9fa);
+  background: var(--surface-page);
 }
 
 .total-row td {

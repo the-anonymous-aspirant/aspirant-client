@@ -3,6 +3,16 @@
   line-height: 1.5;
   font-weight: 400;
   background-color: var(--surface-page);
+  /* The page's ink, paired with the page's surface (#4493 D1). Without this
+     the document inherits the UA default black and nothing below it flips
+     with the theme. Elements that set their own colour are unaffected; what
+     this repairs is everything that INHERITS -- above all the DS ghost
+     button, whose ink is a brand step mixed into `currentColor`
+     (@aspirant/design-system AspButton.vue:170-184) precisely so it takes the
+     surround's polarity. On bare page chrome that currentColor was black in
+     both themes, so `.btn-back` on the goal canvas measured 8.55:1 light and
+     1.60:1 dark -- same ink, flipped ground. */
+  color: var(--text-body);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
