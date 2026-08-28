@@ -143,6 +143,16 @@
 
 <template>
   <div class="pixel-draw">
+    <!-- HELD from the #4442 (#4295-A10) glyph-only sweep, on purpose. Every
+         member of this toolbar — the colour swatches AND the ⌫ eraser — is a
+         single-select member carrying aria-pressed, and §3.89 puts both shapes
+         out of AspButton's contract by construction: it has no pressed state,
+         and "a control that IS its content (a colour swatch)" is named there
+         explicitly. AspSegmented is not the answer either: its members render
+         from a text-only `options` array, so a swatch cannot ride `opt.icon`
+         (the #4450 gap), and porting the eraser alone would drop one 44x44 DS
+         box into a row of 24px swatches. Held whole, so the palette stays one
+         uniform toolbar. -->
     <div class="pixel-palette" role="toolbar" aria-label="Drawing colours">
       <button
         v-for="color in DRAW_PALETTE"
