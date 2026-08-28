@@ -5,21 +5,31 @@
     <p>
       <i>Your results are stored as json in your browsers storage and is never sent anywhere</i>
     </p>
+    <!-- Each member switches a named panel below, so the strip declares
+         as="tabs" (§3.89 Q1) and the panels carry role="tabpanel" + the ids
+         the members reference. The always-on comment/intensity card sits
+         between the tablist and its panels; aria-controls carries the
+         association that adjacency no longer does. -->
     <div class="tabs">
-      <button :class="{ active: activeTab === 'current' }" @click="activeTab = 'current'">
-        Current
-      </button>
-      <button :class="{ active: activeTab === 'data' }" @click="activeTab = 'data'">
-        Collected Data
-      </button>
-      <button :class="{ active: activeTab === 'heatmap' }" @click="activeTab = 'heatmap'">
-        Emotion Heatmap
-      </button>
+      <AspSegmented
+        :options="tabOptions"
+        :model-value="activeTab"
+        as="tabs"
+        aria-label="Emotion tracker views"
+        @update:model-value="activeTab = $event"
+      />
     </div>
     <div class="comment-section" @click="focusComment">
       <h2 v-if="selectedEmotionData">Selected Emotion: {{ selectedEmotionData.key }}</h2>
       <textarea ref="commentBox" v-model="comment" placeholder="Enter your comment"></textarea>
       <label for="intensity"><strong>Intensity:</strong></label>
+      <!-- Held deliberately as native buttons, not ported to AspSegmented
+           (#4446 decision H3): this is a 1-5 rating SCALE the user is entering
+           and saving, not a tab/mode/filter strip. AspSegmented mutes its
+           selected member on purpose so a mode choice does not spend the
+           accent budget (§3.89 Q1) - exactly backwards for the primary datum
+           on this card. The DS has no scale primitive; if one is wanted it
+           belongs in the DS lane, not in a consumer-side reinterpretation. -->
       <div class="intensity-buttons">
         <button
           v-for="i in 5"
@@ -32,7 +42,7 @@
       </div>
       <AspButton class="save-button" variant="primary" @click="saveEmotion">Save</AspButton>
     </div>
-    <div v-if="activeTab === 'current'" class="content-wrapper">
+    <div v-if="activeTab === 'current'" id="ee-panel-current" role="tabpanel" class="content-wrapper">
       <h2>Emotion Picker</h2>
       <p><i>You can only note down one value per emotion per day</i></p>
       <div class="emotion-container">
@@ -93,7 +103,7 @@
         </div>
       </transition-group>
     </div>
-    <div v-if="activeTab === 'data'" class="data-view">
+    <div v-if="activeTab === 'data'" id="ee-panel-data" role="tabpanel" class="data-view">
       <h2>Collected Data</h2>
       <p><i>All registered data. Click on delete to permanently remove an entry</i></p>
       <div
@@ -116,7 +126,7 @@
         </div>
       </div>
     </div>
-    <div v-if="activeTab === 'heatmap'" class="heatmap">
+    <div v-if="activeTab === 'heatmap'" id="ee-panel-heatmap" role="tabpanel" class="heatmap">
       <h2>Emotion Heatmap</h2>
       <p>
         <i
@@ -147,12 +157,13 @@
 
 <script>
   import emotions from '../../resources/games/emotions.js';
-  import { AspButton } from '@aspirant/design-system';
+  import { AspButton, AspSegmented } from '@aspirant/design-system';
 
   export default {
     name: 'EmotionalExcellence',
     components: {
       AspButton,
+      AspSegmented,
     },
     data() {
       return {
@@ -164,6 +175,12 @@
         comment: '',
         intensity: 1,
         activeTab: 'current',
+        // AspSegmented members; `controls` names the tabpanel each drives.
+        tabOptions: [
+          { value: 'current', label: 'Current', controls: 'ee-panel-current' },
+          { value: 'data', label: 'Collected Data', controls: 'ee-panel-data' },
+          { value: 'heatmap', label: 'Emotion Heatmap', controls: 'ee-panel-heatmap' },
+        ],
         collectedData: JSON.parse(localStorage.getItem('savedEmotions')) || [],
         expandedDates: [],
       };
@@ -348,35 +365,13 @@
     margin-top: var(--space-xl);
   }
 
-  /* Tabs */
+  /* Tabs — layout only; the strip's paint comes from AspSegmented. */
   .tabs {
     display: flex;
     justify-content: center;
     margin-bottom: var(--space-lg);
     gap: var(--space-sm);
     margin-top: var(--space-sm);
-  }
-
-  .tabs button {
-    padding: var(--space-sm) var(--space-lg);
-    border: none;
-    background-color: var(--surface-card);
-    color: var(--text-on-dark);
-    font-weight: bold;
-    cursor: pointer;
-    font-size: var(--text-base);
-    transition: filter var(--transition-moderate), transform var(--transition-moderate);
-    border-radius: var(--radius-md);
-  }
-
-  .tabs button.active {
-    background-color: var(--brand-primary);
-    color: var(--text-on-fixed-light);
-  }
-
-  .tabs button:not(.active):hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
   }
 
   /* Emotion boxes */
