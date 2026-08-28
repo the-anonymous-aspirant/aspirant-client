@@ -43,11 +43,18 @@
               </svg>
             </div>
             <div class="folder-title">{{ s.name || s.bank.toUpperCase() }}</div>
-            <button class="btn-icon" @click="showSchema(s.bank)" title="View expected CSV schema">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-              </svg>
-            </button>
+            <AspTooltip content="View expected CSV schema">
+              <AspButton
+                variant="ghost"
+                size="icon"
+                aria-label="View expected CSV schema"
+                @click="showSchema(s.bank)"
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                </svg>
+              </AspButton>
+            </AspTooltip>
           </div>
 
           <div class="folder-stats">
@@ -88,11 +95,14 @@
       <div class="modal">
         <div class="modal-header">
           <h3>{{ schemaModal.name }} — CSV Schema</h3>
-          <button class="btn-icon" @click="schemaModal = null">
+          <!-- Was nameless: no aria-label, no title, no text. AspButton
+               size="icon" warns on exactly this in dev; the name is added
+               here rather than merely carried across. #4445 -->
+          <AspButton variant="ghost" size="icon" aria-label="Close" @click="schemaModal = null">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
               <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
             </svg>
-          </button>
+          </AspButton>
         </div>
         <div class="modal-body">
           <div class="schema-meta">
@@ -292,13 +302,13 @@ import { AspInput } from '@aspirant/design-system';
 import axios from 'axios';
 import { Chart, registerables } from 'chart.js';
 import { AspDataTable } from '@aspirant/design-system';
-import { AspButton } from '@aspirant/design-system';
+import { AspButton, AspTooltip } from '@aspirant/design-system';
 import { seriesColor } from '../../composables/chartSeries.js';
 
 Chart.register(...registerables);
 
 export default {
-  components: { AspInput, AspDataTable, AspButton },
+  components: { AspInput, AspDataTable, AspButton, AspTooltip },
   data() {
     return {
       // AspDataTable column defs — all non-sortable (the native tables were
@@ -1005,20 +1015,12 @@ export default {
   flex: 1;
 }
 
-.btn-icon {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  color: var(--text-muted);
-  transition: color 0.15s, background 0.15s;
-}
-
-.btn-icon:hover {
-  color: var(--color-primary, #007bff);
-  background: rgba(0,123,255,0.08);
-}
+/* The schema-info control and the modal closer are AspButton
+   variant="ghost" size="icon"; the DS owns their paint and focus. The deleted
+   :hover rule was one of six references in this file to `--color-primary`, a
+   token defined nowhere — so it painted the hardcoded #007bff fallback,
+   bootstrap blue against this app's amber. The other five are outside this
+   child's scope and are filed, not swept. */
 
 .folder-stats {
   display: flex;
