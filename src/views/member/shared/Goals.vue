@@ -24,14 +24,14 @@
           </div>
           <div class="tree-actions" @click.stop>
             <AspTooltip content="Rename">
-              <button class="btn-action" aria-label="Rename" @click="startRename(tree)">
+              <AspButton variant="ghost" size="icon" aria-label="Rename" @click="startRename(tree)">
                 &#9998;
-              </button>
+              </AspButton>
             </AspTooltip>
             <AspTooltip content="Delete">
-              <button class="btn-action btn-delete" aria-label="Delete" @click="confirmDelete(tree)">
+              <AspButton variant="ghost" size="icon" aria-label="Delete" @click="confirmDelete(tree)">
                 &#10005;
-              </button>
+              </AspButton>
             </AspTooltip>
           </div>
         </div>
@@ -292,6 +292,14 @@ export default {
 
 .goals-card {
   background-color: var(--surface-card);
+  /* #3027/§3.18: a component that paints a surface must pair it with its own
+     ink. This card painted --surface-card and inherited the page's ink, so
+     currentColor inside it was the same value as the surface — .tree-date
+     (which derives from currentColor) rendered at 1.00:1, invisible, and so
+     did the two row-action glyphs. The port surfaced it: AspButton's ghost ink
+     is a currentColor mix by design, so it inherits whatever the consumer's
+     surface declares — and this one declared nothing. */
+  color: var(--text-on-dark);
   border: 2px solid var(--border-card);
   border-radius: var(--radius-xl);
   padding: var(--space-xl);
@@ -356,26 +364,12 @@ export default {
   gap: var(--space-xs);
 }
 
-.btn-action {
-  background: none;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-size: var(--text-base);
-  cursor: pointer;
-  padding: var(--space-2xs) var(--space-xs);
-  transition: color var(--transition-moderate), border-color var(--transition-moderate);
-}
-
-.btn-action:hover {
-  color: var(--text-on-dark);
-  border-color: var(--text-on-dark);
-}
-
-.btn-action.btn-delete:hover {
-  color: var(--feedback-error);
-  border-color: var(--feedback-error);
-}
+/* The two row actions are AspButton variant="ghost" size="icon" — the DS owns
+   their paint, hover, focus ring and the 44px square target (§3.23 rule-4), so
+   .btn-action / .btn-delete are deleted rather than reduced: a scoped rule
+   lands on the DS root and overrides the component the port just adopted
+   (#4323/#4324 measured that live). The red delete-hover goes with them; the
+   AspTooltip content and the aria-label carry the meaning. */
 
 /* Dialog Overlay */
 .dialog-overlay {
