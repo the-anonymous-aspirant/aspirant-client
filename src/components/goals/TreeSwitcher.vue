@@ -17,7 +17,11 @@
     >
       {{ activeTreeName || 'Select tree' }}
       <template #iconRight>
-        <span class="trigger-arrow" :class="{ open: isOpen }">&#9662;</span>
+        <!-- aria-hidden because #iconRight is INSIDE the button, so the glyph
+             would otherwise join the accessible name ("Existing name ▾"). The
+             open/closed state it draws is already announced, properly, by the
+             aria-expanded above. -->
+        <span class="trigger-arrow" :class="{ open: isOpen }" aria-hidden="true">&#9662;</span>
       </template>
     </AspButton>
 
@@ -187,8 +191,19 @@ export default {
       loadingTrees.value = false;
     }
 
+    // `activeTreeId` arrives as `route.params.id`, which vue-router always
+    // hands over as a STRING; `t.id` arrives from /api/goals/trees, where the
+    // Go model declares `ID uint json:"id"` and therefore serialises a NUMBER.
+    // The two never matched under ===, so this always resolved to undefined and
+    // the trigger always read the "Select tree" placeholder — for every tree,
+    // in production. Found by #4513 while porting that trigger to AspButton:
+    // the accessible-name assertion could not be written truthfully until the
+    // name existed. Compared as strings at both call sites; the prop stays
+    // typed String, which is what the route actually provides.
+    const sameTree = (a, b) => String(a) === String(b);
+
     function updateActiveTreeName() {
-      const active = trees.value.find((t) => t.id === props.activeTreeId);
+      const active = trees.value.find((t) => sameTree(t.id, props.activeTreeId));
       activeTreeName.value = active?.name || '';
     }
 
@@ -204,7 +219,7 @@ export default {
     }
 
     function switchTree(tree) {
-      if (tree.id === props.activeTreeId) {
+      if (sameTree(tree.id, props.activeTreeId)) {
         isOpen.value = false;
         return;
       }
