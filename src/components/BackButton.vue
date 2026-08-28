@@ -4,45 +4,30 @@
     class="back-button-container"
     :class="{ 'mobile': isMobile }"
   >
-    <AspTooltip :content="getBackButtonTitle()" position="right">
-      <button
-        @click="goBack"
-        class="back-button"
-        :aria-label="getBackButtonTitle()"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          class="back-icon"
-        >
-          <path
-            d="M15 18L9 12L15 6"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-        <span class="back-text" v-if="!isMobile"></span>
-      </button>
+    <!-- The DS ships AspBackButton, and docs/COMPONENTS.md §9 names THIS file
+         as the component it was ported from — so §3.13 build-in-DS-first says
+         adopt it rather than re-port the inner button. position="inline"
+         because the container below already owns the placement (and the two
+         mobile insets the DS does not model); icon-only because the label was
+         already an empty span here. Static tooltip content: the old title was
+         computed from history at render time and went stale, which is why the
+         DS deliberately ships none. -->
+    <AspTooltip content="Back" position="right">
+      <AspBackButton to="/" label="Back" position="inline" icon-only />
     </AspTooltip>
   </div>
 </template>
 
 <script>
 import { computed } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
-import { AspTooltip } from '@aspirant/design-system';
+import { useRoute } from 'vue-router';
+import { AspBackButton, AspTooltip } from '@aspirant/design-system';
 import { isMobile } from '@/global_state_manager.js';
 
 export default {
   name: 'BackButton',
-  components: { AspTooltip },
+  components: { AspBackButton, AspTooltip },
   setup() {
-    const router = useRouter();
     const route = useRoute();
 
     const showBackButton = computed(() => {
@@ -50,24 +35,16 @@ export default {
       return route.path !== '/';
     });
 
-    const goBack = () => {
-      // Check if there's history to go back to
-      if (window.history.length > 1) {
-        router.go(-1);
-      } else {
-        // If no history, go to home page
-        router.push('/');
-      }
-    };
-
-    const getBackButtonTitle = () => {
-      return window.history.length > 1 ? 'Go back' : 'Go to home';
-    };
-
+    // goBack and getBackButtonTitle are gone with the native button. Both were
+    // built on `window.history.length > 1`, which counts forward entries and is
+    // already > 1 on a tab that merely navigated within the app — so it answers
+    // "has this tab navigated at all", not "is the previous entry ours", and
+    // popping on it can walk the user out to the referring site. AspBackButton
+    // reads `history.state.back` (what vue-router actually writes) and falls
+    // back to a same-origin referrer check. Adopting the component is what
+    // fixes that; re-porting the inner button would have carried the bug.
     return {
       showBackButton,
-      goBack,
-      getBackButtonTitle,
       isMobile
     };
   }
@@ -75,11 +52,28 @@ export default {
 </script>
 
 <style scoped>
+/* The container owns placement AND the pill surface: AspBackButton sets no
+   background on purpose, so it inherits polarity, and a control fixed over
+   arbitrary scrolling content needs a surface of its own to stay legible.
+   Painting it here rather than on the DS root is the whole distinction —
+   a scoped rule on the component would override it (#4323/#4324).
+   `color` is paired with that surface (#3027/§3.18): the DS ink is
+   currentColor-derived, so a surface that declares none hands it the page's
+   polarity and the glyph goes unreadable on the card. */
 .back-button-container {
   position: fixed;
   top: var(--space-lg);
   right: var(--space-lg);
   z-index: 1000;
+  display: inline-flex;
+  padding: var(--space-2xs);
+  background: var(--surface-card);
+  color: var(--text-on-dark);
+  border: 2px solid var(--brand-primary);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   transition: all var(--transition-moderate);
 }
 
@@ -88,67 +82,21 @@ export default {
   right: var(--space-md);
 }
 
-.back-button {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  background: var(--surface-card);
-  color: var(--brand-primary);
-  border: 2px solid var(--brand-primary);
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  font-weight: 600;
-  font-size: var(--text-sm);
-  transition: all var(--transition-moderate);
-  box-shadow: var(--shadow-md);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-.back-button:hover {
-  filter: brightness(1.15);
+/* .back-button, .back-icon, .back-text and their hover/active rules are gone
+   with the native button. The DS owns the control's paint, its focus ring, its
+   44px minimum target and the icon's nudge-left hover — which it also disables
+   under prefers-reduced-motion, something this file never did. The container
+   keeps the lift on hover, since that belongs to the pill, not the button. */
+.back-button-container:hover {
   transform: translateY(-1px);
   box-shadow: var(--shadow-lg);
 }
 
-.back-button:active {
-  transform: translateY(0);
-  box-shadow: var(--shadow-sm);
-}
-
-.back-icon {
-  transition: transform var(--transition-base);
-}
-
-.back-button:hover .back-icon {
-  transform: translateX(-2px);
-}
-
-.back-text {
-  font-family: var(--font-family-base);
-  letter-spacing: 0.5px;
-}
-
 /* Mobile styles */
-@media (max-width: 768px) {
-  .back-button {
-    padding: var(--space-xs) var(--space-sm);
-    font-size: var(--text-sm);
-    min-width: 44px;
-    min-height: 44px;
-    justify-content: center;
-  }
-
-  .back-text {
-    display: none;
-  }
-
-  .back-icon {
-    width: 18px;
-    height: 18px;
-  }
-}
+/* The former mobile block only restated the 44px target, hid the (empty)
+   label and resized the glyph. AspBackButton guarantees min-height 44px at
+   every breakpoint and the label is clipped in the accessibility tree rather
+   than display:none, so nothing here needs a mobile branch any more. */
 
 /* Small screen adjustments */
 @media (max-width: 480px) {
@@ -157,16 +105,6 @@ export default {
     right: var(--space-sm);
   }
 
-  .back-button {
-    padding: var(--space-2xs) var(--space-sm);
-    min-width: 40px;
-    min-height: 40px;
-  }
-
-  .back-icon {
-    width: 16px;
-    height: 16px;
-  }
 }
 
 /* Ensure it doesn't interfere with mobile menu */
