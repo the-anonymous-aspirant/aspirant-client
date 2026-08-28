@@ -209,10 +209,9 @@
               class="col-scraped sortable"
               :class="{ active: sort === 'scraped_at' }"
               data-test="sort-scraped"
-              title="How long ago this entry first appeared in the feed"
               @click="setSort('scraped_at')"
             >
-              Added
+              <AspTooltip content="How long ago this entry first appeared in the feed">Added</AspTooltip>
             </th>
             <th class="col-action"></th>
           </tr>
@@ -235,9 +234,9 @@
               <div class="title-cell">
                 <div class="title-line">
                   <a class="title-link" :href="job.canonical_url" target="_blank" rel="noopener">{{ job.title }}</a>
-                  <span v-if="job.seen_on_sites_count > 1" class="badge badge-sites" :title="`Seen on ${job.seen_on_sites_count} sites`">
-                    ×{{ job.seen_on_sites_count }}
-                  </span>
+                  <AspTooltip v-if="job.seen_on_sites_count > 1" :content="`Seen on ${job.seen_on_sites_count} sites`">
+                    <span class="badge badge-sites">×{{ job.seen_on_sites_count }}</span>
+                  </AspTooltip>
                 </div>
                 <div class="row-meta">
                   <!-- The Added column is hidden below 768px (see media query),
@@ -330,7 +329,7 @@
 
 <script>
   import axios from 'axios';
-  import { AspButton, AspInput, AspTimeSince } from '@aspirant/design-system';
+  import { AspButton, AspInput, AspTimeSince, AspTooltip } from '@aspirant/design-system';
 
   const PER_PAGE = 25;
   const FILTER_DEBOUNCE_MS = 300;
@@ -353,7 +352,7 @@
 
   export default {
     name: 'JobsView',
-    components: { AspButton, AspInput, AspTimeSince },
+    components: { AspButton, AspInput, AspTimeSince, AspTooltip },
     data() {
       return {
         jobs: [],

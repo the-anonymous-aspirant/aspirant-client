@@ -108,7 +108,14 @@ test.describe('/member/personal/jobs — card→page→filter→hide', () => {
     const multi = page.locator('[data-test-row-id="job-002"]');
     await expect(multi.locator('.badge-sites')).toBeVisible();
     await expect(multi.locator('.badge-sites')).toContainText('×2');
-    await expect(multi.locator('.badge-sites')).toHaveAttribute('title', 'Seen on 2 sites');
+    // The hover hint is now an AspTooltip DS chip (#4278-A1) rather than a native
+    // title attribute. The chip is a hover/focus affordance, so assert it only on
+    // the pointer-capable project — mobile-safari emulates touch, where a hover
+    // tooltip does not fire.
+    if (test.info().project.name !== 'mobile-safari') {
+      await multi.locator('.badge-sites').hover();
+      await expect(page.getByRole('tooltip')).toHaveText('Seen on 2 sites');
+    }
 
     const single = page.locator('[data-test-row-id="job-001"]');
     await expect(single.locator('.badge-sites')).toHaveCount(0);

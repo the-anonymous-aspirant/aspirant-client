@@ -68,29 +68,33 @@
             </td>
             <td>
               <div class="row-actions">
-                <AspButton
-                  variant="secondary"
-                  size="sm"
-                  type="button"
-                  :disabled="!row.flow.enabled || acting.has(row.flow.id)"
-                  :title="row.flow.enabled ? 'trigger this flow' : 'flow disabled'"
-                  :data-test="`trigger-${row.flow.id}`"
-                  @click="onTrigger(row.flow.id)"
-                >
-                  ▶ Start
-                </AspButton>
-                <AspButton
+                <AspTooltip :content="row.flow.enabled ? 'trigger this flow' : 'flow disabled'">
+                  <AspButton
+                    variant="secondary"
+                    size="sm"
+                    type="button"
+                    :disabled="!row.flow.enabled || acting.has(row.flow.id)"
+                    :data-test="`trigger-${row.flow.id}`"
+                    @click="onTrigger(row.flow.id)"
+                  >
+                    ▶ Start
+                  </AspButton>
+                </AspTooltip>
+                <AspTooltip
                   v-if="row.latestRun && row.latestRun.status === 'running'"
-                  variant="destructive"
-                  size="sm"
-                  type="button"
-                  :disabled="acting.has(row.flow.id)"
-                  title="signal the driver to stop"
-                  :data-test="`cancel-${row.flow.id}`"
-                  @click="onCancel(row.flow.id, row.latestRun.id)"
+                  content="signal the driver to stop"
                 >
-                  ✕ Cancel
-                </AspButton>
+                  <AspButton
+                    variant="destructive"
+                    size="sm"
+                    type="button"
+                    :disabled="acting.has(row.flow.id)"
+                    :data-test="`cancel-${row.flow.id}`"
+                    @click="onCancel(row.flow.id, row.latestRun.id)"
+                  >
+                    ✕ Cancel
+                  </AspButton>
+                </AspTooltip>
               </div>
             </td>
           </tr>
@@ -110,7 +114,7 @@
 </template>
 
 <script>
-  import { AspButton } from '@aspirant/design-system';
+  import { AspButton, AspTooltip } from '@aspirant/design-system';
   import { useBrowserFlows } from '../../composables/useBrowserFlows.js';
 
   const MAX_RUNS = 20;
@@ -124,7 +128,7 @@
 
   export default {
     name: 'BrowserFlows',
-    components: { AspButton },
+    components: { AspButton, AspTooltip },
     data() {
       return {
         flows: [],
