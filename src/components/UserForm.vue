@@ -24,19 +24,34 @@
           autocomplete="new-password"
         />
       </div>
-      <!-- Access Role dropdown menu -->
+      <!-- Access Role dropdown menu.
+           The caption stays here rather than moving to AspSelect's `label`
+           prop, and that is the DS's constraint, not a preference:
+           .select__label is --text-xs with no weight where the .field__label
+           the four AspInput/AspTextarea fields around it render is --text-sm at
+           --font-weight-medium (DS defect #4484). Handing this one caption to
+           the prop would put a fifth, smaller treatment in a form that finally
+           has one. `for` is dropped because an id passed to AspSelect lands on
+           its wrapper <div>, which is not a labelable element; the accessible
+           name rides aria-label instead. Both halves come out when #4484 does. -->
       <div>
-        <label for="accessRole">Access Role</label>
-        <select v-model="localUser.access_role">
-          <option v-for="role in roles" :key="role.ID" :value="role.role_name">
-            {{ role.role_name }}
-          </option>
-        </select>
+        <label>Access Role</label>
+        <AspSelect
+          v-model="localUser.access_role"
+          :options="roleOptions"
+          aria-label="Access Role"
+        />
       </div>
-      <!-- Comment input field -->
+      <!-- Comment input field. AspTextarea's caption matches AspInput's exactly,
+           so this one CAN hand its label to the prop, and the hand-rolled
+           <label> goes with the rule that used to imitate .field__label. -->
       <div>
-        <label for="comment">Comment</label>
-        <textarea v-model="localUser.comment"></textarea>
+        <AspTextarea
+          v-model="localUser.comment"
+          label="Comment"
+          :rows="3"
+          :max-rows="10"
+        />
       </div>
       <!-- Save and Cancel buttons -->
       <div class="form-actions">
@@ -48,12 +63,12 @@
 </template>
 
 <script>
-  import { AspInput, AspButton } from '@aspirant/design-system';
+  import { AspInput, AspButton, AspSelect, AspTextarea } from '@aspirant/design-system';
 
   import axios from 'axios';
 
   export default {
-    components: { AspInput, AspButton },
+    components: { AspInput, AspButton, AspSelect, AspTextarea },
     props: {
       user: Object, // The 'user' prop is declared here, indicating that the parent component can pass a user object to this component
     },
@@ -63,6 +78,14 @@
         localUser: { ...this.user },
         roles: [], // Add roles data property
       };
+    },
+    computed: {
+      // AspSelect takes `[{value,label}]` where the native took <option> markup.
+      // Value and label are both role_name, as the <option> had — the API's `ID`
+      // is not what this form submits.
+      roleOptions() {
+        return this.roles.map(role => ({ value: role.role_name, label: role.role_name }));
+      },
     },
     methods: {
       // Fetch roles from the API
@@ -115,12 +138,13 @@
     margin-bottom: var(--space-md);
   }
 
-  /* Only the <select> and the <textarea> still take a hand-rolled caption, and
-     they are retuned to read as the same caption AspInput renders for the three
-     migrated fields — DS `.field__label` is --text-sm at --font-weight-medium,
-     where this was --text-base at `bold`. Left alone, one form would have
-     carried two different label treatments, which is the mixed-contract
-     regression #4296 forbids in its label lane rather than its control lane. */
+  /* One hand-rolled caption is left — the Access Role select's, held here by DS
+     defect #4484 (see the template). It is retuned to read as the .field__label
+     the four DS fields render, which is the whole point of keeping it: left at
+     its old --text-base/bold, this form would carry two label treatments, the
+     mixed-contract regression #4296 forbids in its label lane rather than its
+     control lane. The e2e asserts the two resolve identically, so a later tidy
+     into AspSelect's `label` prop fails loudly instead of shrinking one caption. */
   .user-form label {
     display: block;
     margin-bottom: var(--space-2xs);
@@ -130,37 +154,21 @@
     color: var(--text-on-light);
   }
 
-  /* `select` and `textarea` are primitive families #4278 does not cover (its
-     four lanes are button / input / tooltip / table), and AspSelect/AspTextarea
-     adoption is therefore out of this slice's scope — but leaving them at the
-     old box would put two natives at a different height, radius and fill beside
-     three DS controls in one form. So they are held to the box AspInput
-     renders: 34px for the single-line control (the §3.10 filter canon),
-     --radius-md, --border-control (which carries the WCAG 1.4.11 3:1 non-text
-     floor that decorative --border-subtle does not), and the --surface-elevated
-     / --text-body pairing resolved against the control's own surface rather
-     than the page's. The textarea keeps a vertical padding instead of a fixed
-     height, because a multi-line box that cannot grow is not the same control. */
-  .user-form select,
-  .user-form textarea {
+  /* The block that used to hand-paint `select` and `textarea` is gone. It said
+     those were "primitive families #4278 does not cover" and held them to the
+     box AspInput renders — a statement about that census, not about the DS:
+     AspSelect and AspTextarea have shipped throughout, and each now paints the
+     34px / --radius-md / --border-control / --surface-elevated box the rule was
+     copying. The rule could not have survived the port in any case, since both
+     components render their control past this file's data-v attribute.
+
+     The one declaration with no DS equivalent is the full-row width. AspSelect's
+     root is `display: inline-flex` and its trigger has `min-width: 10rem`, so in
+     this 500px column it would sit at its content width beside four fields that
+     fill the row. AspTextarea's root is already block-level. */
+  .user-form .select {
+    display: flex;
     width: 100%;
-    box-sizing: border-box;
-    border: 1px solid var(--border-control);
-    border-radius: var(--radius-md);
-    background-color: var(--surface-elevated);
-    color: var(--text-body);
-    font-family: inherit;
-    font-size: var(--text-sm);
-  }
-
-  .user-form select {
-    height: 34px;
-    padding: 0 var(--space-sm);
-  }
-
-  .user-form textarea {
-    padding: var(--space-xs) var(--space-sm);
-    resize: vertical;
   }
 
   /* Save (confirm) and Cancel (neutral) are AspButtons now — DS owns their fill,
