@@ -20,7 +20,12 @@
     <div v-if="currentView === 'enterData'">
       <input type="datetime-local" v-model="selectedDateTime" class="datetime-input" />
 
-      <textarea v-model="comment" placeholder="Add a comment" class="comment-input"></textarea>
+      <!-- The wrapper carries the layout, not the component: AspTextarea sets
+           inheritAttrs: false and rides $attrs — class included — to the inner
+           <textarea>, where this file's data-v attribute does not reach. -->
+      <div class="comment-field">
+        <AspTextarea v-model="comment" placeholder="Add a comment" :rows="4" :max-rows="10" />
+      </div>
 
       <div class="button-group">
         <AspButton class="confirm-btn" variant="primary" size="lg" @click="confirmDateTime">
@@ -76,13 +81,14 @@
 
 <script>
   import axios from 'axios';
-  import { AspButton, AspDataTable } from '@aspirant/design-system';
+  import { AspButton, AspDataTable, AspTextarea } from '@aspirant/design-system';
   import assetManager from '../../../asset_manager';
 
   export default {
     components: {
       AspButton,
       AspDataTable,
+      AspTextarea,
     },
     data() {
       return {
@@ -374,16 +380,16 @@
     text-align: center;
   }
 
-  .comment-input {
-    width: 100%;
-    height: 100px;
+  /* Was .comment-input, hand-painting the box. AspTextarea paints it now, with
+     --border-control at the WCAG 1.4.11 3:1 floor rather than the decorative
+     --border-subtle this had (the same swap AspInput's own source records).
+     What is left is the gap above it — the DS cannot know what this field sits
+     under. The centred bold text went with the box: it was a property of a
+     hand-rolled control, not of a comment field, and the DS control's own
+     left-aligned regular face is what every other composer in the app now
+     renders. */
+  .comment-field {
     margin-top: var(--space-lg);
-    padding: var(--space-sm);
-    font-size: var(--text-base);
-    font-weight: bold;
-    text-align: center;
-    border: 2px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
   }
 
   .feeding-times {
