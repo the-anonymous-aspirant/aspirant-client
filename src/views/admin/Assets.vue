@@ -82,26 +82,38 @@
 
     <div class="stats">{{ totalFiles }} files, {{ formatSize(totalSize) }} total</div>
 
-    <div v-if="deleteTarget" v-overlay-history="() => (deleteTarget = null)" class="modal-overlay" @click.self="deleteTarget = null">
-      <div class="modal">
-        <h3>Delete asset?</h3>
+    <!-- AspModal, not a hand-rolled scrim: this dialog had no role="dialog",
+         no aria-modal, no focus containment and no Escape — as did all twelve
+         overlays in the app (#4516). The panel is a DARK surface-setter in both
+         themes, so anything below that paints its own background declares its
+         own ink. -->
+    <AspModal
+      :open="Boolean(deleteTarget)"
+      title="Delete asset?"
+      size="sm"
+      @update:open="(open) => (open ? null : cancelDelete())"
+    >
+      <!-- Test hook on the body: AspModal's root is a <Teleport>, so a
+           fallthrough attribute has no element to land on. -->
+      <div v-if="deleteTarget" data-testid="asset-delete-confirm">
         <p class="modal-path">{{ deleteTarget.key }}</p>
         <p>This cannot be undone.</p>
-        <div class="modal-actions">
-          <AspButton variant="secondary" @click="deleteTarget = null">Cancel</AspButton>
-          <AspButton variant="destructive" @click="deleteAsset">Delete</AspButton>
-        </div>
       </div>
-    </div>
+      <template #footer>
+        <AspButton variant="secondary" @click="cancelDelete">Cancel</AspButton>
+        <AspButton variant="destructive" @click="deleteAsset">Delete</AspButton>
+      </template>
+    </AspModal>
   </div>
 </template>
 
 <script>
   import axios from 'axios';
-  import { AspButton, AspTooltip } from '@aspirant/design-system';
+  import { AspButton, AspModal, AspTooltip } from '@aspirant/design-system';
+  import { overlayHistoryWatch } from '../../directives/overlayHistory.js';
 
   export default {
-    components: { AspButton, AspTooltip },
+    components: { AspButton, AspModal, AspTooltip },
     data() {
       return {
         assets: [],
@@ -116,6 +128,12 @@
     },
     created() {
       this.fetchAssets();
+    },
+    watch: {
+      // Back closes the dialog rather than leaving the page (#4172). The
+      // directive cannot bind to AspModal's teleported root, so the history
+      // entry follows the state edge instead — see overlayHistory.js.
+      deleteTarget: overlayHistoryWatch('cancelDelete'),
     },
     computed: {
       pathSegments() {
@@ -252,6 +270,11 @@
       },
       confirmDelete(file) {
         this.deleteTarget = file;
+      },
+      // One close path for every dismissal — Cancel, the ✕, a scrim press,
+      // Escape and the Back gesture all land here, so all reach one state.
+      cancelDelete() {
+        this.deleteTarget = null;
       },
       async deleteAsset() {
         const file = this.deleteTarget;
@@ -492,45 +515,30 @@
     margin-top: var(--space-xs);
   }
 
-  /* Modal */
-  .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: var(--surface-scrim);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
+  /* Delete dialog. The scrim, the panel, its radius, shadow, padding, title
+     and the footer row are all AspModal's now — five local rules deleted
+     (#4516). What remains is the one element that paints its own background.
 
-  .modal {
-    background: var(--surface-elevated);
-    border-radius: var(--radius-xl);
-    padding: var(--space-xl);
-    max-width: 400px;
-    width: 90%;
-    box-shadow: var(--shadow-lg);
-  }
+     .modal-path SETS a surface, so it declares the ink that pairs with it. It
+     did not before: the panel used to be --surface-elevated (light) and the
+     chip inherited the page's dark ink by accident. AspModal's panel is
+     --surface-card, DARK in both themes, so that inheritance now hands this
+     light chip a light ink — the 1.00:1 shape from #4448.
 
-  .modal h3 {
-    margin: 0 0 var(--space-sm) 0;
-    color: var(--text-on-light);
-  }
-
+     The ink is --text-on-fixed-light, NOT --text-on-light: that token flips
+     with the theme (#424242 -> #e0e0e0) because it names the ink for the
+     theme's light-ish surface, and this background is a fixed literal that
+     does not flip with it. Measured, not reasoned: --text-on-light here read
+     1.16:1 in dark. The literal itself is the older defect and outlives this
+     task. */
   .modal-path {
     font-family: monospace;
     font-size: var(--text-xs);
     background: #f0f0f0;
+    color: var(--text-on-fixed-light);
     padding: var(--space-xs);
     border-radius: var(--radius-sm);
     word-break: break-all;
-  }
-
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-sm);
-    margin-top: var(--space-lg);
   }
 
 
