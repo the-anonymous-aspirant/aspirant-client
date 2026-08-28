@@ -5,8 +5,8 @@ import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/moc
  *  hand-painted native <button> to AspButton variant="secondary" with the
  *  disclosure arrow on #iconRight.
  *
- *  Two of the three assertions here guard something that could actually break;
- *  the third records a capability the port ADDED. They are labelled as such,
+ *  Three of the four cases here guard something that could actually break; the
+ *  fourth records a capability the port ADDED. They are labelled as such,
  *  because #4493 and #4512 both turned up assertions that looked like guards
  *  and were not, and an unlabelled green test is the expensive kind of wrong.
  *
@@ -32,6 +32,11 @@ import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/moc
  *  below are ordered so the useful one is not mistaken for a consequence of the
  *  weak one. Test 1 and test 3 stay green in that state; only this one fails.
  *
+ *  GUARD 3 — the mobile width. Making the name resolve is a correctness fix
+ *  that COSTS width, on a toolbar that already overflows a phone. The reasoning
+ *  and the measured numbers are at the test itself; the point of having it here
+ *  is that a later change to the cap has to answer for the overflow.
+ *
  *  ADDED, not guarded — the ARIA. The native announced nothing about the menu
  *  it opens: no aria-haspopup, no aria-expanded. The port carries both through
  *  AspButton's attribute fall-through. There is no regression to protect here
@@ -42,7 +47,7 @@ import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/moc
  *  the trigger BY ITS NAME. Until #4513 the name never resolved — `t.id` from
  *  the API is a JSON number, `route.params.id` is a string, and the `===`
  *  between them meant the trigger read the "Select tree" placeholder for every
- *  tree in production. A regression to that bug turns all three tests red.
+ *  tree in production. A regression to that bug turns all four cases red.
  */
 
 const LONG_NAME = 'A tree whose name is long enough to need clipping in the toolbar';
