@@ -1,7 +1,15 @@
 <template>
   <div class="canvas-view">
     <div class="canvas-toolbar">
-      <button class="btn-back" @click="goBack">&#8592; Trees</button>
+      <!-- Ghost, not AspBackButton. `goBack()` is an unconditional
+           `router.push('/member/shared/goals')` — it always lands on the Trees
+           list, which is what the label promises. AspBackButton pops history
+           when there is an in-app entry to pop, and on a canvas reached through
+           the tree switcher that entry is another TREE, so it would send
+           "Trees" somewhere that is not Trees. Ghost is also how the DS itself
+           paints a back affordance (AspBackButton: no background, muted ink,
+           transparent border), so the family reads the same. #4460. -->
+      <AspButton variant="ghost" class="btn-back" @click="goBack">&#8592; Trees</AspButton>
       <TreeSwitcher
         :activeTreeId="treeId"
         @tree-renamed="onTreeRenamed"
@@ -345,21 +353,12 @@ export default {
   flex-shrink: 0;
 }
 
-.btn-back {
-  background: none;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-lg);
-  color: var(--text-muted);
-  padding: var(--space-xs) var(--space-md);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  transition: color var(--transition-moderate);
-}
-
-.btn-back:hover {
-  color: var(--text-on-light);
-  border-color: var(--text-on-light);
-}
+/* Layout only. Fill, ink, radius, border, focus and hover are AspButton's now;
+   a scoped `.btn-back { color/border/padding }` block would fall through to the
+   DS button root and override the component it just adopted (the scoped-
+   selector footgun that bit the earlier AspButton slices). Nothing here needs
+   to survive — the toolbar's flex gap does the spacing — so the class stays
+   only as a hook for anything a later layout tweak needs. */
 
 .toolbar-spacer {
   flex: 1;

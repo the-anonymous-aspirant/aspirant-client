@@ -1,53 +1,51 @@
 <template>
   <div v-if="!loggedIn">
-    <!-- Collapsed state: show only login button -->
-    <transition name="login-transition" mode="out-in">
-      <div v-if="collapsed" key="collapsed" class="collapsed-login">
-        <button class="collapsed-login-button" @click="expandSidebar">
-          Login
-        </button>
-      </div>
-      <!-- Expanded state: show full login form -->
-      <div v-else key="expanded" class="login-card">
-        <form @submit.prevent="login">
-          <!-- Both fields carry AspInput's own `label` prop rather than the
-               hand-rolled <label for>: the component mints the id and wires
-               `for` to the inner <input> itself, so the association cannot
-               drift the way a hand-maintained pair can. That is also why
-               neither field passes an `id` — an id arriving through $attrs
-               lands on the inner input AFTER the component's own `:id`
-               (mergeProps: later wins), which would leave `for` pointing at a
-               node that no longer carries that id. The e2e selectors move to
-               `input[name=...]` for the same reason.
+    <!-- One rendered state. The former `v-if="collapsed"` branch — a bespoke
+         fixed-height sidebar-rail trigger — was unreachable: this component is
+         mounted in exactly three places (`LoginView.vue:5`, `Sidebar.vue:226`,
+         `Sidebar.vue:234`) and every one passed `:collapsed="false"`, with the
+         prop itself defaulting to false. The `<transition>` went with it: with
+         one always-present child it had nothing to cross-fade between. Removed
+         in #4460 along with the prop and its three bindings. -->
+    <div class="login-card">
+      <form @submit.prevent="login">
+        <!-- Both fields carry AspInput's own `label` prop rather than the
+             hand-rolled <label for>: the component mints the id and wires
+             `for` to the inner <input> itself, so the association cannot
+             drift the way a hand-maintained pair can. That is also why
+             neither field passes an `id` — an id arriving through $attrs
+             lands on the inner input AFTER the component's own `:id`
+             (mergeProps: later wins), which would leave `for` pointing at a
+             node that no longer carries that id. The e2e selectors move to
+             `input[name=...]` for the same reason.
 
-               `name` + `autocomplete` are the caller's to set through the
-               $attrs fallthrough seam (design ruling §3.85) — they are what
-               makes a password manager offer to fill and to save this pair. -->
-          <div class="form-group">
-            <AspInput
-              v-model="username"
-              label="Username"
-              name="username"
-              autocomplete="username"
-              required
-            />
-          </div>
-          <div class="form-group">
-            <AspInput
-              v-model="password"
-              type="password"
-              label="Password"
-              name="password"
-              autocomplete="current-password"
-              required
-            />
-          </div>
-          <AspButton type="submit" class="login-button">Login</AspButton>
-        </form>
-        <p v-if="error" class="error-message">{{ error }}</p>
-        <p v-if="success" class="success-message">{{ success }}</p>
-      </div>
-    </transition>
+             `name` + `autocomplete` are the caller's to set through the
+             $attrs fallthrough seam (design ruling §3.85) — they are what
+             makes a password manager offer to fill and to save this pair. -->
+        <div class="form-group">
+          <AspInput
+            v-model="username"
+            label="Username"
+            name="username"
+            autocomplete="username"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <AspInput
+            v-model="password"
+            type="password"
+            label="Password"
+            name="password"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+        <AspButton type="submit" class="login-button">Login</AspButton>
+      </form>
+      <p v-if="error" class="error-message">{{ error }}</p>
+      <p v-if="success" class="success-message">{{ success }}</p>
+    </div>
   </div>
   <div class="logout-card" v-else @click="toggleSidebar">
     <AspButton class="login-button" @click.stop="logout">Logout</AspButton>
@@ -66,10 +64,6 @@
         type: Boolean,
         required: true,
       },
-      collapsed: {
-        type: Boolean,
-        default: false,
-      },
     },
     data() {
       return {
@@ -83,12 +77,6 @@
     methods: {
       toggleSidebar() {
         toggleSidebar(); // Use the imported function
-      },
-      expandSidebar() {
-        // Only expand if currently collapsed
-        if (this.collapsed) {
-          toggleSidebar();
-        }
       },
       async logout() {
         // The session is the server's HttpOnly auth_token cookie, which this
@@ -198,9 +186,11 @@
      are AspButtons now — DS owns their fill, ink, radius, focus and hover
      (#4295). The class falls through to the DS <button> root and is reduced to
      the one thing DS cannot know: this button spans its card's full width and
-     keeps the small top gap from the field above it. The collapsed-sidebar
-     trigger below is a bespoke fixed-height strip affordance, not the standard
-     button-of-record shape, and is held out of this slice (residue). */
+     keeps the small top gap from the field above it.
+
+     They are now the ONLY buttons in this file. The collapsed-sidebar trigger
+     this comment used to hold out as residue turned out to be unreachable —
+     see the template — so #4460 deleted it rather than porting it. */
   .login-button {
     width: 100%;
     margin-top: var(--space-2xs);
@@ -223,47 +213,4 @@
     cursor: pointer;
   }
 
-  .collapsed-login {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: var(--space-2xs);
-    transition: all var(--transition-moderate);
-  }
-
-  .collapsed-login-button {
-    background-color: var(--brand-primary);
-    /* --brand-primary is a fixed-light surface in both themes (same #ffb300
-       amber); its ink must be the fixed-light ink, not --text-on-dark, which
-       measures 1.79:1 here. Same defect and fix as AspButton's .btn--primary
-       (#4295) — this native button is the one instance the migration left
-       out of scope (residue). Task-#4282. */
-    color: var(--text-on-fixed-light);
-    border: none;
-    height: 40px;
-    cursor: pointer;
-    font-size: var(--text-sm);
-    font-weight: bold;
-    transition: all var(--transition-moderate);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .collapsed-login-button:hover {
-    background-color: var(--brand-primary-hover);
-    transform: scale(1.05);
-  }
-
-  /* Vue transition styles */
-  .login-transition-enter-active,
-  .login-transition-leave-active {
-    transition: all var(--transition-moderate);
-  }
-
-  .login-transition-enter-from,
-  .login-transition-leave-to {
-    opacity: 0;
-    transform: scale(0.9);
-  }
 </style>
