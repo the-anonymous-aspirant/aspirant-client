@@ -404,7 +404,18 @@ export default {
    for text-overflow to clip. `.trigger-label` is gone with it — the name now
    rides the default slot, i.e. .btn__label itself. */
 .switcher-trigger {
-  max-width: 240px;
+  /* 40vw is the mobile half of the cap, and it is there to keep this port
+     width-NEUTRAL rather than to fix anything. The toolbar (back / switcher /
+     spacer / add-node, one non-wrapping row) already overflows a 390px
+     viewport on origin/main: documentElement.scrollWidth 483 against
+     clientWidth 390, measured at the merge-base. Making the name resolve
+     (#4513) grows the trigger from the 155px "Select tree" placeholder to the
+     full 240px cap, which would have pushed that to 568 — a pre-existing
+     defect made 85px worse by a change that is otherwise a correctness fix.
+     min() holds the phone width at ~156px, i.e. what the placeholder occupied,
+     so the overflow stays exactly where this branch found it. The toolbar
+     itself is the control that needs fixing, and not from inside this file. */
+  max-width: min(240px, 40vw);
 }
 
 .switcher-trigger :deep(.btn__label) {

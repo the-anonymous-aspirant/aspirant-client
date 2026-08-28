@@ -108,6 +108,27 @@ test.describe('#4513 tree-switcher trigger (AspButton port)', () => {
     await expect(label).toHaveCSS('text-overflow', 'ellipsis');
   });
 
+  test('GUARD: the resolved name does not widen the mobile toolbar', async ({ page }) => {
+    // Making the name resolve is a correctness fix that costs width: the
+    // trigger goes from the 155px "Select tree" placeholder to whatever the
+    // cap allows. The goal toolbar (back / switcher / spacer / add-node, one
+    // non-wrapping row) ALREADY overflows a 390px viewport on the merge-base —
+    // documentElement.scrollWidth 483 against clientWidth 390 — so a flat
+    // 240px cap would have taken that to 568 and quietly made a pre-existing
+    // defect 85px worse. The mobile half of the cap holds it at 156px, one
+    // pixel of overflow from where this branch found it (484).
+    //
+    // Asserting the fraction rather than 156px keeps this about the rule and
+    // not about the current font: a control that carries a user-entered name
+    // does not get to claim more than 40% of a phone.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openCanvas(page, [{ id: 1, name: LONG_NAME }]);
+
+    const trigger = page.getByRole('button', { name: LONG_NAME, exact: true });
+    const box = (await trigger.boundingBox())!;
+    expect(box.width).toBeLessThanOrEqual(390 * 0.4 + 1);
+  });
+
   test('ADDED: the trigger now announces the menu it opens', async ({ page }) => {
     await openCanvas(page, [{ id: 1, name: 'Existing name' }]);
 
