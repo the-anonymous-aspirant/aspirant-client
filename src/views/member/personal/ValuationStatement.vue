@@ -22,40 +22,23 @@
          history tab share state so Edit can hand a row's final_values
          straight back into the existing review step without
          unmounting it. -->
-    <nav class="tab-nav" role="tablist" aria-label="Värdeutlåtande-vyer">
-      <button
-        type="button"
-        role="tab"
-        class="tab-button"
-        :class="{ active: activeTab === 'create' }"
-        :aria-selected="activeTab === 'create'"
-        @click="activeTab = 'create'"
-      >
-        Skapa
-      </button>
-      <button
-        type="button"
-        role="tab"
-        class="tab-button"
-        :class="{ active: activeTab === 'history' }"
-        :aria-selected="activeTab === 'history'"
-        @click="onOpenHistoryTab"
-      >
-        Tidigare värderingar
-      </button>
-      <button
-        type="button"
-        role="tab"
-        class="tab-button"
-        :class="{ active: activeTab === 'about' }"
-        :aria-selected="activeTab === 'about'"
-        @click="activeTab = 'about'"
-      >
-        Om verktyget
-      </button>
-    </nav>
+    <!-- The three top-level views are a real tab pattern — each member
+         switches a named panel below — so the strip declares as="tabs"
+         (§3.89 Q1) and the panels now carry role="tabpanel" + the ids the
+         members reference. The 'Tidigare värderingar' member keeps its
+         load-on-open side effect via selectTab, which the old per-button
+         @click carried. -->
+    <div class="tab-nav">
+      <AspSegmented
+        :options="tabOptions"
+        :model-value="activeTab"
+        as="tabs"
+        aria-label="Värdeutlåtande-vyer"
+        @update:model-value="selectTab"
+      />
+    </div>
 
-    <div v-if="activeTab === 'create'">
+    <div v-if="activeTab === 'create'" id="vs-panel-create" role="tabpanel">
 
     <!-- Step 1: Upload -->
     <ValuationStep v-if="step === 'upload'" title="1. Ladda upp underlag" wide>
@@ -134,14 +117,14 @@
               </span>
               <span class="file-name">{{ f.name }}</span>
               <span class="file-size">{{ formatBytes(f.size) }}</span>
-              <button
-                type="button"
-                class="file-remove"
+              <AspButton
+                variant="ghost"
+                size="icon"
                 :aria-label="`Ta bort ${f.name}`"
                 @click="removeFile(idx)"
               >
                 ×
-              </button>
+              </AspButton>
             </li>
           </ul>
         </div>
@@ -387,7 +370,7 @@
          valuation-statement/processed*. Persists when the wizard reaches
          the Done step; PATCH on Edit save (edit-in-place per operator
          decision 2026-06-24 — no history snapshots). -->
-    <div v-if="activeTab === 'history'" class="history-tab">
+    <div v-if="activeTab === 'history'" id="vs-panel-history" role="tabpanel" class="history-tab">
       <div class="history-toolbar">
         <AspButton
           type="button"
@@ -444,15 +427,19 @@
                    buttons (#1173) so the Name column has room for the
                    row to stay on one line. The menu items themselves
                    carry the same labels the e2e tests select by. -->
-              <div class="row-menu" :class="{ open: openMenuRowId === row.id }">
-                <button
-                  type="button"
+              <!-- The `open` class went with the .row-menu.open trigger rule
+                   this port deleted; aria-expanded on the trigger is the open
+                   state now, and .row-menu-popover is still the popover hook. -->
+              <div class="row-menu">
+                <AspButton
+                  variant="ghost"
+                  size="icon"
                   class="row-menu-trigger"
                   :aria-haspopup="'menu'"
                   :aria-expanded="openMenuRowId === row.id"
                   :aria-label="'Åtgärder för ' + row.name"
                   @click.stop="toggleRowMenu(row.id)"
-                >⋮</button>
+                >⋮</AspButton>
                 <div
                   v-if="openMenuRowId === row.id"
                   class="row-menu-popover"
@@ -479,7 +466,7 @@
          The first strategy whose content-fingerprint guard fires on a
          given PDF wins; if none fires the field is left blank for
          manual entry during granskning. -->
-    <div v-if="activeTab === 'about'" class="about-tab">
+    <div v-if="activeTab === 'about'" id="vs-panel-about" role="tabpanel" class="about-tab">
       <p class="about-intro">
         För varje fält i värdeutlåtandemallen visas, i prioritetsordning,
         hur verktyget försöker läsa fältet ur dina underlag. Varje försök
@@ -522,7 +509,7 @@
 </template>
 
 <script>
-import { AspButton, AspInput } from '@aspirant/design-system';
+import { AspButton, AspInput, AspSegmented } from '@aspirant/design-system';
 import axios from 'axios';
 
 import ValuationStep from '@/components/ValuationStep.vue';
@@ -581,7 +568,7 @@ const BLANK_CONFIDENCE = () => ({
 });
 
 export default {
-  components: { AspButton, AspInput, ValuationStep },
+  components: { AspButton, AspInput, AspSegmented, ValuationStep },
   data() {
     return {
       step: 'upload',
@@ -604,6 +591,14 @@ export default {
       aboutSchemaVersion: valuationAbout.schema_version ?? null,
       // Tab state + persisted-iterations store ('Tidigare värderingar').
       activeTab: 'create',
+      // AspSegmented members. `controls` names the tabpanel each one drives;
+      // the panels are v-if'd, so only the selected member's reference is
+      // live — the standard trade for not mounting three heavy panels.
+      tabOptions: [
+        { value: 'create', label: 'Skapa', controls: 'vs-panel-create' },
+        { value: 'history', label: 'Tidigare värderingar', controls: 'vs-panel-history' },
+        { value: 'about', label: 'Om verktyget', controls: 'vs-panel-about' },
+      ],
       processedRows: [],
       processedLoading: false,
       processedError: null,
@@ -1052,6 +1047,16 @@ export default {
       return snap;
     },
 
+    // One handler for the strip: 'history' keeps the load-on-open side
+    // effect the old per-button @click carried, the other two just switch.
+    selectTab(tab) {
+      if (tab === 'history') {
+        this.onOpenHistoryTab();
+        return;
+      }
+      this.activeTab = tab;
+    },
+
     onOpenHistoryTab() {
       this.activeTab = 'history';
       this.loadProcessed();
@@ -1329,22 +1334,11 @@ export default {
 }
 .file-name { font-weight: 500; overflow-wrap: anywhere; }
 .file-size { color: var(--text-muted); font-size: var(--text-xs); font-family: monospace; }
-.file-remove {
-  background: none;
-  border: 1px solid transparent;
-  color: var(--text-muted);
-  font-size: var(--text-lg);
-  line-height: 1;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background-color var(--transition-moderate), color var(--transition-moderate);
-}
-.file-remove:hover {
-  background-color: rgba(245, 101, 101, 0.18);
-  color: #e53e3e;
-}
+/* The per-file remove control is AspButton variant="ghost" size="icon" — the
+   DS owns its paint, hover, focus ring and the 44px square target (§3.23
+   rule-4), so the .file-remove rules are gone. The former red hover tint goes
+   with them: it was a hard-coded rgba/#hex pair outside the token system, and
+   the label ("Ta bort <fil>") already carries the destructive meaning. */
 
 /* .btn-secondary is gone entirely — all four of its usages were <button>s and
    they are AspButton variant="secondary" now.
@@ -1718,30 +1712,16 @@ export default {
 /* Top-level tab nav: matches the tonal weight of the rest of the page
  * (no heavy underline; the active button gets a brand-coloured rule).
  * Lives outside the .step chrome so it can wrap the whole wizard. */
+/* Layout only. The members are AspSegmented's, so the DS owns their paint,
+   the selected-member cue, hover, focus ring and keyboard model; the former
+   .tab-button rules are deleted rather than reduced, because a scoped rule
+   here would land on the DS elements and override the primitive this port
+   just adopted (#4323/#4324 measured that live). */
 .tab-nav {
   display: flex;
   justify-content: center;
-  gap: var(--space-md);
   margin: 0 0 var(--space-lg) 0;
-  border-bottom: 1px solid var(--border-card);
   width: 100%;
-}
-.tab-button {
-  background: none;
-  border: none;
-  padding: var(--space-sm) var(--space-md);
-  font-size: var(--text-base);
-  color: var(--text-muted);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color var(--transition-quick), border-color var(--transition-quick);
-}
-.tab-button:hover { color: var(--text-on-light); }
-.tab-button.active {
-  color: var(--brand-primary);
-  border-bottom-color: var(--brand-primary);
-  font-weight: 600;
 }
 
 /* History tab */
@@ -1779,19 +1759,13 @@ export default {
    holding Redigera / .docx / .pdf / Radera. Frees horizontal space so
    the Name column can stay readable on one line. */
 .row-menu { position: relative; display: inline-block; }
-.row-menu-trigger {
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: 2px 8px;
-  font-size: var(--text-lg);
-  line-height: 1;
-  color: var(--text-on-light);
-  cursor: pointer;
-}
-.row-menu-trigger:hover,
-.row-menu.open .row-menu-trigger {
-  border-color: var(--border-card);
+/* The trigger is AspButton variant="ghost" size="icon"; the class survives the
+   port only as the e2e selector hook (processed-valuations.spec.ts binds
+   `.row-menu-trigger`), and the DS root is what carries it. Resting and hover
+   paint belong to the DS now. The one cue the DS cannot express is "this menu
+   is open", so that single rule stays — keyed off the aria-expanded the
+   trigger already sets, not off a parent class. */
+.row-menu-trigger[aria-expanded='true'] {
   background: var(--surface-card-inner);
 }
 .row-menu-popover {
