@@ -1,15 +1,20 @@
 <template>
   <div class="timeline-filter">
     <div class="filter-group">
+      <!-- The caption stays consumer-authored rather than moving to AspSelect's
+           `label` prop: .select__label is --text-xs with no weight where the
+           .field__label AspInput and AspTextarea render is --text-sm at
+           --font-weight-medium (DS defect #4484), and this caption has to match
+           the "Mode" one beside it. The name therefore rides aria-label; the
+           <label> keeps no `for`, because an id passed to AspSelect lands on its
+           wrapper <div>, which is not a labelable element. -->
       <label class="filter-label">Period</label>
-      <select v-model="localPeriod" class="filter-select">
-        <option value="day">Day</option>
-        <option value="week">ISO Week</option>
-        <option value="month">Month</option>
-        <option value="quarter">Quarter</option>
-        <option value="year">Year</option>
-        <option value="custom">Custom</option>
-      </select>
+      <AspSelect
+        :model-value="localPeriod"
+        :options="periodOptions"
+        aria-label="Period"
+        @update:model-value="v => { localPeriod = v }"
+      />
     </div>
 
     <div v-if="localPeriod === 'custom'" class="filter-group filter-dates">
@@ -44,12 +49,13 @@
 
 <script>
 import { computed } from 'vue';
-import { AspButton, AspSegmented } from '@aspirant/design-system';
+import { AspButton, AspSegmented, AspSelect } from '@aspirant/design-system';
 
 export default {
   components: {
     AspButton,
     AspSegmented,
+    AspSelect,
   },
   props: {
     period: { type: String, required: true },
@@ -77,6 +83,18 @@ export default {
       set: (v) => emit('update:mode', v),
     });
 
+    // Same shape as the strip below: AspSelect renders its members from
+    // `options` where the native took <option> markup. Every value here is
+    // meaningful (there is no "all" entry), so nothing becomes a placeholder.
+    const periodOptions = [
+      { value: 'day', label: 'Day' },
+      { value: 'week', label: 'ISO Week' },
+      { value: 'month', label: 'Month' },
+      { value: 'quarter', label: 'Quarter' },
+      { value: 'year', label: 'Year' },
+      { value: 'custom', label: 'Custom' },
+    ];
+
     // The strip's members are data, not markup: AspSegmented renders them from
     // `options` and owns the roving tabindex + arrow-key selection.
     const modeOptions = [
@@ -86,6 +104,7 @@ export default {
     ];
 
     return {
+      periodOptions,
       modeOptions,
       localPeriod,
       localCustomStart,
@@ -130,15 +149,11 @@ export default {
   white-space: nowrap;
 }
 
-.filter-select {
-  padding: var(--space-2xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
+/* .filter-select is gone with the native it painted. AspSelect's trigger sets
+   its own fill, ink and --border-control boundary, and this file's data-v
+   attribute does not reach inside the component anyway, so the rule could no
+   longer match. The two `date` inputs below keep .filter-date — `date` is
+   outside AspInput's §3.85 allowlist and no DS component covers it. */
 
 .filter-dates {
   gap: var(--space-xs);

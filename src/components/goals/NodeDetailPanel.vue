@@ -44,15 +44,22 @@
           <!-- Completion status -->
           <div class="completion-section">
             <div class="completion-row">
-              <label class="completion-label">
-                <input
-                  type="checkbox"
-                  :checked="!!node.completed_at"
-                  @change="toggleCompletion"
-                  :disabled="isAutoCompleted"
-                />
-                <span>{{ completionText }}</span>
-              </label>
+              <!-- Ported, on a measurement rather than on the sibling's
+                   decision. #4477 HELD Finance's checkbox because AspCheckbox
+                   draws its box with --border-subtle, which measures 1.26:1
+                   against that row's near-white page (DS defect #4482). This
+                   control sits on --surface-card, dark in both themes, where the
+                   native's #000 boundary measured 2.09:1 — under WCAG 1.4.11's
+                   3:1 floor — and the DS box's near-white FILL carries the edge
+                   instead of its border. The same component is wrong there and
+                   right here; the surround decides, so each site is measured. -->
+              <AspCheckbox
+                class="completion-label"
+                :model-value="!!node.completed_at"
+                :label="completionText"
+                :disabled="isAutoCompleted"
+                @update:model-value="toggleCompletion"
+              />
               <span v-if="isAutoCompleted" class="auto-badge">auto</span>
             </div>
             <p v-if="isAutoCompleted" class="completion-hint">
@@ -69,13 +76,23 @@
               </AspButton>
             </div>
             <div v-if="editing" class="edit-mode">
-              <textarea
-                v-model="editBody"
-                class="description-textarea"
-                rows="12"
-                @keydown.ctrl.enter="saveDescription"
-                @keydown.meta.enter="saveDescription"
-              ></textarea>
+              <!-- The wrapper carries the monospace, not the component: this
+                   field holds Markdown source, and .field__textarea inherits its
+                   font from AspTextarea's own .field root — so a rule here has
+                   to reach past that, which :deep does and a class on the
+                   component does not (AspTextarea sets inheritAttrs: false and
+                   delivers class to the inner <textarea>, where no data-v from
+                   this file lands). This is the one content property the DS
+                   cannot know; the box is entirely the DS's. -->
+              <div class="description-editor">
+                <AspTextarea
+                  v-model="editBody"
+                  :rows="12"
+                  :max-rows="30"
+                  @keydown.ctrl.enter="saveDescription"
+                  @keydown.meta.enter="saveDescription"
+                />
+              </div>
               <div class="edit-actions">
                 <AspButton variant="secondary" @click="cancelEdit">Cancel</AspButton>
                 <AspButton variant="primary" @click="saveDescription" :disabled="saving">
@@ -98,11 +115,11 @@
                 class="comment-item"
               >
                 <div v-if="editingCommentId === comment.id" class="comment-edit">
-                  <textarea
+                  <AspTextarea
                     v-model="editCommentBody"
-                    rows="3"
-                    class="comment-textarea"
-                  ></textarea>
+                    :rows="3"
+                    :max-rows="12"
+                  />
                   <div class="comment-edit-actions">
                     <AspButton variant="secondary" size="sm" @click="cancelCommentEdit">Cancel</AspButton>
                     <AspButton
@@ -126,12 +143,21 @@
 
             <!-- Add comment -->
             <div class="add-comment">
-              <textarea
-                v-model="newCommentBody"
-                placeholder="Add a comment..."
-                rows="2"
-                class="comment-textarea"
-              ></textarea>
+              <!-- Wrapper, because .add-comment is a flex column with
+                   align-items: flex-end (to right-align Post). Cross-axis
+                   alignment shrinks every item to its content width, and
+                   AspTextarea's root is a flex item like any other — measured,
+                   the composer came out 190px in a 430px panel. A class on the
+                   component cannot fix it: inheritAttrs is false there and
+                   class rides $attrs to the inner <textarea>. -->
+              <div class="composer-field">
+                <AspTextarea
+                  v-model="newCommentBody"
+                  placeholder="Add a comment..."
+                  :rows="2"
+                  :max-rows="10"
+                />
+              </div>
               <AspButton
                 variant="primary"
                 size="sm"
@@ -150,7 +176,7 @@
 import { ref, computed, watch } from 'vue';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { AspButton, AspTooltip } from '@aspirant/design-system';
+import { AspButton, AspCheckbox, AspTextarea, AspTooltip } from '@aspirant/design-system';
 import { useGoalComments } from '../../composables/goals/useGoalComments.js';
 
 marked.setOptions({ breaks: true, gfm: true });
@@ -161,7 +187,7 @@ function renderMarkdown(text) {
 }
 
 export default {
-  components: { AspButton, AspTooltip },
+  components: { AspButton, AspCheckbox, AspTextarea, AspTooltip },
   props: {
     node: { type: Object, default: null },
     treeId: { type: [String, Number], required: true },
@@ -498,18 +524,18 @@ export default {
   align-items: center;
   gap: var(--space-sm);
 }
+/* AspCheckbox is its own <label>, sets its own flex row, gap, --text-sm and
+   pointer, and takes `color: inherit` — so the only declaration left with no DS
+   equivalent is this panel's ink, which the component must inherit from
+   somewhere. It rides the class AspCheckbox puts on its root (inheritAttrs is
+   on there, unlike AspTextarea's).
+
+   `.completion-label input[type="checkbox"]` is gone and had to be: it is an
+   attribute selector, so it would still have matched the input AspCheckbox
+   renders inside its own label and overridden .checkbox__box's 1rem sizing —
+   a consumer rule silently outranking the DS on the very box being adopted. */
 .completion-label {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
   color: var(--text-on-dark);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-.completion-label input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
 }
 .auto-badge {
   font-size: 0.65rem;
@@ -543,17 +569,13 @@ export default {
   font-weight: 600;
 }
 
-.description-textarea {
-  width: 100%;
-  padding: var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
-  font-size: var(--text-sm);
+/* Was .description-textarea, hand-painting the box on --surface-card-inner.
+   AspTextarea paints it now (--surface-elevated fill, --text-body ink,
+   --border-control at the WCAG 1.4.11 3:1 floor) and this file's data-v cannot
+   reach the real <textarea> in any case. Only the monospace survives, because
+   it is what the field CONTAINS (Markdown source), not how the control looks. */
+.description-editor :deep(.field__textarea) {
   font-family: monospace;
-  resize: vertical;
-  box-sizing: border-box;
   line-height: 1.5;
 }
 
@@ -649,18 +671,8 @@ export default {
 .btn-link:hover { color: var(--text-on-dark); }
 .btn-link.btn-danger:hover { color: var(--feedback-error); }
 
-.comment-textarea {
-  width: 100%;
-  padding: var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
-  font-size: var(--text-sm);
-  resize: vertical;
-  box-sizing: border-box;
-  line-height: 1.4;
-}
+/* .comment-textarea is gone with the two natives it painted — both composers
+   are AspTextarea now and nothing here is left for a consumer to say. */
 
 .comment-edit-actions {
   display: flex;
@@ -675,10 +687,13 @@ export default {
   gap: var(--space-xs);
   align-items: flex-end;
 }
-.add-comment .comment-textarea { width: 100%; }
-
-
-
+/* `align-items: flex-end` above right-aligns the Post button, and it shrinks
+   every other item in the column to its content width along with it — which is
+   what the old `.comment-textarea { width: 100% }` was quietly undoing. The
+   wrapper takes over that job for the DS control. */
+.composer-field {
+  width: 100%;
+}
 
 .loading-text, .empty-text {
   color: var(--text-muted);
