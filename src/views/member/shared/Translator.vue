@@ -10,13 +10,19 @@
       <div class="translate-form">
         <div class="language-selectors">
           <div class="lang-group">
-            <label for="source-lang">From</label>
-            <select id="source-lang" v-model="sourceLang" :disabled="translating">
-              <option value="" disabled>Select language</option>
-              <option v-for="lang in languageList" :key="lang.code" :value="lang.code">
-                {{ lang.name }} ({{ lang.code }})
-              </option>
-            </select>
+            <!-- The caption stays the visible label and doubles as the control's
+                 accessible name via `aria-label`; the old `for=` is gone because
+                 AspSelect mints its own trigger id. The `<option value="" disabled>`
+                 prompt is the `placeholder` prop now — a non-selectable prompt shown
+                 while modelValue matches no option is exactly what it stood in for. -->
+            <label>From</label>
+            <AspSelect
+              v-model="sourceLang"
+              :options="languageOptions"
+              placeholder="Select language"
+              aria-label="From"
+              :disabled="translating"
+            />
           </div>
 
           <AspTooltip content="Swap languages">
@@ -33,24 +39,27 @@
           </AspTooltip>
 
           <div class="lang-group">
-            <label for="target-lang">To</label>
-            <select id="target-lang" v-model="targetLang" :disabled="translating">
-              <option value="" disabled>Select language</option>
-              <option v-for="lang in languageList" :key="lang.code" :value="lang.code">
-                {{ lang.name }} ({{ lang.code }})
-              </option>
-            </select>
+            <label>To</label>
+            <AspSelect
+              v-model="targetLang"
+              :options="languageOptions"
+              placeholder="Select language"
+              aria-label="To"
+              :disabled="translating"
+            />
           </div>
         </div>
 
         <div class="input-area">
-          <textarea
+          <AspTextarea
             v-model="inputText"
             placeholder="Enter text to translate..."
-            rows="5"
+            aria-label="Text to translate"
+            :rows="5"
+            :max-rows="14"
             :disabled="translating"
             maxlength="5000"
-          ></textarea>
+          />
           <span class="char-counter">{{ inputText.length }} / 5000</span>
         </div>
 
@@ -94,27 +103,24 @@
           <h4>Install Language Pair</h4>
           <div class="install-controls">
             <div class="lang-group">
-              <label for="install-source">Source</label>
-              <select id="install-source" v-model="installSource" :disabled="installing">
-                <option value="" disabled>Select</option>
-                <option v-for="lang in languageList" :key="lang.code" :value="lang.code">
-                  {{ lang.name }} ({{ lang.code }})
-                </option>
-              </select>
+              <label>Source</label>
+              <AspSelect
+                v-model="installSource"
+                :options="languageOptions"
+                placeholder="Select"
+                aria-label="Source"
+                :disabled="installing"
+              />
             </div>
             <div class="lang-group">
-              <label for="install-target">Target</label>
-              <select id="install-target" v-model="installTarget" :disabled="installing">
-                <option value="" disabled>Select</option>
-                <option
-                  v-for="tgt in installTargets"
-                  :key="tgt.code"
-                  :value="tgt.code"
-                >
-                  {{ tgt.code }}
-                  <template v-if="tgt.installed"> (installed)</template>
-                </option>
-              </select>
+              <label>Target</label>
+              <AspSelect
+                v-model="installTarget"
+                :options="installTargetOptions"
+                placeholder="Select"
+                aria-label="Target"
+                :disabled="installing"
+              />
             </div>
             <AspButton
               variant="primary"
@@ -148,10 +154,10 @@
 
 <script>
 import axios from 'axios';
-import { AspButton, AspTooltip } from '@aspirant/design-system';
+import { AspButton, AspSelect, AspTextarea, AspTooltip } from '@aspirant/design-system';
 
 export default {
-  components: { AspButton, AspTooltip },
+  components: { AspButton, AspSelect, AspTextarea, AspTooltip },
   data() {
     return {
       // Translation state
@@ -184,6 +190,17 @@ export default {
       if (!this.installSource || !this.languagesData) return [];
       const lang = this.languagesData.languages.find(l => l.code === this.installSource);
       return lang ? lang.targets : [];
+    },
+    // AspSelect takes `[{value,label}]` where the natives took <option> markup;
+    // the labels are the exact strings the options rendered.
+    languageOptions() {
+      return this.languageList.map(lang => ({ value: lang.code, label: `${lang.name} (${lang.code})` }));
+    },
+    installTargetOptions() {
+      return this.installTargets.map(tgt => ({
+        value: tgt.code,
+        label: tgt.installed ? `${tgt.code} (installed)` : tgt.code,
+      }));
     },
     installedPairs() {
       if (!this.languagesData) return [];
@@ -344,14 +361,10 @@ export default {
   font-weight: 600;
 }
 
-.lang-group select {
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
-  font-size: var(--text-sm);
-}
+/* `.lang-group select` is gone: the four language pickers are AspSelect, which
+   paints its own trigger (--surface-elevated, --text-body, --border-control at
+   the WCAG 1.4.11 3:1 floor) past this file's data-v attribute. .lang-group
+   keeps only the column layout that stacks caption over control. */
 
 /* .btn-swap survives only as the hook for the mobile rotate below — every
    paint rule it carried is deleted, including the :disabled opacity, which is
@@ -363,25 +376,28 @@ export default {
   position: relative;
 }
 
-.input-area textarea {
-  width: 100%;
-  padding: var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
-  font-size: var(--text-sm);
-  font-family: inherit;
-  resize: vertical;
-  box-sizing: border-box;
-}
+/* `.input-area textarea` is gone for the same reason: AspTextarea owns the box
+   (and grows to content between its `rows` floor and `maxRows` ceiling instead
+   of the native resize handle). .input-area stays position: relative only so
+   the character counter keeps its bottom-right anchor inside the field. */
 
 .char-counter {
   position: absolute;
   bottom: var(--space-xs);
   right: var(--space-sm);
   font-size: var(--text-xs);
-  color: var(--text-muted);
+  /* The counter sits ON the field, not on the card, and it is a sibling of the
+     DS textarea rather than a descendant — so it declares the field's own fill
+     under itself and pairs that surface with the field's ink (--text-body at
+     --text-muted's 88%). Without the fill it inherits the card's --text-on-dark
+     mix, which the #4478 evidence set measured as invisible over AspTextarea's
+     near-white --surface-elevated; and trusted-contrast.spec.ts, which reads
+     the nearest opaque ANCESTOR, would otherwise measure it against the card.
+     The fill is the same token the field paints, so the box is seamless. */
+  padding: 0 var(--space-2xs);
+  background: var(--surface-elevated);
+  color: color-mix(in srgb, var(--text-body) 88%, transparent);
+  pointer-events: none;
 }
 
 /* Layout only, and the class is KEPT for exactly that: without align-self the
