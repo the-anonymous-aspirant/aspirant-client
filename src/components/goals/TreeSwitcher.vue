@@ -17,10 +17,10 @@
           <span class="item-name">{{ tree.name }}</span>
           <div class="item-actions" @click.stop>
             <AspTooltip content="Rename">
-              <button class="btn-item-action" aria-label="Rename" @click="startRename(tree)">&#9998;</button>
+              <AspButton variant="ghost" size="icon" aria-label="Rename" @click="startRename(tree)">&#9998;</AspButton>
             </AspTooltip>
             <AspTooltip content="Delete">
-              <button class="btn-item-action btn-item-delete" aria-label="Delete" @click="startDelete(tree)">&#10005;</button>
+              <AspButton variant="ghost" size="icon" aria-label="Delete" @click="startDelete(tree)">&#10005;</AspButton>
             </AspTooltip>
           </div>
         </div>
@@ -391,6 +391,11 @@ export default {
 }
 
 .switcher-dropdown {
+  /* Dark card on a light page — declare the ink polarity so the DS's
+     currentColor-relative components resolve light. Without it AspButton
+     variant="ghost" mixes brand-primary-800 into DARK inherited ink and the
+     row actions render at 1.08:1, i.e. invisible. See .timeline-filter. #4443 */
+  color: var(--text-on-dark);
   position: absolute;
   top: calc(100% + var(--space-xs));
   left: 0;
@@ -455,25 +460,11 @@ export default {
   opacity: 1;
 }
 
-.btn-item-action {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  padding: var(--space-2xs);
-  border-radius: var(--radius-sm);
-  transition: color var(--transition-moderate), background-color var(--transition-moderate);
-}
-
-.btn-item-action:hover {
-  color: var(--text-on-dark);
-  background-color: var(--border-card);
-}
-
-.btn-item-delete:hover {
-  color: var(--feedback-error);
-}
+/* The rename/delete row actions are AspButton variant="ghost" size="icon" —
+   DS-owned paint, hover and 44px square. Deliberately NOT restyled locally: a
+   scoped rule here would reach the DS root element and override the size pin.
+   The delete action loses its local red hover; destructive intent is carried
+   by the AspTooltip label and the confirm dialog, not by a hover tint. */
 
 .dropdown-empty {
   color: var(--text-muted);

@@ -7,7 +7,7 @@
             <span class="type-badge" :class="node.type">{{ typeLabel }}</span>
             <h2 class="panel-title">{{ node.name }}</h2>
           </div>
-          <button class="btn-close" @click="$emit('close')">&times;</button>
+          <AspButton variant="ghost" size="icon" aria-label="Close" @click="$emit('close')">&times;</AspButton>
         </div>
 
         <div class="panel-body">
@@ -21,7 +21,7 @@
             />
             <span v-if="!node.color" class="inherited-badge">inherited</span>
             <AspTooltip v-if="node.color" content="Revert to inherited color">
-              <button class="btn-clear-color" aria-label="Revert to inherited color" @click="clearColor">&times;</button>
+              <AspButton variant="ghost" size="icon" aria-label="Revert to inherited color" @click="clearColor">&times;</AspButton>
             </AspTooltip>
           </div>
 
@@ -384,6 +384,9 @@ export default {
 }
 
 .panel {
+  /* Dark card on a light page — declare the ink polarity for the DS's
+     currentColor-relative components. See TimelineFilter.vue. #4443 */
+  color: var(--text-on-dark);
   width: 480px;
   max-width: 90vw;
   height: 100vh;
@@ -432,16 +435,11 @@ export default {
 .type-badge.milestone { background: #7c4dff; color: #fff; }
 .type-badge.step { background: #26a69a; color: #fff; }
 
-.btn-close {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 1.5rem;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-.btn-close:hover { color: var(--text-on-dark); }
+/* The header close and the colour-revert control are AspButton
+   variant="ghost" size="icon" — the DS owns their paint, hover, focus ring and
+   the 44px square touch target (§3.23 rule-4). No local rule may target them:
+   a scoped button rule lands on the DS root element and overrides it, the port
+   hazard #4323 and #4324 both measured live. */
 
 .panel-body {
   flex: 1;
@@ -490,24 +488,6 @@ export default {
   font-style: italic;
 }
 
-.btn-clear-color {
-  background: none;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-}
-.btn-clear-color:hover {
-  color: var(--feedback-error);
-  border-color: var(--feedback-error);
-}
 
 /* Completion */
 .completion-section {

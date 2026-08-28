@@ -1,25 +1,25 @@
 <template>
   <div class="canvas-controls">
     <AspTooltip content="Zoom in" position="left">
-      <button class="control-btn" aria-label="Zoom in" @click="$emit('zoom-in')">+</button>
+      <AspButton variant="secondary" size="icon" aria-label="Zoom in" @click="$emit('zoom-in')">+</AspButton>
     </AspTooltip>
     <AspTooltip content="Zoom out" position="left">
-      <button class="control-btn" aria-label="Zoom out" @click="$emit('zoom-out')">&minus;</button>
+      <AspButton variant="secondary" size="icon" aria-label="Zoom out" @click="$emit('zoom-out')">&minus;</AspButton>
     </AspTooltip>
     <AspTooltip content="Fit view" position="left">
-      <button class="control-btn" aria-label="Fit view" @click="$emit('fit-view')">&#8862;</button>
+      <AspButton variant="secondary" size="icon" aria-label="Fit view" @click="$emit('fit-view')">&#8862;</AspButton>
     </AspTooltip>
     <AspTooltip content="Reset" position="left">
-      <button class="control-btn" aria-label="Reset" @click="$emit('reset')">&#8634;</button>
+      <AspButton variant="secondary" size="icon" aria-label="Reset" @click="$emit('reset')">&#8634;</AspButton>
     </AspTooltip>
   </div>
 </template>
 
 <script>
-import { AspTooltip } from '@aspirant/design-system';
+import { AspButton, AspTooltip } from '@aspirant/design-system';
 
 export default {
-  components: { AspTooltip },
+  components: { AspButton, AspTooltip },
   emits: ['zoom-in', 'zoom-out', 'fit-view', 'reset'],
 };
 </script>
@@ -35,24 +35,9 @@ export default {
   z-index: 10;
 }
 
-.control-btn {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--surface-card);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
-  color: var(--text-on-dark);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 0;
-  transition: background-color var(--transition-fast);
-}
-
-.control-btn:hover {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-}
+/* The four controls are AspButton size="icon" (a fixed 44px square, §3.23
+   rule-4 touch floor) with variant="secondary" — the DS owns their paint,
+   border, hover and focus ring. This block is layout only: a local rule on the
+   button itself would land on the DS root element and override the size pin
+   and the variant, which is the port hazard #4323/#4324 both measured. */
 </style>

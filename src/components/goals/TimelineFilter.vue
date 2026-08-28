@@ -20,20 +20,13 @@
 
     <div class="filter-group">
       <label class="filter-label">Mode</label>
-      <div class="mode-toggle">
-        <button
-          :class="['mode-btn', { active: localMode === 'planned' }]"
-          @click="localMode = 'planned'"
-        >Planned</button>
-        <button
-          :class="['mode-btn', { active: localMode === 'achieved' }]"
-          @click="localMode = 'achieved'"
-        >Achieved</button>
-        <button
-          :class="['mode-btn', { active: localMode === 'combined' }]"
-          @click="localMode = 'combined'"
-        >Combined</button>
-      </div>
+      <AspSegmented
+        v-model="localMode"
+        :options="modeOptions"
+        as="radiogroup"
+        size="sm"
+        aria-label="Timeline mode"
+      />
     </div>
 
     <div class="filter-actions">
@@ -51,11 +44,12 @@
 
 <script>
 import { computed } from 'vue';
-import { AspButton } from '@aspirant/design-system';
+import { AspButton, AspSegmented } from '@aspirant/design-system';
 
 export default {
   components: {
     AspButton,
+    AspSegmented,
   },
   props: {
     period: { type: String, required: true },
@@ -83,7 +77,16 @@ export default {
       set: (v) => emit('update:mode', v),
     });
 
+    // The strip's members are data, not markup: AspSegmented renders them from
+    // `options` and owns the roving tabindex + arrow-key selection.
+    const modeOptions = [
+      { value: 'planned', label: 'Planned' },
+      { value: 'achieved', label: 'Achieved' },
+      { value: 'combined', label: 'Combined' },
+    ];
+
     return {
+      modeOptions,
       localPeriod,
       localCustomStart,
       localCustomEnd,
@@ -95,6 +98,14 @@ export default {
 
 <style scoped>
 .timeline-filter {
+  /* This card paints the dark --surface-card on a light page, so it must also
+     DECLARE its ink polarity. The DS's currentColor-relative components
+     (AspSegmented's labels, AspButton variant="ghost") inherit `color` from
+     their host by design (§3.18) — that is the seam through which a consumer
+     tells them which surface they landed on. Without this line they inherit the
+     light page's dark ink and paint dark-on-dark: measured at 1.99:1 for the
+     unselected strip members and 1.85:1 for the selected one. #4443. */
+  color: var(--text-on-dark);
   display: flex;
   align-items: center;
   gap: var(--space-md);
@@ -147,37 +158,16 @@ export default {
   font-size: var(--text-sm);
 }
 
-.mode-toggle {
-  display: flex;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  border: 1px solid var(--border-card);
-}
+/* The Planned/Achieved/Combined strip is AspSegmented (as="radiogroup"): three
+   modes that re-filter one timeline in place, with no second panel to name in
+   aria-controls, so it is a radiogroup and not tabs.
 
-.mode-btn {
-  padding: var(--space-2xs) var(--space-sm);
-  border: none;
-  border-radius: 0;
-  background-color: var(--surface-card-inner);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  transition: background-color var(--transition-fast), color var(--transition-fast);
-}
-
-.mode-btn:not(:last-child) {
-  border-right: 1px solid var(--border-card);
-}
-
-.mode-btn.active {
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-weight: 600;
-}
-
-.mode-btn:hover:not(.active) {
-  color: var(--text-on-dark);
-}
+   Note what the old .mode-btn.active rule was doing: it painted the selected
+   member with the full brand amber (background: var(--brand-primary)). That
+   spends the accent budget on a choice, which is the specific thing §3.89 built
+   this primitive to stop — AspSegmented marks selection with a currentColor mix
+   and a thin brand underline instead. Dropping the rule is the fix, not a
+   side effect of the port. */
 
 .filter-actions {
   display: flex;
@@ -185,9 +175,11 @@ export default {
   margin-left: auto;
 }
 
-/* Apply/Clear are AspButtons now (primary/secondary); DS owns their visuals +
-   disabled state. .filter-actions above lays them out. The mode-btn segmented
-   group stays native (held pending the #4295 design ruling). */
+/* Apply/Clear are AspButtons (primary/secondary) and the mode strip is
+   AspSegmented; the DS owns all three, including the disabled state.
+   .filter-actions above lays the two buttons out. The mode-strip hold this
+   comment used to record — "held pending the #4295 design ruling" — is
+   released: the ruling landed as §3.89 and shipped as AspSegmented (#4329). */
 
 .filter-active-badge {
   font-size: var(--text-xs);
