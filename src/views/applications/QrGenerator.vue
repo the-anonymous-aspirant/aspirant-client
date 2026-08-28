@@ -4,27 +4,45 @@
     <h2 class="page-subtitle">Generate a QR code from any text or URL</h2>
 
     <div class="generator-card">
+      <!-- The <label for> survives here and does NOT beside the select below,
+           and the asymmetry is the DS's: AspTextarea sets inheritAttrs: false
+           and binds $attrs to the real <textarea>, so `id` lands on a labelable
+           element. AspSelect leaves inheritAttrs on, so an `id` given to it
+           lands on its wrapper <div>. -->
       <label for="qr-input">Enter text or URL</label>
-      <textarea
-        id="qr-input"
-        v-model="inputText"
-        placeholder="https://example.com or any text..."
-        rows="3"
-        maxlength="900"
-        @input="generate"
-      />
+      <!-- Wrapper, because .generator-card is a flex column with
+           align-items: center, which shrinks every item to its content width —
+           what the old `textarea { width: 100% }` was quietly undoing.
+           Measured, the field came out 190px in a 524px card. A class on the
+           component cannot fix it: AspTextarea sets inheritAttrs: false and
+           rides $attrs, class included, to the inner <textarea>, where this
+           file's data-v attribute does not reach. -->
+      <div class="input-field">
+        <AspTextarea
+          id="qr-input"
+          :model-value="inputText"
+          placeholder="https://example.com or any text..."
+          :rows="3"
+          :max-rows="10"
+          maxlength="900"
+          @update:model-value="v => { inputText = v; generate() }"
+        />
+      </div>
       <div class="char-counter" :class="{ 'near-limit': inputText.length > 800 }">
         {{ inputText.length }} / 900
       </div>
 
       <div class="size-control">
-        <label for="qr-size">Size</label>
-        <select id="qr-size" v-model="selectedSize" @change="generate">
-          <option :value="150">Small (150px)</option>
-          <option :value="200">Medium (200px)</option>
-          <option :value="300">Large (300px)</option>
-          <option :value="500">Extra Large (500px)</option>
-        </select>
+        <!-- A <span>, not a <label for>: see the note above. The name rides
+             aria-label, and the caption shares .generator-card label's rule so
+             the two captions on this card still read alike. -->
+        <span class="control-caption">Size</span>
+        <AspSelect
+          :model-value="selectedSize"
+          :options="sizeOptions"
+          aria-label="Size"
+          @update:model-value="v => { selectedSize = v; generate() }"
+        />
       </div>
     </div>
 
@@ -57,12 +75,22 @@
 
 <script setup>
 import { ref } from 'vue';
-import { AspButton } from '@aspirant/design-system';
+import { AspButton, AspSelect, AspTextarea } from '@aspirant/design-system';
 
 const inputText = ref('');
 const encodedText = ref('');
 const qrUrl = ref('');
 const selectedSize = ref(300);
+// AspSelect takes `[{value,label}]` where the native took <option> markup. The
+// values stay NUMBERS: `selectedSize` is interpolated into the QR service's
+// `?size=NxN` query and into the image's inline width/height, and AspSelect
+// matches with `===`, so a string here would select nothing and size nothing.
+const sizeOptions = [
+  { value: 150, label: 'Small (150px)' },
+  { value: 200, label: 'Medium (200px)' },
+  { value: 300, label: 'Large (300px)' },
+  { value: 500, label: 'Extra Large (500px)' },
+];
 const copied = ref(false);
 
 const generate = () => {
@@ -101,8 +129,19 @@ const copyUrl = async () => {
   padding: var(--space-xl) var(--space-lg);
 }
 
+/* This card declares a background, so it declares the ink that goes on it
+   (#2415 / §3.18). Without this line the card inherits the ambient ink, and
+   --text-muted is `color-mix(currentColor 88%, transparent)` — it has no colour
+   of its own — so the character counter composited at 1.99:1 in light and
+   1.42:1 in dark against a --surface-card that is dark in both. Measured on the
+   built page: the counter goes to 8.23:1 in light and 11.44:1 in dark. The
+   `label` rule below was
+   unaffected because it names an absolute ink; the counter is the descendant
+   that had none. Predates this task; fixed here because it is the card this
+   task rebuilt, and the same shape as #4483 on VoiceCommander.vue. */
 .generator-card {
   background-color: var(--surface-card);
+  color: var(--text-on-dark);
   border: 2px solid var(--border-card);
   border-radius: var(--radius-xl);
   padding: var(--space-xl);
@@ -112,7 +151,8 @@ const copyUrl = async () => {
   align-items: center;
 }
 
-.generator-card label {
+.generator-card label,
+.control-caption {
   display: block;
   text-align: center;
   color: var(--text-heading-card);
@@ -123,28 +163,17 @@ const copyUrl = async () => {
   margin-bottom: var(--space-xs);
 }
 
-textarea {
-  width: 100%;
-  background: var(--surface-card-inner);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-md);
-  padding: var(--space-sm) var(--space-md);
-  color: var(--text-on-dark);
-  font-size: var(--text-base);
-  font-family: var(--font-family-base);
-  resize: vertical;
-  box-sizing: border-box;
-  transition: border-color var(--transition-base);
-}
+/* The bare `textarea` and `select` element rules are gone with the natives they
+   painted. Neither could have survived the port for two independent reasons:
+   each component renders its control inside its own root, past this file's
+   data-v attribute, and both boxes are now the DS's own — --surface-elevated
+   with --border-control, which carries the WCAG 1.4.11 3:1 non-text floor that
+   this card's --border-card did not on its own fill. AspTextarea also owns the
+   focus ring and the placeholder ink.
 
-textarea:focus {
-  outline: none;
-  border-color: var(--brand-accent);
-}
-
-textarea::placeholder {
-  color: var(--text-muted);
-}
+   Element-name selectors are the ones to grep for on a migration like this: a
+   class rule that stops matching is visible in the diff, and `textarea { }` is
+   not. */
 
 .char-counter {
   text-align: right;
@@ -168,25 +197,18 @@ textarea::placeholder {
   margin-bottom: var(--space-2xs);
 }
 
-.size-control select {
-  width: auto;
-  min-width: 200px;
-}
-
-select {
+.input-field {
   width: 100%;
-  background: var(--surface-card-inner);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-md);
-  padding: var(--space-xs) var(--space-sm);
-  color: var(--text-on-dark);
-  font-size: var(--text-sm);
-  cursor: pointer;
 }
 
-select:focus {
-  outline: none;
-  border-color: var(--brand-accent);
+/* AspSelect's root is `display: inline-flex`, which is what centres it under
+   the caption in this centred card. The 200px floor is kept explicitly: the
+   trigger's own `min-width: 10rem` is 160px, so leaving this out narrows the
+   control by 40px rather than preserving it. The trigger stretches to the
+   root's width, so the floor set here reaches it. Layout only. */
+.size-control .select {
+  display: inline-flex;
+  min-width: 200px;
 }
 
 
