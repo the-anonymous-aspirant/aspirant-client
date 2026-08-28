@@ -166,22 +166,31 @@
     <div class="section">
       <h3>Transactions</h3>
       <div class="filters-row">
-        <select v-model="filterBank" @change="resetAndLoad" class="select-input">
-          <option value="">All banks</option>
-          <option v-for="s in sources" :key="s.bank" :value="s.bank">{{ s.name || s.bank.toUpperCase() }}</option>
-        </select>
-        <select v-model="filterCategory" @change="resetAndLoad" class="select-input">
-          <option value="">All categories</option>
-          <option v-for="cat in availableCategories" :key="cat" :value="cat">{{ cat }}</option>
-        </select>
+        <!-- v-model is spelled out here rather than used: the natives paired
+             v-model with @change, and AspSelect emits only update:modelValue,
+             so the assignment and the refetch both have to hang off that one
+             event. -->
+        <AspSelect
+          :model-value="filterBank"
+          :options="bankOptions"
+          aria-label="Filter by bank"
+          @update:model-value="v => { filterBank = v; resetAndLoad() }"
+        />
+        <AspSelect
+          :model-value="filterCategory"
+          :options="categoryOptions"
+          aria-label="Filter by category"
+          @update:model-value="v => { filterCategory = v; resetAndLoad() }"
+        />
         <input type="date" v-model="filterDateFrom" @change="resetAndLoad" class="date-input" />
         <input type="date" v-model="filterDateTo" @change="resetAndLoad" class="date-input" />
-        <!-- The two <select>s and the two date pickers beside this field cannot
-             migrate: `select` is a primitive family #4278 does not cover, and
-             `date` is out of AspInput's contract by the §3.85 ruling. Their
-             shared rule below is therefore retuned to the DS control tokens so
-             the row reads as one row rather than one DS control among four
-             natives. -->
+        <!-- Only the two date pickers are still native, and only because `date`
+             is outside AspInput's contract by the §3.85 ruling. The selects
+             beside them are AspSelect now: the earlier note here said `select`
+             was a family #4278 does not cover, which was a statement about that
+             census rather than about the DS — AspSelect has shipped throughout.
+             .date-input keeps the retuned box below so the two natives still
+             read as part of a row of DS controls (§3.86). -->
         <div class="search-field">
           <AspInput v-model="filterSearch" type="search" placeholder="Search..." @input="debounceSearch" />
         </div>
@@ -215,10 +224,24 @@
     <div class="section" v-if="monthlyData.length">
       <h3>Spending Analysis</h3>
       <div class="chart-controls">
-        <select v-model="chartCategory" @change="renderCharts()" class="select-input">
-          <option value="">All Categories</option>
-          <option v-for="cat in chartableCategories" :key="cat" :value="cat">{{ cat }}</option>
-        </select>
+        <AspSelect
+          :model-value="chartCategory"
+          :options="chartCategoryOptions"
+          aria-label="Chart category"
+          @update:model-value="v => { chartCategory = v; renderCharts() }"
+        />
+        <!-- HELD native, and measured rather than assumed. AspCheckbox paints
+             .checkbox__box with --border-subtle, the one token AspInput,
+             AspSelect and AspTextarea each explicitly rejected for a control
+             boundary (their own comments cite §3.72 / #4061: #cccccc is 1.26:1
+             against the light page, so the control has no visible edge). On
+             this row, light theme, unchecked: the native's boundary measures
+             16.52:1 and the DS box's 1.26:1 — porting it would take a clearly
+             drawn control to an invisible one, below WCAG 1.4.11's 3:1 non-text
+             floor, on the default theme. Dark is the reverse (native 1.21:1,
+             DS 10.84:1), so this is a light-theme-only regression and a single-
+             theme walk would have shipped it. Filed as DS defect #4482; port
+             this the moment the box carries --border-control. -->
         <label class="toggle-label">
           <input type="checkbox" v-model="excludeInternalTransfers" @change="renderCharts()" />
           Exclude internal transfers
@@ -302,13 +325,13 @@ import { AspInput } from '@aspirant/design-system';
 import axios from 'axios';
 import { Chart, registerables } from 'chart.js';
 import { AspDataTable } from '@aspirant/design-system';
-import { AspButton, AspTooltip } from '@aspirant/design-system';
+import { AspButton, AspSelect, AspTooltip } from '@aspirant/design-system';
 import { seriesColor } from '../../composables/chartSeries.js';
 
 Chart.register(...registerables);
 
 export default {
-  components: { AspInput, AspDataTable, AspButton, AspTooltip },
+  components: { AspInput, AspDataTable, AspButton, AspSelect, AspTooltip },
   data() {
     return {
       // AspDataTable column defs — all non-sortable (the native tables were
@@ -377,6 +400,29 @@ export default {
     },
     chartableCategories() {
       return this.availableCategories.filter(c => c !== 'internal_transfer' && c !== 'transfers');
+    },
+    // AspSelect takes `[{value,label}]` where the native took <option> markup.
+    // The empty-string "All ..." entry stays a real option rather than becoming
+    // the `placeholder` prop: the filters treat '' as a value they refetch on,
+    // and a placeholder is not selectable, so making it one would leave no way
+    // back to the unfiltered view.
+    bankOptions() {
+      return [
+        { value: '', label: 'All banks' },
+        ...this.sources.map(s => ({ value: s.bank, label: s.name || s.bank.toUpperCase() })),
+      ];
+    },
+    categoryOptions() {
+      return [
+        { value: '', label: 'All categories' },
+        ...this.availableCategories.map(cat => ({ value: cat, label: cat })),
+      ];
+    },
+    chartCategoryOptions() {
+      return [
+        { value: '', label: 'All Categories' },
+        ...this.chartableCategories.map(cat => ({ value: cat, label: cat })),
+      ];
     },
     internalCategories() {
       return ['internal_transfer', 'transfers'];
@@ -1256,12 +1302,15 @@ export default {
   width: 220px;
 }
 
-/* The natives that remain in the filter row, held to the same box AspInput
-   renders: 34px (the §3.10 filter canon), --radius-md, and --border-control,
-   which carries the WCAG 1.4.11 3:1 non-text floor that the old
-   `--border-color, #ccc` fallback did not. `.text-input` is gone from the
-   selector because that control is AspInput's now. */
-.select-input, .date-input {
+/* The two `date` pickers are the only natives left in the filter row, held to
+   the same box AspInput and AspSelect render: 34px (the §3.10 filter canon),
+   --radius-md, and --border-control, which carries the WCAG 1.4.11 3:1
+   non-text floor that the old `--border-color, #ccc` fallback did not.
+   `.text-input` left this selector when that control became AspInput;
+   `.select-input` left it when the three selects became AspSelect, which
+   already paints this exact box itself — leaving the class here would have
+   been a consumer rule competing with the DS for the trigger it renders. */
+.date-input {
   height: 34px;
   padding: 0 var(--space-sm);
   border: 1px solid var(--border-control);
@@ -1378,6 +1427,10 @@ th {
   margin-bottom: var(--space-md);
 }
 
+/* Stays, with the native checkbox it wraps — see the hold recorded at the
+   control. AspCheckbox would render its own <label> around box and text and
+   make every declaration here redundant, so this rule leaves the file in the
+   same commit the control does, and not before. */
 .toggle-label {
   display: flex;
   align-items: center;

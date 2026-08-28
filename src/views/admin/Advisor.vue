@@ -89,14 +89,24 @@
       </div>
 
       <div class="chat-input-area">
-        <textarea
-          v-model="question"
-          placeholder="Ask a question..."
-          rows="2"
-          :disabled="querying"
-          @keydown.enter.exact.prevent="askQuestion"
-          maxlength="2000"
-        ></textarea>
+        <!-- A wrapper, not a class on the component, and the reason is
+             AspTextarea's inheritAttrs: false — `class` travels in $attrs, and
+             AspTextarea binds $attrs to the real <textarea> INSIDE its root, so
+             a class passed here lands on a node this file's data-v attribute
+             cannot reach. Measured: the field came out 190px in a 784px row.
+             Finance's .search-field wrapper exists for the same reason. The
+             wrapper carries flex: 1 and nothing else — the box is the DS's. -->
+        <div class="chat-input">
+          <AspTextarea
+            v-model="question"
+            placeholder="Ask a question..."
+            :rows="2"
+            :max-rows="6"
+            :disabled="querying"
+            maxlength="2000"
+            @keydown.enter.exact.prevent="askQuestion"
+          />
+        </div>
         <AspButton
           variant="primary"
           @click="askQuestion"
@@ -119,20 +129,22 @@
           <div class="form-row">
             <div class="form-group">
               <label>Domain</label>
-              <select v-model="uploadDomain" :disabled="uploading">
-                <option value="" disabled>Select domain</option>
-                <option v-for="d in domainList" :key="d.name" :value="d.name">
-                  {{ d.display_name }}
-                </option>
-              </select>
+              <AspSelect
+                v-model="uploadDomain"
+                :options="domainOptions"
+                placeholder="Select domain"
+                aria-label="Domain"
+                :disabled="uploading"
+              />
             </div>
             <div class="form-group">
               <label>Access Level</label>
-              <select v-model="uploadAccess" :disabled="uploading">
-                <option value="admin">Admin only</option>
-                <option value="family">Family</option>
-                <option value="public">Public</option>
-              </select>
+              <AspSelect
+                v-model="uploadAccess"
+                :options="accessOptions"
+                aria-label="Access Level"
+                :disabled="uploading"
+              />
             </div>
           </div>
           <div class="form-group">
@@ -188,11 +200,13 @@
 
 <script>
 import axios from 'axios';
-import { AspButton } from '@aspirant/design-system';
+import { AspButton, AspSelect, AspTextarea } from '@aspirant/design-system';
 
 export default {
   components: {
     AspButton,
+    AspSelect,
+    AspTextarea,
   },
   data() {
     return {
@@ -238,6 +252,21 @@ export default {
     },
     domainList() {
       return this.sources?.domains || [];
+    },
+    // AspSelect takes `[{value,label}]` where the natives took <option> markup.
+    // The domain select's old `<option value="" disabled>Select domain</option>`
+    // becomes the `placeholder` prop rather than a disabled first entry: the
+    // placeholder is exactly a non-selectable prompt shown while modelValue
+    // matches no option, which is what that disabled option was standing in for.
+    domainOptions() {
+      return this.domainList.map(d => ({ value: d.name, label: d.display_name }));
+    },
+    accessOptions() {
+      return [
+        { value: 'admin', label: 'Admin only' },
+        { value: 'family', label: 'Family' },
+        { value: 'public', label: 'Public' },
+      ];
     },
   },
   methods: {
@@ -709,16 +738,18 @@ export default {
   align-items: flex-end;
 }
 
-.chat-input-area textarea {
+/* Was `.chat-input-area textarea`, hand-painting the box. AspTextarea paints
+   it now (--surface-elevated fill, --text-body ink, --border-control at the
+   WCAG 1.4.11 3:1 floor), and this file's scoped attribute cannot reach the
+   real <textarea> inside it anyway. What is left is the one thing the DS
+   cannot know: this control shares its row with a Send button and takes the
+   remaining width. The near-white control on this dark card is §3.86, the same
+   call GoalTreeCanvas's dialog records — an always-live data-entry control
+   adopts the DS control fill rather than the card's inner fill. */
+.chat-input {
   flex: 1;
-  padding: var(--space-sm);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
-  font-size: var(--text-sm);
-  font-family: inherit;
-  resize: none;
+  /* AspTextarea's own root is a block-level flex column, so it fills this. */
+  min-width: 0;
 }
 
 /* .btn-send/.btn-upload/.btn-small/.btn-danger visuals now come from AspButton
@@ -779,7 +810,11 @@ export default {
   font-weight: 600;
 }
 
-.form-group select,
+/* `.form-group select` has left this selector: both selects are AspSelect now,
+   which renders its own trigger past this file's data-v attribute and paints
+   the §3.86 control box itself. The `file` input stays native — no DS
+   component covers it, and AspInput's §3.85 allowlist excludes the type — so
+   it keeps the card-inner box it has always had. */
 .form-group input[type="file"] {
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
