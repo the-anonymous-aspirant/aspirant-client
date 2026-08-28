@@ -79,12 +79,15 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
     // keeps the assertion engine-independent rather than pinned to one
     // browser's serialization.
     //
-    // The control selector is `.field__control, input, select, textarea`
-    // because the tinted SURFACE moved, not the assertion: rows whose value
-    // control is now an AspInput carry the fill on the component's
-    // `.field__control`, while rows still holding a native date picker, select
-    // or textarea match the trailing part unchanged. `.first()` takes document
-    // order, which puts `.field__control` ahead of the input it contains.
+    // The control selector is `.field__control, .select__trigger,
+    // .field__textarea, input` because the tinted SURFACE moved, not the
+    // assertion: rows whose value control is now an AspInput carry the fill on
+    // the component's `.field__control`, an AspSelect carries it on its
+    // `.select__trigger` (a <button>, which no `select` selector reaches), an
+    // AspTextarea on its `.field__textarea`, and rows still holding a native
+    // date picker match `input` unchanged. `querySelector` takes document
+    // order, which puts a component's own surface node ahead of anything
+    // inside it.
     const BUCKETS: Array<[string, string]> = [
       ['confident', '#38a169'],
       ['uncertain', '#dd6b20'],
@@ -114,7 +117,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
         };
 
         const control = el.querySelector(
-          '.field__control, input, select, textarea',
+          '.field__control, .select__trigger, .field__textarea, input',
         ) as HTMLElement;
         // On a migrated row the ink lives on the component's inner <input>;
         // on a native row the control IS the inked element.
@@ -296,7 +299,7 @@ test.describe('Värdeutlåtande BR-flow regression', () => {
             // also assert that their bounding boxes sit inside the parent
             // — the rendered scrollbar gutter still counts as "escaped".
             const nodes = (el as HTMLElement).querySelectorAll(
-              'span, dt, dd, p, legend, label, input, select, textarea, h4, h5',
+              'span, dt, dd, p, legend, label, input, select, textarea, h4, h5, .select__trigger',
             );
             return Array.from(nodes).flatMap(n => {
               const nr = (n as HTMLElement).getBoundingClientRect();
