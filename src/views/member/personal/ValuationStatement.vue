@@ -195,11 +195,12 @@
         </div>
         <div class="field-row" :class="confClass('upplatelseform')">
           <label>Upplåtelseform</label>
-          <select v-model="reviewedFields.upplatelseform" @change="markManual('upplatelseform')">
-            <option value="Bostadsrätt">Bostadsrätt</option>
-            <option value="Friköpt">Friköpt</option>
-            <option value="Tomträtt">Tomträtt</option>
-          </select>
+          <AspSelect
+            :model-value="reviewedFields.upplatelseform"
+            :options="upplatelseformOptions"
+            aria-label="Upplåtelseform"
+            @update:model-value="v => { reviewedFields.upplatelseform = v; markManual('upplatelseform') }"
+          />
         </div>
       </fieldset>
 
@@ -226,11 +227,12 @@
         <legend>Värdebedömning</legend>
         <div class="field-row" :class="confClass('likviditet')">
           <label>Likviditet</label>
-          <select v-model="reviewedFields.likviditet" @change="markManual('likviditet')">
-            <option value="god">god</option>
-            <option value="normal">normal</option>
-            <option value="låg">låg</option>
-          </select>
+          <AspSelect
+            :model-value="reviewedFields.likviditet"
+            :options="likviditetOptions"
+            aria-label="Likviditet"
+            @update:model-value="v => { reviewedFields.likviditet = v; markManual('likviditet') }"
+          />
         </div>
         <div class="field-row" :class="confClass('marknadsvarde_kr')">
           <label>Marknadsvärde (kr)</label>
@@ -252,12 +254,13 @@
         </div>
         <div class="field-row" :class="confClass('bilder_note')">
           <label>Anteckning om bilder/skick</label>
-          <textarea
+          <AspTextarea
             v-model="reviewedFields.bilder_note"
-            rows="2"
+            :rows="2"
+            :max-rows="8"
             placeholder="Lämna tom om inget ska läggas till"
             @input="markManual('bilder_note')"
-          ></textarea>
+          />
         </div>
       </fieldset>
 
@@ -296,10 +299,18 @@
           <label>Företagets namn</label>
           <AspInput v-model="reviewedFields.foretag" @input="markManual('foretag')" />
         </div>
-        <label class="checkbox-row">
-          <input type="checkbox" v-model="saveOperatorDefaults" />
-          Spara ort, namn, titel och företag som standard för nästa gång
-        </label>
+        <!-- Ported on a measurement, not on #4477's precedent. That task HELD
+             Finance's checkbox because AspCheckbox's --border-subtle measures
+             1.26:1 on a near-white page (DS defect #4482). This one sits inside
+             .field-block on --surface-card, dark in both themes, where the
+             native's #000 boundary measured 2.09:1 — under WCAG 1.4.11's 3:1
+             floor — and the DS box's near-white fill carries the edge instead.
+             Same surround, same result as #4479's goals panel. -->
+        <AspCheckbox
+          class="checkbox-row"
+          v-model="saveOperatorDefaults"
+          label="Spara ort, namn, titel och företag som standard för nästa gång"
+        />
       </fieldset>
 
       <!-- Per-source extraction provenance (collapsible) -->
@@ -410,6 +421,16 @@
         <tbody>
           <tr v-for="row in processedRows" :key="row.id" :data-test-row-id="row.id">
             <td>
+              <!-- HELD native, and `text` is inside AspInput's §3.85 allowlist,
+                   so this is a choice rather than a limit. This is an
+                   edit-in-place affordance (§3.69/§3.72/§3.81): it must read as
+                   a table cell at rest and reveal its box only on hover and
+                   focus. AspInput draws its box at rest by contract — that is
+                   what makes it a field — so adopting it here would put a
+                   permanent control box in every row of a read-scanned table
+                   and change what the table is, not just what it looks like.
+                   The affordance is the reason; if the DS ever grows a quiet
+                   variant, this is its first consumer. -->
               <input
                 type="text"
                 class="history-name-input"
@@ -509,7 +530,7 @@
 </template>
 
 <script>
-import { AspButton, AspInput, AspSegmented } from '@aspirant/design-system';
+import { AspButton, AspCheckbox, AspInput, AspSegmented, AspSelect, AspTextarea } from '@aspirant/design-system';
 import axios from 'axios';
 
 import ValuationStep from '@/components/ValuationStep.vue';
@@ -568,7 +589,7 @@ const BLANK_CONFIDENCE = () => ({
 });
 
 export default {
-  components: { AspButton, AspInput, AspSegmented, ValuationStep },
+  components: { AspButton, AspCheckbox, AspInput, AspSegmented, AspSelect, AspTextarea, ValuationStep },
   data() {
     return {
       step: 'upload',
@@ -625,6 +646,17 @@ export default {
   computed: {
     mode() {
       return this.reviewedFields.upplatelseform === 'Friköpt' ? 'frikopt' : 'bostadsratt';
+    },
+
+    // AspSelect takes `[{value,label}]` where the natives took <option> markup.
+    // Value and label are the same string in both, as they were in the markup —
+    // these values are written verbatim into the generated document, so a label
+    // that diverged from its value would be a silent content change.
+    upplatelseformOptions() {
+      return ['Bostadsrätt', 'Friköpt', 'Tomträtt'].map(v => ({ value: v, label: v }));
+    },
+    likviditetOptions() {
+      return ['god', 'normal', 'låg'].map(v => ({ value: v, label: v }));
     },
 
     extractingStatus() {
@@ -1493,16 +1525,19 @@ export default {
   min-width: 0;
 }
 .field-row label { font-size: var(--text-sm); color: var(--text-muted); }
-/* The controls that CANNOT migrate — the seven native date pickers the #880
-   specs pin, the two selects, and the textareas — held to the box AspInput
-   renders beside them, so the review form still reads as one form. Their old
-   `--surface-card-inner` well is also the fill AspInput's own source rejected
-   for a dark card: no flat dark-on-dark value clears the WCAG 1.4.11 3:1
-   non-text floor there (it measured 2.80:1), which is why the DS control uses
-   an elevated fill and why these now do too (§3.86). */
-.field-row input,
-.field-row select,
-.field-row textarea {
+/* The controls that still CANNOT migrate — the native `date` pickers the #880
+   specs pin — held to the box AspInput renders beside them, so the review form
+   still reads as one form. Their old `--surface-card-inner` well is also the
+   fill AspInput's own source rejected for a dark card: no flat dark-on-dark
+   value clears the WCAG 1.4.11 3:1 non-text floor there (it measured 2.80:1),
+   which is why the DS control uses an elevated fill and why these do too
+   (§3.86).
+
+   `select` and `textarea` have LEFT this selector: both are DS controls now
+   (AspSelect, AspTextarea), each painting this exact box itself, and each
+   rendering past this file's data-v attribute where the rule could not have
+   reached them anyway. */
+.field-row input {
   padding: 0 var(--space-sm);
   height: var(--asp-input-height, 34px);
   border-radius: var(--radius-md);
@@ -1515,18 +1550,21 @@ export default {
   box-sizing: border-box;
 }
 
-/* A textarea is the one control that must not be pinned to the 34px canon. */
-.field-row textarea {
-  height: auto;
-  padding: var(--space-xs) var(--space-sm);
+/* AspSelect's root is `display: inline-flex` with a `min-width: 10rem` trigger,
+   so in this grid column it would sit at its content width beside fields that
+   fill the row. The width is the one thing the DS cannot know; AspTextarea's
+   root is already block-level and needs nothing. */
+.field-row .select {
+  display: flex;
+  width: 100%;
 }
 
+/* AspCheckbox is its own <label> and already sets the flex row, the gap and
+   --text-sm; the class rides its root (inheritAttrs is on there, unlike
+   AspTextarea's). What is left is the gap above it and this block's muted ink,
+   which the component takes by `color: inherit`. */
 .checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
   margin-top: var(--space-sm);
-  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
@@ -1545,11 +1583,14 @@ export default {
 .chip.not-found,
 .chip.not_found   { background-color: rgba(245, 101, 101, 0.2); color: #e53e3e; }
 
-/* On a migrated row the tint lands on AspInput's `.field__control` — the
-   element that actually carries the fill — and NOT on its inner <input>, which
-   is transparent by design and sits inside it. `:deep` is required because the
-   component's internals are outside this file's scope id. The native selectors
-   stay for the date pickers, selects and textareas beside it. */
+/* On a migrated row the tint lands on the element that actually carries the
+   fill, and NOT on any transparent node inside it: AspInput's `.field__control`
+   (its inner <input> is transparent by design), AspSelect's `.select__trigger`
+   (a <button>, which no `select` selector reaches — that is what dropped the
+   colour code on the two migrated rows until it was measured), and
+   AspTextarea's `.field__textarea`. `:deep` is required because the components'
+   internals are outside this file's scope id. The bare `input` selector stays
+   for the native date pickers beside them. */
 .field-row :deep(.field__input) {
   background-color: transparent;
   border-left: none;
@@ -1569,9 +1610,9 @@ export default {
    chips so the operator can scan the form by color: green = säker,
    orange = osäker, blue = manuell (operator edit), red = saknas. */
 .field-row.confident input,
-.field-row.confident select,
-.field-row.confident textarea,
-.field-row.confident :deep(.field__control) {
+.field-row.confident :deep(.field__control),
+.field-row.confident :deep(.select__trigger),
+.field-row.confident :deep(.field__textarea) {
   /* Fallback for an engine without color-mix: the plain elevated fill. It
      loses the colour code and keeps the text readable, which is the right way
      round to degrade. */
@@ -1580,9 +1621,9 @@ export default {
   border-left: 4px solid #38a169;
 }
 .field-row.uncertain input,
-.field-row.uncertain select,
-.field-row.uncertain textarea,
-.field-row.uncertain :deep(.field__control) {
+.field-row.uncertain :deep(.field__control),
+.field-row.uncertain :deep(.select__trigger),
+.field-row.uncertain :deep(.field__textarea) {
   /* Fallback for an engine without color-mix: the plain elevated fill. It
      loses the colour code and keeps the text readable, which is the right way
      round to degrade. */
@@ -1591,9 +1632,9 @@ export default {
   border-left: 4px solid #dd6b20;
 }
 .field-row.manual input,
-.field-row.manual select,
-.field-row.manual textarea,
-.field-row.manual :deep(.field__control) {
+.field-row.manual :deep(.field__control),
+.field-row.manual :deep(.select__trigger),
+.field-row.manual :deep(.field__textarea) {
   /* Fallback for an engine without color-mix: the plain elevated fill. It
      loses the colour code and keeps the text readable, which is the right way
      round to degrade. */
@@ -1602,9 +1643,9 @@ export default {
   border-left: 4px solid #3182ce;
 }
 .field-row.not-found input,
-.field-row.not-found select,
-.field-row.not-found textarea,
-.field-row.not-found :deep(.field__control) {
+.field-row.not-found :deep(.field__control),
+.field-row.not-found :deep(.select__trigger),
+.field-row.not-found :deep(.field__textarea) {
   /* Fallback for an engine without color-mix: the plain elevated fill. It
      loses the colour code and keeps the text readable, which is the right way
      round to degrade. */
@@ -1794,6 +1835,8 @@ export default {
   background: rgba(255, 179, 0, 0.15);
 }
 .row-menu-item--danger { color: var(--feedback-error, #c0392b); }
+/* Stays, with the native it paints — see the hold at the control. The
+   transparent rest state IS the affordance here, not an unfinished migration. */
 .history-name-input {
   width: 100%;
   background: transparent;
