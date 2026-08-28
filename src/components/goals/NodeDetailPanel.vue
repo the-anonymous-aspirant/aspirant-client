@@ -145,8 +145,10 @@
                          size="sm" with a --brand-primary-alpha hover fill. So
                          the port would swap two underlined words for two pills
                          inside a metadata line. What is missing is a `link`
-                         variant in the DS; until it exists this is a decision,
-                         not an unfinished migration. The file's other five
+                         variant in the DS — filed as DS gap #4514, so this
+                         hold has an owner rather than being a note that stops
+                         here. Until it lands this is a decision, not an
+                         unfinished migration. The file's other five
                          controls ARE AspButton — see the Save above. -->
                     <button class="btn-link" @click="startCommentEdit(comment)">edit</button>
                     <button class="btn-link btn-danger" @click="removeComment(comment.id)">delete</button>

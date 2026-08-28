@@ -22,14 +22,35 @@ would find a reason. A site is sited when either:
       between it and the one before — whose first member is sited. One comment
       over a v-for, or over a four-row menu, covers the group it heads.
 
+Site detection skips anything inside an HTML comment, and that exclusion is
+load-bearing rather than tidiness. A rationale explaining why a control stays
+native naturally quotes the tag it is about ("attrs fall through to its root
+<button>"), and a line-anchored match counts that prose as a site. It then
+finds the surrounding comment attached to it and reports it SITED — so the
+miscount lands in the passing column and never shows up as a failure. The
+first draft of this script did exactly that: a comment-only edit moved the
+total from 13 to 14 while still exiting 0. A pattern match over source is not
+a count until it excludes comment context.
+
 Usage:
     scripts/check-native-button-rationale.py                      # working tree
     scripts/check-native-button-rationale.py --ref origin/main    # any commit
     scripts/check-native-button-rationale.py --skip src/views/x.vue,src/y.vue
 
-Exits non-zero and names every unsited site. Known unsited on origin/main
-@ 15123e2: GameTimeline.vue (12, closed by PR #243) and JobsView.vue:154,163
-(a 2-option tab strip, open question — see #4246).
+Exits non-zero and names every unsited site.
+
+Counts, so a later reader can tell a regression from the known backlog
+(measured 2026-08-28, `--ref origin/main` @ 15123e2 and the #4513 branch):
+
+    origin/main   4 sited / 23 unsited   (9 in the three files #4513 closes,
+                                          12 GameTimeline, 2 JobsView)
+    #4513 branch  12 sited /  0 unsited  in scope, i.e. with GameTimeline and
+                                         JobsView skipped
+
+Still unsited repo-wide after this branch, both out of its scope because each
+sits in another open PR's file set: GameTimeline.vue (12, closed by PR #243 /
+#4512) and JobsView.vue:154,163 (a 2-option tab strip — the AspSegmented
+question of #4450, see #4246).
 """
 import argparse
 import pathlib
@@ -56,6 +77,26 @@ def attached_text(lines, i):
         if k >= 0:
             top = min(top, k)
     return '\n'.join(lines[top:i])
+
+
+def comment_mask(lines):
+    """True for each line whose START sits inside an HTML comment."""
+    mask, inside = [], False
+    for line in lines:
+        mask.append(inside)
+        i = 0
+        while True:
+            if inside:
+                j = line.find('-->', i)
+                if j < 0:
+                    break
+                inside, i = False, j + 3
+            else:
+                j = line.find('<!--', i)
+                if j < 0:
+                    break
+                inside, i = True, j + 4
+    return mask
 
 
 def sources(ref):
@@ -85,8 +126,9 @@ def main():
         if path in skip:
             continue
         prev_end, prev_sited = None, False
+        in_comment = comment_mask(lines)
         for i, line in enumerate(lines):
-            if not OPEN_TAG.match(line):
+            if not OPEN_TAG.match(line) or in_comment[i]:
                 continue
             ok = bool(RATIONALE.search(attached_text(lines, i)))
             if not ok and prev_sited and prev_end is not None:

@@ -56,8 +56,17 @@
            is a centred inline-flex pill with its own radius and padding; every
            one of its four variants draws that box (the variant validator is a
            closed set, AspButton.vue:8), so the port would put a pill inside a
-           list of rows. The DS has no menu/menuitem primitive — that gap, not
-           this call site, is what has to close first. -->
+           list of rows.
+           The near-miss is NOT AspButton but AspList variant="interactive" +
+           AspListItem, whose .list-item__inner already IS a full-width,
+           text-align:start, background:none, font:inherit <button> — the right
+           box. What it cannot do is carry the semantics: its <ul>, <li> and
+           inner <button> are hard-coded elements with no role override, and
+           AspListItem sets neither inheritAttrs:false nor v-bind="$attrs"
+           (unlike AspInput/AspTextarea/AspTooltip), so a consumer-supplied
+           role="menuitem" lands on the <li> — the wrong element — silently.
+           Filed as DS gap #4515; that, not this call site, is what has to close
+           first. (DS read at origin/main b44561a, 2026-08-28T20:52Z.) -->
       <button class="btn-new-tree" @click="startCreate">+ New Tree</button>
     </div>
 
