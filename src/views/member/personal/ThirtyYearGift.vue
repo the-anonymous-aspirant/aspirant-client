@@ -30,6 +30,13 @@
       </div>
     </div>
 
+    <!-- #4518 (C11) sited hold — NOT ported to AspModal. This backdrop reveals a
+         single QR-code image on solve: no heading, no actions, no form, nothing
+         focusable. It is a celebratory reveal / status region, not a dialog;
+         AspModal would impose role="dialog" + aria-modal + a required accessible
+         name it does not semantically have. Kept as-is with its v-overlay-history
+         Back-close. No DS gap (a not-a-dialog determination, not a missing
+         primitive). Rationale recorded on task #4518. -->
     <transition name="popup">
       <div v-if="isSolved" v-overlay-history="() => (isSolved = false)" class="popup-backdrop" :style="{ paddingLeft: sidebarWidth }" @click.self="isSolved = false">
         <div class="popup-content">

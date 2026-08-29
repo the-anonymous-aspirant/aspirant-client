@@ -134,10 +134,14 @@ for (const theme of ['light', 'dark'] as const) {
       await page.locator('.mode-selector button.mode-btn').first().click();
       await page.locator('.item-card.draggable').first().click();
 
-      const modal = page.locator('.item-modal');
+      // The modal is AspModal now (#4518): `[role="dialog"]`, its `.modal__title`
+      // heading and `.modal__body` slot painted by the DS card ink — which is
+      // what retired the `--text-on-light` reads that flipped this panel to
+      // 1.60:1 in dark. The ratio, not the class, is still what is asserted.
+      const modal = page.getByRole('dialog');
       await expect(modal).toBeVisible();
-      expect(await contrastRatio(modal.locator('.modal-header h3')), `${theme}: modal heading`).toBeGreaterThanOrEqual(AA_TEXT);
-      expect(await contrastRatio(modal.locator('.modal-body p')), `${theme}: modal body`).toBeGreaterThanOrEqual(AA_TEXT);
+      expect(await contrastRatio(modal.locator('.modal__title')), `${theme}: modal heading`).toBeGreaterThanOrEqual(AA_TEXT);
+      expect(await contrastRatio(modal.locator('.modal__body p').first()), `${theme}: modal body`).toBeGreaterThanOrEqual(AA_TEXT);
     });
   });
 }

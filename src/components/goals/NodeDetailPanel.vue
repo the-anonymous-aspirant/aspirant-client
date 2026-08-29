@@ -1,4 +1,12 @@
 <template>
+  <!-- #4518 (C11) sited hold — NOT ported to AspModal. This is an edge-anchored
+       side sheet (node editor: colour, description, comments), not a centred
+       dialog. AspModal's sizes are sm|md|lg|fullscreen — none an edge sheet —
+       and overriding its teleported root to fake one is the #4447/#4448 anti-
+       pattern (sixteen local override rules were deleted to escape it). Kept as
+       the hand-rolled sheet with its v-overlay-history Back-close; the DS gap
+       (an AspModal sheet/drawer variant) is filed as its own task. Rationale on
+       task #4518. -->
   <transition name="panel-slide">
     <div v-if="node" v-overlay-history="() => $emit('close')" class="panel-overlay" @click.self="$emit('close')">
       <div class="panel">
