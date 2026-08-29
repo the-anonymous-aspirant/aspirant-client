@@ -373,23 +373,28 @@
     </div>
 
     <!-- Item Details Modal -->
-    <div v-if="selectedItem" v-overlay-history="closeItemDetails" class="modal-overlay" @click="closeItemDetails">
-      <div class="item-modal" @click.stop>
-        <div class="modal-header">
-          <h3>{{ selectedItem.name }}</h3>
-        </div>
-        <div class="modal-body">
-          <p>{{ selectedItem.description }}</p>
-          <div class="modal-actions" v-if="selectedItem.wikipedia">
-            <a :href="selectedItem.wikipedia" target="_blank" rel="noopener noreferrer" class="wikipedia-link">
-              <img v-if="wikipediaIconUrl" :src="wikipediaIconUrl" alt="" class="inline-icon-sm" />
-              <span v-else>📖</span>
-              Learn more on Wikipedia
-            </a>
-          </div>
-        </div>
+    <!-- Item Details Modal — AspModal, not a hand-rolled scrim (#4518 / C11):
+         the native had no role="dialog", no aria-modal, no focus trap and no
+         Escape. Options API, so Back-close binds via overlayHistoryWatch on the
+         selectedItem edge (the directive cannot reach AspModal's teleported
+         root, #4446). The title carries the item name; the panel ink is now
+         AspModal's card ink, which retires the .item-modal / .modal-* text
+         rules that read --text-on-light and flipped to 1.60:1 in dark (#4493). -->
+    <AspModal
+      :open="!!selectedItem"
+      :title="selectedItem?.name"
+      size="sm"
+      @update:open="(open) => (open ? null : closeItemDetails())"
+    >
+      <p v-if="selectedItem">{{ selectedItem.description }}</p>
+      <div class="modal-actions" v-if="selectedItem?.wikipedia">
+        <a :href="selectedItem.wikipedia" target="_blank" rel="noopener noreferrer" class="wikipedia-link">
+          <img v-if="wikipediaIconUrl" :src="wikipediaIconUrl" alt="" class="inline-icon-sm" />
+          <span v-else>📖</span>
+          Learn more on Wikipedia
+        </a>
       </div>
-    </div>
+    </AspModal>
 
     <!-- Feedback Toast -->
     <div v-if="feedbackMessage" class="feedback-toast" :class="feedbackType">
@@ -399,16 +404,17 @@
 </template>
 
 <script>
-import { sidebarWidth } from '@/global_state_manager.js';
 import AssetManager from '@/asset_manager.js';
 import axios from 'axios';
-import { AspButton, AspDataTable } from '@aspirant/design-system';
+import { AspButton, AspDataTable, AspModal } from '@aspirant/design-system';
+import { overlayHistoryWatch } from '@/directives/overlayHistory.js';
 
 export default {
   name: 'GameTimeline',
   components: {
     AspButton,
     AspDataTable,
+    AspModal,
   },
   props: {
     title: { type: String, required: true },
@@ -478,9 +484,6 @@ export default {
       const total = this.gameMode === 'timeline' ? this.placedItems.length : this.completedGuesses;
       if (total === 0) return 100;
       return Math.round((this.score / total) * 100);
-    },
-    sidebarWidth() {
-      return sidebarWidth.value;
     },
     isNewHighScore() {
       if (!this.gameComplete || !this.gameMode) return false;
@@ -803,6 +806,10 @@ export default {
     selectedHistoryMode() {
       this.fetchLeaderboard();
     },
+    // Back closes the item-detail dialog rather than leaving the page (#4172);
+    // the directive cannot bind to AspModal's teleported root, so the history
+    // entry follows the selectedItem edge through the same close path (#4518).
+    selectedItem: overlayHistoryWatch('closeItemDetails'),
   },
   mounted() {
     // Display state; the session lives in the HttpOnly cookie (#2564).
@@ -1600,47 +1607,13 @@ h1 {
 }
 
 
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: v-bind(sidebarWidth);
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: var(--space-lg);
-}
-
-/* The DS surface token, not a pinned `#ffffff` (#4493 D3). Both text rules
-   below read `var(--text-on-light)`, which flips to #e0e0e0 in the dark theme,
-   so a hard-coded white panel left this modal at 1.60:1 there — the same
-   arithmetic as Finance's `--bg-card` cards, reached a different way: there the
-   surface token was undefined, here it was never a token at all. */
-.item-modal {
-  background: var(--surface-elevated);
-  padding: var(--space-xl);
-  border-radius: var(--radius-xl);
-  max-width: 500px;
-  margin: var(--space-lg);
-  box-shadow: var(--shadow-lg);
-}
-
-.modal-header h3 {
-  color: var(--text-on-light);
-  margin-bottom: var(--space-lg);
-  font-size: var(--text-xl);
-}
-
-.modal-body p {
-  color: var(--text-on-light);
-  line-height: 1.6;
-  font-size: var(--text-base);
-}
-
+/* Modal — scrim, panel and title/body text rules deleted with the AspModal
+   port (#4518): AspModal owns the fixed full-viewport scrim, the dark card
+   panel + radius + shadow, the title, and the card ink. Retiring `.item-modal`
+   / `.modal-header h3` / `.modal-body p` also retires their `--text-on-light`
+   reads, which flipped the panel to 1.60:1 in the dark theme (#4493 D3) — the
+   card ink AspModal applies is surface-correct in both. `.modal-actions` and
+   `.wikipedia-link` stay: they style the Wikipedia link inside the modal body. */
 .modal-actions {
   margin-top: var(--space-lg);
   text-align: center;
