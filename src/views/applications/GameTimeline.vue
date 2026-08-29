@@ -8,6 +8,12 @@
     <!-- Mode Selector -->
     <div class="mode-selector" v-if="!gameStarted">
       <h3>Choose Your Challenge:</h3>
+      <!-- HELD as native <button>, not AspButton (#4512). Each of these is a
+           content card that happens to be clickable -- an asset image or emoji
+           block, a title and a description, stacked -- not a control with a
+           label. AspButton lays its slot out as a single inline run and owns
+           the padding, so a card would have to fight it on both. Same shape as
+           the recorded palette hold in PixelAvatarDraw.vue:150-155. -->
       <div class="mode-buttons">
         <button @click="startGame('timeline')" class="mode-btn">
           <div class="mode-icon">
@@ -34,6 +40,15 @@
           <span v-else>📈</span>
           Your Progress
         </h4>
+        <!-- HELD as native <button>, not AspSegmented (#4512). Contract-wise
+             this IS AspSegmented as="tabs": two mutually-exclusive options
+             bound to one model. What blocks it is the icon. AspSegmented takes
+             an icon per option, but as a TEXT GLYPH -- AspSegmented.vue:142
+             renders <span class="segmented__icon">{{ opt.icon }}</span> -- and
+             these tabs render <img :src> from AssetManager, with the emoji only
+             as the v-else fallback. Migrating would silently trade a real
+             uploaded asset for an emoji. Closing that needs an image-icon slot
+             in the DS, and #4246 is app-side only. Revisit when the DS has one. -->
         <div class="history-tabs">
           <button
             :class="['tab-btn', { active: selectedHistoryMode === 'timeline' }]"
@@ -94,6 +109,9 @@
       <!-- Leaderboard -->
       <div class="leaderboard-section">
         <h4>Leaderboard</h4>
+        <!-- HELD as native <button> for the same reason as the score-history
+             strip above: AspSegmented's icon slot is a text glyph, these carry
+             an AssetManager <img>. (#4512) -->
         <div class="history-tabs">
           <button
             :class="['tab-btn', { active: selectedHistoryMode === 'timeline' }]"
@@ -257,14 +275,22 @@
             <div class="item-description">{{ currentItem.description }}</div>
             <div class="guess-section">
               <label>Guess the year:</label>
+              <!-- The year steppers are AspButton size="sm" (#4512). The usual
+                   reason a compact stepper row is held back from the DS -- the
+                   44px touch floor turning six buttons into a wall -- applies to
+                   size="icon" only, where AspButton pins width and height
+                   (AspButton.vue:138-142). size="sm" is padding alone, so the row
+                   keeps its rhythm. variant="secondary" rather than "ghost":
+                   ghost is transparent, and boxiness is the affordance in a row
+                   of discrete tap targets. .year-btn survives as layout only. -->
               <div class="year-adjust">
-                <button class="year-btn" @click="yearGuess = Math.max(sliderMin, yearGuess - 100)" :disabled="showingResult">-100</button>
-                <button class="year-btn" @click="yearGuess = Math.max(sliderMin, yearGuess - 10)" :disabled="showingResult">-10</button>
-                <button class="year-btn" @click="yearGuess = Math.max(sliderMin, yearGuess - 1)" :disabled="showingResult">-1</button>
+                <AspButton variant="secondary" size="sm" class="year-btn" @click="yearGuess = Math.max(sliderMin, yearGuess - 100)" :disabled="showingResult">-100</AspButton>
+                <AspButton variant="secondary" size="sm" class="year-btn" @click="yearGuess = Math.max(sliderMin, yearGuess - 10)" :disabled="showingResult">-10</AspButton>
+                <AspButton variant="secondary" size="sm" class="year-btn" @click="yearGuess = Math.max(sliderMin, yearGuess - 1)" :disabled="showingResult">-1</AspButton>
                 <div class="year-display">{{ formatYear(yearGuess) }}</div>
-                <button class="year-btn" @click="yearGuess = Math.min(2025, yearGuess + 1)" :disabled="showingResult">+1</button>
-                <button class="year-btn" @click="yearGuess = Math.min(2025, yearGuess + 10)" :disabled="showingResult">+10</button>
-                <button class="year-btn" @click="yearGuess = Math.min(2025, yearGuess + 100)" :disabled="showingResult">+100</button>
+                <AspButton variant="secondary" size="sm" class="year-btn" @click="yearGuess = Math.min(2025, yearGuess + 1)" :disabled="showingResult">+1</AspButton>
+                <AspButton variant="secondary" size="sm" class="year-btn" @click="yearGuess = Math.min(2025, yearGuess + 10)" :disabled="showingResult">+10</AspButton>
+                <AspButton variant="secondary" size="sm" class="year-btn" @click="yearGuess = Math.min(2025, yearGuess + 100)" :disabled="showingResult">+100</AspButton>
               </div>
               <div class="slider-container">
                 <div class="slider-labels">
@@ -1336,27 +1362,13 @@ h1 {
   margin-bottom: var(--space-lg);
 }
 
+/* Layout only. Fill, ink, border, radius, padding, type, hover and the
+   disabled treatment are AspButton's now (#4512); a scoped rule here would
+   reach the DS button's root element and silently override it, which is the
+   migration footgun this epic hit before. All that is left is the tap-target
+   width that keeps the six steppers on one rhythm. */
 .year-btn {
-  background: rgba(255, 255, 255, 0.15);
-  color: var(--text-on-dark);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: var(--radius-sm);
-  padding: var(--space-2xs) var(--space-xs);
-  cursor: pointer;
-  font-size: var(--text-xs);
-  font-weight: 600;
   min-width: 36px;
-  transition: filter var(--transition-moderate), transform var(--transition-moderate);
-}
-
-.year-btn:hover:not(:disabled) {
-  filter: brightness(1.3);
-  transform: translateY(-1px);
-}
-
-.year-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .year-display {
