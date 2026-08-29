@@ -63,6 +63,7 @@
       :open="showCreateNode"
       title="Add Node"
       size="md"
+      :show-close="false"
       @update:open="(open) => (open ? null : (showCreateNode = false))"
     >
         <!-- ref kept verbatim: `createNodeInput.value?.focus()` reaches the

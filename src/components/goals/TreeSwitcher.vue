@@ -78,6 +78,7 @@
       :open="showRename"
       title="Rename Tree"
       size="sm"
+      :show-close="false"
       @update:open="(open) => (open ? null : cancelRename())"
     >
       <!-- The ref stays exactly as it was, and that is the point: with
@@ -110,6 +111,7 @@
       :open="showCreate"
       title="New Tree"
       size="sm"
+      :show-close="false"
       @update:open="(open) => (open ? null : cancelCreate())"
     >
       <AspInput

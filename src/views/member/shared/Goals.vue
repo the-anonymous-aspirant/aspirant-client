@@ -47,6 +47,7 @@
       :open="showCreateDialog"
       title="Create New Tree"
       size="sm"
+      :show-close="false"
       @update:open="(open) => (open ? null : cancelCreate())"
     >
       <!-- ref kept verbatim: `this.$refs.createInput?.focus()` reaches the
@@ -74,6 +75,7 @@
       :open="showRenameDialog"
       title="Rename Tree"
       size="sm"
+      :show-close="false"
       @update:open="(open) => (open ? null : cancelRename())"
     >
       <AspInput
