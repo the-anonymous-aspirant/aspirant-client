@@ -38,82 +38,89 @@
       </div>
     </div>
 
-    <!-- Create Dialog -->
-    <div v-if="showCreateDialog" v-overlay-history="cancelCreate" class="dialog-overlay" @click.self="cancelCreate">
-      <div class="dialog">
-        <h3>Create New Tree</h3>
-        <!-- ref kept verbatim: `this.$refs.createInput?.focus()` reaches the
-             inner <input> through AspInput's defineExpose (#4303). Without it
-             the ref resolves to the component instance and the call is a silent
-             no-op — the affordance disappears with nothing going red. -->
-        <AspInput
-          ref="createInput"
-          v-model="newTreeName"
-          placeholder="Tree name"
-          maxlength="100"
-          @keyup.enter="createTree"
-          @keyup.escape="cancelCreate"
-        />
-        <div v-if="createError" class="error-text">{{ createError }}</div>
-        <div class="dialog-actions">
-          <AspButton variant="secondary" @click="cancelCreate">Cancel</AspButton>
-          <AspButton variant="primary" @click="createTree" :disabled="creating || !newTreeName.trim()">
-            {{ creating ? 'Creating...' : 'Create' }}
-          </AspButton>
-        </div>
-      </div>
-    </div>
+    <!-- Create Dialog — AspModal, not a hand-rolled scrim: the native had no
+         role="dialog", no aria-modal, no focus trap and no Escape (#4517). Back
+         still closes it — the directive cannot bind to AspModal's teleported
+         root, so the history entry follows the state edge via overlayHistoryWatch
+         (see the watch block). -->
+    <AspModal
+      :open="showCreateDialog"
+      title="Create New Tree"
+      size="sm"
+      @update:open="(open) => (open ? null : cancelCreate())"
+    >
+      <!-- ref kept verbatim: `this.$refs.createInput?.focus()` reaches the
+           inner <input> through AspInput's defineExpose (#4303). The ref still
+           resolves across AspModal's Teleport because it is set in this same
+           component's render. -->
+      <AspInput
+        ref="createInput"
+        v-model="newTreeName"
+        placeholder="Tree name"
+        maxlength="100"
+        @keyup.enter="createTree"
+      />
+      <div v-if="createError" class="error-text">{{ createError }}</div>
+      <template #footer>
+        <AspButton variant="secondary" @click="cancelCreate">Cancel</AspButton>
+        <AspButton variant="primary" @click="createTree" :disabled="creating || !newTreeName.trim()">
+          {{ creating ? 'Creating...' : 'Create' }}
+        </AspButton>
+      </template>
+    </AspModal>
 
     <!-- Rename Dialog -->
-    <div v-if="showRenameDialog" v-overlay-history="cancelRename" class="dialog-overlay" @click.self="cancelRename">
-      <div class="dialog">
-        <h3>Rename Tree</h3>
-        <AspInput
-          ref="renameInput"
-          v-model="renameValue"
-          placeholder="New name"
-          maxlength="100"
-          @keyup.enter="renameTree"
-          @keyup.escape="cancelRename"
-        />
-        <div v-if="renameError" class="error-text">{{ renameError }}</div>
-        <div class="dialog-actions">
-          <AspButton variant="secondary" @click="cancelRename">Cancel</AspButton>
-          <AspButton variant="primary" @click="renameTree" :disabled="renaming || !renameValue.trim()">
-            {{ renaming ? 'Renaming...' : 'Rename' }}
-          </AspButton>
-        </div>
-      </div>
-    </div>
+    <AspModal
+      :open="showRenameDialog"
+      title="Rename Tree"
+      size="sm"
+      @update:open="(open) => (open ? null : cancelRename())"
+    >
+      <AspInput
+        ref="renameInput"
+        v-model="renameValue"
+        placeholder="New name"
+        maxlength="100"
+        @keyup.enter="renameTree"
+      />
+      <div v-if="renameError" class="error-text">{{ renameError }}</div>
+      <template #footer>
+        <AspButton variant="secondary" @click="cancelRename">Cancel</AspButton>
+        <AspButton variant="primary" @click="renameTree" :disabled="renaming || !renameValue.trim()">
+          {{ renaming ? 'Renaming...' : 'Rename' }}
+        </AspButton>
+      </template>
+    </AspModal>
 
     <!-- Delete Confirmation -->
-    <div v-if="showDeleteDialog" v-overlay-history="cancelDelete" class="dialog-overlay" @click.self="cancelDelete">
-      <div class="dialog">
-        <h3>Delete Tree</h3>
-        <p class="dialog-message">
-          Are you sure you want to delete <strong>{{ deleteTarget?.name }}</strong>?
-          This will also delete all nodes and comments.
-        </p>
-        <div v-if="deleteError" class="error-text">{{ deleteError }}</div>
-        <div class="dialog-actions">
-          <AspButton variant="secondary" @click="cancelDelete">Cancel</AspButton>
-          <AspButton variant="destructive" @click="deleteTree" :disabled="deleting">
-            {{ deleting ? 'Deleting...' : 'Delete' }}
-          </AspButton>
-        </div>
-      </div>
-    </div>
+    <AspModal
+      :open="showDeleteDialog"
+      title="Delete Tree"
+      size="sm"
+      @update:open="(open) => (open ? null : cancelDelete())"
+    >
+      <p class="dialog-message">
+        Are you sure you want to delete <strong>{{ deleteTarget?.name }}</strong>?
+        This will also delete all nodes and comments.
+      </p>
+      <div v-if="deleteError" class="error-text">{{ deleteError }}</div>
+      <template #footer>
+        <AspButton variant="secondary" @click="cancelDelete">Cancel</AspButton>
+        <AspButton variant="destructive" @click="deleteTree" :disabled="deleting">
+          {{ deleting ? 'Deleting...' : 'Delete' }}
+        </AspButton>
+      </template>
+    </AspModal>
   </div>
 </template>
 
 <script>
-import { AspInput } from '@aspirant/design-system';
-
 import axios from 'axios';
-import { AspButton, AspTooltip } from '@aspirant/design-system';
+import { AspButton, AspInput, AspModal, AspTooltip } from '@aspirant/design-system';
+import { overlayHistoryWatch } from '../../../directives/overlayHistory.js';
 
 export default {
-  components: { AspButton, AspInput, AspTooltip },
+  components: { AspButton, AspInput, AspModal, AspTooltip },
   data() {
     return {
       trees: [],
@@ -245,11 +252,20 @@ export default {
     },
   },
   watch: {
-    showCreateDialog(val) {
-      if (val) {
-        this.$nextTick(() => this.$refs.createInput?.focus());
-      }
-    },
+    // Back closes each dialog rather than leaving the page (#4172); the
+    // directive cannot bind to AspModal's teleported root, so the history entry
+    // follows the state edge — see overlayHistory.js. The create dialog also
+    // keeps its focus-on-open, so it carries an array of two watch handlers.
+    showCreateDialog: [
+      overlayHistoryWatch('cancelCreate'),
+      function focusCreateInput(val) {
+        if (val) {
+          this.$nextTick(() => this.$refs.createInput?.focus());
+        }
+      },
+    ],
+    showRenameDialog: overlayHistoryWatch('cancelRename'),
+    showDeleteDialog: overlayHistoryWatch('cancelDelete'),
   },
   mounted() {
     this.fetchTrees();
@@ -372,30 +388,10 @@ export default {
    AspTooltip content and the aria-label carry the meaning. */
 
 /* Dialog Overlay */
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.dialog {
-  background-color: var(--surface-card);
-  border: 2px solid var(--border-card);
-  border-radius: var(--radius-xl);
-  padding: var(--space-xl);
-  width: 90%;
-  max-width: 400px;
-}
-
-.dialog h3 {
-  color: var(--text-heading-card);
-  font-size: var(--text-lg);
-  margin: 0 0 var(--space-md) 0;
-}
+/* Scrim, panel and footer-row rules deleted with the AspModal port (#4517):
+   AspModal owns the fixed scrim, the dark card panel + radius, the title, and
+   the flex-end footer that .dialog-overlay / .dialog / .dialog h3 /
+   .dialog-actions used to hand-draw. */
 
 /* §3.86: an always-live data-entry control on a dark card adopts the DS control
    fill. Both fields are AspInput now, so the rule that painted this dialog's
@@ -418,13 +414,6 @@ export default {
   font-size: var(--text-sm);
   margin: 0 0 var(--space-md) 0;
   line-height: 1.5;
-}
-
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-sm);
-  margin-top: var(--space-lg);
 }
 
 
