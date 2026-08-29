@@ -1,9 +1,29 @@
 <template>
   <div class="tree-switcher" ref="switcherRef">
-    <button class="switcher-trigger" @click="toggleDropdown">
-      <span class="trigger-label">{{ activeTreeName || 'Select tree' }}</span>
-      <span class="trigger-arrow" :class="{ open: isOpen }">&#9662;</span>
-    </button>
+    <!-- Ported from a hand-painted native <button> (#4513). The native set
+         --surface-card-inner / --border-card / --text-on-dark by hand, which is
+         a consumer-side re-draw of variant="secondary" — so the port hands the
+         paint back to the DS and keeps only the 240px cap, which is layout the
+         DS cannot know. The disclosure arrow rides #iconRight (the DS slot for
+         exactly this), so `.btn__label` still owns the name and the arrow stays
+         out of the accessible name. The port also ADDS aria-haspopup and
+         aria-expanded: the native announced nothing about the menu it opens. -->
+    <AspButton
+      variant="secondary"
+      class="switcher-trigger"
+      aria-haspopup="menu"
+      :aria-expanded="isOpen"
+      @click="toggleDropdown"
+    >
+      {{ activeTreeName || 'Select tree' }}
+      <template #iconRight>
+        <!-- aria-hidden because #iconRight is INSIDE the button, so the glyph
+             would otherwise join the accessible name ("Existing name ▾"). The
+             open/closed state it draws is already announced, properly, by the
+             aria-expanded above. -->
+        <span class="trigger-arrow" :class="{ open: isOpen }" aria-hidden="true">&#9662;</span>
+      </template>
+    </AspButton>
 
     <div v-if="isOpen" class="switcher-dropdown">
       <div class="dropdown-list">
@@ -29,6 +49,24 @@
         </div>
         <div v-if="loadingTrees" class="dropdown-empty">Loading...</div>
       </div>
+      <!-- HELD native, and the reason is the box, not the label (#4513). This
+           is the footer row of .dropdown-list: full-bleed, left-aligned, and
+           separated by a border-top from the rows above it — a menu affordance,
+           the same shape as ValuationStatement's .row-menu-item set. AspButton
+           is a centred inline-flex pill with its own radius and padding; every
+           one of its four variants draws that box (the variant validator is a
+           closed set, AspButton.vue:8), so the port would put a pill inside a
+           list of rows.
+           The near-miss is NOT AspButton but AspList variant="interactive" +
+           AspListItem, whose .list-item__inner already IS a full-width,
+           text-align:start, background:none, font:inherit <button> — the right
+           box. What it cannot do is carry the semantics: its <ul>, <li> and
+           inner <button> are hard-coded elements with no role override, and
+           AspListItem sets neither inheritAttrs:false nor v-bind="$attrs"
+           (unlike AspInput/AspTextarea/AspTooltip), so a consumer-supplied
+           role="menuitem" lands on the <li> — the wrong element — silently.
+           Filed as DS gap #4515; that, not this call site, is what has to close
+           first. (DS read at origin/main b44561a, 2026-08-28T20:52Z.) -->
       <button class="btn-new-tree" @click="startCreate">+ New Tree</button>
     </div>
 
@@ -162,8 +200,19 @@ export default {
       loadingTrees.value = false;
     }
 
+    // `activeTreeId` arrives as `route.params.id`, which vue-router always
+    // hands over as a STRING; `t.id` arrives from /api/goals/trees, where the
+    // Go model declares `ID uint json:"id"` and therefore serialises a NUMBER.
+    // The two never matched under ===, so this always resolved to undefined and
+    // the trigger always read the "Select tree" placeholder — for every tree,
+    // in production. Found by #4513 while porting that trigger to AspButton:
+    // the accessible-name assertion could not be written truthfully until the
+    // name existed. Compared as strings at both call sites; the prop stays
+    // typed String, which is what the route actually provides.
+    const sameTree = (a, b) => String(a) === String(b);
+
     function updateActiveTreeName() {
-      const active = trees.value.find((t) => t.id === props.activeTreeId);
+      const active = trees.value.find((t) => sameTree(t.id, props.activeTreeId));
       activeTreeName.value = active?.name || '';
     }
 
@@ -179,7 +228,7 @@ export default {
     }
 
     function switchTree(tree) {
-      if (tree.id === props.activeTreeId) {
+      if (sameTree(tree.id, props.activeTreeId)) {
         isOpen.value = false;
         return;
       }
@@ -354,27 +403,32 @@ export default {
   position: relative;
 }
 
+/* Layout only — the paint left with the native (#4513). AspButton
+   variant="secondary" brings an opaque --surface-elevated fill and --text-body
+   ink, so it resolves in both themes on its own and needs nothing from here;
+   what it cannot know is that a tree name is user-entered and unbounded, hence
+   the cap. .btn is inline-flex and .btn__label carries no DS rule at all, so
+   the ellipsis has to be set on that span: a flex item will not shrink below
+   its content without min-width: 0, and without the shrink there is nothing
+   for text-overflow to clip. `.trigger-label` is gone with it — the name now
+   rides the default slot, i.e. .btn__label itself. */
 .switcher-trigger {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-md);
-  background-color: var(--surface-card-inner);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-lg);
-  color: var(--text-on-dark);
-  font-size: var(--text-base);
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color var(--transition-moderate);
-  max-width: 240px;
+  /* 40vw is the mobile half of the cap, and it is there to keep this port
+     width-NEUTRAL rather than to fix anything. The toolbar (back / switcher /
+     spacer / add-node, one non-wrapping row) already overflows a 390px
+     viewport on origin/main: documentElement.scrollWidth 483 against
+     clientWidth 390, measured at the merge-base. Making the name resolve
+     (#4513) grows the trigger from the 155px "Select tree" placeholder to the
+     full 240px cap, which would have pushed that to 568 — a pre-existing
+     defect made 85px worse by a change that is otherwise a correctness fix.
+     min() holds the phone width at ~156px, i.e. what the placeholder occupied,
+     so the overflow stays exactly where this branch found it. The toolbar
+     itself is the control that needs fixing, and not from inside this file. */
+  max-width: min(240px, 40vw);
 }
 
-.switcher-trigger:hover {
-  border-color: var(--text-muted);
-}
-
-.trigger-label {
+.switcher-trigger :deep(.btn__label) {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
