@@ -76,9 +76,9 @@
           <AspDataTable :columns="runColumns" :rows="runs" row-key="id">
             <template #cell-started="{ row }">{{ formatDate(row.started_at) }}</template>
             <template #cell-status="{ row }">
-              <span :class="['status-pill', `status-${statusClass(row.status)}`]">
-                {{ row.status }}
-              </span>
+              <AspBadge surface="card" :status="badgeStatus(statusClass(row.status))">
+                <span style="text-transform: lowercase">{{ row.status }}</span>
+              </AspBadge>
             </template>
             <template #cell-duration="{ row }">{{ formatDuration(runDurationMs(row)) }}</template>
             <template #cell-rows="{ row }">{{ row.output_rows_count ?? 0 }}</template>
@@ -119,7 +119,7 @@
 
 <script>
   import { Chart, LineController, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Filler } from 'chart.js';
-  import { AspButton, AspDataTable } from '@aspirant/design-system';
+  import { AspButton, AspDataTable, AspBadge } from '@aspirant/design-system';
   import { useBrowserFlows } from '../../../composables/useBrowserFlows.js';
   import { seriesColor } from '../../../composables/chartSeries.js';
 
@@ -134,12 +134,25 @@
     'failed',
     'cancelled',
   ]);
+  // AspBadge's own semantic groups (AspBadge.vue STATUS_LEGEND) — declared by
+  // the DS, not invented here. Collapses the 6 run-level statuses onto the 4
+  // groups the badge understands; the visible status word (kept verbatim in
+  // the slot) is what disambiguates within a group.
+  const BADGE_STATUS = {
+    success: 'positive',
+    running: 'caution',
+    failed: 'negative',
+    cancelled: 'negative',
+    blocked: 'neutral',
+    unknown: 'neutral',
+  };
 
   export default {
     name: 'FlowDetail',
     components: {
       AspButton,
       AspDataTable,
+      AspBadge,
     },
     data() {
       return {
@@ -190,6 +203,9 @@
     methods: {
       statusClass(status) {
         return KNOWN_STATUSES.has(status) ? status : 'unknown';
+      },
+      badgeStatus(statusClassValue) {
+        return BADGE_STATUS[statusClassValue] ?? 'neutral';
       },
       formatPercent(v) {
         if (v === undefined || v === null) return '—';
@@ -455,21 +471,6 @@
   .runs-table {
     width: 100%;
   }
-  .status-pill {
-    display: inline-block;
-    padding: 0.15rem 0.5rem;
-    border-radius: 999px;
-    font-size: 0.75rem;
-    color: #ffffff;
-    text-transform: lowercase;
-  }
-  .status-success { background: #2e7d32; }
-  .status-running { background: #f9a825; color: #424242; }
-  .status-blocked { background: #ad1457; }
-  .status-failed { background: #c62828; }
-  .status-cancelled { background: #5e35b1; }
-  .status-unknown { background: #9e9e9e; }
-
   .pagination {
     display: flex;
     align-items: center;

@@ -12,9 +12,9 @@
 
     <h1 v-if="run" data-test="run-header">
       Run
-      <span :class="['status-pill', `status-${statusClass(run.status)}`]" data-test="run-status">
-        {{ run.status }}
-      </span>
+      <AspBadge surface="card" :status="badgeStatus(statusClass(run.status))" data-test="run-status">
+        <span style="text-transform: lowercase">{{ run.status }}</span>
+      </AspBadge>
       <AspButton
         v-if="run.status === 'running'"
         type="button"
@@ -97,9 +97,13 @@
         >
           <div class="step-head">
             <span class="step-order">#{{ action.step_order }}</span>
-            <span :class="['status-pill', `status-${stepStatusClass(action)}`]" :data-test="`step-status-${action.step_order}`">
+            <AspBadge
+              surface="card"
+              :status="badgeStatus(stepStatusClass(action))"
+              :data-test="`step-status-${action.step_order}`"
+            >
               {{ stepStatusLabel(action) }}
-            </span>
+            </AspBadge>
             <span class="step-action">{{ action.action_type }}</span>
             <span v-if="action.selector" class="step-selector">{{ action.selector }}</span>
             <span class="step-duration">
@@ -150,7 +154,7 @@
 
 <script>
   import { useBrowserFlows } from '../../../composables/useBrowserFlows.js';
-  import { AspButton } from '@aspirant/design-system';
+  import { AspButton, AspBadge } from '@aspirant/design-system';
 
   const KNOWN_STATUSES = new Set([
     'success',
@@ -159,6 +163,19 @@
     'failed',
     'cancelled',
   ]);
+  // AspBadge's own semantic groups (AspBadge.vue STATUS_LEGEND) — declared by
+  // the DS, not invented here. Collapses the run-level AND step-level status
+  // vocabularies onto the 4 groups the badge understands; the visible status
+  // word (kept verbatim in the slot) is what disambiguates within a group.
+  const BADGE_STATUS = {
+    success: 'positive',
+    running: 'caution',
+    failed: 'negative',
+    cancelled: 'negative',
+    blocked: 'neutral',
+    skipped: 'neutral',
+    unknown: 'neutral',
+  };
 
   const TRACE_ASSETS = Object.freeze([
     'screenshot_before.png',
@@ -175,6 +192,7 @@
     name: 'RunForensic',
     components: {
       AspButton,
+      AspBadge,
     },
     data() {
       return {
@@ -226,6 +244,9 @@
     methods: {
       statusClass(status) {
         return KNOWN_STATUSES.has(status) ? status : 'unknown';
+      },
+      badgeStatus(statusClassValue) {
+        return BADGE_STATUS[statusClassValue] ?? 'neutral';
       },
       stepStatusClass(action) {
         if (action.succeeded) return 'success';
@@ -353,22 +374,6 @@
     color: var(--text-muted, #9e9e9e);
     font-style: italic;
   }
-
-  .status-pill {
-    display: inline-block;
-    padding: 0.15rem 0.55rem;
-    border-radius: 999px;
-    font-size: 0.75rem;
-    color: var(--text-on-dark);
-    text-transform: lowercase;
-  }
-  .status-success { background: var(--feedback-success-solid); }
-  .status-running { background: #f9a825; color: #212121; }
-  .status-blocked { background: #ad1457; }
-  .status-failed { background: var(--feedback-error-solid); }
-  .status-cancelled { background: #5e35b1; }
-  .status-skipped { background: #757575; }
-  .status-unknown { background: #9e9e9e; }
 
   /* The run-cancel control is now an AspButton (variant="secondary"); DS owns
      its visuals + disabled state. The former .btn/.btn-cancel rules are removed. */
