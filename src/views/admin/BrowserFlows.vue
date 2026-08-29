@@ -108,6 +108,7 @@
       <span><span class="swatch cell-blocked"></span>blocked</span>
       <span><span class="swatch cell-failed"></span>failed</span>
       <span><span class="swatch cell-cancelled"></span>cancelled</span>
+      <span><span class="swatch cell-unknown"></span>unknown</span>
       <span><span class="swatch cell-empty"></span>no run</span>
     </div>
   </div>
@@ -327,19 +328,19 @@
   }
   .cell:hover {
     transform: scale(1.15);
-    outline: 1px solid #444;
+    outline: 1px solid var(--border-control);
   }
   .cell-empty {
-    background: #f0f0f0;
+    background: var(--surface-card-inner);
     cursor: default;
     pointer-events: none;
   }
-  .cell-success { background: var(--feedback-success-solid); }
-  .cell-running { background: #f9a825; }
-  .cell-blocked { background: #ad1457; }
-  .cell-failed { background: var(--feedback-error-solid); }
-  .cell-unknown { background: #9e9e9e; }
-  .cell-cancelled { background: #5e35b1; }
+  .cell-success { background: var(--chart-series-3-on-dark); }
+  .cell-running { background: var(--chart-series-1-on-dark); }
+  .cell-blocked { background: var(--chart-series-5-on-dark); }
+  .cell-failed { background: var(--chart-series-4-on-dark); }
+  .cell-unknown { background: var(--chart-series-9-on-dark); }
+  .cell-cancelled { background: var(--chart-series-2-on-dark); }
   .row-actions {
     display: flex;
     gap: 0.4rem;
