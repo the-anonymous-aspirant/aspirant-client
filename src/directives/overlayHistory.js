@@ -136,6 +136,76 @@ export function __overlayDepth() {
 }
 
 /**
+ * overlayHistoryWatch — the Options-API counterpart to `v-overlay-history`, for
+ * an overlay rendered by a COMPONENT rather than by a `v-if`-gated element of
+ * our own.  (#4516)
+ *
+ * The directive above rests on a premise that holds for every hand-rolled
+ * overlay in this app and for none of the DS ones: the scrim is an element we
+ * write, so its mount is the open and its unmount is the close. `AspModal`
+ * renders its scrim inside a `<Teleport>`, which makes the component's root a
+ * non-element node — Vue silently drops a runtime directive placed there (the
+ * shape recorded on `AspTooltip` in #4446). There is no element of ours left to
+ * hang the lifecycle on.
+ *
+ * So the binding moves to the signal that was always the real one: the state
+ * edge. Every consumer here is Options-API, holding its open state in `data()`,
+ * where a composable cannot reach — hence a watch handler and not a
+ * `useOverlayHistory()`.
+ *
+ *   watch: {
+ *     deleteTarget: overlayHistoryWatch('cancelDelete'),
+ *   },
+ *
+ * `closeMethod` names a method on the component: the SAME one the dialog's
+ * Cancel button and `AspModal`'s own dismiss paths (scrim press, Escape, the ✕)
+ * already call, so a Back-close and every manual close reach one state. It is a
+ * method name rather than a closure because the returned watcher is created
+ * once per component definition and shared by every instance of it; `this` is
+ * what distinguishes them, and Vue calls an Options watch handler with the
+ * instance as `this`.
+ *
+ * Truthiness is the open test, so an object-valued handle (`deleteTarget`, a
+ * file; `schemaModal`, a fetched schema) works unchanged alongside a boolean.
+ * A change from one open value to another — swapping which row is being
+ * confirmed without closing the dialog — is not an edge and pushes nothing.
+ *
+ * Boundary: a component torn down while its overlay is open fires no watcher,
+ * so its stack entry survives. A real route change already clears the whole
+ * stack (`clearForNavigation`, wired in the router), which is the only teardown
+ * path these views have; an overlay under an ancestor `v-if` would need the
+ * directive or an explicit `beforeUnmount` pop instead.
+ */
+export function overlayHistoryWatch(closeMethod) {
+  // Per-instance, because the watcher itself is shared across instances.
+  const tokens = new WeakMap();
+  return function overlayHistoryWatcher(value, previous) {
+    const isOpen = Boolean(value);
+    const wasOpen = Boolean(previous);
+    if (isOpen === wasOpen) return;
+    if (isOpen) {
+      if (typeof this[closeMethod] !== 'function') {
+        if (import.meta && import.meta.env && import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            '[overlayHistoryWatch] no such method on the component:',
+            closeMethod,
+          );
+        }
+        return;
+      }
+      tokens.set(this, pushOverlay(() => this[closeMethod]()));
+      return;
+    }
+    const token = tokens.get(this);
+    if (token) {
+      tokens.delete(this);
+      popOverlay(token);
+    }
+  };
+}
+
+/**
  * v-overlay-history — bind a `v-if`-gated overlay element's lifecycle to the
  * browser history so Back closes it. See the module header for usage. The
  * binding value is the overlay's own close handler.

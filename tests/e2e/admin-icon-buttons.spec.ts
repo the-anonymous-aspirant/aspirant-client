@@ -89,11 +89,22 @@ test.describe('#4445 admin glyph-only controls are AspButton size="icon"', () =>
     await expectIconButton(page, 'View expected CSV schema');
 
     // The handler still fires, and the modal's closer — nameless before #4445
-    // (no aria-label, no title, no text) — now has a name and closes the modal.
+    // (no aria-label, no title, no text) — has a name and closes the modal.
+    //
+    // Since #4516 that closer is AspModal's own, not the AspButton this task
+    // built: the dialog is a DS component now, so the ✕ comes with it. What is
+    // asserted is what #4445 was actually about — a NAME and a target no
+    // smaller than the WCAG 2.5.8 floor — rather than the DS class of the
+    // moment, which is why this reads `.modal__close` and 44px and not
+    // `btn--size-icon`.
     await page.getByRole('button', { name: 'View expected CSV schema' }).first().click();
-    const closer = page.getByRole('button', { name: 'Close' }).first();
+    const closer = page.getByRole('button', { name: 'Close dialog' }).first();
     await expect(closer).toBeVisible();
-    await expect(closer).toHaveClass(/btn--size-icon/);
+    await expect(closer).toHaveClass(/modal__close/);
+    const box = await closer.boundingBox();
+    expect(box, 'schema dialog closer: has a box').not.toBeNull();
+    expect(Math.round(box!.width), 'schema dialog closer: >= 44px wide').toBeGreaterThanOrEqual(44);
+    expect(Math.round(box!.height), 'schema dialog closer: >= 44px tall').toBeGreaterThanOrEqual(44);
     await closer.click();
     await expect(closer).toBeHidden();
   });
