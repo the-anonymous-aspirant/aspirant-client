@@ -90,54 +90,53 @@
       </div>
     </div>
 
-    <!-- Schema Modal -->
-    <div class="modal-overlay" v-if="schemaModal" v-overlay-history="() => (schemaModal = null)" @click.self="schemaModal = null">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ schemaModal.name }} — CSV Schema</h3>
-          <!-- Was nameless: no aria-label, no title, no text. AspButton
-               size="icon" warns on exactly this in dev; the name is added
-               here rather than merely carried across. #4445 -->
-          <AspButton variant="ghost" size="icon" aria-label="Close" @click="schemaModal = null">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-            </svg>
-          </AspButton>
+    <!-- Schema Modal. AspModal, not a hand-rolled scrim: this dialog had no
+         role="dialog", no aria-modal, no focus containment and no Escape — as
+         did all twelve overlays in the app (#4516). Its header, ✕ and body
+         padding are the DS's now; the hand-built close AspButton of #4445 goes
+         with them, since AspModal ships a named one ("Close dialog", its
+         default) at the same 44x44 WCAG 2.5.8 target. -->
+    <AspModal
+      :open="Boolean(schemaModal)"
+      :title="schemaModal ? `${schemaModal.name} — CSV Schema` : ''"
+      size="lg"
+      @update:open="(open) => (open ? null : closeSchema())"
+    >
+      <!-- Test hook on the body: AspModal's root is a <Teleport>, so a
+           fallthrough attribute has no element to land on. -->
+      <div v-if="schemaModal" data-testid="finance-schema-modal">
+        <div class="schema-meta">
+          <p v-if="schemaModal.description">{{ schemaModal.description }}</p>
+          <div class="schema-props">
+            <span><strong>Encoding:</strong> {{ schemaModal.encoding }}</span>
+            <span><strong>Delimiter:</strong> <code>{{ schemaModal.delimiter }}</code></span>
+            <span><strong>Currency:</strong> {{ schemaModal.currency }}</span>
+          </div>
         </div>
-        <div class="modal-body">
-          <div class="schema-meta">
-            <p v-if="schemaModal.description">{{ schemaModal.description }}</p>
-            <div class="schema-props">
-              <span><strong>Encoding:</strong> {{ schemaModal.encoding }}</span>
-              <span><strong>Delimiter:</strong> <code>{{ schemaModal.delimiter }}</code></span>
-              <span><strong>Currency:</strong> {{ schemaModal.currency }}</span>
-            </div>
-          </div>
 
-          <AspDataTable class="schema-table" :columns="schemaColumns" :rows="schemaModal.columns" row-key="name">
-            <template #cell-name="{ row }"><code>{{ row.name }}</code></template>
-            <template #cell-required="{ row }">
-              <span :class="row.required ? 'badge-required' : 'badge-optional'">{{ row.required ? 'Required' : 'Optional' }}</span>
-            </template>
-            <template #cell-aliases="{ row }">
-              <span v-if="row.aliases && row.aliases.length">
-                <code v-for="(a, i) in row.aliases" :key="a">{{ a }}<span v-if="i < row.aliases.length - 1">, </span></code>
-              </span>
-              <span v-else class="text-muted">—</span>
-            </template>
-          </AspDataTable>
+        <AspDataTable class="schema-table" :columns="schemaColumns" :rows="schemaModal.columns" row-key="name">
+          <template #cell-name="{ row }"><code>{{ row.name }}</code></template>
+          <template #cell-required="{ row }">
+            <span :class="row.required ? 'badge-required' : 'badge-optional'">{{ row.required ? 'Required' : 'Optional' }}</span>
+          </template>
+          <template #cell-aliases="{ row }">
+            <span v-if="row.aliases && row.aliases.length">
+              <code v-for="(a, i) in row.aliases" :key="a">{{ a }}<span v-if="i < row.aliases.length - 1">, </span></code>
+            </span>
+            <span v-else class="text-muted">—</span>
+          </template>
+        </AspDataTable>
 
-          <div v-if="schemaModal.sample_row" class="schema-sample">
-            <strong>Example row:</strong>
-            <code class="sample-code">{{ schemaModal.sample_row }}</code>
-          </div>
+        <div v-if="schemaModal.sample_row" class="schema-sample">
+          <strong>Example row:</strong>
+          <code class="sample-code">{{ schemaModal.sample_row }}</code>
+        </div>
 
-          <div v-if="schemaModal.notes" class="schema-notes">
-            <strong>Notes:</strong> {{ schemaModal.notes }}
-          </div>
+        <div v-if="schemaModal.notes" class="schema-notes">
+          <strong>Notes:</strong> {{ schemaModal.notes }}
         </div>
       </div>
-    </div>
+    </AspModal>
 
     <!-- Sticky Filter Bar -->
     <div class="filter-bar" v-if="hasActiveFilters">
@@ -325,13 +324,20 @@ import { AspInput } from '@aspirant/design-system';
 import axios from 'axios';
 import { Chart, registerables } from 'chart.js';
 import { AspDataTable } from '@aspirant/design-system';
-import { AspButton, AspSelect, AspTooltip } from '@aspirant/design-system';
+import { AspButton, AspModal, AspSelect, AspTooltip } from '@aspirant/design-system';
 import { seriesColor } from '../../composables/chartSeries.js';
+import { overlayHistoryWatch } from '../../directives/overlayHistory.js';
 
 Chart.register(...registerables);
 
 export default {
-  components: { AspInput, AspDataTable, AspButton, AspSelect, AspTooltip },
+  components: { AspInput, AspDataTable, AspButton, AspModal, AspSelect, AspTooltip },
+  watch: {
+    // Back closes the dialog rather than leaving the page (#4172). The
+    // directive cannot bind to AspModal's teleported root, so the history
+    // entry follows the state edge instead — see overlayHistory.js.
+    schemaModal: overlayHistoryWatch('closeSchema'),
+  },
   data() {
     return {
       // AspDataTable column defs — all non-sortable (the native tables were
@@ -615,6 +621,11 @@ export default {
       } catch (err) {
         console.error('Failed to load schema:', err);
       }
+    },
+    // One close path for every dismissal — the ✕, a scrim press, Escape and the
+    // Back gesture all land here, so they all reach the same state.
+    closeSchema() {
+      this.schemaModal = null;
     },
 
     // --- Actions ---
@@ -1164,42 +1175,16 @@ export default {
   color: #721c24;
 }
 
-/* Schema modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
+/* Schema modal. The scrim, the panel, the header rule, the ✕ and the body
+   padding are all AspModal's now — six local rules deleted, including the last
+   raw rgba() scrim in this file (#4516).
 
-.modal {
-  background: var(--surface-elevated);
-  border-radius: 12px;
-  max-width: 700px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-lg);
-  border-bottom: 1px solid var(--border-color, #eee);
-}
-
-.modal-header h3 {
-  margin: 0;
-}
-
-.modal-body {
-  padding: var(--space-lg);
-}
+   Everything that survives below and PAINTS A BACKGROUND now declares the ink
+   that pairs with it. The old panel was --surface-elevated (light) and these
+   chips inherited the page's dark ink by accident; AspModal's panel is
+   --surface-card, DARK in both themes, so that inheritance would hand a light
+   chip a light ink — the 1.00:1 shape from #4448. Ink on the surface-setter,
+   never an override on the DS root. */
 
 .schema-meta {
   margin-bottom: var(--space-lg);
@@ -1219,6 +1204,7 @@ export default {
 
 .schema-props code {
   background: var(--surface-page);
+  color: var(--text-on-light);
   padding: 1px 5px;
   border-radius: 3px;
 }
@@ -1242,8 +1228,13 @@ export default {
   background: var(--surface-page);
 }
 
+/* Slot content is compiled in THIS component's scope, so unlike the th/td rules
+   above (which cannot reach AspDataTable's own internals) this one does land —
+   on the <code> rendered by the #cell-name and #cell-aliases slots. It paints a
+   background, so it declares its ink. */
 .schema-table code {
   background: var(--surface-page);
+  color: var(--text-on-light);
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 0.85rem;
@@ -1258,12 +1249,15 @@ export default {
   font-weight: 600;
 }
 
+/* --text-muted is a currentColor mix, so on the dark panel it resolved to a
+   PALE ink over this pale chip. An absolute one, paired with the background the
+   chip itself sets. */
 .badge-optional {
   font-size: 0.75rem;
   padding: 2px 6px;
   border-radius: 8px;
   background: var(--surface-page);
-  color: var(--text-muted);
+  color: var(--text-on-light);
   font-weight: 600;
 }
 
@@ -1277,15 +1271,21 @@ export default {
   margin-top: var(--space-xs);
   padding: 8px 12px;
   background: var(--surface-page);
+  color: var(--text-on-light);
   border-radius: 4px;
   font-size: 0.85rem;
   overflow-x: auto;
   white-space: nowrap;
 }
 
+/* --text-on-fixed-light, not --text-on-light: this background is a fixed
+   literal, while that token flips with the theme (#424242 -> #e0e0e0) because
+   it names the ink for the theme's light-ish surface. Measured, not reasoned:
+   --text-on-light here read 1.19:1 in dark. The chips above that paint
+   var(--surface-page) do flip with it, so they keep it. */
 .schema-notes {
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--text-on-fixed-light);
   padding: var(--space-sm) var(--space-md);
   background: #fff3cd;
   border-radius: 4px;

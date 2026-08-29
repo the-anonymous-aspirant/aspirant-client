@@ -112,10 +112,12 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(schema).toBeVisible();
       expect(await contrastRatio(schema), `${theme}: schema control on the card`).toBeGreaterThanOrEqual(AA_TEXT);
 
-      // The modal is the third `#fff` surface in this file; its closer is the
-      // other ghost control #4445 ported.
+      // The modal is the third `#fff` surface in this file; its closer was the
+      // other ghost control #4445 ported, and since #4516 it is AspModal's own
+      // ✕ (`Close dialog`), inheriting the panel ink rather than mixing a brand
+      // step into it. The ratio is what is asserted either way.
       await schema.click();
-      const closer = page.getByRole('button', { name: 'Close' }).first();
+      const closer = page.getByRole('button', { name: 'Close dialog' }).first();
       await expect(closer).toBeVisible();
       expect(await contrastRatio(closer), `${theme}: modal closer`).toBeGreaterThanOrEqual(AA_TEXT);
     });
