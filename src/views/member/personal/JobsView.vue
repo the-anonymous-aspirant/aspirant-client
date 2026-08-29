@@ -93,54 +93,45 @@
           </div>
         </div>
 
-        <table v-if="sources.length" class="sources-table" data-test="sources-table">
-          <thead>
-            <tr>
-              <th class="src-col-name">Source</th>
-              <th class="src-col-desc">Scope</th>
-              <th class="src-col-proxy">Proxy</th>
-              <th class="src-col-run">Last run</th>
-              <th class="src-col-count">Rows</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="src in sources"
-              :key="src.source"
-              :data-test-source="src.source"
-            >
-              <td class="src-col-name">
-                <a
-                  v-if="src.board_url"
-                  :href="src.board_url"
-                  target="_blank"
-                  rel="noopener"
-                  class="src-name-link"
-                >{{ src.source }}</a>
-                <span v-else>{{ src.source }}</span>
-              </td>
-              <td class="src-col-desc">
-                <span v-if="src.description">{{ src.description }}</span>
-                <span v-else class="muted">—</span>
-              </td>
-              <td class="src-col-proxy">
-                <span v-if="src.proxy" class="badge badge-proxy">{{ src.proxy }}</span>
-                <span v-else class="muted">—</span>
-              </td>
-              <td class="src-col-run">
-                <span v-if="src.last_run_at">
-                  <span
-                    class="badge"
-                    :class="src.last_run_status === 'success' ? 'badge-run-ok' : 'badge-run-fail'"
-                  >{{ src.last_run_status || 'unknown' }}</span>
-                  <span class="run-time">{{ formatRelative(src.last_run_at) }}</span>
-                </span>
-                <span v-else class="muted">never</span>
-              </td>
-              <td class="src-col-count">{{ src.row_count }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <AspDataTable
+          v-if="sources.length"
+          class="sources-table"
+          data-test="sources-table"
+          :columns="sourceColumns"
+          :rows="sources"
+          row-key="source"
+          :row-attrs="(src) => ({ 'data-test-source': src.source })"
+        >
+          <template #cell-name="{ row }">
+            <a
+              v-if="row.board_url"
+              :href="row.board_url"
+              target="_blank"
+              rel="noopener"
+              class="src-name-link"
+            >{{ row.source }}</a>
+            <span v-else class="src-name-plain">{{ row.source }}</span>
+          </template>
+          <template #cell-desc="{ row }">
+            <span v-if="row.description">{{ row.description }}</span>
+            <span v-else class="muted">—</span>
+          </template>
+          <template #cell-proxy="{ row }">
+            <span v-if="row.proxy" class="badge badge-proxy">{{ row.proxy }}</span>
+            <span v-else class="muted">—</span>
+          </template>
+          <template #cell-run="{ row }">
+            <span v-if="row.last_run_at">
+              <span
+                class="badge"
+                :class="row.last_run_status === 'success' ? 'badge-run-ok' : 'badge-run-fail'"
+              >{{ row.last_run_status || 'unknown' }}</span>
+              <span class="run-time">{{ formatRelative(row.last_run_at) }}</span>
+            </span>
+            <span v-else class="muted">never</span>
+          </template>
+          <template #cell-count="{ row }">{{ row.row_count }}</template>
+        </AspDataTable>
         <p v-else class="sources-empty muted" data-test="sources-empty">
           No scraper flows are registered.
         </p>
@@ -329,7 +320,7 @@
 
 <script>
   import axios from 'axios';
-  import { AspButton, AspInput, AspTimeSince, AspTooltip } from '@aspirant/design-system';
+  import { AspButton, AspInput, AspTimeSince, AspTooltip, AspDataTable } from '@aspirant/design-system';
 
   const PER_PAGE = 25;
   const FILTER_DEBOUNCE_MS = 300;
@@ -352,9 +343,20 @@
 
   export default {
     name: 'JobsView',
-    components: { AspButton, AspInput, AspTimeSince, AspTooltip },
+    components: { AspButton, AspInput, AspTimeSince, AspTooltip, AspDataTable },
     data() {
       return {
+        // #4278-A2: the scraper-sources panel is a uniform read → AspDataTable.
+        // Rich cells (name link, proxy/run badges, muted fallbacks) render via
+        // cell slots; the row's data-test-source hook rides row-attrs. Rows col
+        // is right-aligned + tabular per the numeric-column convention.
+        sourceColumns: [
+          { key: 'name', label: 'Source', sortable: false },
+          { key: 'desc', label: 'Scope', sortable: false },
+          { key: 'proxy', label: 'Proxy', sortable: false },
+          { key: 'run', label: 'Last run', sortable: false },
+          { key: 'count', label: 'Rows', align: 'right', sortable: false },
+        ],
         jobs: [],
         total: 0,
         page: 1,
@@ -701,32 +703,18 @@
     color: inherit;
   }
 
-  .sources-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--text-sm);
-  }
-
-  .sources-table th,
-  .sources-table td {
-    text-align: left;
-    padding: var(--space-xs) var(--space-sm);
-    border-bottom: 1px solid var(--border-card, #333);
-    vertical-align: top;
-  }
-
-  .sources-table th {
-    color: var(--text-muted, #888);
-    font-weight: 500;
-  }
-
-  .sources-table .src-col-name {
-    white-space: nowrap;
-  }
-
-  .sources-table .src-col-count {
-    text-align: right;
+  /* AspDataTable (#4278-A2) owns the table/header/cell treatment now. Only the
+     cell CONTENT styles survive; the numeric Rows column is right-aligned via
+     the column's `align: 'right'` (→ .data-table__td--right), and tabular
+     figures are restored on that cell with :deep since a scoped class cannot
+     reach the DS-rendered <td>. */
+  .sources-table :deep(.data-table__td--right) {
     font-variant-numeric: tabular-nums;
+  }
+
+  .sources-table .src-name-link,
+  .sources-table .src-name-plain {
+    white-space: nowrap;
   }
 
   .sources-table .src-name-link {

@@ -37,36 +37,23 @@
       <div v-if="messagesLoading && messages.length === 0" class="loading-text">Loading messages...</div>
       <div v-else-if="messagesError" class="error-text">{{ messagesError }}</div>
       <div v-else-if="messages.length === 0" class="empty-text">No voice messages yet.</div>
-      <table v-else class="messages-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Time</th>
-            <th>Status</th>
-            <th>Transcription</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="msg in recentMessages" :key="msg.id">
-            <td>{{ formatDate(msg.created_at) }}</td>
-            <td>{{ formatTime(msg.created_at) }}</td>
-            <td>
-              <span class="status-badge" :class="msg.status">{{ msg.status }}</span>
-            </td>
-            <td class="transcription-cell">
-              {{ msg.transcription || '—' }}
-            </td>
-            <td>
-              <AspTooltip content="Delete">
-                <AspButton variant="ghost" size="icon" aria-label="Delete" @click="deleteMessage(msg.id)">
-                  &times;
-                </AspButton>
-              </AspTooltip>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <AspDataTable v-else class="messages-table" :columns="messageColumns" :rows="recentMessages" row-key="id">
+        <template #cell-date="{ row }">{{ formatDate(row.created_at) }}</template>
+        <template #cell-time="{ row }">{{ formatTime(row.created_at) }}</template>
+        <template #cell-status="{ row }">
+          <span class="status-badge" :class="row.status">{{ row.status }}</span>
+        </template>
+        <template #cell-transcription="{ row }">
+          <span class="transcription-cell">{{ row.transcription || '—' }}</span>
+        </template>
+        <template #cell-actions="{ row }">
+          <AspTooltip content="Delete">
+            <AspButton variant="ghost" size="icon" aria-label="Delete" @click="deleteMessage(row.id)">
+              &times;
+            </AspButton>
+          </AspTooltip>
+        </template>
+      </AspDataTable>
     </div>
 
     <!-- Filter Bar -->
@@ -320,13 +307,24 @@
 </template>
 
 <script>
-import { AspInput, AspButton, AspSelect, AspTooltip } from '@aspirant/design-system';
+import { AspInput, AspButton, AspSelect, AspTooltip, AspDataTable } from '@aspirant/design-system';
 import axios from 'axios';
 
 export default {
-  components: { AspInput, AspButton, AspSelect, AspTooltip },
+  components: { AspInput, AspButton, AspSelect, AspTooltip, AspDataTable },
   data() {
     return {
+      // #4278-A2: the recent-messages table is a uniform read, so it rides the
+      // DS AspDataTable. Date/Time/Status/Transcription/actions render through
+      // cell slots; no column sorts (the list is already newest-first).
+      messageColumns: [
+        { key: 'date', label: 'Date', sortable: false },
+        { key: 'time', label: 'Time', sortable: false },
+        { key: 'status', label: 'Status', sortable: false },
+        { key: 'transcription', label: 'Transcription', sortable: false },
+        { key: 'actions', label: '', sortable: false },
+      ],
+
       // Recording state
       recordState: 'idle', // idle | recording | uploading
       recordError: null,
@@ -815,30 +813,12 @@ export default {
   margin: 0 0 var(--space-md) 0;
 }
 
-.messages-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.messages-table th {
-  text-align: left;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: var(--space-xs) var(--space-sm);
-  border-bottom: 2px solid var(--surface-card-inner);
-}
-
-.messages-table td {
-  padding: var(--space-sm);
-  border-bottom: 1px solid var(--surface-card-inner);
-  font-size: var(--text-sm);
-  color: var(--text-on-dark);
-  vertical-align: top;
-}
-
+/* The recent-messages table's own th/td styling is retired — AspDataTable
+   (#4278-A2) owns the table, header and cell treatment now. Only the cell
+   CONTENT styles below (transcription clamp, status badge) survive, applied to
+   the spans inside the cell slots. */
 .transcription-cell {
+  display: inline-block;
   max-width: 400px;
   word-break: break-word;
 }
