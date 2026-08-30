@@ -753,6 +753,9 @@ export default {
 /* Record Card */
 .record-card {
   background-color: var(--surface-card);
+  /* Declares its ink: --surface-card is dark in BOTH themes, so the ambient
+     light-theme ink would land ~#424242 on #424242 (#2415 / §3.18, #4483). */
+  color: var(--text-on-dark);
   border: 2px solid var(--border-card);
   border-radius: var(--radius-xl);
   padding: var(--space-xl);
@@ -800,6 +803,9 @@ export default {
 /* Messages Card */
 .messages-card {
   background-color: var(--surface-card);
+  /* Declares its ink: --surface-card is dark in BOTH themes, so the ambient
+     light-theme ink would land ~#424242 on #424242 (#2415 / §3.18, #4483). */
+  color: var(--text-on-dark);
   border: 2px solid var(--border-card);
   border-radius: var(--radius-xl);
   padding: var(--space-xl);
@@ -937,6 +943,9 @@ export default {
 /* Tasks Card */
 .tasks-card {
   background-color: var(--surface-card);
+  /* Declares its ink: --surface-card is dark in BOTH themes, so the ambient
+     light-theme ink would land ~#424242 on #424242 (#2415 / §3.18, #4483). */
+  color: var(--text-on-dark);
   border: 2px solid var(--border-card);
   border-radius: var(--radius-xl);
   padding: var(--space-xl);
@@ -1104,6 +1113,9 @@ export default {
 /* Notes Card */
 .notes-card {
   background-color: var(--surface-card);
+  /* Declares its ink: --surface-card is dark in BOTH themes, so the ambient
+     light-theme ink would land ~#424242 on #424242 (#2415 / §3.18, #4483). */
+  color: var(--text-on-dark);
   border: 2px solid var(--border-card);
   border-radius: var(--radius-xl);
   padding: var(--space-xl);
@@ -1228,6 +1240,9 @@ export default {
 /* Vocabulary Card */
 .vocabulary-card {
   background-color: var(--surface-card);
+  /* Declares its ink: --surface-card is dark in BOTH themes, so the ambient
+     light-theme ink would land ~#424242 on #424242 (#2415 / §3.18, #4483). */
+  color: var(--text-on-dark);
   border: 2px solid var(--border-card);
   border-radius: var(--radius-xl);
   padding: var(--space-xl);
