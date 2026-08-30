@@ -54,20 +54,27 @@
       @node-updated="onNodeUpdated"
     />
 
-    <!-- Node creation dialog -->
-    <div v-if="showCreateNode" v-overlay-history="() => (showCreateNode = false)" class="dialog-overlay" @click.self="showCreateNode = false">
-      <div class="dialog dialog-wide">
-        <h3>Add Node</h3>
-        <!-- ref kept verbatim: `createNodeInput.value?.focus()` (L~274) reaches
-             the inner <input> through AspInput's defineExpose (#4303). Without
-             it the ref resolves to the component instance and opening this
-             dialog would silently stop putting the caret in the name field. -->
+    <!-- Node creation dialog — AspModal, not a hand-rolled scrim (#4517): the
+         native had no role="dialog", no aria-modal, no focus trap and no Escape.
+         setup() component, so Back-close binds via useOverlayHistory on the open
+         ref (the directive cannot reach AspModal's teleported root, #4446).
+         size="md" (34rem) matches the old .dialog-wide 540px cap. -->
+    <AspModal
+      :open="showCreateNode"
+      title="Add Node"
+      size="md"
+      :show-close="false"
+      @update:open="(open) => (open ? null : (showCreateNode = false))"
+    >
+        <!-- ref kept verbatim: `createNodeInput.value?.focus()` reaches the
+             inner <input> through AspInput's defineExpose (#4303). It still
+             resolves across AspModal's Teleport because it is set in this
+             component's render. -->
         <AspInput
           ref="createNodeInput"
           v-model="newNode.name"
           placeholder="Node name"
           maxlength="255"
-          @keyup.escape="showCreateNode = false"
         />
         <div class="form-row">
           <label>Type</label>
@@ -117,7 +124,7 @@
           &#9888; Recommended depth reached. Adding further nesting may reduce clarity.
         </div>
         <div v-if="createError" class="error-text">{{ createError }}</div>
-        <div class="dialog-actions">
+        <template #footer>
           <AspButton variant="secondary" @click="showCreateNode = false">Cancel</AspButton>
           <AspButton
             variant="primary"
@@ -126,16 +133,16 @@
           >
             {{ creating ? 'Creating...' : 'Create' }}
           </AspButton>
-        </div>
-      </div>
-    </div>
+        </template>
+    </AspModal>
   </div>
 </template>
 
 <script>
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AspButton, AspInput, AspSelect, AspTextarea } from '@aspirant/design-system';
+import { AspButton, AspInput, AspModal, AspSelect, AspTextarea } from '@aspirant/design-system';
+import { useOverlayHistory } from '../../../directives/overlayHistory.js';
 
 import Canvas from '../../../components/goals/Canvas.vue';
 import TreeSwitcher from '../../../components/goals/TreeSwitcher.vue';
@@ -153,7 +160,7 @@ const NODE_TEMPLATES = {
 const MAX_RECOMMENDED_DEPTH = 5;
 
 export default {
-  components: { AspButton, AspInput, AspSelect, AspTextarea, Canvas, TreeSwitcher, NodeDetailPanel, TimelineFilter },
+  components: { AspButton, AspInput, AspModal, AspSelect, AspTextarea, Canvas, TreeSwitcher, NodeDetailPanel, TimelineFilter },
   setup() {
     const route = useRoute();
     const router = useRouter();
@@ -316,6 +323,12 @@ export default {
       }
     });
 
+    // Back closes the create-node dialog rather than leaving the page (#4172);
+    // binds the open ref to the same close AspModal's scrim/Escape/✕ use (#4517).
+    useOverlayHistory(showCreateNode, () => {
+      showCreateNode.value = false;
+    });
+
     return {
       treeId,
       nodes,
@@ -403,36 +416,10 @@ export default {
 }
 
 /* Dialog styles (shared with Goals.vue patterns) */
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.dialog {
-  background-color: var(--surface-card);
-  border: 2px solid var(--border-card);
-  border-radius: var(--radius-xl);
-  padding: var(--space-xl);
-  width: 90%;
-  max-width: 400px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.dialog.dialog-wide {
-  max-width: 540px;
-}
-
-.dialog h3 {
-  color: var(--text-heading-card);
-  font-size: var(--text-lg);
-  margin: 0 0 var(--space-md) 0;
-}
+/* Scrim, panel (incl. .dialog-wide width and the max-height/overflow scroll)
+   and title rules deleted with the AspModal port (#4517): AspModal owns the
+   fixed scrim, the dark card panel + radius, the title, and a flex body that
+   scrolls at max-height:100dvh — size="md" (34rem) matches the old 540px cap. */
 
 /* The name field is AspInput, the Type/Parent pickers are AspSelect and the
    description is AspTextarea — the DS paints all four past this file's data-v
@@ -541,13 +528,4 @@ export default {
   color: var(--feedback-warning, #f5a623);
   font-size: var(--text-sm);
 }
-
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-sm);
-  margin-top: var(--space-lg);
-}
-
-
 </style>
