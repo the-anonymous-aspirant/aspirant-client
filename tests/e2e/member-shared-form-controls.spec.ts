@@ -151,7 +151,7 @@ async function openCanvas(page: Page): Promise<{ posts: Record<string, unknown>[
   await page.goto('/member/shared/goals/1');
   await dismissMobileSidebarIfPresent(page);
   await page.getByRole('button', { name: '+ Add Node' }).click();
-  await expect(page.locator('.dialog')).toBeVisible();
+  await expect(page.locator('[role="dialog"]')).toBeVisible();
   return { posts };
 }
 
@@ -193,7 +193,7 @@ test.describe('GoalTreeCanvas Add Node — AspSelect type/parent and AspTextarea
     // the number the option was built with, which is what the API takes.
     await expect.poll(() => posts.length).toBe(1);
     expect(posts[0]).toMatchObject({ name: 'Finish chapter 3', type: 'step', parent_id: 7 });
-    await expect(page.locator('.dialog')).toBeHidden();
+    await expect(page.locator('[role="dialog"]')).toBeHidden();
   });
 });
 

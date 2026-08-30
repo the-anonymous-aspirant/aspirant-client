@@ -40,6 +40,8 @@
  * a Back-close runs exactly the same close path as a manual one.
  */
 
+import { watch, onScopeDispose } from 'vue';
+
 const STATE_KEY = '__overlayHistory';
 
 const stack = []; // [{ token, close }] — top of stack is the last element.
@@ -203,6 +205,59 @@ export function overlayHistoryWatch(closeMethod) {
       popOverlay(token);
     }
   };
+}
+
+/**
+ * useOverlayHistory — the Composition-API counterpart to `overlayHistoryWatch`,
+ * for a `setup()` component whose overlay is a COMPONENT (`AspModal`) rather
+ * than a `v-if`-gated element of our own.  (#4517)
+ *
+ * Same reason the directive cannot serve it: `AspModal` teleports its scrim, so
+ * the component root is a non-element node and Vue drops a runtime directive
+ * placed there (#4446). And `overlayHistoryWatch` cannot serve it either — that
+ * arm is Options-only, keyed on `this` and a watch handler shared across
+ * instances. A `setup()` overlay holds its open state in a `ref`, so the
+ * binding follows that ref's edge instead.
+ *
+ *   const showCreate = ref(false)
+ *   useOverlayHistory(showCreate, () => (showCreate.value = false))
+ *
+ * `close` is the SAME handler the dialog's Cancel button and `AspModal`'s own
+ * dismiss paths (scrim press, Escape, the ✕) already call, so a Back-close and
+ * every manual close reach one state. Truthiness is the open test, so an
+ * object-valued ref (a target row) works alongside a boolean; a change from one
+ * open value to another is not an edge and pushes nothing.
+ *
+ * Teardown: a component unmounted while its overlay is open would otherwise
+ * strand its stack entry (the watcher fires no close on unmount). `onScopeDispose`
+ * pops the live entry so the stack stays honest even when a parent `v-if` tears
+ * the whole component down mid-open — the one path the Options watch arm leaves
+ * to `clearForNavigation`.
+ *
+ * @param {import('vue').Ref} openRef - the overlay's open-state ref.
+ * @param {() => void} close - closes the overlay; invoked on a Back gesture.
+ */
+export function useOverlayHistory(openRef, close) {
+  let token = null;
+  watch(openRef, (value, previous) => {
+    const isOpen = Boolean(value);
+    const wasOpen = Boolean(previous);
+    if (isOpen === wasOpen) return;
+    if (isOpen) {
+      token = pushOverlay(() => close());
+    } else if (token) {
+      const t = token;
+      token = null;
+      popOverlay(t);
+    }
+  });
+  onScopeDispose(() => {
+    if (token) {
+      const t = token;
+      token = null;
+      popOverlay(t);
+    }
+  });
 }
 
 /**

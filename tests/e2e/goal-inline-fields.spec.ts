@@ -92,7 +92,7 @@ test.describe('#4305 goal-tree inline fields (AspInput)', () => {
     await openGoals(page);
     await page.getByRole('button', { name: /New Tree/ }).click();
 
-    const field = page.locator('.dialog input.field__input');
+    const field = page.locator('[role="dialog"] input.field__input');
     await expectLiveField(field, 'Tree name');
     // Focus is asserted after the fill so a fill-induced focus cannot be
     // mistaken for the dialog's own: re-open instead.
@@ -108,7 +108,7 @@ test.describe('#4305 goal-tree inline fields (AspInput)', () => {
     // (now-absent) title attribute.
     await page.getByRole('button', { name: 'Rename' }).first().click();
 
-    const field = page.locator('.dialog input.field__input');
+    const field = page.locator('[role="dialog"] input.field__input');
     await expect(field).toBeVisible();
     // Selecting the whole value is what makes the affordance work: the user
     // types the new name straight over the old one without clearing it first.
@@ -133,7 +133,7 @@ test.describe('#4305 goal-tree inline fields (AspInput)', () => {
     if (!(await rename.count())) test.skip(true, 'no rename affordance rendered for the seeded tree');
     await rename.first().click();
 
-    await expect(page.locator('.dialog h3')).toHaveText('Rename Tree');
+    await expect(page.locator('[role="dialog"] .modal__title')).toHaveText('Rename Tree');
     await expect.poll(async () => (await activeField(page)).selection).toBe(
       `0-${TREES[0].name.length}`,
     );
@@ -145,7 +145,7 @@ test.describe('#4305 goal-tree inline fields (AspInput)', () => {
     if (!(await add.count())) test.skip(true, 'no add-node affordance on the seeded empty tree');
     await add.first().click();
 
-    const field = page.locator('.dialog input.field__input');
+    const field = page.locator('[role="dialog"] input.field__input');
     await expect(field).toHaveAttribute('placeholder', 'Node name');
     await expect.poll(async () => (await activeField(page)).isFieldInput).toBe(true);
   });
@@ -155,7 +155,7 @@ test.describe('#4305 goal-tree inline fields (AspInput)', () => {
     const add = page.getByRole('button', { name: /Add Node|New Node|\+ Node/ });
     if (!(await add.count())) test.skip(true, 'no add-node affordance on the seeded empty tree');
     await add.first().click();
-    await expect(page.locator('.dialog')).toBeVisible();
+    await expect(page.locator('[role="dialog"]')).toBeVisible();
 
     // Take the caret out of the name field before measuring. The dialog focuses
     // it on open — that is the affordance the tests above assert — and
@@ -165,7 +165,7 @@ test.describe('#4305 goal-tree inline fields (AspInput)', () => {
     // then 112,112,112 on two runs of the same page). Comparing a focused
     // control against unfocused siblings is a flake, not a finding.
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-    await expect(page.locator('.dialog .field__control')).not.toHaveClass(/focus/);
+    await expect(page.locator('[role="dialog"] .field__control')).not.toHaveClass(/focus/);
     await page.waitForTimeout(400); // > --transition-fast, so the border has settled
 
     // The dialog mixes three DS controls (AspInput name, AspSelect type and
@@ -175,7 +175,7 @@ test.describe('#4305 goal-tree inline fields (AspInput)', () => {
     // the whole reason this dialog does not read as three DS controls among
     // strangers — so assert the box across DS and native alike. The textarea
     // is a multi-line box and is excluded here as it always was.
-    const boxes = await page.locator('.dialog .field__control, .dialog .select__trigger, .dialog .form-row input[type="date"]').evaluateAll((els) =>
+    const boxes = await page.locator('[role="dialog"] .field__control, [role="dialog"] .select__trigger, [role="dialog"] .form-row input[type="date"]').evaluateAll((els) =>
       els.map((el) => {
         const cs = getComputedStyle(el);
         return `${Math.round(el.getBoundingClientRect().height)}|${cs.borderTopLeftRadius}|${cs.backgroundColor}|${cs.borderTopColor}`;

@@ -51,11 +51,11 @@ test.describe('overlay back-gesture (#4172)', () => {
     await openGoals(page);
 
     await page.getByRole('button', { name: /New Tree/ }).click();
-    await expect(page.locator('.dialog-overlay')).toBeVisible();
+    await expect(page.locator('[role="dialog"]')).toBeVisible();
 
     // The browser Back gesture closes the dialog — it does NOT leave the page.
     await page.goBack();
-    await expect(page.locator('.dialog-overlay')).toBeHidden();
+    await expect(page.locator('[role="dialog"]')).toBeHidden();
     await expect(page).toHaveURL(/\/member\/shared\/goals$/);
     await expect(page.getByRole('heading', { name: 'Goal Trees' })).toBeVisible();
   });
@@ -64,10 +64,10 @@ test.describe('overlay back-gesture (#4172)', () => {
     await openGoals(page);
 
     await page.getByRole('button', { name: /New Tree/ }).click();
-    await expect(page.locator('.dialog-overlay')).toBeVisible();
+    await expect(page.locator('[role="dialog"]')).toBeVisible();
 
     await page.goBack(); // closes the dialog
-    await expect(page.locator('.dialog-overlay')).toBeHidden();
+    await expect(page.locator('[role="dialog"]')).toBeHidden();
     await expect(page).toHaveURL(/\/member\/shared\/goals$/);
 
     await page.goBack(); // now leaves the screen
@@ -80,13 +80,13 @@ test.describe('overlay back-gesture (#4172)', () => {
     await openGoals(page);
 
     await page.getByRole('button', { name: /New Tree/ }).click();
-    await expect(page.locator('.dialog-overlay')).toBeVisible();
+    await expect(page.locator('[role="dialog"]')).toBeVisible();
 
     // Close via the Cancel button (the same handler the scrim uses). This must
     // unwind the history entry the open pushed, so a subsequent Back leaves the
     // page rather than re-opening the just-closed dialog.
     await page.getByRole('button', { name: 'Cancel' }).click();
-    await expect(page.locator('.dialog-overlay')).toBeHidden();
+    await expect(page.locator('[role="dialog"]')).toBeHidden();
     // let the directive's unmount → history.back() unwind settle (same URL, so
     // there is no navigation event to await).
     await page.waitForTimeout(200);
@@ -103,11 +103,11 @@ test.describe('overlay back-gesture (#4172)', () => {
     // DS AspTooltip migration, #4297, moved the visible tooltip off the native
     // `title=` and kept the name on aria-label), so select it by role+name.
     await page.getByRole('button', { name: 'Delete' }).click();
-    await expect(page.locator('.dialog-overlay')).toBeVisible();
-    await expect(page.locator('.dialog-overlay')).toContainText('Tree A');
+    await expect(page.locator('[role="dialog"]')).toBeVisible();
+    await expect(page.locator('[role="dialog"]')).toContainText('Tree A');
 
     await page.goBack();
-    await expect(page.locator('.dialog-overlay')).toBeHidden();
+    await expect(page.locator('[role="dialog"]')).toBeHidden();
     await expect(page).toHaveURL(/\/member\/shared\/goals$/);
   });
 });
