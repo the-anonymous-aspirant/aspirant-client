@@ -38,6 +38,8 @@ import ValuationStatement from '../views/member/personal/ValuationStatement.vue'
 import PappasPushups from '../views/member/personal/PappasPushups.vue';
 import JobsView from '../views/member/personal/JobsView.vue';
 import Scratchpad from '../views/member/shared/Scratchpad.vue';
+import Constellations from '../views/member/shared/Constellations.vue';
+import ConstellationsRoom from '../views/member/shared/ConstellationsRoom.vue';
 import Advisor from '../views/admin/Advisor.vue';
 import BrowserFlows from '../views/admin/BrowserFlows.vue';
 import FlowDetail from '../views/admin/browser-flows/FlowDetail.vue';
@@ -105,6 +107,10 @@ const routes = [
   { path: '/member/shared/goals/:id', component: GoalTreeCanvas, meta: MEMBER_ROLES },
   { path: '/member/shared/remarkable-pdfs', component: RemarkablePdfsView, meta: MEMBER_ROLES },
   { path: '/member/shared/scratchpad', component: Scratchpad, meta: MEMBER_ROLES },
+  // Constellations (#4587): the landing/lobby and the in-room route it lands on.
+  // The room component is a placeholder here (#4598/B3); #4601 mounts the board.
+  { path: '/member/shared/constellations', component: Constellations, meta: MEMBER_ROLES },
+  { path: '/member/shared/constellations/room/:code', component: ConstellationsRoom, meta: MEMBER_ROLES },
 
   // Personal
   { path: '/member/personal/ludde-analytics', component: LuddeAnalytics, meta: MEMBER_ROLES },
