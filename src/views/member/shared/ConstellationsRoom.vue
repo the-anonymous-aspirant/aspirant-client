@@ -40,8 +40,12 @@
 
     <!-- Board canvas: F1 avatars + F2 relationship lines (#4602/#4603) mount here. -->
     <section class="constellations-room-board" data-testid="board-canvas" aria-label="Relationship board">
-      <!-- Dice cluster: F3 (#4604) mounts top-left. -->
-      <div class="constellations-room-dice" data-testid="dice-mount" aria-hidden="true"></div>
+      <!-- Dice cluster (#4587-F3 / #4604). Faces come from the D1 poll's
+           `dice` field so every viewer converges on the same server-resolved
+           roll; rolling.vue talks to the roll endpoint directly. -->
+      <div class="constellations-room-dice" data-testid="dice-mount">
+        <ConstellationsDice v-if="code" :code="code" :dice="state?.dice ?? null" />
+      </div>
 
       <p v-if="loading && !state" class="constellations-room-board-note">Connecting to the room…</p>
       <p v-else class="constellations-room-board-note">
@@ -67,6 +71,7 @@
 import { computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useRoomSync } from '../../../composables/useRoomSync.js';
+import ConstellationsDice from '../../../components/constellations/ConstellationsDice.vue';
 
 const route = useRoute();
 const router = useRouter();
