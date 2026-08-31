@@ -53,9 +53,9 @@
           <div class="completion-section">
             <div class="completion-row">
               <!-- Ported, on a measurement rather than on the sibling's
-                   decision. #4477 HELD Finance's checkbox because AspCheckbox
-                   draws its box with --border-subtle, which measures 1.26:1
-                   against that row's near-white page (DS defect #4482). This
+                   decision. #4477 HELD a native checkbox on a near-white page
+                   because AspCheckbox draws its box with --border-subtle, which
+                   measures 1.26:1 there (DS defect #4482). This
                    control sits on --surface-card, dark in both themes, where the
                    native's #000 boundary measured 2.09:1 — under WCAG 1.4.11's
                    3:1 floor — and the DS box's near-white FILL carries the edge

@@ -88,29 +88,6 @@ async function mockAdmin(page: Page): Promise<void> {
     // row at the root path, and a folder row has no Delete control.
     json({ assets: [{ key: 'q3-summary.pdf', etag: 'e1', content_type: 'application/pdf', size: 1024, last_modified: '2026-08-01T00:00:00Z' }] }),
   );
-  await page.route(/\/api\/finance\/summary\/overview/, json({ total_transactions: 12, total_income: 1000, total_expenses: 500, banks: ['seb'], categories: [] }));
-  await page.route(/\/api\/finance\/summary\/monthly/, json([]));
-  await page.route(/\/api\/finance\/summary\/outliers/, json({ top_expenses: [], top_income: [] }));
-  await page.route(/\/api\/finance\/transactions/, json({ transactions: [], total: 0 }));
-  await page.route(/\/api\/finance\/sources/, json([{ bank: 'seb', name: 'SEB', transaction_count: 12 }]));
-  // AFTER the sources list, not before: most-recently-registered wins, and
-  // /api/finance/sources also matches the schema URL. Registered the other way
-  // round this returns the sources ARRAY as the schema, which still opens a
-  // dialog — with no columns, so every chip this spec measures is absent and
-  // the failure reads as "element not found" rather than "wrong mock".
-  await page.route(/\/api\/finance\/sources\/seb\/schema/, json({
-    name: 'SEB',
-    description: 'Kontoutdrag CSV',
-    encoding: 'utf-8',
-    delimiter: ';',
-    currency: 'SEK',
-    columns: [
-      { name: 'bokforingsdatum', required: true, description: 'Posting date', aliases: ['date'] },
-      { name: 'text', required: false, description: 'Free-text description', aliases: [] },
-    ],
-    sample_row: '2026-08-01;ICA MAXI;-249,00',
-    notes: 'Amounts use a comma decimal separator.',
-  }));
 }
 
 async function withTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
@@ -146,48 +123,6 @@ test.describe('#4516 the admin dialogs are AspModal', () => {
   test.beforeEach(async ({ page }) => {
     await seedAdmin(page);
     await mockAdmin(page);
-  });
-
-  test('Finance schema: dialog semantics, Escape closes, Back closes and stays on the page', async ({ page }) => {
-    await openAdmin(page, '/admin/finance');
-    await expect(page.locator('.source-folder')).toBeVisible();
-
-    const open = page.getByRole('button', { name: 'View expected CSV schema' }).first();
-    await open.click();
-    await expectDialogSemantics(page, 'SEB — CSV Schema');
-    await expect(page.getByTestId('finance-schema-modal')).toBeVisible();
-
-    // Escape — which did nothing on any of the twelve hand-rolled overlays.
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog')).toBeHidden();
-
-    // ... and the Back gesture still closes it without leaving the route
-    // (#4172). This is the assertion the port most easily breaks: the directive
-    // that used to carry it cannot bind to a teleported component root.
-    await open.click();
-    await expect(page.getByRole('dialog')).toBeVisible();
-    await page.goBack();
-    await expect(page.getByRole('dialog')).toBeHidden();
-    await expect(page).toHaveURL(/\/admin\/finance$/);
-
-    // The entry the dialog pushed is unwound, not orphaned: one more Back now
-    // leaves the route rather than being swallowed.
-    await page.goBack();
-    await expect(page).not.toHaveURL(/\/admin\/finance$/);
-  });
-
-  test('Finance schema: a manual close unwinds its history entry too', async ({ page }) => {
-    await openAdmin(page, '/admin/finance');
-    const open = page.getByRole('button', { name: 'View expected CSV schema' }).first();
-    await open.click();
-    await expect(page.getByRole('dialog')).toBeVisible();
-
-    await page.getByRole('button', { name: 'Close dialog' }).first().click();
-    await expect(page.getByRole('dialog')).toBeHidden();
-
-    // No orphan entry left behind by the close: the next Back leaves the route.
-    await page.goBack();
-    await expect(page).not.toHaveURL(/\/admin\/finance$/);
   });
 
   test('Assets delete: dialog semantics, and Cancel and Back reach the same state', async ({ page }) => {
@@ -235,35 +170,6 @@ for (const theme of ['light', 'dark'] as const) {
       await withTheme(page, theme);
       await seedAdmin(page);
       await mockAdmin(page);
-    });
-
-    test('the Finance schema chips are legible on the DS panel', async ({ page }) => {
-      await openAdmin(page, '/admin/finance');
-      await page.getByRole('button', { name: 'View expected CSV schema' }).first().click();
-      const dialog = page.getByRole('dialog');
-      await expect(dialog).toBeVisible();
-
-      // Each of these PAINTS its own background, so each must declare its own
-      // ink; each inherited the page's by accident while the panel was light.
-      for (const [what, sel] of [
-        ['delimiter chip', '.schema-props code'],
-        ['optional badge', '.badge-optional'],
-        ['column-name code', '.schema-table code'],
-        ['example row', '.sample-code'],
-        ['notes block', '.schema-notes'],
-      ] as const) {
-        expect(
-          await contrastRatio(dialog.locator(sel)),
-          `${theme}: ${what} on the dialog panel`,
-        ).toBeGreaterThanOrEqual(AA_TEXT);
-      }
-
-      // And the body text that does NOT paint a background: it must take the
-      // panel's ink, which is the other half of the same rule.
-      expect(
-        await contrastRatio(dialog.locator('.schema-meta p')),
-        `${theme}: description on the dialog panel`,
-      ).toBeGreaterThanOrEqual(AA_TEXT);
     });
 
     test('the Assets delete path chip is legible on the DS panel', async ({ page }) => {

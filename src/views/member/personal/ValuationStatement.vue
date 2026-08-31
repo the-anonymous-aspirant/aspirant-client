@@ -310,7 +310,7 @@
           <AspInput v-model="reviewedFields.foretag" @input="markManual('foretag')" />
         </div>
         <!-- Ported on a measurement, not on #4477's precedent. That task HELD
-             Finance's checkbox because AspCheckbox's --border-subtle measures
+             a native checkbox because AspCheckbox's --border-subtle measures
              1.26:1 on a near-white page (DS defect #4482). This one sits inside
              .field-block on --surface-card, dark in both themes, where the
              native's #000 boundary measured 2.09:1 — under WCAG 1.4.11's 3:1

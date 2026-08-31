@@ -2,7 +2,7 @@ import { test, expect, type Page, type Route } from '@playwright/test';
 import { dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 
 /**
- * #4445 (#4442-A10c) — the nine glyph-only controls in the three admin views
+ * #4445 (#4442-A10c) — the glyph-only controls in the admin views
  * are AspButton size="icon" (§3.89 / §3.23 rule-4), each with an accessible
  * name and the DS's fixed 44x44 target.
  *
@@ -24,9 +24,8 @@ const json = (body: unknown) => (route: Route) =>
 
 /** On the mobile-safari project the sidebar starts open and its .mobile-overlay
  *  covers the route content, intercepting every click — the repo's own helper
- *  exists for this. Omitting it is why this spec's Finance case passed on
- *  chromium and timed out on mobile-safari: the control was visible and the
- *  click never landed. */
+ *  exists for this. Omitting it is why an admin case can pass on chromium and
+ *  time out on mobile-safari: the control is visible and the click never lands. */
 async function openAdmin(page: Page, route: string): Promise<void> {
   await page.goto(route);
   await dismissMobileSidebarIfPresent(page);
@@ -47,11 +46,6 @@ async function mockAdmin(page: Page): Promise<void> {
     /\/api\/assets(\?.*)?$/,
     json({ assets: [{ key: 'report.pdf', etag: 'e1', content_type: 'application/pdf', size: 1024, last_modified: '2026-08-01T00:00:00Z' }] }),
   );
-  await page.route(/\/api\/finance\/summary\/overview/, json({ total_transactions: 12, total_income: 1000, total_expenses: 500, banks: ['seb'], categories: [] }));
-  await page.route(/\/api\/finance\/summary\/monthly/, json([]));
-  await page.route(/\/api\/finance\/summary\/outliers/, json({ top_expenses: [], top_income: [] }));
-  await page.route(/\/api\/finance\/transactions/, json({ transactions: [], total: 0 }));
-  await page.route(/\/api\/finance\/sources/, json([{ bank: 'seb', name: 'SEB', transaction_count: 12 }]));
   await page.route(/\/api\/voice-messages/, json({ items: [{ id: 1, transcript: 'hello', created_at: '2026-08-01T00:00:00Z', status: 'new' }] }));
   await page.route(/\/api\/commander\/tasks/, json({ items: [{ id: 1, title: 'Task one', status: 'open', created_at: '2026-08-01T00:00:00Z' }], total: 1 }));
   await page.route(/\/api\/commander\/notes/, json({ items: [{ id: 1, title: 'Note', content: 'body', created_at: '2026-08-01T00:00:00Z' }], total_pages: 1 }));
@@ -81,32 +75,6 @@ test.describe('#4445 admin glyph-only controls are AspButton size="icon"', () =>
     await expect(page.locator('.file-name')).toBeVisible();
     await expectIconButton(page, 'Download');
     await expectIconButton(page, 'Delete');
-  });
-
-  test('Finance schema control, and the modal closer that had no name at all', async ({ page }) => {
-    await openAdmin(page, '/admin/finance');
-    await expect(page.locator('.source-folder')).toBeVisible();
-    await expectIconButton(page, 'View expected CSV schema');
-
-    // The handler still fires, and the modal's closer — nameless before #4445
-    // (no aria-label, no title, no text) — has a name and closes the modal.
-    //
-    // Since #4516 that closer is AspModal's own, not the AspButton this task
-    // built: the dialog is a DS component now, so the ✕ comes with it. What is
-    // asserted is what #4445 was actually about — a NAME and a target no
-    // smaller than the WCAG 2.5.8 floor — rather than the DS class of the
-    // moment, which is why this reads `.modal__close` and 44px and not
-    // `btn--size-icon`.
-    await page.getByRole('button', { name: 'View expected CSV schema' }).first().click();
-    const closer = page.getByRole('button', { name: 'Close dialog' }).first();
-    await expect(closer).toBeVisible();
-    await expect(closer).toHaveClass(/modal__close/);
-    const box = await closer.boundingBox();
-    expect(box, 'schema dialog closer: has a box').not.toBeNull();
-    expect(Math.round(box!.width), 'schema dialog closer: >= 44px wide').toBeGreaterThanOrEqual(44);
-    expect(Math.round(box!.height), 'schema dialog closer: >= 44px tall').toBeGreaterThanOrEqual(44);
-    await closer.click();
-    await expect(closer).toBeHidden();
   });
 
   test('VoiceCommander message, task and note actions', async ({ page }) => {

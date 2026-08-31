@@ -89,39 +89,6 @@ for (const theme of ['light', 'dark'] as const) {
       expect(await contrastRatio(back), `${theme}: back control ink over the page`).toBeGreaterThanOrEqual(AA_TEXT);
     });
 
-    test(`D2 the finance source card and its ghost controls are legible`, async ({ page }) => {
-      await withTheme(page, theme);
-      await page.addInitScript(() => {
-        localStorage.setItem('user_role', 'Admin');
-        localStorage.setItem('user_name', 'e2e-admin');
-      });
-      await page.route(/\/api\//, json({}));
-      await page.route(/\/api\/finance\/summary\/overview/, json({ total_transactions: 12, total_income: 1000, total_expenses: 500, banks: ['seb'], categories: [] }));
-      await page.route(/\/api\/finance\/summary\/monthly/, json([]));
-      await page.route(/\/api\/finance\/summary\/outliers/, json({ top_expenses: [], top_income: [] }));
-      await page.route(/\/api\/finance\/transactions/, json({ transactions: [], total: 0 }));
-      await page.route(/\/api\/finance\/sources/, json([{ bank: 'seb', name: 'SEB', transaction_count: 12 }]));
-      await page.goto('/admin/finance');
-      await dismissMobileSidebarIfPresent(page);
-
-      const card = page.locator('.source-folder').first();
-      await expect(card).toBeVisible();
-      expect(await contrastRatio(card.locator('.folder-header').first()), `${theme}: card body ink`).toBeGreaterThanOrEqual(AA_TEXT);
-
-      const schema = page.getByRole('button', { name: 'View expected CSV schema' }).first();
-      await expect(schema).toBeVisible();
-      expect(await contrastRatio(schema), `${theme}: schema control on the card`).toBeGreaterThanOrEqual(AA_TEXT);
-
-      // The modal is the third `#fff` surface in this file; its closer was the
-      // other ghost control #4445 ported, and since #4516 it is AspModal's own
-      // ✕ (`Close dialog`), inheriting the panel ink rather than mixing a brand
-      // step into it. The ratio is what is asserted either way.
-      await schema.click();
-      const closer = page.getByRole('button', { name: 'Close dialog' }).first();
-      await expect(closer).toBeVisible();
-      expect(await contrastRatio(closer), `${theme}: modal closer`).toBeGreaterThanOrEqual(AA_TEXT);
-    });
-
     test(`D3 the timeline item modal is legible on the panel it paints`, async ({ page }) => {
       await withTheme(page, theme);
       await seedTrustedSession(page);

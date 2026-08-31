@@ -23,7 +23,6 @@ import UserAdmin from '../views/admin/UserAdmin.vue';
 import Assets from '../views/admin/Assets.vue';
 import VoiceCommander from '../views/admin/VoiceCommander.vue';
 import SystemHealth from '../views/admin/SystemHealth.vue';
-import Finance from '../views/admin/Finance.vue';
 import EasterHuntView from '../views/applications/EasterHuntView.vue';
 import QrGeneratorView from '../views/applications/QrGenerator.vue';
 import FilesManagerView from '../views/member/shared/FilesManager.vue';
@@ -60,7 +59,6 @@ const routes = [
   { path: '/admin/assets', component: Assets, meta: { roles: ['Admin'] } },
   { path: '/admin/voice-commander', component: VoiceCommander, meta: { roles: ['Admin'] } },
   { path: '/admin/system-health', component: SystemHealth, meta: { roles: ['Admin'] } },
-  { path: '/admin/finance', component: Finance, meta: { roles: ['Admin'] } },
   { path: '/admin/advisor', component: Advisor, meta: { roles: ['Admin'] } },
   { path: '/admin/browser-flows', component: BrowserFlows, meta: { roles: ['Admin'] } },
   { path: '/admin/browser-flows/:id', component: FlowDetail, meta: { roles: ['Admin'] } },

@@ -94,8 +94,7 @@
              AspTextarea binds $attrs to the real <textarea> INSIDE its root, so
              a class passed here lands on a node this file's data-v attribute
              cannot reach. Measured: the field came out 190px in a 784px row.
-             Finance's .search-field wrapper exists for the same reason. The
-             wrapper carries flex: 1 and nothing else — the box is the DS's. -->
+             The wrapper carries flex: 1 and nothing else — the box is the DS's. -->
         <div class="chat-input">
           <AspTextarea
             v-model="question"
