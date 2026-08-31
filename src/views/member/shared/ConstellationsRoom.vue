@@ -107,7 +107,7 @@ const router = useRouter();
 
 const code = computed(() => route.params.code || '');
 
-const { state, loading, error, start } = useRoomSync(() => code.value);
+const { state, loading, error, start, refresh } = useRoomSync(() => code.value);
 
 // Live occupancy: current people in the room over the room's player slots.
 // player_count is the room size chosen at create; occupancy is how many are

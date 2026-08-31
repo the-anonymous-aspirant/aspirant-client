@@ -225,8 +225,11 @@ test.describe('#4603 Constellations relationship control panel', () => {
     );
     expect(captured.set).toEqual([{ from_user_id: 11, to_user_id: 12, type_id: 1 }]);
 
-    // The selection resets after a successful edit.
+    // The selection resets after a successful edit, and no error is shown
+    // (guards the refresh-not-destructured ReferenceError class of bug, where
+    // the POST succeeds but the post-edit refresh throws into the catch).
     await expect(page.locator('[data-testid="type-button"][data-type-code="P"]')).toBeDisabled();
+    await expect(page.getByTestId('edit-error')).toHaveCount(0);
   });
 
   test('Clear POSTs clear for the pair and removes the edge', async ({ page }) => {
