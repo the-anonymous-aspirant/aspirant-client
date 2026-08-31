@@ -48,9 +48,13 @@
       </div>
 
       <p v-if="loading && !state" class="constellations-room-board-note">Connecting to the room…</p>
-      <p v-else class="constellations-room-board-note">
-        {{ memberCount }} {{ memberCount === 1 ? 'player' : 'players' }} seated. The board is next.
-      </p>
+      <!-- F1 (#4602): the relationship graph — ring-laid avatars + typed coloured edges. -->
+      <ConstellationGraph
+        v-else-if="memberCount"
+        :members="state.members"
+        :relationships="state.relationships || []"
+      />
+      <p v-else class="constellations-room-board-note">Waiting for players to join…</p>
 
       <!-- Relationship summary: F4 (#4605) mounts bottom-left. -->
       <div class="constellations-room-summary" data-testid="summary-mount"></div>
@@ -72,6 +76,7 @@ import { computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useRoomSync } from '../../../composables/useRoomSync.js';
 import ConstellationsDice from '../../../components/constellations/ConstellationsDice.vue';
+import ConstellationGraph from '../../../components/constellations/ConstellationGraph.vue';
 
 const route = useRoute();
 const router = useRouter();
