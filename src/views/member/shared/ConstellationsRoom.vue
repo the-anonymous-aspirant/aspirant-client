@@ -56,8 +56,13 @@
       />
       <p v-else class="constellations-room-board-note">Waiting for players to join…</p>
 
-      <!-- Relationship summary: F4 (#4605) mounts bottom-left. -->
-      <div class="constellations-room-summary" data-testid="summary-mount"></div>
+      <!-- Relationship summary: F4 (#4605). Mounted bottom-centre, matching
+           the wireframe's POLYAMORY box (gate resolved in #4605's design
+           comment — the earlier bottom-left placeholder here predated that
+           resolution). -->
+      <div class="constellations-room-summary" data-testid="summary-mount">
+        <ConstellationsSummary :members="state?.members || []" :relationships="state?.relationships || []" />
+      </div>
     </section>
 
     <button
@@ -77,6 +82,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useRoomSync } from '../../../composables/useRoomSync.js';
 import ConstellationsDice from '../../../components/constellations/ConstellationsDice.vue';
 import ConstellationGraph from '../../../components/constellations/ConstellationGraph.vue';
+import ConstellationsSummary from '../../../components/constellations/ConstellationsSummary.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -238,8 +244,11 @@ onMounted(() => {
 .constellations-room-summary {
   position: absolute;
   bottom: 1rem;
-  left: 1rem;
-  max-width: 22rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 26rem;
+  padding: 0 1rem;
 }
 
 .constellations-room-board-note {
