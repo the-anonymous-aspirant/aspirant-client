@@ -176,7 +176,11 @@ const edges = computed(() => {
   outline: none;
 }
 
-.constellation-graph-node--selected .constellation-graph-node-ring {
+/* Selection outranks the hover highlight (the :hover rule above carries
+   higher specificity, so the selected state must repeat it). */
+.constellation-graph-node--selected .constellation-graph-node-ring,
+.constellation-graph-node--selected:hover .constellation-graph-node-ring,
+.constellation-graph-node--selected:focus-visible .constellation-graph-node-ring {
   stroke: #facc15;
   stroke-width: 3;
 }
