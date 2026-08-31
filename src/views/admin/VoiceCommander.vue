@@ -91,11 +91,11 @@
         </div>
         <div class="filter-group">
           <label for="label-filter">Label</label>
-          <!-- Kept as `text` rather than `search`, unlike Finance's field: the
-               `search` type renders a leading magnifier, which reads as a
-               second caption under a control the row already captions "LABEL".
-               Finance's field has no caption and a "Search..." placeholder, so
-               there the glyph is the affordance rather than a duplicate. -->
+          <!-- Kept as `text` rather than `search`: the `search` type renders a
+               leading magnifier, which reads as a second caption under a control
+               the row already captions "LABEL". The glyph earns its place only
+               where a field carries no caption and a "Search..." placeholder, so
+               it is the affordance rather than a duplicate here. -->
           <AspInput
             id="label-filter"
             v-model="labelFilter"

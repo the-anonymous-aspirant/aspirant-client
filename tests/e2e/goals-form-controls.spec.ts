@@ -144,8 +144,8 @@ test.describe('#4479 goals form controls are DS components', () => {
     await expect(box).toBeVisible();
     await expect(box).not.toBeChecked();
 
-    // #4482 held Finance's toggle native because AspCheckbox's --border-subtle
-    // measured 1.26:1 against that row's near-white page. This control sits on
+    // #4482 held a native toggle on a near-white page because AspCheckbox's
+    // --border-subtle measured 1.26:1 there. This control sits on
     // --surface-card, dark in both themes, where the DS box's near-white FILL
     // carries the edge instead of its border — which is why the same component
     // can be right here and wrong there, and why this is measured rather than
