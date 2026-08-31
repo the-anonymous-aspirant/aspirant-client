@@ -53,8 +53,24 @@
         v-else-if="memberCount"
         :members="state.members"
         :relationships="state.relationships || []"
+        :selected-ids="selectedIds"
+        @select="toggleSelect"
       />
       <p v-else class="constellations-room-board-note">Waiting for players to join…</p>
+
+      <!-- F2 (#4603): pinned right-edge relationship control panel. -->
+      <div class="constellations-room-panel">
+        <ConstellationControlPanel
+          :types="relationshipTypes"
+          :pair-selected="selectedIds.length === 2"
+          :busy="editBusy"
+          @set-type="setType"
+          @clear="clearPair"
+          @undo="undo"
+          @redo="redo"
+        />
+        <p v-if="editError" class="constellations-room-error" data-testid="edit-error">{{ editError }}</p>
+      </div>
 
       <!-- Relationship summary: F4 (#4605). Mounted bottom-centre, matching
            the wireframe's POLYAMORY box (gate resolved in #4605's design
@@ -77,12 +93,14 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import axios from 'axios';
 import { useRoomSync } from '../../../composables/useRoomSync.js';
 import ConstellationsDice from '../../../components/constellations/ConstellationsDice.vue';
 import ConstellationGraph from '../../../components/constellations/ConstellationGraph.vue';
 import ConstellationsSummary from '../../../components/constellations/ConstellationsSummary.vue';
+import ConstellationControlPanel from '../../../components/constellations/ConstellationControlPanel.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -120,8 +138,96 @@ function leave() {
   router.push({ path: '/member/shared/constellations' });
 }
 
+// ---- F2 (#4603): selection + B1/C1 edit calls -----------------------------
+
+// A2 vocabulary rows, normalized ({ id, code, label, colour } — the server
+// serializes the gorm.Model id as "ID", the tagged fields lowercase).
+const relationshipTypes = ref([]);
+const selectedIds = ref([]);
+const editBusy = ref(false);
+const editError = ref(null);
+
+async function loadRelationshipTypes() {
+  try {
+    const res = await axios.get('/api/constellations/relationship-types');
+    const rows = res.data?.relationship_types || [];
+    relationshipTypes.value = rows.map((t) => ({
+      id: t.ID ?? t.id,
+      code: t.code,
+      label: t.label,
+      colour: t.colour,
+    }));
+  } catch {
+    // The panel renders empty; the next explicit action will surface an error.
+  }
+}
+
+function toggleSelect(userId) {
+  const current = selectedIds.value;
+  if (current.includes(userId)) {
+    selectedIds.value = current.filter((id) => id !== userId);
+  } else {
+    // Keep at most two: the oldest pick drops when a third player is chosen.
+    selectedIds.value = [...current, userId].slice(-2);
+  }
+}
+
+// Runs one B1/C1 edit call, then refreshes the room state so the caller's own
+// board converges immediately (other viewers converge on the ~1.5s poll).
+async function runEdit(call) {
+  if (editBusy.value) return;
+  editBusy.value = true;
+  editError.value = null;
+  try {
+    await call();
+    await refresh();
+  } catch (err) {
+    editError.value = err.response?.data?.error?.message || 'Edit failed — try again';
+  } finally {
+    editBusy.value = false;
+  }
+}
+
+function setType(typeId) {
+  const [from, to] = selectedIds.value;
+  if (!from || !to) return;
+  runEdit(async () => {
+    await axios.post(`/api/constellations/rooms/${encodeURIComponent(code.value)}/relationships/set`, {
+      from_user_id: from,
+      to_user_id: to,
+      type_id: typeId,
+    });
+    selectedIds.value = [];
+  });
+}
+
+function clearPair() {
+  const [from, to] = selectedIds.value;
+  if (!from || !to) return;
+  runEdit(async () => {
+    await axios.post(`/api/constellations/rooms/${encodeURIComponent(code.value)}/relationships/clear`, {
+      from_user_id: from,
+      to_user_id: to,
+    });
+    selectedIds.value = [];
+  });
+}
+
+function undo() {
+  runEdit(() =>
+    axios.post(`/api/constellations/rooms/${encodeURIComponent(code.value)}/relationships/undo`),
+  );
+}
+
+function redo() {
+  runEdit(() =>
+    axios.post(`/api/constellations/rooms/${encodeURIComponent(code.value)}/relationships/redo`),
+  );
+}
+
 onMounted(() => {
   start();
+  loadRelationshipTypes();
 });
 </script>
 
@@ -249,6 +355,35 @@ onMounted(() => {
   width: 100%;
   max-width: 26rem;
   padding: 0 1rem;
+}
+
+/* F2: the control panel pins to the board's right edge (wireframe). On
+   narrow screens the overlay would cover the graph and swallow avatar taps,
+   so the panel drops into flow beneath the board instead. */
+.constellations-room-panel {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 9rem;
+}
+
+@media (max-width: 48rem) {
+  .constellations-room-board {
+    flex-direction: column;
+    padding-bottom: 1rem;
+  }
+
+  .constellations-room-panel {
+    position: static;
+    transform: none;
+    margin-top: 1rem;
+    max-width: none;
+  }
 }
 
 .constellations-room-board-note {

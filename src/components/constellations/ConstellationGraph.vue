@@ -13,8 +13,10 @@
     both ends of the room's radial surface (#131a33 → #0b1020); worst pair
     5.82:1 (§3.60 validation recorded on task #4602).
 
-    Hovering or keyboard-focusing a player reveals their name. Edit gestures
-    are F2 (#4603); this component only renders the current graph.
+    Hovering or keyboard-focusing a player reveals their name. Selection (F2,
+    #4603): clicking or Enter/Space on an avatar emits `select` with the
+    player's user_id; the parent owns the up-to-two selection and passes it
+    back via `selectedIds`, which highlights the chosen rings.
   -->
   <svg
     class="constellation-graph"
@@ -46,11 +48,17 @@
         v-for="node in placed"
         :key="node.member.user_id"
         class="constellation-graph-node"
+        :class="{ 'constellation-graph-node--selected': selectedSet.has(node.member.user_id) }"
         :transform="`translate(${node.x}, ${node.y})`"
         tabindex="0"
+        role="button"
         :aria-label="node.name"
+        :aria-pressed="selectedSet.has(node.member.user_id)"
         data-testid="board-avatar"
         :data-user-id="node.member.user_id"
+        @click="emit('select', node.member.user_id)"
+        @keydown.enter.prevent="emit('select', node.member.user_id)"
+        @keydown.space.prevent="emit('select', node.member.user_id)"
       >
         <circle class="constellation-graph-node-ring" :r="AVATAR_R" />
         <clipPath :id="`cg-clip-${node.member.user_id}`">
@@ -90,7 +98,13 @@ import { computed, reactive } from 'vue';
 const props = defineProps({
   members: { type: Array, default: () => [] },
   relationships: { type: Array, default: () => [] },
+  // user_ids the parent holds as the current selection (F2 edit gesture).
+  selectedIds: { type: Array, default: () => [] },
 });
+
+const emit = defineEmits(['select']);
+
+const selectedSet = computed(() => new Set(props.selectedIds));
 
 const SIZE = 480; // square viewBox; the room shell scales it responsively
 const CENTER = SIZE / 2;
@@ -158,8 +172,13 @@ const edges = computed(() => {
 }
 
 .constellation-graph-node {
-  cursor: default;
+  cursor: pointer;
   outline: none;
+}
+
+.constellation-graph-node--selected .constellation-graph-node-ring {
+  stroke: #facc15;
+  stroke-width: 3;
 }
 
 .constellation-graph-node-ring {
