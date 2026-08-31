@@ -13,8 +13,9 @@ import axios from 'axios';
 //
 // The constellations handlers return the DTO directly (no { status, data }
 // envelope), while some shared paths use the standard envelope; unwrap handles
-// both, matching Constellations.vue.
-const unwrap = (res) =>
+// both, matching Constellations.vue. Exported so other constellations call
+// sites (e.g. the F3 dice-roll POST) share the same unwrap rule.
+export const unwrap = (res) =>
   res && res.data && typeof res.data === 'object' && 'data' in res.data ? res.data.data : res.data;
 
 const POLL_INTERVAL_MS = 1500; // ~1–2s short-poll cadence
