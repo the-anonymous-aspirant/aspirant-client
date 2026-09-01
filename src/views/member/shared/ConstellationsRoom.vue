@@ -81,14 +81,25 @@
       </div>
     </section>
 
-    <button
-      type="button"
-      class="constellations-room-leave"
-      data-testid="leave-room"
-      @click="leave"
-    >
-      Leave room
-    </button>
+    <div class="constellations-room-actions">
+      <a
+        class="constellations-room-rules"
+        :href="RULEBOOK_URL"
+        target="_blank"
+        rel="noopener noreferrer"
+        data-testid="read-rules"
+      >
+        Read the rules
+      </a>
+      <button
+        type="button"
+        class="constellations-room-leave"
+        data-testid="leave-room"
+        @click="leave"
+      >
+        Leave room
+      </button>
+    </div>
   </div>
 </template>
 
@@ -134,7 +145,28 @@ const qrUrl = computed(() => {
   return `https://api.qrserver.com/v1/create-qr-code/?size=112x112&margin=0&data=${encodeURIComponent(joinUrl)}`;
 });
 
-function leave() {
+// Static rulebook artefact attached to the originating operator request and
+// cited in the epic body (#4587). Surfaced in a new tab so a player can read
+// the rules without leaving the room (#4587-H2 / #4772).
+const RULEBOOK_URL = '/api/uploads/0bf7b2f6-6a41-4b31-9de5-9da06a65c67b';
+
+// Leaving must tell the server (#4587-H1 / #4771). A bare router.push left
+// membership open server-side: occupancy never dropped, the room never emptied
+// (so it was never slated for deletion), and the one-game-per-user lock stayed
+// held — trapping the player out of every future create/join. Call the leave
+// endpoint, then navigate. Tolerate a 4xx/network error (stale or already-gone
+// membership) so a blip can never trap a player in the room UI.
+async function leave() {
+  try {
+    if (code.value) {
+      await axios.post(
+        `/api/constellations/rooms/${encodeURIComponent(code.value)}/leave`,
+        {},
+      );
+    }
+  } catch {
+    // Best-effort: navigating away must not depend on the call succeeding.
+  }
   router.push({ path: '/member/shared/constellations' });
 }
 
@@ -392,16 +424,27 @@ onMounted(() => {
   max-width: 26rem;
 }
 
-.constellations-room-leave {
+.constellations-room-actions {
   margin-top: 2rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.constellations-room-rules,
+.constellations-room-leave {
   background: transparent;
   border: 1px solid #334155;
   color: #f8fafc;
   padding: 0.5rem 1.25rem;
   border-radius: 8px;
   cursor: pointer;
+  font: inherit;
+  text-decoration: none;
+  line-height: 1.5;
 }
 
+.constellations-room-rules:hover,
 .constellations-room-leave:hover {
   background: #1e293b;
 }
