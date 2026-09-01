@@ -145,10 +145,13 @@ const qrUrl = computed(() => {
   return `https://api.qrserver.com/v1/create-qr-code/?size=112x112&margin=0&data=${encodeURIComponent(joinUrl)}`;
 });
 
-// Static rulebook artefact attached to the originating operator request and
-// cited in the epic body (#4587). Surfaced in a new tab so a player can read
-// the rules without leaving the room (#4587-H2 / #4772).
-const RULEBOOK_URL = '/api/uploads/0bf7b2f6-6a41-4b31-9de5-9da06a65c67b';
+// The rulebook, bundled as a public static page and surfaced in a new tab so a
+// player can read the rules without leaving the room (#4587-H2 / #4772). The
+// original epic body pointed at /api/uploads/… — but that is the system_3 admin
+// upload store (behind X-System3-Auth); aspirant-server has no /uploads/:id
+// route, so the link 404'd for every member (#4772 G1 re-walk finding). Serving
+// the rulebook as a client static asset resolves 200 for any session.
+const RULEBOOK_URL = '/constellations-rulebook.html';
 
 // Leaving must tell the server (#4587-H1 / #4771). A bare router.push left
 // membership open server-side: occupancy never dropped, the room never emptied
