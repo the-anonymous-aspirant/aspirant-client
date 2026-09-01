@@ -134,8 +134,16 @@ test.describe('#4601 Constellations in-room shell', () => {
 
   // #4587-H2 / #4772 — the room specifies two buttons ("Read the rules; leave
   // the game"); the rules link was absent. It must surface the rulebook artefact
-  // in a new tab.
-  test('Read the rules links to the rulebook artefact in a new tab', async ({ page }) => {
+  // in a new tab, AND that artefact must actually load for a logged-in member.
+  //
+  // #4587-H3 / #4776 — the H2 e2e asserted only href presence, and the href
+  // pointed at /api/uploads/<id> (system_3's admin upload store, behind
+  // X-System3-Auth). At the aspirant edge that is a 401/404 for every member:
+  // the button rendered but the rulebook never loaded. The rulebook is now a
+  // client static asset (public/constellations-rulebook.txt); this test asserts
+  // both the href AND a live 200 for the member, which is the assertion the H2
+  // spec was missing.
+  test('Read the rules links to the bundled rulebook and it loads 200 for a member', async ({ page }) => {
     await seedTrustedSession(page);
     await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
 
@@ -144,8 +152,18 @@ test.describe('#4601 Constellations in-room shell', () => {
 
     const rules = page.getByTestId('read-rules');
     await expect(rules).toBeVisible();
-    await expect(rules).toHaveAttribute('href', '/api/uploads/0bf7b2f6-6a41-4b31-9de5-9da06a65c67b');
+    await expect(rules).toHaveAttribute('href', '/constellations-rulebook.txt');
     await expect(rules).toHaveAttribute('target', '_blank');
     await expect(rules).toHaveAttribute('rel', /noopener/);
+
+    // The regression #4776 fixes: the href must resolve to a real 200 for a
+    // logged-in member, not just be present. Fetch it through the page's own
+    // (session-carrying) context — the installMock catch-all only intercepts
+    // /api/ paths, so this hits the preview server's real static asset.
+    const href = await rules.getAttribute('href');
+    expect(href).toBe('/constellations-rulebook.txt');
+    const res = await page.request.get(href!);
+    expect(res.status()).toBe(200);
+    expect(await res.text()).toContain('CONSTELLATIONS');
   });
 });

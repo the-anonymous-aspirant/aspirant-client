@@ -148,7 +148,14 @@ const qrUrl = computed(() => {
 // Static rulebook artefact attached to the originating operator request and
 // cited in the epic body (#4587). Surfaced in a new tab so a player can read
 // the rules without leaving the room (#4587-H2 / #4772).
-const RULEBOOK_URL = '/api/uploads/0bf7b2f6-6a41-4b31-9de5-9da06a65c67b';
+//
+// It is bundled as a client static asset (public/), NOT the /api/uploads/<id>
+// system_3 handle it was first wired to (#4772): that endpoint lives in
+// system_3's admin app behind X-System3-Auth, so it 404s/401s for every
+// logged-in member at the aspirant edge — aspirant-server has no /uploads
+// route. Serving the rulebook from the client bundle keeps the link a 200 for
+// members with no server change (#4587-H3 / #4776).
+const RULEBOOK_URL = '/constellations-rulebook.txt';
 
 // Leaving must tell the server (#4587-H1 / #4771). A bare router.push left
 // membership open server-side: occupancy never dropped, the room never emptied

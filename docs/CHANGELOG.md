@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Constellations: the room's "Read the rules" link now serves the rulebook
+  from a client static asset (`public/constellations-rulebook.txt`) instead
+  of the `/api/uploads/<id>` system_3 admin handle it was first wired to
+  (#4772). That endpoint lives in system_3 behind `X-System3-Auth` and has
+  no counterpart on aspirant-server, so it returned 401/404 for every
+  logged-in member at the aspirant edge — the button rendered but the
+  rulebook never loaded. The e2e now asserts the link resolves to a real
+  200 for a member (`tests/e2e/constellations-room.spec.ts`), not just that
+  the href is present, which is the assertion the H2 spec was missing
+  (#4587-H3 / #4776).
+
 - Trusted tools: fixed low-contrast text on `/trusted/translator` and
   `/trusted/jobs`, the same surface/ink collision #3014 fixed on the
   valuation wizard. Cards painting `--surface-card` inside a view whose
