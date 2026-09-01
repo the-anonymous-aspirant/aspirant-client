@@ -133,9 +133,13 @@ test.describe('#4601 Constellations in-room shell', () => {
   });
 
   // #4587-H2 / #4772 — the room specifies two buttons ("Read the rules; leave
-  // the game"); the rules link was absent. It must surface the rulebook artefact
-  // in a new tab.
-  test('Read the rules links to the rulebook artefact in a new tab', async ({ page }) => {
+  // the game"); the rules link was absent. It must surface the rulebook in a new
+  // tab. The original href pointed at /api/uploads/… — the system_3 admin upload
+  // store, which aspirant-server does not serve (no /uploads/:id route), so the
+  // link 404'd for every member (G1 re-walk). The rulebook is now a public static
+  // asset; assert the link both points at it AND actually resolves 200 for a
+  // logged-in member — an href-only assertion is what masked the dead link.
+  test('Read the rules links to the rulebook and it resolves for a member', async ({ page }) => {
     await seedTrustedSession(page);
     await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
 
@@ -144,8 +148,15 @@ test.describe('#4601 Constellations in-room shell', () => {
 
     const rules = page.getByTestId('read-rules');
     await expect(rules).toBeVisible();
-    await expect(rules).toHaveAttribute('href', '/api/uploads/0bf7b2f6-6a41-4b31-9de5-9da06a65c67b');
+    await expect(rules).toHaveAttribute('href', '/constellations-rulebook.html');
     await expect(rules).toHaveAttribute('target', '_blank');
     await expect(rules).toHaveAttribute('rel', /noopener/);
+
+    // The link target must actually be served — not 404 as the /api/uploads/…
+    // target was. page.request carries the seeded member session.
+    const href = await rules.getAttribute('href');
+    const res = await page.request.get(href as string);
+    expect(res.status()).toBe(200);
+    expect(await res.text()).toContain('How to play');
   });
 });
