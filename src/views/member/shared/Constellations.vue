@@ -275,6 +275,11 @@ export default {
 
 .constellations-card {
   background: var(--surface-card, #fff);
+  /* --surface-card is dark in BOTH themes, so pair it with the theme-absolute
+     light ink (as AspCard does). Without this, text inherits --text-body, which
+     flips to #424242 in light mode and vanishes on the dark card — the "gray
+     button" whose create/join label was invisible in light mode only (#4779). */
+  color: var(--text-on-dark);
   border: 1px solid var(--border-subtle, #e5e7eb);
   border-radius: 12px;
   padding: 1.25rem;
@@ -284,6 +289,9 @@ export default {
 .constellations-card-title {
   margin: 0 0 1rem;
   font-size: 1.05rem;
+  /* The global `h2` rule paints --text-on-light, which flips to #424242 in light
+     and vanishes on the dark card. Re-pair it with the card's own ink (#4779). */
+  color: var(--text-on-dark);
 }
 
 .constellations-identity {

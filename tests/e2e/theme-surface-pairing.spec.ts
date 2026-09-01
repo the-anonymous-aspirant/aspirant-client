@@ -110,5 +110,29 @@ for (const theme of ['light', 'dark'] as const) {
       expect(await contrastRatio(modal.locator('.modal__title')), `${theme}: modal heading`).toBeGreaterThanOrEqual(AA_TEXT);
       expect(await contrastRatio(modal.locator('.modal__body p').first()), `${theme}: modal body`).toBeGreaterThanOrEqual(AA_TEXT);
     });
+
+    test(`D4 the constellations create/join card text is legible on the card it paints`, async ({ page }) => {
+      // #4779 — `.constellations-card` set `background: var(--surface-card)` (dark
+      // in BOTH themes) with no paired ink, so its text inherited `--text-body`,
+      // which flips to #424242 in light and rendered ~1:1 on the gray card — the
+      // operator's "gray button whose create/join label is invisible in light".
+      // Dark passed (inherited #e0e0e0), so only a both-themes read separates them.
+      // The fix pairs `color: var(--text-on-dark)` as AspCard does. The ratio, not
+      // the token name, is asserted — a build where the token stopped flipping
+      // would still pass.
+      await withTheme(page, theme);
+      await seedTrustedSession(page);
+      await page.route(/\/api\//, (route: Route) => route.fulfill({ status: 204, body: '' }));
+      await page.route(/\/api\/constellations\/profile$/, json({ game_username: 'Vega', avatar_url: '' }));
+      await page.goto('/member/shared/constellations');
+      await dismissMobileSidebarIfPresent(page);
+
+      // The segmented "Create"/"Join" toggle is literally the create/join control
+      // the operator named; the card title shares the same inherited ink.
+      const createTab = page.locator('.segmented__item', { hasText: 'Create' }).first();
+      await expect(createTab).toBeVisible();
+      expect(await contrastRatio(createTab), `${theme}: create/join toggle ink on the card`).toBeGreaterThanOrEqual(AA_TEXT);
+      expect(await contrastRatio(page.locator('.constellations-card-title').first()), `${theme}: card title ink`).toBeGreaterThanOrEqual(AA_TEXT);
+    });
   });
 }
