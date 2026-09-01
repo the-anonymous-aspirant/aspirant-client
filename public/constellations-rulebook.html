@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Constellations — Rulebook</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #131a33;
+      --ink: #f8fafc;
+      --muted: #94a3b8;
+      --line: #283252;
+      --accent: #9aa6ff;
+      --p: #f2a4c8;   /* Partner  */
+      --d: #f6c86b;   /* Date     */
+      --fp: #7ee0c0;  /* F+       */
+      --f: #79b8f2;   /* Friend   */
+      --a: #c79cf0;   /* Affair   */
+      --r: #f08a8a;   /* Rejection*/
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 50% -10%, #131a33 0%, #0b1020 60%);
+      color: var(--ink);
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 46rem; margin: 0 auto; padding: 3.5rem 1.5rem 5rem; }
+    header { text-align: center; border-bottom: 1px solid var(--line); padding-bottom: 2rem; margin-bottom: 2.5rem; }
+    .title {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      letter-spacing: 0.22em; text-transform: uppercase;
+      font-size: clamp(1.5rem, 5vw, 2.2rem); font-weight: 700; margin: 0;
+    }
+    .title sup { font-size: 0.5em; vertical-align: super; color: var(--muted); }
+    .tagline { color: var(--muted); font-style: italic; margin: 0.75rem auto 0; max-width: 34rem; }
+    h2 {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 0.82rem; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--accent); font-weight: 600;
+      margin: 2.75rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--line);
+    }
+    h2:first-of-type { border-top: 0; padding-top: 0; }
+    p { margin: 0 0 1rem; }
+    ul, ol { margin: 0 0 1rem; padding-left: 1.4rem; }
+    li { margin: 0.3rem 0; }
+    ol ol, ul ul { margin: 0.3rem 0; }
+    strong { color: var(--ink); }
+    .mode { color: var(--accent); font-weight: 600; }
+    .types { list-style: none; padding: 0; display: grid; gap: 0.5rem; }
+    .types li { display: flex; align-items: baseline; gap: 0.75rem; }
+    .types .key {
+      font-family: ui-monospace, monospace; font-weight: 700;
+      min-width: 2.6rem; text-align: center;
+      padding: 0.15rem 0.4rem; border-radius: 6px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--line);
+    }
+    .k-p { color: var(--p); } .k-d { color: var(--d); } .k-fp { color: var(--fp); }
+    .k-f { color: var(--f); } .k-a { color: var(--a); } .k-r { color: var(--r); }
+    .note { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+      border-radius: 8px; padding: 0.85rem 1.1rem; margin: 1.25rem 0; color: var(--muted); }
+    .note strong { color: var(--ink); }
+    .creators { color: var(--muted); }
+    .creators a { color: var(--accent); }
+    footer { margin-top: 3.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line);
+      text-align: center; color: var(--muted); font-size: 0.85rem;
+      font-family: ui-monospace, monospace; }
+    a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1 class="title">Constellations<sup>©</sup></h1>
+      <p class="tagline">Welcome you sad, miserable souls to Constellations, the game where you try (and probably fail) to make your relationships work. Just like in real life!</p>
+    </header>
+
+    <h2>1 · Contents</h2>
+    <ul>
+      <li>1 Die</li>
+      <li>16 Relationship cards</li>
+      <li>16 Life cards</li>
+      <li>80 Action cards</li>
+      <li>48 Connection cards</li>
+      <li>1 Rulebook</li>
+    </ul>
+
+    <h2>2 · How to play</h2>
+    <p>The purpose of the game is to try to achieve your relationship goal, as defined by the Relationship Cards. You do this by playing Action Cards to create (or break) connections with other players and dealing with the chaotic Life Cards that sometimes throw a wrench into your plans.</p>
+    <p>The game can be played in two modes:</p>
+    <ul>
+      <li><span class="mode">Competitive mode:</span> Try to achieve your own relationship goal before another player does.</li>
+      <li><span class="mode">Collaborative mode:</span> Try to make everyone's relationships work within a preset amount of rounds.</li>
+    </ul>
+
+    <h2>3 · About relationships</h2>
+    <p>The core of the game lies around forming relationships, and you will mostly see this happening by playing Action Cards.</p>
+    <p>There are six types of connections (relationships), represented by the Connection cards, and which one you play determines which type of relationship (connection) you could form. We acknowledge the amazing fluidity and breadth that exists in relationships, but for the sake of this game the following ones are defined:</p>
+    <ul class="types">
+      <li><span class="key k-p">P</span><span><strong>Partner</strong></span></li>
+      <li><span class="key k-d">D</span><span><strong>Date</strong></span></li>
+      <li><span class="key k-f">F</span><span><strong>Friend</strong></span></li>
+      <li><span class="key k-fp">F+</span><span><strong>Friends with benefits</strong></span></li>
+      <li><span class="key k-a">A</span><span><strong>Affair</strong></span></li>
+      <li><span class="key k-r">R</span><span><strong>Rejection</strong></span></li>
+    </ul>
+
+    <h3 style="font-size:0.95rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-top:1.5rem;">Creating connections</h3>
+    <p>Take the Connection card of your choice and offer it to another player. That player responds by offering a Connection card of their own. Connection cards can be exchanged either:</p>
+    <ul>
+      <li><strong>Face-up:</strong> player 1 offers their Connection card openly, so player 2, and every other player, sees it before offering a card in return.</li>
+      <li><strong>Face-down:</strong> player 1 and player 2 exchange Connection cards without showing it to each other (and to the other players) in advance. Use this option if you want to keep the relationship secret from other players.</li>
+    </ul>
+    <p>Once the cards have been exchanged, there are two possible outcomes:</p>
+    <ul>
+      <li><strong>Case 1 — Connection cards match.</strong> Congratulations, you just formed a new connection! Take notes on your Connections sheet.</li>
+      <li><strong>Case 2 — Connection cards don't match.</strong> Maybe you should have communicated better first? Return each other's cards and form a Rejection connection between you and the other player on your Connections sheet. You now have a rejection!</li>
+    </ul>
+    <div class="note"><strong>Note:</strong> If those players already had a previous relationship formed and were trying to escalate or de-escalate it, said relationship must now be replaced by a Rejection. In the case of the Rejection being cleared, those players do <strong>not</strong> get the previous connection back. They must try to form a new relationship from scratch.</div>
+    <p>Players connected by a Rejection cannot initiate new cards exchange before they are clear from said Rejection — not even if only player 1 has a Rejection connection with player 2 but player 2 is clean (a few cards could facilitate that to happen). A no is a no!</p>
+
+    <h2>4 · Gameplay setup</h2>
+    <ol>
+      <li>Separate the Relationship, Life and Action cards into three piles and shuffle each well.</li>
+      <li>Give each player one Relationship card, to be kept secret from other players.</li>
+      <li>Give each player 5 Action cards, to be kept secret from other players.</li>
+      <li>Give each player 1 Connection card of each type, for a total of 6 different cards.</li>
+      <li>Let the person who dealt the cards be the first to play.</li>
+    </ol>
+
+    <h2>5 · Let's begin!</h2>
+    <ol>
+      <li>Roll the Life die:
+        <ol>
+          <li>If you roll a 1 or a 6, draw a Life Card.</li>
+          <li>For any other number, life does not happen.</li>
+        </ol>
+      </li>
+      <li>Play one Action Card from your hand, or pass.</li>
+      <li>End your turn, then draw as many Action Cards as you played (some cards will allow you to play multiple).</li>
+    </ol>
+
+    <h2>6 · How to win (competitive mode)</h2>
+    <ol>
+      <li>At the end of your turn, if you have fulfilled the requirements of your relationship card, you may declare "I have a constellation".</li>
+      <li>After this, all other players play one more turn each.</li>
+      <li>If you still fulfil the requirements of your relationship card when it reaches your turn again — CONGRATULATIONS! The game ends in your victory.</li>
+      <li>If you do not fulfil the requirements anymore… awww. Declare to the group that you're going to need some time to rethink your constellation. The game continues.</li>
+    </ol>
+
+    <h2>7 · How to win (collaborative mode)</h2>
+    <ol>
+      <li>The game has a pre-defined number of rounds: 2 × (number of players). E.g. 5 players: 10 rounds; 3 players: 6 rounds, etc.</li>
+      <li>Players' relationship goals will still be kept secret.</li>
+      <li>At the end of the last round, count how many people achieved their relationship goals:
+        <ol>
+          <li>No one: Are you sure you know what collaboration means?</li>
+          <li>Somewhere in between: Well, at least you tried.</li>
+          <li>Everyone: You guys are true warriors of compersion. Well done!</li>
+        </ol>
+      </li>
+    </ol>
+
+    <h2>8 · Some guidance</h2>
+    <ul>
+      <li><strong>Face up, face down cards:</strong> some cards will tell you to offer your Connection cards face up or face down. This allows other players to understand — or not — the connections that are being formed in the game: sometimes they are very clear (face up), sometimes they will know a rejection happened but they cannot know which relationship was proposed (face down), or that a connection was formed but they don't know which one (face down). This can be especially useful when playing in competitive mode.</li>
+      <li><strong>Silent cards:</strong> some Action and Life cards will have a muted speaker symbol on their top left. It means that these cards should not be read out loud. Depending on which mode you are playing, the current stage of the game or your goal, it could be helpful to perform some Actions/Lives or add them to your hand without announcing them to other players. This is optional, yet the symbol is there for a reason — so think about the card's meaning before deciding.</li>
+    </ul>
+    <p>Now, you are ready to start. Happy "constellating"!</p>
+
+    <h2>9 · About the creators</h2>
+    <p class="creators">Hello everyone, I'm Noly — or you might know me as Vi — and together with my partner, Victor, we have created Constellations: a card game for the non-monogamous community. After noticing the variety of dating and sex games available, I felt like it was about time we came up with something made especially for the wonderful world beyond the mono-normative bubble. But hey, don't worry, this game is monogamous-folk friendly!</p>
+    <p class="creators">Both me and Victor are polyamorous, more specifically solo-poly, and Berlin based. Me: Brazilian, tattoo artist and illustrator, artsy agender using neopronouns (ze/zir). Victor: a Swedish programmer and game enthusiast with a love for travel and (sadly) overpriced coffee.</p>
+    <p class="creators">Polyamory is a big part of our lives — in fact it is our identity — but especially for me, Noly, it is something I dedicate myself a lot to: back in 2023 I founded the Polyamory Berlin Community, a space for non-monogamous people to meet, chat, make friends and grow together. The community has a strong educational focus, and I host up to 5 free meet-ups every month, where people can gather for crafting their artistic hobbies, discuss a book, play boardgames, have a picnic with moderated discussions or simply have a drink! If you live in Berlin, or visit the city every now and then, you are very welcome to join the community on Discord or Telegram.</p>
+    <p class="creators">We are both happy that you have your copy of Constellations and we hope you will enjoy it! Got any questions or feedback? Send us an email — we'll love to hear from you! <a href="mailto:polyamorybc@gmail.com">polyamorybc@gmail.com</a></p>
+
+    <footer>Constellations · Rulebook</footer>
+  </div>
+</body>
+</html>
