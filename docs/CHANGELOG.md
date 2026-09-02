@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Constellations: "Read the rules" now flips the board in place instead of
+  opening a new tab. #4772 fixed a dead rulebook link by serving the rulebook as
+  a static asset and linking it with `target="_blank"`; the operator wants the
+  page to stay put. The board is now a two-sided card: the button flips it,
+  the rulebook is embedded scrollable on the back face, and the label swaps to
+  "Back to the game". The rulebook keeps exactly one source of truth — it is
+  embedded from `/constellations-rulebook.html`, not duplicated — and remains
+  reachable at its own URL. The turned-away face is `inert`, so a board button
+  behind the rules cannot be tabbed to or clicked, and the flip respects
+  `prefers-reduced-motion`. Operator-reported (system_3 #4806 ask 5).
+
+- Constellations: the relationship picker now opens when you click a player,
+  instead of standing on the board permanently. It rendered unconditionally with
+  every button disabled under a "Select two players" hint nobody had asked for.
+  The panel is now split by scope: the pair picker (hint, the six type buttons,
+  Clear) appears while a selection is in progress and closes when the pair is
+  resolved or dismissed; the undo/redo arrows stay put, because they are
+  board-scoped and hiding them with the picker would put undo out of reach
+  exactly when it is wanted. The hint tracks the selection ("Select one more
+  player" at one, "Set the pair's connection" at two). Operator-reported
+  (system_3 #4806 ask 3).
+
 - Constellations: the status line at the bottom of the board is now a transient
   feed, one item at a time. It rendered every current connection concatenated
   into a single paragraph with `·` separators, so a room with several players
