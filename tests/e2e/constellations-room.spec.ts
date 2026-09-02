@@ -404,6 +404,53 @@ test.describe('#4810 Constellations scanned-link auto-join', () => {
     await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
   });
 
+  // The already_in_game panel links to the room you ARE in — the SAME route
+  // with a different :code. Entry runs in onMounted, and Vue Router would
+  // normally reuse a component across a param-only change, which would leave
+  // the player on the new room still looking at the old room's refusal. It does
+  // not here, because App.vue keys the router-view on `$route.path`, forcing a
+  // remount. That key is load-bearing for this panel and is not obviously so
+  // from inside this view, hence the test: if it is ever dropped or narrowed to
+  // the route name, this goes red instead of the link silently dead-ending.
+  test('following the link to your active room re-enters and lands on the board', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, SEATED);
+    // Refuse only the scanned room; the active room admits the caller.
+    await page.route(/\/constellations\/rooms\/([^/]+)\/join$/, async (route: Route) => {
+      const joined = new URL(route.request().url()).pathname.split('/').slice(-2, -1)[0];
+      if (joined === 'ZK4TQ') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 'ZK4TQ', player_count: 4, status: 'active', occupancy: 2, slot: 1 }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'conflict',
+            reason: 'already_in_game',
+            message: 'You are already in game ZK4TQ — leave it before starting or joining another.',
+            active_room_code: 'ZK4TQ',
+          },
+        }),
+      });
+    });
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByTestId('blocked-state')).toBeVisible();
+    await page.getByTestId('go-to-active-room').click();
+
+    await expect(page).toHaveURL(/ZK4TQ$/);
+    await expect(page.getByTestId('blocked-state')).toHaveCount(0);
+    await expect(page.getByTestId('board-canvas')).toBeVisible();
+  });
+
   test('a reason this client does not know still renders the server message', async ({ page }) => {
     await seedTrustedSession(page);
     await installMock(page, SEATED);
