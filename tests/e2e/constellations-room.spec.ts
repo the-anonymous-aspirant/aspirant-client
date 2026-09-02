@@ -325,9 +325,17 @@ test.describe('#4810 Constellations scanned-link auto-join', () => {
 
     await expect(page.getByTestId('blocked-state')).toBeVisible();
     await expect(page.getByTestId('blocked-title')).toHaveText('This game is full');
+    // The seat count comes from the server's message; the guidance says what to
+    // do about it and must not repeat the count back.
     await expect(page.getByTestId('blocked-message')).toContainText('all 4 seats are taken');
-    await expect(page.getByTestId('blocked-guidance')).toContainText('All 4 seats are taken');
+    await expect(page.getByTestId('blocked-guidance')).toContainText('start a game of your own');
     await expect(page.getByTestId('board-canvas')).toHaveCount(0);
+    // A "Scan to join" QR next to a refusal contradicts it, and the occupancy
+    // never loaded, so both are hidden while blocked.
+    await expect(page.getByTestId('join-qr')).toHaveCount(0);
+    await expect(page.getByTestId('occupancy')).toHaveCount(0);
+    // The room code stays — it names which room turned you away.
+    await expect(page.getByTestId('room-code')).toHaveText(ROOM_CODE);
   });
 
   test('an ended game says the game has ended, not that the code is unknown', async ({ page }) => {

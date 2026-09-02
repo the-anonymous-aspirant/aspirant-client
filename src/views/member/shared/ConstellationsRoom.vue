@@ -17,7 +17,11 @@
         </p>
       </div>
 
-      <div class="constellations-room-meta">
+      <!-- Occupancy and the join QR are board furniture: while entry is refused
+           the occupancy has never loaded (it would read 0) and a "Scan to join"
+           code contradicts the refusal next to it. The room code stays — it
+           names which room turned you away. -->
+      <div v-if="!blocked" class="constellations-room-meta">
         <div class="constellations-room-occupancy" data-testid="occupancy" :title="occupancyTitle">
           <span class="constellations-room-occupancy-count">{{ occupancyLabel }}</span>
           <span class="constellations-room-occupancy-label">in the room</span>
@@ -394,9 +398,9 @@ const blockedGuidance = computed(() => {
   if (!b) return '';
   switch (b.reason) {
     case 'room_full':
-      return b.playerCount
-        ? `All ${b.playerCount} seats are taken. Ask someone in the room to leave, or start a game of your own.`
-        : 'Every seat is taken. Ask someone in the room to leave, or start a game of your own.';
+      // The seat count is already in the server's message; repeating it here
+      // just makes the panel say the same thing twice. Guidance is advice.
+      return 'Ask someone in the room to leave, or start a game of your own.';
     case 'room_ended':
       return 'Everyone left, so the room closed. Its code can be handed to a new game later, so a fresh scan may work another time.';
     case 'room_not_found':
