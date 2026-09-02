@@ -47,6 +47,12 @@ import { unwrap } from '../../composables/useRoomSync.js';
 const props = defineProps({
   code: { type: String, required: true },
   dice: { type: Object, default: null }, // { faces, nonce, rolled_at } | null, from the D1 snapshot
+  // True until the room's first D1 snapshot has loaded (#4832). The roll present
+  // in that first snapshot is pre-existing state — it is adopted WITHOUT the
+  // spin animation, so entering a room (e.g. via a scanned link) never reads as
+  // an auto-roll. Only rolls that arrive AFTER the first snapshot — an explicit
+  // click here, or another player's live roll — spin.
+  loading: { type: Boolean, default: false },
 });
 
 const SPIN_MS = 2000;
@@ -77,6 +83,10 @@ const rolling = ref(false);
 const error = ref(null);
 const displayFace = ref(0); // 0 = never rolled yet
 const knownNonce = ref(0);
+// False until the first room snapshot has resolved. While false, a roll already
+// present in the snapshot is adopted silently (no spin); once true, later nonce
+// changes animate. See the `loading` prop (#4832).
+const initialized = ref(false);
 let spinTimer = null;
 let settleTimer = null;
 
@@ -115,6 +125,14 @@ function landOn(face) {
   displayFace.value = face;
 }
 
+// adoptSettled records a roll's face WITHOUT animating — used for the roll that
+// already existed when this viewer entered the room (#4832), so entry never
+// reads as a spin.
+function adoptSettled(dice) {
+  knownNonce.value = dice.nonce;
+  landOn(dice.faces?.[0] ?? 1);
+}
+
 // Animate toward a server-resolved roll over the shared ~2s spin, then land.
 // Guards on nonce so a poll tick that repeats the roll we already settled
 // (ours or someone else's) does not re-trigger the animation.
@@ -127,10 +145,19 @@ function settleTo(dice, elapsedMs = 0) {
 }
 
 watch(
-  () => props.dice,
-  (next) => {
+  () => [props.loading, props.dice],
+  () => {
     if (rolling.value) return; // this viewer's own click already owns the animation
-    settleTo(next);
+    const dice = props.dice;
+    if (!initialized.value) {
+      // Still resolving the entry snapshot: adopt a pre-existing roll silently,
+      // and mark initialized once the first snapshot has loaded so every later
+      // roll animates.
+      if (dice && dice.nonce !== knownNonce.value) adoptSettled(dice);
+      if (!props.loading) initialized.value = true;
+      return;
+    }
+    settleTo(dice);
   },
   { immediate: true },
 );
