@@ -36,13 +36,46 @@
       </div>
     </header>
 
-    <p v-if="error" class="constellations-room-error" data-testid="room-error">{{ error }}</p>
+    <p v-if="error && !blocked" class="constellations-room-error" data-testid="room-error">{{ error }}</p>
+
+    <!-- Entry (#4806 ask 1). A scanned link now JOINS you before it tries to
+         read the board, so the player never meets the D1 poll's 403. While the
+         join is in flight the shell shows nothing but this line; if the join is
+         refused, the refusal replaces the board rather than sitting under a
+         board that cannot render. -->
+    <p v-if="entering" class="constellations-room-board-note" data-testid="joining-room">
+      Joining the room…
+    </p>
+
+    <section v-else-if="blocked" class="constellations-room-blocked" data-testid="blocked-state">
+      <h2 class="constellations-room-blocked-title" data-testid="blocked-title">{{ blockedTitle }}</h2>
+      <p class="constellations-room-blocked-message" data-testid="blocked-message">{{ blocked.message }}</p>
+      <p v-if="blockedGuidance" class="constellations-room-blocked-guidance" data-testid="blocked-guidance">
+        {{ blockedGuidance }}
+      </p>
+      <div class="constellations-room-blocked-actions">
+        <router-link
+          v-if="blocked.activeRoomCode"
+          :to="`/member/shared/constellations/room/${blocked.activeRoomCode}`"
+          class="constellations-room-rules"
+          data-testid="go-to-active-room"
+        >Go to room {{ blocked.activeRoomCode }}</router-link>
+        <button
+          type="button"
+          class="constellations-room-leave"
+          data-testid="back-to-lobby"
+          @click="backToLobby"
+        >
+          Back to Constellations
+        </button>
+      </div>
+    </section>
 
     <!-- Board canvas: F1 avatars + F2 relationship lines (#4602/#4603) mount
          into the front face. The board is a two-sided card (#4806 ask 5): the
          rules live on the back and are reached by flipping in place, never by
          navigating away. -->
-    <div class="constellations-room-board-stage">
+    <div v-else class="constellations-room-board-stage">
       <section
         class="constellations-room-board"
         :class="{ 'is-flipped': showRules }"
@@ -112,7 +145,9 @@
       </section>
     </div>
 
-    <div class="constellations-room-actions">
+    <!-- Hidden while entry is in flight or refused (#4806 ask 1): there is no
+         board to read the rules of, and no room to leave. -->
+    <div v-if="!entering && !blocked" class="constellations-room-actions">
       <button
         type="button"
         class="constellations-room-rules"
@@ -315,10 +350,96 @@ function redo() {
   );
 }
 
-onMounted(() => {
-  start();
-  loadRelationshipTypes();
+// ---- #4806 ask 1: entry -----------------------------------------------
+//
+// "When I've created a room, and I scan the code on another device, I get to a
+// page that says that only a player in the room can see the board - but I'd
+// like for that link to automatically add them to the game, if there is still
+// space in the room. If not a message should be shown with elucidating
+// details, of course."
+//
+// So the room route JOINS before it reads. Previously it went straight to the
+// D1 poll, which answers 403 "Only a member of the room may view its state" to
+// a non-member, and useRoomSync rendered that server prose verbatim — the exact
+// sentence the operator objected to.
+//
+// The join is fired unconditionally, for members and non-members alike, because
+// #4808 made it idempotent: a caller already seated in THIS room gets a 200
+// with their existing slot, not a 409. That is what lets the creator re-open
+// their own room link (the operator's own scenario) without a special case, and
+// it is why the "existing member" path must never flash the blocked state.
+const entering = ref(true);
+// { reason, message, activeRoomCode, playerCount } | null. `reason` is #4808's
+// machine-readable discriminator; `message` is the server's human sentence,
+// which is always rendered so a reason this client does not recognise still
+// says something true.
+const blocked = ref(null);
+
+const BLOCKED_TITLES = {
+  room_full: 'This game is full',
+  room_ended: 'This game has ended',
+  room_not_found: 'No room with that code',
+  already_in_game: 'You’re already in another game',
+};
+
+const blockedTitle = computed(
+  () => BLOCKED_TITLES[blocked.value?.reason] || 'You could not join this room',
+);
+
+// The server message says WHAT blocked; this says what to do about it. Kept
+// client-side because it is navigation advice about this app, not a fact the
+// server holds.
+const blockedGuidance = computed(() => {
+  const b = blocked.value;
+  if (!b) return '';
+  switch (b.reason) {
+    case 'room_full':
+      return b.playerCount
+        ? `All ${b.playerCount} seats are taken. Ask someone in the room to leave, or start a game of your own.`
+        : 'Every seat is taken. Ask someone in the room to leave, or start a game of your own.';
+    case 'room_ended':
+      return 'Everyone left, so the room closed. Its code can be handed to a new game later, so a fresh scan may work another time.';
+    case 'room_not_found':
+      return 'Check the code and scan again — room codes are five characters.';
+    case 'already_in_game':
+      return 'A player can only be in one game at a time. Leave that one, then scan this code again.';
+    default:
+      return '';
+  }
 });
+
+function backToLobby() {
+  router.push({ path: '/member/shared/constellations' });
+}
+
+async function enterRoom() {
+  if (!code.value) {
+    entering.value = false;
+    return;
+  }
+  try {
+    await axios.post(`/api/constellations/rooms/${encodeURIComponent(code.value)}/join`, {});
+    blocked.value = null;
+    start();
+    loadRelationshipTypes();
+  } catch (err) {
+    // 401 is the global interceptor's (main.js) — it owns the auth redirect, and
+    // rendering a refusal underneath it would flash a wrong explanation on the
+    // way out.
+    if (err.response?.status === 401) return;
+    const detail = err.response?.data?.error;
+    blocked.value = {
+      reason: detail?.reason || '',
+      message: detail?.message || 'You could not be added to this room.',
+      activeRoomCode: detail?.active_room_code || '',
+      playerCount: detail?.room_player_count || 0,
+    };
+  } finally {
+    entering.value = false;
+  }
+}
+
+onMounted(enterRoom);
 </script>
 
 <style scoped>
@@ -532,6 +653,51 @@ onMounted(() => {
     margin-top: 1rem;
     max-width: none;
   }
+}
+
+/* #4806 ask 1: the blocked panel replaces the board when entry is refused. It
+   deliberately reuses the action row's button shapes rather than inventing a
+   second visual language for a state the player meets once. */
+.constellations-room-blocked {
+  width: 100%;
+  max-width: 34rem;
+  margin-top: 3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: center;
+  padding: 2rem 1.5rem;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  background: radial-gradient(circle at 50% 40%, #131a33 0%, #0b1020 70%);
+}
+
+.constellations-room-blocked-title {
+  margin: 0;
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+}
+
+.constellations-room-blocked-message {
+  margin: 0;
+  color: #f8fafc;
+}
+
+.constellations-room-blocked-guidance {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  max-width: 28rem;
+}
+
+.constellations-room-blocked-actions {
+  margin-top: 0.5rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .constellations-room-board-note {
