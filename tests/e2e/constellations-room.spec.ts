@@ -23,6 +23,7 @@ type RoomState = { occupancy: number; player_count: number; members: unknown[] }
 async function installMock(page: Page, initial: RoomState) {
   const room: RoomState = { ...initial };
   const joinCalls: string[] = [];
+  const putProfileBodies: Record<string, unknown>[] = [];
 
   // Stub the external QR image so the shell's <img> never hits the network.
   await page.route(/qrserver\.com/, async (route: Route) => {
@@ -55,6 +56,21 @@ async function installMock(page: Page, initial: RoomState) {
       });
       return;
     }
+    // #4822: the in-room name-prompt PUTs this endpoint, then relies on the
+    // next state poll to re-render — so the mock must fold the saved name
+    // back into `room.members` for the /state branch below to reflect it.
+    if (/\/constellations\/profile$/.test(url.pathname) && route.request().method() === 'PUT') {
+      const body = route.request().postDataJSON() as { game_username?: string };
+      putProfileBodies.push(body);
+      const withoutName = (room.members as { game_username?: string }[]).find((m) => !m.game_username);
+      if (withoutName) withoutName.game_username = body.game_username || '';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ game_username: body.game_username || '', avatar_url: '' }),
+      });
+      return;
+    }
     if (/\/constellations\/rooms\/[^/]+\/state$/.test(url.pathname)) {
       await route.fulfill({
         status: 200,
@@ -80,7 +96,26 @@ async function installMock(page: Page, initial: RoomState) {
       room.occupancy = n;
     },
     joinCalls,
+    putProfileBodies,
   };
+}
+
+// #4822: the in-room name-prompt looks up the caller's own member row by
+// matching GET /api/profile's ID against a room member's user_id — no
+// self-flag exists on the D1 aggregate. Registered after installMock so it
+// wins the match over the bare /api/ catch-all (which would otherwise answer
+// 204 and leave the ID unresolved).
+async function installProfileMock(page: Page, id: number) {
+  await page.route(/\/api\/profile$/, async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'success',
+        data: { ID: id, username: 'e2e-tester', display_name: 'e2e-tester', email: '', avatar_url: '', CreatedAt: '2026-01-01T00:00:00Z' },
+      }),
+    });
+  });
 }
 
 // Installs a mock whose join endpoint REFUSES with #4808's discriminated
@@ -261,6 +296,78 @@ test.describe('#4601 Constellations in-room shell', () => {
       (el) => el.ownerDocument.documentElement.scrollHeight - el.ownerDocument.documentElement.clientHeight,
     );
     expect(overflow).toBeGreaterThan(0);
+  });
+});
+
+// #4822 — a scanned room link (#4810) seats a player before they ever meet
+// the lobby's game-username gate, so a first-time scanner lands on the board
+// as "Player N" with no way to name themselves without leaving (and losing)
+// their seat. Covers the in-room affordance: the prompt shows only for the
+// caller's own empty-named row, disappears once a save lands, and never
+// shows for an already-named caller.
+test.describe('#4822 Constellations: in-room game-name affordance', () => {
+  test('prompts the caller to set a name when their own row has none', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, {
+      occupancy: 2,
+      player_count: 4,
+      members: [
+        { user_id: 1, slot: 1, game_username: '' },
+        { user_id: 2, slot: 2, game_username: 'Rigel' },
+      ],
+    });
+    await installProfileMock(page, 1);
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    const prompt = page.getByTestId('name-prompt');
+    await expect(prompt).toBeVisible();
+    await expect(prompt).toContainText('Player 1');
+
+    await page.getByTestId('name-prompt-input').fill('Vega');
+    await page.getByTestId('name-prompt-save').click();
+
+    // The next poll reflects the save; the prompt goes away with it.
+    await expect(prompt).toBeHidden();
+  });
+
+  test('does not prompt when the caller already has a game name', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, {
+      occupancy: 1,
+      player_count: 4,
+      members: [{ user_id: 1, slot: 1, game_username: 'Vega' }],
+    });
+    await installProfileMock(page, 1);
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    // The board itself is proof the room loaded; the prompt must be absent.
+    await expect(page.getByTestId('board-canvas')).toBeVisible();
+    await expect(page.getByTestId('name-prompt')).toHaveCount(0);
+  });
+
+  test('does not prompt about another player\'s empty name', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, {
+      occupancy: 2,
+      player_count: 4,
+      members: [
+        { user_id: 1, slot: 1, game_username: 'Vega' },
+        { user_id: 2, slot: 2, game_username: '' },
+      ],
+    });
+    // The caller is user 1, who already has a name — user 2's empty name is
+    // not the caller's problem to fix from inside this client.
+    await installProfileMock(page, 1);
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByTestId('board-canvas')).toBeVisible();
+    await expect(page.getByTestId('name-prompt')).toHaveCount(0);
   });
 });
 
