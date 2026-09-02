@@ -183,6 +183,11 @@
             v-else-if="showDictionary && dictionaryEverOpened"
             :relationship-types="relationshipTypes"
             :goal-cards="goalCards"
+            :selected-card-id="myGoalCardId"
+            :achieved="myGoalAchieved"
+            :busy="goalBusy"
+            @select="selectGoal"
+            @clear="clearGoal"
           />
         </div>
       </section>
@@ -416,6 +421,40 @@ async function loadGoalCards() {
     }));
   } catch {
     // The dictionary shows its "could not be loaded" empty state.
+  }
+}
+
+// #4807-B2: the caller's own selected goal + whether the server has detected it
+// achieved. The /state `goal` is private to the viewer (A1 scopes it in the
+// serializer), so this only ever reflects this player's own choice — a second
+// player's goal is never in the payload to read.
+const myGoalCardId = computed(() => state.value?.goal?.card_id ?? null);
+const myGoalAchieved = computed(() => state.value?.goal?.achieved === true);
+const goalBusy = ref(false);
+
+async function selectGoal(cardId) {
+  if (goalBusy.value) return;
+  goalBusy.value = true;
+  try {
+    await axios.post(`/api/constellations/rooms/${encodeURIComponent(code.value)}/goal/set`, { goal_card_id: cardId });
+    await refresh();
+  } catch (err) {
+    editError.value = err.response?.data?.error?.message || 'Could not select that goal.';
+  } finally {
+    goalBusy.value = false;
+  }
+}
+
+async function clearGoal() {
+  if (goalBusy.value) return;
+  goalBusy.value = true;
+  try {
+    await axios.post(`/api/constellations/rooms/${encodeURIComponent(code.value)}/goal/clear`, {});
+    await refresh();
+  } catch (err) {
+    editError.value = err.response?.data?.error?.message || 'Could not clear your goal.';
+  } finally {
+    goalBusy.value = false;
   }
 }
 

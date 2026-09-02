@@ -23,16 +23,51 @@
       <h3 id="dict-goals-heading" class="constellation-dictionary-heading">Goal cards</h3>
       <p class="constellation-dictionary-note">Pick the relationship you are playing for; achieve its victory condition to win.</p>
       <ul class="constellation-dictionary-cards" data-testid="dictionary-cards">
-        <li v-for="card in goalCards" :key="card.id" class="constellation-dictionary-card" :data-goal-code="card.code">
+        <li
+          v-for="card in goalCards"
+          :key="card.id"
+          class="constellation-dictionary-card"
+          :class="{
+            'is-selected': card.id === selectedCardId,
+            'is-achieved': card.id === selectedCardId && achieved,
+          }"
+          :data-goal-code="card.code"
+        >
           <div class="constellation-dictionary-card-head">
             <span class="constellation-dictionary-card-name" data-testid="goal-card-name">{{ card.name }}</span>
             <span
-              v-if="card.minPlayers"
+              v-if="card.id === selectedCardId && achieved"
+              class="constellation-dictionary-card-badge"
+              data-testid="goal-achieved-badge"
+            >Achieved ★</span>
+            <span
+              v-else-if="card.minPlayers"
               class="constellation-dictionary-card-floor"
               :title="`Not playable with fewer than ${card.minPlayers} players`"
             >{{ card.minPlayers }}+ players</span>
           </div>
           <p class="constellation-dictionary-card-condition" data-testid="goal-card-condition">{{ card.victoryCondition }}</p>
+          <div class="constellation-dictionary-card-actions">
+            <template v-if="card.id === selectedCardId">
+              <span class="constellation-dictionary-card-mine" data-testid="goal-card-mine">
+                {{ achieved ? 'Your goal — achieved' : 'Your goal' }}
+              </span>
+              <AspButton
+                variant="ghost"
+                size="sm"
+                data-testid="goal-card-clear"
+                @click="$emit('clear')"
+              >Clear</AspButton>
+            </template>
+            <AspButton
+              v-else
+              variant="secondary"
+              size="sm"
+              :disabled="busy"
+              data-testid="goal-card-select"
+              @click="$emit('select', card.id)"
+            >Make this my goal</AspButton>
+          </div>
         </li>
       </ul>
       <p v-if="goalCards.length === 0" class="constellation-dictionary-empty" data-testid="dictionary-empty">
@@ -43,14 +78,24 @@
 </template>
 
 <script setup>
-// Presentational, prop-driven — the room shell owns the fetch (mirrors
-// ConstellationControlPanel / ConstellationsSummary). relationshipTypes are the
-// normalized A2 rows `[{ id, code, label, colour }]`; goalCards are the A1 deck
-// normalized to `[{ id, code, name, victoryCondition, minPlayers }]`.
+// Presentational, prop-driven — the room shell owns the fetch and the set/clear
+// calls (mirrors ConstellationControlPanel / ConstellationsSummary).
+// relationshipTypes are the normalized A2 rows `[{ id, code, label, colour }]`;
+// goalCards are the A1 deck normalized to
+// `[{ id, code, name, victoryCondition, minPlayers }]`. selectedCardId is the
+// viewer's own chosen goal (private, from /state); achieved reflects A2's
+// server-side detection. Selecting/clearing is emitted up to the room shell.
+import { AspButton } from '@aspirant/design-system';
+
 defineProps({
   relationshipTypes: { type: Array, default: () => [] },
   goalCards: { type: Array, default: () => [] },
+  selectedCardId: { type: Number, default: null },
+  achieved: { type: Boolean, default: false },
+  busy: { type: Boolean, default: false },
 });
+
+defineEmits(['select', 'clear']);
 </script>
 
 <style scoped>
@@ -163,6 +208,47 @@ defineProps({
   font-size: 0.82rem;
   line-height: 1.4;
   color: #cbd5e1;
+}
+
+/* The selecting player's own goal is lifted; achieving it turns the accent
+   gold. Selection state is driven by the private /state goal, so it only ever
+   reflects the viewer's own choice. */
+.constellation-dictionary-card.is-selected {
+  border-color: #6366f1;
+  box-shadow: inset 0 0 0 1px #6366f1;
+}
+
+.constellation-dictionary-card.is-achieved {
+  border-color: #f5c518;
+  box-shadow: inset 0 0 0 1px #f5c518;
+}
+
+.constellation-dictionary-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.constellation-dictionary-card-mine {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #a5b4fc;
+}
+
+.is-achieved .constellation-dictionary-card-mine {
+  color: #f5c518;
+}
+
+.constellation-dictionary-card-badge {
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #0b1020;
+  background: #f5c518;
+  border-radius: 999px;
+  padding: 1px 8px;
 }
 
 .constellation-dictionary-empty {
