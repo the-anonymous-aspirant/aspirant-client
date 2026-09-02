@@ -114,14 +114,14 @@
     <div v-else class="constellations-room-board-stage">
       <section
         class="constellations-room-board"
-        :class="{ 'is-flipped': showRules }"
+        :class="{ 'is-flipped': isFlipped }"
         data-testid="board-canvas"
         aria-label="Relationship board"
       >
         <!-- `inert` rather than aria-hidden: the turned-away face is still in the
              layout, so without it the board's buttons stay tab-reachable and
              clickable through a face the viewer cannot see. -->
-        <div class="constellations-room-face constellations-room-face-front" :inert="showRules">
+        <div class="constellations-room-face constellations-room-face-front" :inert="isFlipped">
           <!-- Dice cluster (#4587-F3 / #4604). Faces come from the D1 poll's
                `dice` field so every viewer converges on the same server-resolved
                roll; rolling.vue talks to the roll endpoint directly. -->
@@ -168,15 +168,22 @@
           </div>
         </div>
 
-        <!-- Back face: the rulebook, embedded rather than duplicated. -->
-        <div class="constellations-room-face constellations-room-face-back" :inert="!showRules">
+        <!-- Back face: one of two references — the rulebook (#4811) or the
+             relationship/goal dictionary (#4807-B1). Which is shown follows
+             boardFace; the flip itself is shared. -->
+        <div class="constellations-room-face constellations-room-face-back" :inert="!isFlipped">
           <iframe
-            v-if="rulesEverOpened"
+            v-if="showRules && rulesEverOpened"
             class="constellations-room-rulebook"
             :src="RULEBOOK_URL"
             title="Constellations rulebook"
             data-testid="rules-face"
           ></iframe>
+          <ConstellationDictionary
+            v-else-if="showDictionary && dictionaryEverOpened"
+            :relationship-types="relationshipTypes"
+            :goal-cards="goalCards"
+          />
         </div>
       </section>
     </div>
@@ -192,6 +199,15 @@
         @click="toggleRules"
       >
         {{ showRules ? 'Back to the game' : 'Read the rules' }}
+      </button>
+      <button
+        type="button"
+        class="constellations-room-rules"
+        data-testid="open-dictionary"
+        :aria-expanded="showDictionary"
+        @click="toggleDictionary"
+      >
+        {{ showDictionary ? 'Back to the game' : 'Dictionary' }}
       </button>
       <button
         type="button"
@@ -214,6 +230,7 @@ import ConstellationsDice from '../../../components/constellations/Constellation
 import ConstellationGraph from '../../../components/constellations/ConstellationGraph.vue';
 import ConstellationsSummary from '../../../components/constellations/ConstellationsSummary.vue';
 import ConstellationControlPanel from '../../../components/constellations/ConstellationControlPanel.vue';
+import ConstellationDictionary from '../../../components/constellations/ConstellationDictionary.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -307,15 +324,35 @@ const qrUrl = computed(() => {
 // (`body { … }`) into the app's own stylesheet.
 const RULEBOOK_URL = '/constellations-rulebook.html';
 
-const showRules = ref(false);
-// The iframe is mounted lazily on the first flip and then kept, so opening the
-// rules does not cost a fetch on every board load and flipping back and forth
-// is instant (and does not lose the reader's scroll position).
+// The board's back face carries one of two references — the rulebook (#4811) or
+// the relationship/goal dictionary (#4807-B1). A single `boardFace` drives the
+// flip so both reuse the same in-place rotation the operator asked for; the
+// front is the game.
+const boardFace = ref('game'); // 'game' | 'rules' | 'dictionary'
+const isFlipped = computed(() => boardFace.value !== 'game');
+const showRules = computed(() => boardFace.value === 'rules');
+const showDictionary = computed(() => boardFace.value === 'dictionary');
+// Each back-face reference is mounted lazily on its first flip and then kept, so
+// opening it does not cost a fetch on every board load and flipping is instant.
 const rulesEverOpened = ref(false);
+const dictionaryEverOpened = ref(false);
 
 function toggleRules() {
-  if (!showRules.value) rulesEverOpened.value = true;
-  showRules.value = !showRules.value;
+  if (boardFace.value === 'rules') {
+    boardFace.value = 'game';
+    return;
+  }
+  rulesEverOpened.value = true;
+  boardFace.value = 'rules';
+}
+
+function toggleDictionary() {
+  if (boardFace.value === 'dictionary') {
+    boardFace.value = 'game';
+    return;
+  }
+  dictionaryEverOpened.value = true;
+  boardFace.value = 'dictionary';
 }
 
 // Leaving must tell the server (#4587-H1 / #4771). A bare router.push left
@@ -343,6 +380,7 @@ async function leave() {
 // A2 vocabulary rows, normalized ({ id, code, label, colour } — the server
 // serializes the gorm.Model id as "ID", the tagged fields lowercase).
 const relationshipTypes = ref([]);
+const goalCards = ref([]);
 const selectedIds = ref([]);
 const editBusy = ref(false);
 const editError = ref(null);
@@ -359,6 +397,25 @@ async function loadRelationshipTypes() {
     }));
   } catch {
     // The panel renders empty; the next explicit action will surface an error.
+  }
+}
+
+// #4807-B1: the goal-card deck for the dictionary face. Server-sourced (A1's
+// GET /goal-cards) so re-wording a card never means editing the client; the
+// dictionary renders whatever the endpoint returns.
+async function loadGoalCards() {
+  try {
+    const res = await axios.get('/api/constellations/goal-cards');
+    const rows = res.data?.goal_cards || [];
+    goalCards.value = rows.map((c) => ({
+      id: c.ID ?? c.id,
+      code: c.code,
+      name: c.name,
+      victoryCondition: c.victory_condition,
+      minPlayers: c.min_players ?? null,
+    }));
+  } catch {
+    // The dictionary shows its "could not be loaded" empty state.
   }
 }
 
@@ -503,6 +560,7 @@ async function enterRoom() {
     blocked.value = null;
     start();
     loadRelationshipTypes();
+    loadGoalCards();
   } catch (err) {
     // 401 is the global interceptor's (main.js) — it owns the auth redirect, and
     // rendering a refusal underneath it would flash a wrong explanation on the
