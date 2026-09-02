@@ -17,14 +17,31 @@ import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/moc
 type Profile = { game_username: string; avatar_url: string };
 
 const ROOM_CODE = 'ABCDE';
+// The room a caller is already seated in, for the #4798 already-in-game refusal.
+const ACTIVE_ROOM_CODE = 'ZK4TQ';
 
 // Installs a stateful mock for the constellations + avatar surface. Returns
 // handles to inspect what the view sent.
-async function installMock(page: Page, initial: Profile) {
+async function installMock(page: Page, initial: Profile, alreadyInRoom?: string) {
   const profile: Profile = { ...initial };
   const putUsernames: string[] = [];
   const createBodies: Array<{ player_count: number }> = [];
   const joinCodes: string[] = [];
+
+  // #4798: the aspirant-server ErrAlreadyInGame refusal names the room the
+  // caller is stuck in — {code, message, active_room_code} — so the lobby can
+  // show the code and link to it. `alreadyInRoom` makes create/join return it.
+  const alreadyInGame409 = (activeCode: string) => ({
+    status: 409,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      error: {
+        code: 'conflict',
+        message: `You are already in game ${activeCode} — leave it before starting or joining another.`,
+        active_room_code: activeCode,
+      },
+    }),
+  });
 
   // Bare /api catch-all first so unrelated background calls resolve quietly;
   // the specific handler registered below wins at match time (later route wins).
@@ -58,6 +75,10 @@ async function installMock(page: Page, initial: Profile) {
     if (joinMatch && method === 'POST') {
       const code = decodeURIComponent(joinMatch[1]).toUpperCase();
       joinCodes.push(code);
+      if (alreadyInRoom) {
+        await route.fulfill(alreadyInGame409(alreadyInRoom));
+        return;
+      }
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -70,6 +91,10 @@ async function installMock(page: Page, initial: Profile) {
     if (path.endsWith('/constellations/rooms') && method === 'POST') {
       const body = req.postDataJSON() as { player_count: number };
       createBodies.push(body);
+      if (alreadyInRoom) {
+        await route.fulfill(alreadyInGame409(alreadyInRoom));
+        return;
+      }
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -149,5 +174,45 @@ test.describe('#4598 Constellations landing lobby', () => {
 
     await expect(page).toHaveURL(/\/member\/shared\/constellations\/room\/XBVGR$/);
     await expect.poll(() => handles.joinCodes).toContain('XBVGR');
+  });
+
+  // #4798 — operator finding 2026-09-02: the refusal was a bare red string
+  // ("You are already in an active game") that named no room, so the user could
+  // not navigate to the room to leave it. These two guard the room code and the
+  // link against a regression to the bare form.
+  test('create refused while already in a game names the room and links to it', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, { game_username: 'Vega', avatar_url: '' }, ACTIVE_ROOM_CODE);
+    await page.goto('/member/shared/constellations');
+    await dismissMobileSidebarIfPresent(page);
+
+    await page.getByTestId('create-room').click();
+
+    const error = page.getByTestId('action-error');
+    await expect(error).toBeVisible();
+    await expect(error).toContainText(ACTIVE_ROOM_CODE);
+    // Still on the lobby — the refusal did not navigate anywhere on its own.
+    await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
+
+    await page.getByTestId('go-to-active-room').click();
+    await expect(page).toHaveURL(new RegExp(`/member/shared/constellations/room/${ACTIVE_ROOM_CODE}$`));
+  });
+
+  test('join refused while already in a game names the room', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, { game_username: 'Vega', avatar_url: '' }, ACTIVE_ROOM_CODE);
+    await page.goto('/member/shared/constellations');
+    await dismissMobileSidebarIfPresent(page);
+
+    await page.locator('.segmented__item', { hasText: 'Join' }).click();
+    await page.getByTestId('join-code').fill('xbvgr');
+    await page.getByTestId('join-room').click();
+
+    const error = page.getByTestId('action-error');
+    await expect(error).toBeVisible();
+    await expect(error).toContainText(ACTIVE_ROOM_CODE);
+    // The code named is the room the user is ALREADY in, not the one they tried.
+    await expect(error).not.toContainText('XBVGR');
+    await expect(page.getByTestId('go-to-active-room')).toBeVisible();
   });
 });

@@ -109,7 +109,18 @@
       <p v-if="!hasUsername" class="constellations-hint">
         Set a game username above before creating or joining a room.
       </p>
-      <p v-if="actionError" class="constellations-error" role="alert">{{ actionError }}</p>
+      <!-- #4798: when the refusal is "you are already in a game", the server
+           names the room (active_room_code) so the user can go there and leave
+           it. Without the code the message is unactionable. -->
+      <p v-if="actionError" class="constellations-error" role="alert" data-testid="action-error">
+        {{ actionError }}
+        <router-link
+          v-if="activeRoomCode"
+          :to="`/member/shared/constellations/room/${activeRoomCode}`"
+          class="constellations-error-link"
+          data-testid="go-to-active-room"
+        >Go to room {{ activeRoomCode }}</router-link>
+      </p>
     </section>
   </div>
 </template>
@@ -158,6 +169,7 @@ export default {
       joinCode: '',
       busy: false,
       actionError: '',
+      activeRoomCode: '',
     };
   },
   computed: {
@@ -226,19 +238,32 @@ export default {
         this.uploadingIcon = false;
       }
     },
+    clearActionError() {
+      this.actionError = '';
+      this.activeRoomCode = '';
+    },
     goToRoom(code) {
       this.$router.push({ path: `/member/shared/constellations/room/${code}` });
+    },
+    // Reads the { code, message, active_room_code } error detail an aspirant-server
+    // refusal carries (server/handlers/common.go ErrorDetail, widened for the
+    // already-in-game case by #4798). Falls back to `fallback` when the server
+    // sent no message at all.
+    setActionError(e, fallback) {
+      const detail = e?.response?.data?.error;
+      this.actionError = detail?.message || fallback;
+      this.activeRoomCode = detail?.active_room_code || '';
     },
     async createRoom() {
       if (!this.hasUsername || this.busy) return;
       this.busy = true;
-      this.actionError = '';
+      this.clearActionError();
       try {
         const room = unwrap(await axios.post('/api/constellations/rooms', { player_count: this.playerCount }));
         if (room && room.code) this.goToRoom(room.code);
         else this.actionError = 'The room was created but returned no code.';
       } catch (e) {
-        this.actionError = e?.response?.data?.error?.message || 'Could not create a room.';
+        this.setActionError(e, 'Could not create a room.');
       } finally {
         this.busy = false;
       }
@@ -247,13 +272,13 @@ export default {
       const code = this.joinCode.trim().toUpperCase();
       if (!this.hasUsername || !code || this.busy) return;
       this.busy = true;
-      this.actionError = '';
+      this.clearActionError();
       try {
         const room = unwrap(await axios.post(`/api/constellations/rooms/${encodeURIComponent(code)}/join`, {}));
         const landed = (room && room.code) || code;
         this.goToRoom(landed);
       } catch (e) {
-        this.actionError = e?.response?.data?.error?.message || 'Could not join that room. Check the code and try again.';
+        this.setActionError(e, 'Could not join that room. Check the code and try again.');
       } finally {
         this.busy = false;
       }
@@ -351,5 +376,12 @@ export default {
   margin: 0.75rem 0 0;
   color: var(--text-danger, #b91c1c);
   font-size: 0.9rem;
+}
+
+.constellations-error-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  white-space: nowrap;
 }
 </style>
