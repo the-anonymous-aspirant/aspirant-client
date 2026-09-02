@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Constellations: the "you are already in an active game" refusal now names
+  the room and links to it. Create and join rendered `error.message` as a bare
+  red line that told the user they held a seat somewhere but not where, so
+  they could not go to that room and leave it. aspirant-server now returns
+  `active_room_code` on that 409 (companion PR); the lobby renders the code in
+  the message and, when the field is present, a `Go to room ABCDE` link to
+  `/member/shared/constellations/room/:code`. Regression lock in
+  `tests/e2e/constellations-landing.spec.ts` (create and join arms).
+  Operator-reported (system_3 #4798).
+
 - Trusted tools: fixed low-contrast text on `/trusted/translator` and
   `/trusted/jobs`, the same surface/ink collision #3014 fixed on the
   valuation wizard. Cards painting `--surface-card` inside a view whose
