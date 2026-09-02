@@ -126,7 +126,7 @@
                `dice` field so every viewer converges on the same server-resolved
                roll; rolling.vue talks to the roll endpoint directly. -->
           <div class="constellations-room-dice" data-testid="dice-mount">
-            <ConstellationsDice v-if="code" :code="code" :dice="state?.dice ?? null" />
+            <ConstellationsDice v-if="code" :code="code" :dice="state?.dice ?? null" :loading="loading" />
           </div>
 
           <p v-if="loading && !state" class="constellations-room-board-note">Connecting to the room…</p>
