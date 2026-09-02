@@ -26,7 +26,7 @@
         @card-click="navigateTo"
       />
       <application-card
-        :image-url="appImages.default"
+        :image-url="appImages.system_health_icon"
         title="System Health"
         description="Container metrics, disk usage, and database stats"
         route="/admin/system-health"
@@ -50,7 +50,7 @@
            an iframe embed. The path is served by nginx (auth_request-gated
            reverse proxy to penpot-frontend), not a Vue route. -->
       <application-card
-        :image-url="appImages.default"
+        :image-url="appImages.penpot_design_icon"
         title="Penpot Design"
         description="Self-hosted design tool — mockups, tokens, component libraries. Opens in a new tab (full canvas, not an iframe embed)"
         route="/admin/penpot/"
@@ -59,7 +59,7 @@
       <!-- nginx-served like Penpot above: static Histoire build of the
            design system's stories (system_3 #2218). -->
       <application-card
-        :image-url="appImages.default"
+        :image-url="appImages.histoire_icon"
         title="Histoire — Design System"
         description="Component workbench — stories and variants for @aspirant/design-system. Opens in a new tab"
         route="/admin/histoire/"
@@ -112,6 +112,11 @@
         appImages: {
           default_user: '',
           default: '',
+          // Hand-drawn admin-tile icons (#4840). loadImages() iterates
+          // Object.keys(appImages), so listing a key here is enough to load it.
+          system_health_icon: '',
+          penpot_design_icon: '',
+          histoire_icon: '',
         },
       };
     },
