@@ -42,6 +42,38 @@
 
     <p v-if="error && !blocked" class="constellations-room-error" data-testid="room-error">{{ error }}</p>
 
+    <!-- #4822: a scanned link (#4810) seats a player before they ever meet the
+         lobby's game-username gate, so a first-time scanner is on the board
+         as "Player N" with no affordance to name themselves — leaving would
+         free their seat. This banner is the in-room affordance: it shows only
+         for the caller's own member row, only while that row's game_username
+         is empty, and clears itself the moment the poll reflects a save. -->
+    <div v-if="needsGameName" class="constellations-room-name-prompt" data-testid="name-prompt">
+      <p class="constellations-room-name-prompt-text">
+        You're on the board as “{{ myMemberFallbackName }}” — set a game name so it shows instead.
+      </p>
+      <form class="constellations-room-name-prompt-form" @submit.prevent="saveGameUsername">
+        <input
+          v-model="gameUsernameDraft"
+          type="text"
+          maxlength="40"
+          placeholder="e.g. Vega"
+          aria-label="Game username"
+          class="constellations-room-name-prompt-input"
+          data-testid="name-prompt-input"
+        />
+        <button
+          type="submit"
+          class="constellations-room-rules"
+          data-testid="name-prompt-save"
+          :disabled="!gameUsernameDraft.trim() || savingGameName"
+        >
+          {{ savingGameName ? 'Saving…' : 'Save name' }}
+        </button>
+      </form>
+      <p v-if="nameError" class="constellations-room-error" data-testid="name-prompt-error">{{ nameError }}</p>
+    </div>
+
     <!-- Entry (#4806 ask 1). A scanned link now JOINS you before it tries to
          read the board, so the player never meets the D1 poll's 403. While the
          join is in flight the shell shows nothing but this line; if the join is
@@ -177,7 +209,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
-import { useRoomSync } from '../../../composables/useRoomSync.js';
+import { useRoomSync, unwrap } from '../../../composables/useRoomSync.js';
 import ConstellationsDice from '../../../components/constellations/ConstellationsDice.vue';
 import ConstellationGraph from '../../../components/constellations/ConstellationGraph.vue';
 import ConstellationsSummary from '../../../components/constellations/ConstellationsSummary.vue';
@@ -205,6 +237,51 @@ const occupancyTitle = computed(() => {
 });
 
 const memberCount = computed(() => state.value?.members?.length ?? 0);
+
+// ---- #4822: in-room game-name affordance -----------------------------
+//
+// The D1 room-state aggregate (RoomStateMember) carries no self-flag, so the
+// caller's own row is found by matching user_id against GET /api/profile's
+// ID — the same envelope Sidebar.vue's avatar fetch and useProfile.js use.
+// Best-effort: if this fails the banner just never renders, which is no
+// worse than the pre-#4822 hole this task fixes.
+const myUserId = ref(null);
+async function loadMyUserId() {
+  try {
+    const profile = unwrap(await axios.get('/api/profile'));
+    myUserId.value = profile?.ID ?? null;
+  } catch {
+    // Board still renders; the caller keeps their "Player N" seat.
+  }
+}
+
+const myMember = computed(() => {
+  const id = myUserId.value;
+  if (id == null) return null;
+  return (state.value?.members || []).find((m) => m.user_id === id) || null;
+});
+const needsGameName = computed(() => !!myMember.value && !myMember.value.game_username);
+const myMemberFallbackName = computed(() => `Player ${myMember.value?.slot ?? ''}`.trim());
+
+const gameUsernameDraft = ref('');
+const savingGameName = ref(false);
+const nameError = ref(null);
+
+async function saveGameUsername() {
+  const name = gameUsernameDraft.value.trim();
+  if (!name || savingGameName.value) return;
+  savingGameName.value = true;
+  nameError.value = null;
+  try {
+    await axios.put('/api/constellations/profile', { game_username: name });
+    gameUsernameDraft.value = '';
+    await refresh();
+  } catch (err) {
+    nameError.value = err.response?.data?.error?.message || 'Could not save your game username.';
+  } finally {
+    savingGameName.value = false;
+  }
+}
 
 // Encode the room's deep-link so a scan lands a member on this room. Uses the
 // shared external QR service already used by QrGenerator.vue.
@@ -443,7 +520,10 @@ async function enterRoom() {
   }
 }
 
-onMounted(enterRoom);
+onMounted(() => {
+  enterRoom();
+  loadMyUserId();
+});
 </script>
 
 <style scoped>
@@ -539,6 +619,44 @@ onMounted(enterRoom);
   margin: 1rem 0 0;
   color: #fca5a5;
   font-size: 0.85rem;
+}
+
+/* #4822: the in-room name affordance. A card rather than a bare line so it
+   reads as an action, not another status sentence next to room-error. */
+.constellations-room-name-prompt {
+  width: 100%;
+  max-width: 52rem;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  background: #131a33;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.constellations-room-name-prompt-text {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 0.9rem;
+}
+
+.constellations-room-name-prompt-form {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.constellations-room-name-prompt-input {
+  flex: 1 1 12rem;
+  min-width: 0;
+  background: #0b1020;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #f8fafc;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
 }
 
 /* The stage owns the size and the perspective; the board inside it is the
