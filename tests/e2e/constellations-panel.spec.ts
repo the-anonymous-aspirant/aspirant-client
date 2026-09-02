@@ -185,7 +185,9 @@ function avatar(page: Page, userId: number) {
 }
 
 test.describe('#4603 Constellations relationship control panel', () => {
-  test('renders the six A2 type buttons plus Clear and history arrows, disabled until a pair is selected', async ({
+  // #4806 ask 3 — the picker used to render unconditionally, standing on the
+  // board with every button disabled. It is now scoped to a live selection.
+  test('the pair picker is absent until a player is clicked, then renders the six A2 type buttons plus Clear', async ({
     page,
   }) => {
     await seedTrustedSession(page);
@@ -193,20 +195,66 @@ test.describe('#4603 Constellations relationship control panel', () => {
     await openRoom(page);
 
     const typeButtons = page.getByTestId('type-button');
+    await expect(page.getByTestId('pair-picker')).toHaveCount(0);
+    await expect(typeButtons).toHaveCount(0);
+    await expect(page.getByTestId('panel-hint')).toHaveCount(0);
+    await expect(page.getByTestId('clear-button')).toHaveCount(0);
+
+    // One selected — the picker appears; the edit buttons wait for the pair.
+    await avatar(page, 11).click();
+    await expect(page.getByTestId('pair-picker')).toBeVisible();
     await expect(typeButtons).toHaveCount(6);
     await expect(typeButtons.first()).toHaveText(/P/);
-    await expect(page.getByTestId('panel-hint')).toHaveText('Select two players');
-
     await expect(typeButtons.first()).toBeDisabled();
     await expect(page.getByTestId('clear-button')).toBeDisabled();
 
-    // One selected — still disabled; two — enabled.
-    await avatar(page, 11).click();
-    await expect(typeButtons.first()).toBeDisabled();
+    // Two — enabled.
     await avatar(page, 12).click();
-    await expect(page.getByTestId('panel-hint')).toHaveText('Set the pair’s connection');
     await expect(typeButtons.first()).toBeEnabled();
     await expect(page.getByTestId('clear-button')).toBeEnabled();
+  });
+
+  // The regression lock for the trap in ask 3: the C1 arrows are board-scoped,
+  // not part of the select-two-players gesture. Hiding them with the picker
+  // would put undo out of reach exactly when it is wanted — right after a
+  // mis-click that has already been committed and deselected.
+  test('the history arrows stay reachable with no selection in progress', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, []);
+    await openRoom(page);
+
+    await expect(page.getByTestId('pair-picker')).toHaveCount(0);
+    await expect(page.getByTestId('undo-button')).toBeVisible();
+    await expect(page.getByTestId('redo-button')).toBeVisible();
+    await expect(page.getByTestId('undo-button')).toBeEnabled();
+  });
+
+  test('the hint tracks how many players are selected', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, []);
+    await openRoom(page);
+
+    await avatar(page, 11).click();
+    // Not "Select two players" — you have already selected one, and the panel
+    // only exists because you did.
+    await expect(page.getByTestId('panel-hint')).toHaveText('Select one more player');
+
+    await avatar(page, 12).click();
+    await expect(page.getByTestId('panel-hint')).toHaveText('Set the pair’s connection');
+  });
+
+  test('the picker can be dismissed without editing', async ({ page }) => {
+    await seedTrustedSession(page);
+    const captured = await installMock(page, []);
+    await openRoom(page);
+
+    await avatar(page, 11).click();
+    await expect(page.getByTestId('pair-picker')).toBeVisible();
+
+    await page.getByTestId('dismiss-picker').click();
+    await expect(page.getByTestId('pair-picker')).toHaveCount(0);
+    expect(captured.set).toEqual([]);
+    expect(captured.clear).toEqual([]);
   });
 
   test('choosing a type POSTs set for the selected pair and draws the edge live', async ({ page }) => {
@@ -228,7 +276,9 @@ test.describe('#4603 Constellations relationship control panel', () => {
     // The selection resets after a successful edit, and no error is shown
     // (guards the refresh-not-destructured ReferenceError class of bug, where
     // the POST succeeds but the post-edit refresh throws into the catch).
-    await expect(page.locator('[data-testid="type-button"][data-type-code="P"]')).toBeDisabled();
+    // Since #4806 ask 3 the reset also CLOSES the picker — it does not linger
+    // on the board with its buttons disabled again.
+    await expect(page.getByTestId('pair-picker')).toHaveCount(0);
     await expect(page.getByTestId('edit-error')).toHaveCount(0);
   });
 

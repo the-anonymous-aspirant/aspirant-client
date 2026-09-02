@@ -132,14 +132,50 @@ test.describe('#4601 Constellations in-room shell', () => {
     await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
   });
 
-  // #4587-H2 / #4772 — the room specifies two buttons ("Read the rules; leave
-  // the game"); the rules link was absent. It must surface the rulebook in a new
-  // tab. The original href pointed at /api/uploads/… — the system_3 admin upload
-  // store, which aspirant-server does not serve (no /uploads/:id route), so the
-  // link 404'd for every member (G1 re-walk). The rulebook is now a public static
-  // asset; assert the link both points at it AND actually resolves 200 for a
-  // logged-in member — an href-only assertion is what masked the dead link.
-  test('Read the rules links to the rulebook and it resolves for a member', async ({ page }) => {
+  // #4587-H2 / #4772 established that the rulebook must actually be SERVED —
+  // the original /api/uploads/… href 404'd for every member and an href-only
+  // assertion is what masked it. #4806 ask 5 changes only how it is REACHED
+  // (in-place flip, not a new tab), so that 200 check survives the change and
+  // is asserted here independently of the flip.
+  test('the rulebook asset resolves 200 for a member', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    const res = await page.request.get('/constellations-rulebook.html');
+    expect(res.status()).toBe(200);
+    expect(await res.text()).toContain('How to play');
+  });
+
+  // #4806 ask 5 — "the 'Read the rules' should not bring you to an entirely new
+  // page, just do a flip of the game room, and then reveal the scorllable rules
+  // - replacing the 'Read the rules' with 'Back to the game'." #4772 opened it
+  // in a new tab; that is what this supersedes.
+  test('Read the rules flips the board in place instead of navigating', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
+
+    const roomUrl = `/member/shared/constellations/room/${ROOM_CODE}`;
+    await page.goto(roomUrl);
+    await dismissMobileSidebarIfPresent(page);
+
+    const rules = page.getByTestId('read-rules');
+    await expect(rules).toHaveText('Read the rules');
+    // It is a button now, not an anchor — there is no target to open a tab on.
+    expect(await rules.evaluate((el) => el.tagName)).toBe('BUTTON');
+
+    await rules.click();
+
+    await expect(page).toHaveURL(new RegExp(`${ROOM_CODE}$`));
+    await expect(page.getByTestId('board-canvas')).toHaveClass(/is-flipped/);
+    await expect(page.getByTestId('rules-face')).toBeVisible();
+    await expect(rules).toHaveText('Back to the game');
+    await expect(rules).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('Back to the game flips the board back', async ({ page }) => {
     await seedTrustedSession(page);
     await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
 
@@ -147,16 +183,47 @@ test.describe('#4601 Constellations in-room shell', () => {
     await dismissMobileSidebarIfPresent(page);
 
     const rules = page.getByTestId('read-rules');
-    await expect(rules).toBeVisible();
-    await expect(rules).toHaveAttribute('href', '/constellations-rulebook.html');
-    await expect(rules).toHaveAttribute('target', '_blank');
-    await expect(rules).toHaveAttribute('rel', /noopener/);
+    await rules.click();
+    await expect(rules).toHaveText('Back to the game');
 
-    // The link target must actually be served — not 404 as the /api/uploads/…
-    // target was. page.request carries the seeded member session.
-    const href = await rules.getAttribute('href');
-    const res = await page.request.get(href as string);
-    expect(res.status()).toBe(200);
-    expect(await res.text()).toContain('How to play');
+    await rules.click();
+    await expect(rules).toHaveText('Read the rules');
+    await expect(page.getByTestId('board-canvas')).not.toHaveClass(/is-flipped/);
+    await expect(rules).toHaveAttribute('aria-expanded', 'false');
+    // The board is back and usable — the dice affordance is on screen again.
+    await expect(page.getByTestId('dice-roll')).toBeVisible();
+  });
+
+  // "reveal the scorllable rules" — the rules scroll INSIDE the board, they do
+  // not grow the card down the page.
+  test('the rules face scrolls inside the board rather than growing it', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    // offsetHeight, not boundingBox: the card is mid-rotateY under perspective
+    // while the flip runs, so its *projected* box legitimately shrinks. The
+    // claim under test is a layout one — the card does not grow — and layout
+    // height is what offsetHeight reports, transform or no transform.
+    const board = page.getByTestId('board-canvas');
+    const heightBefore = await board.evaluate((el) => (el as HTMLElement).offsetHeight);
+
+    await page.getByTestId('read-rules').click();
+    const frame = page.getByTestId('rules-face');
+    await expect(frame).toBeVisible();
+
+    const heightAfter = await board.evaluate((el) => (el as HTMLElement).offsetHeight);
+    expect(Math.abs(heightAfter - heightBefore)).toBeLessThan(2);
+
+    // The embedded document is taller than the frame, i.e. there is something
+    // to scroll — measured inside the iframe, not asserted from CSS.
+    const content = page.frameLocator('[data-testid="rules-face"]').locator('body');
+    await expect(content).toContainText('How to play');
+    const overflow = await content.evaluate(
+      (el) => el.ownerDocument.documentElement.scrollHeight - el.ownerDocument.documentElement.clientHeight,
+    );
+    expect(overflow).toBeGreaterThan(0);
   });
 });
