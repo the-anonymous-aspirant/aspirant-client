@@ -104,4 +104,42 @@ test.describe('#4604 Constellations dice roller', () => {
 
     await expect(page.getByTestId('dice-status')).toHaveText('Rolled 4', { timeout: 6000 });
   });
+
+  // #4806 ask 4 — "the icon for the dice should have a default dice phase".
+  // The die used to render as a blank rounded square before the first roll
+  // (displayFace 0 had no pip layout).
+  test('the die rests on a face before anyone has rolled, without claiming a result', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, null);
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    const die = page.getByTestId('dice-roll');
+    await expect(die.locator('.constellations-dice-pip')).toHaveCount(1);
+    await expect(die).toHaveClass(/is-resting/);
+
+    // The resting face is a render default, not a result: the status line and
+    // the accessible name must both still read as un-rolled.
+    await expect(page.getByTestId('dice-status')).toHaveText('Not rolled yet');
+    await expect(die).toHaveAttribute('aria-label', 'Roll the die');
+  });
+
+  // The resting state must clear once a real value lands, or the muted
+  // placeholder pips would sit on top of a genuine roll.
+  test('the resting state clears once a face is rolled', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, null);
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    await page.getByTestId('dice-roll').click();
+    await expect(page.getByTestId('dice-status')).toHaveText('Rolled 4', { timeout: 4000 });
+
+    const die = page.getByTestId('dice-roll');
+    await expect(die).not.toHaveClass(/is-resting/);
+    await expect(die.locator('.constellations-dice-pip')).toHaveCount(4);
+    await expect(die).toHaveAttribute('aria-label', 'Roll the die — currently showing 4');
+  });
 });

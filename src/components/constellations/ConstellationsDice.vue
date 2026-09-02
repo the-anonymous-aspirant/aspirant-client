@@ -3,7 +3,7 @@
     <button
       type="button"
       class="constellations-dice-die"
-      :class="{ 'is-rolling': rolling }"
+      :class="{ 'is-rolling': rolling, 'is-resting': !hasRolled }"
       :disabled="rolling"
       data-testid="dice-roll"
       :aria-label="dieLabel"
@@ -64,6 +64,15 @@ const PIP_LAYOUTS = {
   6: [[28, 25], [72, 25], [28, 50], [72, 50], [28, 75], [72, 75]],
 };
 
+// The face the die rests on before anyone has rolled (#4806 ask 4: "the icon
+// for the dice should have a default dice phase"). displayFace stays 0 for
+// "never rolled" — that is what dieLabel and statusText branch on — so the
+// resting face is a RENDER default only. It is drawn muted (.is-resting) so the
+// board never claims a 1 was rolled: the die reads as an unrolled die, not as a
+// result. Before this the pip layout for 0 was absent and the icon rendered as
+// a blank rounded square.
+const RESTING_FACE = 1;
+
 const rolling = ref(false);
 const error = ref(null);
 const displayFace = ref(0); // 0 = never rolled yet
@@ -71,14 +80,15 @@ const knownNonce = ref(0);
 let spinTimer = null;
 let settleTimer = null;
 
-const pipPositions = computed(() => PIP_LAYOUTS[displayFace.value] || []);
+const hasRolled = computed(() => displayFace.value > 0);
+const pipPositions = computed(() => PIP_LAYOUTS[displayFace.value || RESTING_FACE] || []);
 const dieLabel = computed(() => {
   if (rolling.value) return 'Rolling the die';
-  return displayFace.value ? `Roll the die — currently showing ${displayFace.value}` : 'Roll the die';
+  return hasRolled.value ? `Roll the die — currently showing ${displayFace.value}` : 'Roll the die';
 });
 const statusText = computed(() => {
   if (rolling.value) return 'Rolling…';
-  return displayFace.value ? `Rolled ${displayFace.value}` : 'Not rolled yet';
+  return hasRolled.value ? `Rolled ${displayFace.value}` : 'Not rolled yet';
 });
 
 function clearTimers() {
@@ -185,6 +195,13 @@ onUnmounted(clearTimers);
 
 .constellations-dice-pip {
   fill: #0b1020;
+}
+
+/* The resting face is a placeholder, not a result: draw its pips in the same
+   muted slate the status line uses so a glance never mistakes it for a rolled
+   1. Rolling repaints the pips at full contrast via .is-rolling's absence. */
+.constellations-dice-die.is-resting .constellations-dice-pip {
+  fill: #94a3b8;
 }
 
 .constellations-dice-die.is-rolling {
