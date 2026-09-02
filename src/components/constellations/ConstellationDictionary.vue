@@ -1,0 +1,173 @@
+<template>
+  <!-- #4807-B1: the relationship + goal-card dictionary. Read-only reference
+       the operator asked to sit next to "Read the rules": the six connection
+       types (the vocabulary the goals are written in) and the 16 goal cards,
+       each with the victory condition needed to achieve it. Selecting a goal is
+       B2 (#4828); this face only explains. -->
+  <div class="constellation-dictionary" data-testid="dictionary-face">
+    <h2 class="constellation-dictionary-title">Relationships &amp; goals</h2>
+
+    <section class="constellation-dictionary-section" aria-labelledby="dict-legend-heading">
+      <h3 id="dict-legend-heading" class="constellation-dictionary-heading">Connection types</h3>
+      <p class="constellation-dictionary-note">The lines you draw between players. Every goal below is written in these.</p>
+      <ul class="constellation-dictionary-legend" data-testid="dictionary-legend">
+        <li v-for="t in relationshipTypes" :key="t.id" class="constellation-dictionary-legend-item" :data-type-code="t.code">
+          <span class="constellation-dictionary-swatch" :style="{ background: t.colour }" aria-hidden="true" />
+          <span class="constellation-dictionary-code" :style="{ color: t.colour }">{{ t.code }}</span>
+          <span class="constellation-dictionary-label">{{ t.label }}</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="constellation-dictionary-section" aria-labelledby="dict-goals-heading">
+      <h3 id="dict-goals-heading" class="constellation-dictionary-heading">Goal cards</h3>
+      <p class="constellation-dictionary-note">Pick the relationship you are playing for; achieve its victory condition to win.</p>
+      <ul class="constellation-dictionary-cards" data-testid="dictionary-cards">
+        <li v-for="card in goalCards" :key="card.id" class="constellation-dictionary-card" :data-goal-code="card.code">
+          <div class="constellation-dictionary-card-head">
+            <span class="constellation-dictionary-card-name" data-testid="goal-card-name">{{ card.name }}</span>
+            <span
+              v-if="card.minPlayers"
+              class="constellation-dictionary-card-floor"
+              :title="`Not playable with fewer than ${card.minPlayers} players`"
+            >{{ card.minPlayers }}+ players</span>
+          </div>
+          <p class="constellation-dictionary-card-condition" data-testid="goal-card-condition">{{ card.victoryCondition }}</p>
+        </li>
+      </ul>
+      <p v-if="goalCards.length === 0" class="constellation-dictionary-empty" data-testid="dictionary-empty">
+        The goal deck could not be loaded.
+      </p>
+    </section>
+  </div>
+</template>
+
+<script setup>
+// Presentational, prop-driven — the room shell owns the fetch (mirrors
+// ConstellationControlPanel / ConstellationsSummary). relationshipTypes are the
+// normalized A2 rows `[{ id, code, label, colour }]`; goalCards are the A1 deck
+// normalized to `[{ id, code, name, victoryCondition, minPlayers }]`.
+defineProps({
+  relationshipTypes: { type: Array, default: () => [] },
+  goalCards: { type: Array, default: () => [] },
+});
+</script>
+
+<style scoped>
+/* Dark board palette, matching the rest of the constellations room chrome. */
+.constellation-dictionary {
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px 22px 28px;
+  color: #f8fafc;
+  background: #0b1020;
+  box-sizing: border-box;
+}
+
+.constellation-dictionary-title {
+  margin: 0 0 16px;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.constellation-dictionary-section {
+  margin-bottom: 24px;
+}
+
+.constellation-dictionary-heading {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.constellation-dictionary-note {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.constellation-dictionary-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px 16px;
+}
+
+.constellation-dictionary-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.constellation-dictionary-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+
+.constellation-dictionary-code {
+  font-weight: 700;
+  min-width: 1.75rem;
+}
+
+.constellation-dictionary-label {
+  color: #f8fafc;
+  font-size: 0.85rem;
+}
+
+.constellation-dictionary-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.constellation-dictionary-card {
+  background: #131a33;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.constellation-dictionary-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.constellation-dictionary-card-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.constellation-dictionary-card-floor {
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  color: #94a3b8;
+  border: 1px solid #1e293b;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.constellation-dictionary-card-condition {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: #cbd5e1;
+}
+
+.constellation-dictionary-empty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+</style>
