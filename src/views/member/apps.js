@@ -33,22 +33,22 @@
 // visibility leak — cards advertising other people's apps — not the data.
 
 export const SHARED_APPS = [
-  { title: 'Files', description: 'Upload, download, and share files.', route: 'files', icon: 'home_icon' },
+  { title: 'Files', description: 'Upload, download, and share files.', route: 'files', icon: 'files_icon' },
   { title: 'Message Board', description: 'Leave messages for the crew.', route: 'message-board', icon: 'message_board_icon' },
-  { title: 'Translator', description: 'Translate text between languages', route: 'translator', icon: 'home_icon' },
-  { title: 'Wikipedia', description: 'Browse the English Wikipedia offline', route: 'wikipedia', icon: 'home_icon' },
-  { title: 'Goal Trees', description: 'Plan and track your goals', route: 'goals', icon: 'home_icon' },
+  { title: 'Translator', description: 'Translate text between languages', route: 'translator', icon: 'translator_icon' },
+  { title: 'Wikipedia', description: 'Browse the English Wikipedia offline', route: 'wikipedia', icon: 'wikipedia_hand_icon' },
+  { title: 'Goal Trees', description: 'Plan and track your goals', route: 'goals', icon: 'goal_trees_icon' },
   { title: 'Remarkable PDFs', description: 'Generate PDFs for your Remarkable tablet', route: 'remarkable-pdfs', icon: 'home_icon' },
-  { title: 'Scratchpad', description: 'A personal note that syncs live across your devices', route: 'scratchpad', icon: 'home_icon' },
-  { title: 'Constellations', description: 'A shared relationship-graph board for the card game', route: 'constellations', icon: 'home_icon' },
+  { title: 'Scratchpad', description: 'A personal note that syncs live across your devices', route: 'scratchpad', icon: 'scratchpad_icon' },
+  { title: 'Constellations', description: 'A shared relationship-graph board for the card game', route: 'constellations', icon: 'constellations_icon' },
 ];
 
 export const PERSONAL_APPS = [
   { title: 'Ludde Meal Tracker', description: "Track Ludde's meals. Bonus analytics included.", route: 'ludde-analytics', icon: 'ludde_meal_tracker_icon', person: 'sister (Ludde)', owner: 'jenny' },
   { title: 'Den Stökiga Väggen', description: 'Om bara någon kunde bringa ordning i kaoset...', route: '30-year-gift', icon: '30year_gift_icon', person: 'sister Jenny', owner: 'jenny' },
-  { title: 'Värdeutlåtande', description: 'Fyll i värdeutlåtanden från PDF-underlag', route: 'valuation-statement', icon: 'home_icon', person: 'sister (värdering)', owner: 'jenny' },
-  { title: 'Pappas pushups', description: '60 dagars utmaning — 1000 armhävningar', route: 'pappas-pushups', icon: 'home_icon', person: 'father', owner: 'robert' },
-  { title: 'Jobs', description: 'Berlin part-time English-job feed across scraped boards', route: 'jobs', icon: 'home_icon', person: 'Viktor', owner: 'vinoly' },
+  { title: 'Värdeutlåtande', description: 'Fyll i värdeutlåtanden från PDF-underlag', route: 'valuation-statement', icon: 'vardeutlatande_icon', person: 'sister (värdering)', owner: 'jenny' },
+  { title: 'Pappas pushups', description: '60 dagars utmaning — 1000 armhävningar', route: 'pappas-pushups', icon: 'pushups_icon', person: 'father', owner: 'robert' },
+  { title: 'Jobs', description: 'Berlin part-time English-job feed across scraped boards', route: 'jobs', icon: 'jobs_icon', person: 'Viktor', owner: 'vinoly' },
 ];
 
 // The personal cards one identity may see. Admin sees the whole estate, which
