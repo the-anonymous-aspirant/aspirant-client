@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Constellations: a scanned room link now adds you to the game, and says which
+  condition blocked it when it cannot. Opening `/member/shared/constellations/
+  room/:code` went straight to the state poll, which answers a non-member with
+  403 "Only a member of the room may view its state" — so scanning a room's own
+  QR code from a second device showed the player a refusal instead of the board.
+  The route now joins first (idempotent since aspirant-server #87, so an
+  existing member re-opening their own room link keeps their seat and never
+  flashes an error), and on refusal renders a purpose-built panel keyed off the
+  server's new `reason`: the room is full and how many seats it has, the game
+  has ended, no room with that code, or you are already in another game — named
+  and linked, reusing the #4798 affordance. Every blocked state offers a way
+  back to the lobby, and an unrecognised reason still renders the server's own
+  message rather than a blank panel. Operator-reported (system_3 #4806 ask 1,
+  client half of #4810).
+
 - Constellations: "Read the rules" now flips the board in place instead of
   opening a new tab. #4772 fixed a dead rulebook link by serving the rulebook as
   a static asset and linking it with `target="_blank"`; the operator wants the

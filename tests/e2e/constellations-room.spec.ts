@@ -22,6 +22,7 @@ type RoomState = { occupancy: number; player_count: number; members: unknown[] }
 // test uses to simulate other players arriving/leaving between polls.
 async function installMock(page: Page, initial: RoomState) {
   const room: RoomState = { ...initial };
+  const joinCalls: string[] = [];
 
   // Stub the external QR image so the shell's <img> never hits the network.
   await page.route(/qrserver\.com/, async (route: Route) => {
@@ -36,6 +37,24 @@ async function installMock(page: Page, initial: RoomState) {
 
   await page.route('**/api/constellations/**', async (route: Route) => {
     const url = new URL(route.request().url());
+    // #4806 ask 1: the room route joins before it reads. Default the join to
+    // the seated 200 so every pre-existing case still reaches the board; the
+    // refusal cases below override this route with their own handler.
+    if (/\/constellations\/rooms\/[^/]+\/join$/.test(url.pathname)) {
+      joinCalls.push(url.pathname.split('/').slice(-2, -1)[0]);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: ROOM_CODE,
+          player_count: room.player_count,
+          status: 'active',
+          occupancy: room.occupancy,
+          slot: 1,
+        }),
+      });
+      return;
+    }
     if (/\/constellations\/rooms\/[^/]+\/state$/.test(url.pathname)) {
       await route.fulfill({
         status: 200,
@@ -60,7 +79,24 @@ async function installMock(page: Page, initial: RoomState) {
     setOccupancy(n: number) {
       room.occupancy = n;
     },
+    joinCalls,
   };
+}
+
+// Installs a mock whose join endpoint REFUSES with #4808's discriminated
+// error body. Registered after installMock so it wins the match.
+async function refuseJoin(
+  page: Page,
+  status: number,
+  error: Record<string, unknown>,
+) {
+  await page.route(/\/constellations\/rooms\/[^/]+\/join$/, async (route: Route) => {
+    await route.fulfill({
+      status,
+      contentType: 'application/json',
+      body: JSON.stringify({ error }),
+    });
+  });
 }
 
 test.describe('#4601 Constellations in-room shell', () => {
@@ -225,5 +261,210 @@ test.describe('#4601 Constellations in-room shell', () => {
       (el) => el.ownerDocument.documentElement.scrollHeight - el.ownerDocument.documentElement.clientHeight,
     );
     expect(overflow).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * #4806 ask 1 / #4810 — the scanned room link joins you automatically, and when
+ * it cannot, says WHICH condition blocked.
+ *
+ * Before this, the room route went straight to the D1 poll, which answers a
+ * non-member with 403 "Only a member of the room may view its state" — the
+ * sentence the operator objected to, rendered verbatim.
+ *
+ * The `reason` discriminator these mocks carry is aspirant-server's, added by
+ * #4808 (merged 2026-09-02, `54e4f59a`): error.code is derived from the HTTP
+ * status, so a full room and a caller seated elsewhere are both `conflict`.
+ */
+test.describe('#4810 Constellations scanned-link auto-join', () => {
+  const SEATED: RoomState = { occupancy: 2, player_count: 4, members: [{ user_id: 1 }, { user_id: 2 }] };
+
+  test('a scanned room link joins automatically and lands on the board', async ({ page }) => {
+    await seedTrustedSession(page);
+    const mock = await installMock(page, SEATED);
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByTestId('board-canvas')).toBeVisible();
+    await expect.poll(() => mock.joinCalls).toEqual([ROOM_CODE]);
+    // The 403 poll prose must never reach the player.
+    await expect(page.getByTestId('room-error')).toHaveCount(0);
+    await expect(page.getByTestId('blocked-state')).toHaveCount(0);
+  });
+
+  test('an existing member opening the room never flashes the blocked state', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, SEATED);
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    // Watched across the whole entry, not merely asserted at the end: a naive
+    // "render the board, then correct it" would show the panel for a frame to
+    // every returning player.
+    for (let i = 0; i < 6; i++) {
+      await expect(page.getByTestId('blocked-state')).toHaveCount(0);
+      await page.waitForTimeout(200);
+    }
+    await expect(page.getByTestId('board-canvas')).toBeVisible();
+  });
+
+  test('a full room explains that it is full and names the size', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, SEATED);
+    await refuseJoin(page, 409, {
+      code: 'conflict',
+      reason: 'room_full',
+      message: 'Room ABCDE is full — all 4 seats are taken.',
+      room_player_count: 4,
+    });
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByTestId('blocked-state')).toBeVisible();
+    await expect(page.getByTestId('blocked-title')).toHaveText('This game is full');
+    // The seat count comes from the server's message; the guidance says what to
+    // do about it and must not repeat the count back.
+    await expect(page.getByTestId('blocked-message')).toContainText('all 4 seats are taken');
+    await expect(page.getByTestId('blocked-guidance')).toContainText('start a game of your own');
+    await expect(page.getByTestId('board-canvas')).toHaveCount(0);
+    // A "Scan to join" QR next to a refusal contradicts it, and the occupancy
+    // never loaded, so both are hidden while blocked.
+    await expect(page.getByTestId('join-qr')).toHaveCount(0);
+    await expect(page.getByTestId('occupancy')).toHaveCount(0);
+    // The room code stays — it names which room turned you away.
+    await expect(page.getByTestId('room-code')).toHaveText(ROOM_CODE);
+  });
+
+  test('an ended game says the game has ended, not that the code is unknown', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, SEATED);
+    await refuseJoin(page, 404, {
+      code: 'not_found',
+      reason: 'room_ended',
+      message: 'That game has ended',
+    });
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByTestId('blocked-title')).toHaveText('This game has ended');
+    // The two 404 reasons must not collapse into one explanation — that
+    // collapse is precisely what #4808 separated on the server.
+    await expect(page.getByTestId('blocked-title')).not.toHaveText('No room with that code');
+  });
+
+  test('an unknown code says the code is unknown', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, SEATED);
+    await refuseJoin(page, 404, {
+      code: 'not_found',
+      reason: 'room_not_found',
+      message: 'Room not found',
+    });
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByTestId('blocked-title')).toHaveText('No room with that code');
+    await expect(page.getByTestId('blocked-guidance')).toContainText('five characters');
+  });
+
+  test('already in another game names that room and links to it', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, SEATED);
+    await refuseJoin(page, 409, {
+      code: 'conflict',
+      reason: 'already_in_game',
+      message: 'You are already in game ZK4TQ — leave it before starting or joining another.',
+      active_room_code: 'ZK4TQ',
+    });
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByTestId('blocked-title')).toHaveText('You’re already in another game');
+    await expect(page.getByTestId('blocked-message')).toContainText('ZK4TQ');
+    const link = page.getByTestId('go-to-active-room');
+    await expect(link).toHaveText('Go to room ZK4TQ');
+    await expect(link).toHaveAttribute('href', '/member/shared/constellations/room/ZK4TQ');
+  });
+
+  test('every blocked state offers a way back to the lobby', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, SEATED);
+    await refuseJoin(page, 409, { code: 'conflict', reason: 'room_full', message: 'Room is full' });
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    await page.getByTestId('back-to-lobby').click();
+    await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
+  });
+
+  // The already_in_game panel links to the room you ARE in — the SAME route
+  // with a different :code. Entry runs in onMounted, and Vue Router would
+  // normally reuse a component across a param-only change, which would leave
+  // the player on the new room still looking at the old room's refusal. It does
+  // not here, because App.vue keys the router-view on `$route.path`, forcing a
+  // remount. That key is load-bearing for this panel and is not obviously so
+  // from inside this view, hence the test: if it is ever dropped or narrowed to
+  // the route name, this goes red instead of the link silently dead-ending.
+  test('following the link to your active room re-enters and lands on the board', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, SEATED);
+    // Refuse only the scanned room; the active room admits the caller.
+    await page.route(/\/constellations\/rooms\/([^/]+)\/join$/, async (route: Route) => {
+      const joined = new URL(route.request().url()).pathname.split('/').slice(-2, -1)[0];
+      if (joined === 'ZK4TQ') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 'ZK4TQ', player_count: 4, status: 'active', occupancy: 2, slot: 1 }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'conflict',
+            reason: 'already_in_game',
+            message: 'You are already in game ZK4TQ — leave it before starting or joining another.',
+            active_room_code: 'ZK4TQ',
+          },
+        }),
+      });
+    });
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByTestId('blocked-state')).toBeVisible();
+    await page.getByTestId('go-to-active-room').click();
+
+    await expect(page).toHaveURL(/ZK4TQ$/);
+    await expect(page.getByTestId('blocked-state')).toHaveCount(0);
+    await expect(page.getByTestId('board-canvas')).toBeVisible();
+  });
+
+  test('a reason this client does not know still renders the server message', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, SEATED);
+    await refuseJoin(page, 409, {
+      code: 'conflict',
+      reason: 'some_future_reason',
+      message: 'The room is sealed for the next round.',
+    });
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByTestId('blocked-title')).toHaveText('You could not join this room');
+    await expect(page.getByTestId('blocked-message')).toHaveText('The room is sealed for the next round.');
+    await expect(page.getByTestId('back-to-lobby')).toBeVisible();
   });
 });
