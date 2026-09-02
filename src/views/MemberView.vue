@@ -95,6 +95,16 @@
       AssetManager.releaseAsset('home_icon');
       AssetManager.releaseAsset('message_board_icon');
       AssetManager.releaseAsset('30year_gift_icon');
+      // Hand-drawn member-app icons (#4840): release what loadImages acquires.
+      AssetManager.releaseAsset('files_icon');
+      AssetManager.releaseAsset('translator_icon');
+      AssetManager.releaseAsset('constellations_icon');
+      AssetManager.releaseAsset('wikipedia_hand_icon');
+      AssetManager.releaseAsset('goal_trees_icon');
+      AssetManager.releaseAsset('scratchpad_icon');
+      AssetManager.releaseAsset('pushups_icon');
+      AssetManager.releaseAsset('jobs_icon');
+      AssetManager.releaseAsset('vardeutlatande_icon');
     },
   };
 </script>

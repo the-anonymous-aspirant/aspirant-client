@@ -32,6 +32,20 @@ const assetMap = {
   timeline_icon: { hash: '81a49b7a9f6c94b771d96f2f83edf4d7', type: AssetType.IMAGE },
   transparency_icon: { hash: '2c267c4b8ca0de90847cb4fcb7ffb1e3', type: AssetType.IMAGE },
   home_icon: { hash: 'bc942505fa501c3e1950efb1d7bc9e2b', type: AssetType.IMAGE },
+  // Hand-drawn member-app icons (#4840): the operator's inked sketch, ink-extracted
+  // to black-on-transparent PNGs. They render white via the .app-image invert(1) on
+  // the always-dark app card (--surface-card #424242 light / #2a2a2a dark). Each hash
+  // is the md5 of the uploaded object; the object is fetched member-side by the
+  // Trusted-cookie bypass, so no publish registry entry is needed.
+  files_icon: { hash: '72af3794839dce8f89a2a215fd17d376', type: AssetType.IMAGE },
+  translator_icon: { hash: '400a2a027d03b287b581011e99731016', type: AssetType.IMAGE },
+  constellations_icon: { hash: 'cf6483ecea33f0d297a9c25e0d3749af', type: AssetType.IMAGE },
+  wikipedia_hand_icon: { hash: '7e8ff8c811be6e55ce610155bf49463a', type: AssetType.IMAGE },
+  goal_trees_icon: { hash: '0f1d8b910f7694dfbe2dbfd4116f2b6d', type: AssetType.IMAGE },
+  scratchpad_icon: { hash: '621aa988d8f497aeb841466d81f7e872', type: AssetType.IMAGE },
+  pushups_icon: { hash: 'd7687996bb0b13bb83159afeb728ecbd', type: AssetType.IMAGE },
+  jobs_icon: { hash: '4e6c654dece53e93029bc5cee19b3dbb', type: AssetType.IMAGE },
+  vardeutlatande_icon: { hash: 'f728540c8354400762afab002220fdde', type: AssetType.IMAGE },
   message_board_icon: { hash: 'cf9873f665af55d9a2dd41ae008dab9f', type: AssetType.IMAGE },
   quiz_center_icon: { hash: 'ebf52d7466f9a954ba3951d976f0af55', type: AssetType.IMAGE },
   game_center_icon: { hash: '346984b835ca32c12449b78cd3665901', type: AssetType.IMAGE },
