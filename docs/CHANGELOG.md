@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Constellations: the status line at the bottom of the board is now a transient
+  feed, one item at a time. It rendered every current connection concatenated
+  into a single paragraph with `·` separators, so a room with several players
+  editing piled the whole graph into a wall of standing prose. A connection now
+  announces itself once when it is made or re-typed — fade in, dwell, fade out —
+  and the line is empty the rest of the time; simultaneous edits queue instead
+  of stacking on screen (newest 5 kept). Edges already on the board when the
+  room opens are adopted silently, so a player joining mid-game is not replayed
+  the whole graph, and the permanent "No connections yet." standing text is
+  gone. The graph itself remains the persistent view of who is connected to
+  whom. Respects `prefers-reduced-motion` (dwell without the fade).
+  Operator-reported (system_3 #4806 ask 6).
+
+- Constellations: the die now rests on a face instead of rendering blank. Before
+  the first roll `displayFace` was 0, which had no pip layout, so the icon was
+  an empty rounded square. It rests on a single pip drawn in muted slate — a
+  placeholder, not a result: the status line still reads "Not rolled yet" and
+  the accessible name is still "Roll the die" until a real value lands.
+  Operator-reported (system_3 #4806 ask 4).
+
 - Constellations: the "you are already in an active game" refusal now names
   the room and links to it. Create and join rendered `error.message` as a bare
   red line that told the user they held a seat somewhere but not where, so
