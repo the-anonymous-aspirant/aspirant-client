@@ -273,6 +273,56 @@ test.describe('#4601 Constellations in-room shell', () => {
     await expect(page.getByTestId('dice-roll')).toBeVisible();
   });
 
+  // #4945 item 1: a back→back tab switch (e.g. Rules → Settings) is a real
+  // flip — the card rotates a full turn and swaps its face at the hidden
+  // mid-point — not the instant, motionless content swap the boolean flip left.
+  test('switching between back faces rotates the card (#4945 item 1)', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    const board = page.getByTestId('board-canvas');
+    const deg = async () =>
+      board.evaluate((el) => {
+        const m = ((el as HTMLElement).style.transform || '').match(/rotateY\(([-\d.]+)deg\)/);
+        return m ? Number(m[1]) : 0;
+      });
+
+    // Game → Rules is a half-flip.
+    await page.getByTestId('room-nav-rules').click();
+    await expect(page.getByTestId('rules-face')).toBeVisible();
+    const afterRules = await deg();
+    expect(afterRules % 360).toBe(180); // showing a back face
+
+    // Rules → Settings, both back faces: a full 360° spin, not a no-op.
+    await page.getByTestId('room-nav-settings').click();
+    const afterSettings = await deg();
+    expect(afterSettings - afterRules).toBe(360);
+    // The settings face is the one that comes round after the swap.
+    await expect(page.getByTestId('settings-face')).toBeVisible();
+  });
+
+  // #4945 item 3: the bottom nav is anchored to the bottom of the room on every
+  // face — a sticky footer that does not ride up and down with the game-face
+  // stack.
+  test('the bottom nav is a sticky footer anchored to the bottom (#4945 item 3)', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    const nav = page.getByTestId('room-nav');
+    const pos = await nav.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { position: s.position, bottom: s.bottom };
+    });
+    expect(pos.position).toBe('sticky');
+    expect(pos.bottom).toBe('0px');
+  });
+
   // "reveal the scorllable rules" — the rules scroll INSIDE the board, they do
   // not grow the card down the page.
   test('the rules face scrolls inside the board rather than growing it', async ({ page }) => {

@@ -99,13 +99,26 @@ test.describe('#4835 Constellations creator-only transparency toggles', () => {
     expect(settingsCalls[settingsCalls.length - 1]).toEqual({ reveal_cards: true });
   });
 
-  test('a non-creator does not see the transparency section', async ({ page }) => {
+  // #4945 item 7: a non-creator now SEES the transparency section (so the
+  // feature is discoverable — the operator reported not seeing it at all,
+  // because their room was one they had not created) but it is read-only: the
+  // toggles reflect server state and are disabled, and the hint names who can
+  // change them. Power is unchanged — the server still 403s a non-creator POST.
+  test('a non-creator sees the transparency section read-only', async ({ page }) => {
     await seedTrustedSession(page);
-    await installRoomMock(page, { isCreator: false });
+    await installRoomMock(page, { isCreator: false, revealConnections: true, revealCards: false });
 
     await openSettings(page);
 
-    await expect(page.getByTestId('settings-transparency')).toHaveCount(0);
+    await expect(page.getByTestId('settings-transparency')).toBeVisible();
+    // Reflects current server state, so a non-creator can SEE whether the room
+    // is revealing…
+    await expect(page.getByTestId('toggle-reveal-connections')).toBeChecked();
+    await expect(page.getByTestId('toggle-reveal-cards')).not.toBeChecked();
+    // …but cannot change it.
+    await expect(page.getByTestId('toggle-reveal-connections')).toBeDisabled();
+    await expect(page.getByTestId('toggle-reveal-cards')).toBeDisabled();
+    await expect(page.getByTestId('transparency-hint')).toHaveText('Only the room creator can change these.');
     // The rest of the settings face still renders for a non-creator.
     await expect(page.getByTestId('leave-room')).toBeVisible();
   });

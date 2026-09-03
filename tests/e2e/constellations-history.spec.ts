@@ -32,8 +32,9 @@ const HISTORY_EVENTS = [
   { id: 11, kind: 'clear', type_id: 0, pair_low: 1, pair_high: 2, from_user_id: 0, to_user_id: 0, created_at: '2026-09-02T20:05:00Z' },
 ];
 
-async function installRoomMock(page: Page, opts: { history?: unknown[] } = {}) {
+async function installRoomMock(page: Page, opts: { history?: unknown[]; members?: unknown[] } = {}) {
   const history = opts.history ?? HISTORY_EVENTS;
+  const members = opts.members ?? MEMBERS;
   await page.route(/qrserver\.com/, async (route: Route) => {
     await route.fulfill({ status: 200, contentType: 'image/png', body: '' });
   });
@@ -62,7 +63,7 @@ async function installRoomMock(page: Page, opts: { history?: unknown[] } = {}) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ code: ROOM_CODE, player_count: 4, status: 'active', occupancy: 2, members: MEMBERS, relationships: [], dice: null, history_cursor: null, goal: null }),
+        body: JSON.stringify({ code: ROOM_CODE, player_count: 4, status: 'active', occupancy: 2, members, relationships: [], dice: null, history_cursor: null, goal: null }),
       });
       return;
     }
@@ -95,6 +96,36 @@ test.describe('#4848 Constellations history + settings faces', () => {
     await expect(items.nth(0).getByText('Partner', { exact: true })).toHaveCount(0);
     // A `clear` reads from the normalized pair and says the connection cleared.
     await expect(items.nth(1)).toContainText('connection cleared');
+  });
+
+  // #4945 item 8: each row shows the two participants' profile icons, resolved
+  // from the already-visible room-state members (no extra network call). A
+  // participant present with an avatar shows an <img>; one absent from members
+  // falls back to a neutral placeholder span.
+  test('History rows show the two players\' profile icons from room state', async ({ page }) => {
+    await seedTrustedSession(page);
+    const membersWithAvatars = [
+      { user_id: 1, slot: 1, game_username: 'Vega', avatar_url: 'https://example.test/vega.png' },
+      { user_id: 2, slot: 2, game_username: 'Rigel', avatar_url: 'https://example.test/rigel.png' },
+    ];
+    // A set event between two members who both carry avatars.
+    const events = [
+      { id: 10, kind: 'set', type_id: 1, pair_low: 1, pair_high: 2, from_user_id: 1, to_user_id: 2, created_at: '2026-09-02T20:00:00Z' },
+    ];
+    await installRoomMock(page, { history: events, members: membersWithAvatars });
+
+    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+    await page.getByTestId('room-nav-history').click();
+
+    const row = page.getByTestId('history-list').locator('li').first();
+    const fromImg = row.getByTestId('history-avatar-from');
+    const toImg = row.getByTestId('history-avatar-to');
+    await expect(fromImg).toBeVisible();
+    await expect(toImg).toBeVisible();
+    // The icons are the members' own avatars, in from/to order.
+    await expect(fromImg).toHaveAttribute('src', 'https://example.test/vega.png');
+    await expect(toImg).toHaveAttribute('src', 'https://example.test/rigel.png');
   });
 
   test('History shows an empty state when the log has no events', async ({ page }) => {

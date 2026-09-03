@@ -97,6 +97,29 @@ test.describe('#4807-B2 Constellations goal selection', () => {
     expect(mock.clearCalls.length).toBe(1);
   });
 
+  // #4945 item 6: the chosen goal sorts to the top of the deck (so it never
+  // has to be scrolled to) and carries a distinct highlight. Selecting the
+  // SECOND card must move it to the front.
+  test('the chosen goal sorts to the top of the deck and is highlighted', async ({ page }) => {
+    await seedTrustedSession(page);
+    const mock = installGoalMock(page);
+    await mock.install();
+
+    await openDictionary(page);
+    const cards = page.getByTestId('dictionary-cards').locator('li');
+    // Before selection the deck is in server order: V, then TRIAD.
+    await expect(cards.first()).toHaveAttribute('data-goal-code', 'v');
+
+    // Choose the second card (TRIAD, id 2).
+    await page.locator('li[data-goal-code="triad"]').getByTestId('goal-card-select').click();
+
+    // It moves to the front and reads as selected.
+    await expect(cards.first()).toHaveAttribute('data-goal-code', 'triad');
+    await expect(cards.first()).toHaveClass(/is-selected/);
+    await expect(cards.first().getByTestId('goal-card-mine')).toBeVisible();
+    expect(mock.setCalls).toContain(2);
+  });
+
   test('an achieved goal shows the achievement badge', async ({ page }) => {
     await seedTrustedSession(page);
     const mock = installGoalMock(page, { achieved: true });

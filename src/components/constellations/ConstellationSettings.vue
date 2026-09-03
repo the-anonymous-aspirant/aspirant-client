@@ -53,25 +53,33 @@
       </figure>
     </section>
 
-    <!-- #4835: the two creator-only transparency toggles. Rendered ONLY for the
-         room creator (server truth is_creator) — a non-creator never sees the
-         section, matching the server-side authorization (SetRoomReveal returns
-         403 for a non-creator, so a visible-but-disabled control for everyone
-         would be a hidden no-op). Each toggle relaxes one privacy rule for the
-         whole room: reveal others' connections, reveal others' relationship
-         cards. They are independent. -->
+    <!-- #4835 / #4945 item 7: the two transparency toggles. Originally rendered
+         ONLY for the creator (v-if isCreator), which made the feature invisible
+         to everyone else — the operator reported not seeing it at all, because
+         their room was one they had not created (or a legacy room whose
+         CreatorUserID is 0, so is_creator is false for everyone). The section is
+         now shown to ALL viewers for discoverability, but stays creator-only in
+         POWER: a non-creator sees the current state read-only (disabled inputs +
+         a hint saying who can change it), which matches the server, where
+         SetRoomReveal 403s a non-creator. The checkboxes still reflect server
+         truth, so a non-creator can SEE whether the room is currently revealing,
+         they just cannot flip it. Each toggle relaxes one privacy rule for the
+         whole room; they are independent. -->
     <section
-      v-if="isCreator"
       class="constellation-settings-transparency"
+      :class="{ 'is-readonly': !isCreator }"
       data-testid="settings-transparency"
     >
       <h3 class="constellation-settings-subhead">Room transparency</h3>
-      <p class="constellation-settings-hint">Only you, the room creator, can change these.</p>
+      <p class="constellation-settings-hint" data-testid="transparency-hint">
+        {{ isCreator ? 'Only you, the room creator, can change these.' : 'Only the room creator can change these.' }}
+      </p>
       <label class="constellation-settings-toggle">
         <input
           type="checkbox"
           data-testid="toggle-reveal-connections"
           :checked="revealConnections"
+          :disabled="!isCreator"
           @change="$emit('set-reveal', { field: 'reveal_connections', value: $event.target.checked })"
         />
         <span>Reveal everyone's connections</span>
@@ -81,6 +89,7 @@
           type="checkbox"
           data-testid="toggle-reveal-cards"
           :checked="revealCards"
+          :disabled="!isCreator"
           @change="$emit('set-reveal', { field: 'reveal_cards', value: $event.target.checked })"
         />
         <span>Reveal everyone's relationship cards</span>
@@ -283,6 +292,20 @@ defineEmits(['leave', 'set-reveal']);
   flex: 0 0 auto;
   cursor: pointer;
   accent-color: #38bdf8;
+}
+
+/* #4945 item 7: for a non-creator the section is read-only — the disabled
+   inputs and their labels dim so it reads as a status display, not a control
+   they are failing to operate. The section stays visible so the feature is
+   discoverable. */
+.constellation-settings-transparency.is-readonly .constellation-settings-toggle {
+  cursor: default;
+  color: #94a3b8;
+}
+
+.constellation-settings-toggle input:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .constellation-settings-leave {
