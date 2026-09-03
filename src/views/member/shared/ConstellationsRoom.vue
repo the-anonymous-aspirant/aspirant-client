@@ -63,6 +63,10 @@
 
     <section v-else-if="blocked" class="constellations-room-blocked" data-testid="blocked-state">
       <h2 class="constellations-room-blocked-title" data-testid="blocked-title">{{ blockedTitle }}</h2>
+      <!-- The code stays on the blocked view — it names which room turned you
+           away. On the board it now lives in settings, but settings is
+           unreachable while blocked, so the code is shown here directly. -->
+      <p class="constellations-room-blocked-code">Room <span data-testid="room-code">{{ code }}</span></p>
       <p class="constellations-room-blocked-message" data-testid="blocked-message">{{ blocked.message }}</p>
       <p v-if="blockedGuidance" class="constellations-room-blocked-guidance" data-testid="blocked-guidance">
         {{ blockedGuidance }}
@@ -906,6 +910,18 @@ onMounted(() => {
   margin: 0;
   font-size: 1.25rem;
   letter-spacing: 0.02em;
+}
+
+.constellations-room-blocked-code {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.constellations-room-blocked-code span {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.2em;
+  color: #f8fafc;
 }
 
 .constellations-room-blocked-message {

@@ -155,7 +155,9 @@ test.describe('#4598 Constellations landing lobby', () => {
     await page.getByTestId('create-room').click();
 
     await expect(page).toHaveURL(new RegExp(`/member/shared/constellations/room/${ROOM_CODE}$`));
-    await expect(page.getByTestId('room-code')).toHaveText(ROOM_CODE);
+    // #4848: the room code moved off the board into the settings face; the URL
+    // above already carries it, so here we just confirm the room shell mounted.
+    await expect(page.locator('.constellations-room-title')).toBeVisible();
     expect(handles.createBodies.length).toBe(1);
     expect(handles.createBodies[0].player_count).toBeGreaterThanOrEqual(2);
   });
