@@ -196,6 +196,17 @@ onUnmounted(clearTimer);
   transition: opacity 260ms ease;
 }
 
+/* #4883 item 7 — "let's make the names of each type consistently all caps".
+   The bold coloured term IS the type name in this sentence, and this is where
+   the inconsistency was worst: the phrase templates below carried `Friends`,
+   `Friends With Benefits` and `Affair` capitalised against `partnered`,
+   `dating` and `rejected` in lower case. Applied as text-transform rather than
+   in the builders so the surrounding sentence grammar is untouched. */
+.constellations-summary-item strong {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .constellations-summary-item.is-visible {
   opacity: 1;
 }

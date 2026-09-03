@@ -11,10 +11,14 @@
       <h3 id="dict-legend-heading" class="constellation-dictionary-heading">Connection types</h3>
       <p class="constellation-dictionary-note">The lines you draw between players. Every goal below is written in these.</p>
       <ul class="constellation-dictionary-legend" data-testid="dictionary-legend">
+        <!-- #4883 item 7: the type names read ALL CAPS wherever a name is
+             rendered. Uppercased in the template rather than by CSS so the
+             accessible name a screen reader announces matches the visible one
+             and an assertion can read the text. -->
         <li v-for="t in relationshipTypes" :key="t.id" class="constellation-dictionary-legend-item" :data-type-code="t.code">
           <span class="constellation-dictionary-swatch" :style="{ background: t.colour }" aria-hidden="true" />
           <span class="constellation-dictionary-code" :style="{ color: t.colour }">{{ t.code }}</span>
-          <span class="constellation-dictionary-label">{{ t.label }}</span>
+          <span class="constellation-dictionary-label">{{ t.label.toUpperCase() }}</span>
         </li>
       </ul>
     </section>

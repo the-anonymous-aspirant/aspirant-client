@@ -105,8 +105,13 @@ test.describe('#4807-B1 Constellations dictionary', () => {
     await expect(page.getByTestId('dictionary-face')).toBeVisible();
     await expect(page.getByTestId('room-nav-dictionary')).toHaveAttribute('aria-pressed', 'true');
 
-    // The six connection types form the legend.
-    await expect(page.getByTestId('dictionary-legend').locator('li')).toHaveCount(6);
+    // The six connection types form the legend, their names ALL CAPS (#4883
+    // item 7 — the seeded labels are "Partner" / "Friends with benefits", so
+    // this asserts the client's rendering, not the seed).
+    const legend = page.getByTestId('dictionary-legend');
+    await expect(legend.locator('li')).toHaveCount(6);
+    await expect(legend.locator('li[data-type-code="P"]')).toContainText('PARTNER');
+    await expect(legend.locator('li[data-type-code="F+"]')).toContainText('FRIENDS WITH BENEFITS');
 
     // All 16 goal cards render, each with its name and victory condition.
     await expect(page.getByTestId('dictionary-cards').locator('li')).toHaveCount(16);

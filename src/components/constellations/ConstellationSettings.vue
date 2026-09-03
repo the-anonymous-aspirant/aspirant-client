@@ -119,6 +119,12 @@ defineEmits(['leave', 'set-reveal']);
 </script>
 
 <style scoped>
+/* #4883 item 3: centre the content to match the dictionary and history faces.
+   The face keeps its column flow; `align-items: center` is what pulls the
+   identity row, the facts, the QR and the toggles onto the same axis as the
+   title, and each block that can grow wider than its content is capped so
+   centring is visible rather than a full-bleed row that happens to be
+   symmetric. */
 .constellation-settings {
   height: 100%;
   overflow-y: auto;
@@ -128,6 +134,8 @@ defineEmits(['leave', 'set-reveal']);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  text-align: center;
   gap: 20px;
 }
 
@@ -160,6 +168,7 @@ defineEmits(['leave', 'set-reveal']);
 .constellation-settings-identity-text {
   display: flex;
   flex-direction: column;
+  text-align: left;
 }
 
 .constellation-settings-identity-label {
@@ -177,6 +186,7 @@ defineEmits(['leave', 'set-reveal']);
 .constellation-settings-facts {
   margin: 0;
   display: flex;
+  justify-content: center;
   gap: 28px;
 }
 
@@ -207,6 +217,7 @@ defineEmits(['leave', 'set-reveal']);
 
 .constellation-settings-join {
   display: flex;
+  justify-content: center;
 }
 
 .constellation-settings-qr {
@@ -231,9 +242,12 @@ defineEmits(['leave', 'set-reveal']);
 .constellation-settings-transparency {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 10px;
-  padding-top: 4px;
+  padding-top: 12px;
   border-top: 1px solid #1e293b;
+  width: 100%;
+  max-width: 22rem;
 }
 
 .constellation-settings-subhead {
@@ -248,12 +262,19 @@ defineEmits(['leave', 'set-reveal']);
   color: #94a3b8;
 }
 
+/* The checkbox and its sentence stay left-aligned WITH EACH OTHER — a centred
+   checkbox row would put the box in a different place on each line — but the
+   pair as a whole is centred by the column above, and the two rows share a
+   width so their boxes line up. */
 .constellation-settings-toggle {
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 0.95rem;
   cursor: pointer;
+  text-align: left;
+  width: 100%;
+  max-width: 20rem;
 }
 
 .constellation-settings-toggle input {
@@ -265,7 +286,7 @@ defineEmits(['leave', 'set-reveal']);
 }
 
 .constellation-settings-leave {
-  align-self: flex-start;
+  align-self: center;
   background: transparent;
   border: 1px solid #7f1d1d;
   color: #fca5a5;
