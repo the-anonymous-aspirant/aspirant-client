@@ -5,94 +5,26 @@
 
     <div class="application-list">
       <application-card
-        :image-url="appImages.default"
-        title="Assets"
-        description="Image files and stuff"
-        route="/admin/assets"
-        @card-click="navigateTo"
-      />
-      <application-card
-        :image-url="appImages.default_user"
-        title="User Resources"
-        description="User accounts and permissions"
-        route="/admin/users"
-        @card-click="navigateTo"
-      />
-      <application-card
-        :image-url="appImages.default"
-        title="Voice Commander"
-        description="Record voice commands and manage extracted tasks"
-        route="/admin/voice-commander"
-        @card-click="navigateTo"
-      />
-      <application-card
-        :image-url="appImages.system_health_icon"
-        title="System Health"
-        description="Container metrics, disk usage, and database stats"
-        route="/admin/system-health"
-        @card-click="navigateTo"
-      />
-      <application-card
-        :image-url="appImages.default"
-        title="Advisor"
-        description="Ask about contracts, insurance, and legal documents"
-        route="/admin/advisor"
-        @card-click="navigateTo"
-      />
-      <application-card
-        :image-url="appImages.default"
-        title="Browser Flows"
-        description="Server-rendered Selenium flow runner — proxy/geo/UA probes"
-        route="/admin/browser-flows"
-        @card-click="navigateTo"
-      />
-      <!-- Opens in a new tab: Penpot's canvas needs a full browser tab, not
-           an iframe embed. The path is served by nginx (auth_request-gated
-           reverse proxy to penpot-frontend), not a Vue route. -->
-      <application-card
-        :image-url="appImages.penpot_design_icon"
-        title="Penpot Design"
-        description="Self-hosted design tool — mockups, tokens, component libraries. Opens in a new tab (full canvas, not an iframe embed)"
-        route="/admin/penpot/"
-        @card-click="openInNewTab"
-      />
-      <!-- nginx-served like Penpot above: static Histoire build of the
-           design system's stories (system_3 #2218). -->
-      <application-card
-        :image-url="appImages.histoire_icon"
-        title="Histoire — Design System"
-        description="Component workbench — stories and variants for @aspirant/design-system. Opens in a new tab"
-        route="/admin/histoire/"
-        @card-click="openInNewTab"
-      />
-      <!-- nginx-served like Penpot above: the system_3 fleet's Vue frontend,
-           reverse-proxied to the backend on the cell host (system_3 #2867). -->
-      <application-card
-        :image-url="appImages.default"
-        title="System 3"
-        description="Agent fleet console — tasks, agents, health, chat. Opens in a new tab"
-        route="/admin/apps/system_3/"
-        @card-click="openInNewTab"
-      />
-      <!-- nginx-served like Penpot/System 3 above: encrypted data lake explorer
-           (explorer over Garage + catalog). -->
-      <application-card
-        :image-url="appImages.default"
-        title="Data Lake"
-        description="Browse encrypted lake — explorer over Garage + catalog. Opens in a new tab"
-        route="/admin/explorer/"
-        @card-click="openInNewTab"
+        v-for="app in apps"
+        :key="app.route"
+        :image-url="appImages[app.icon] || ''"
+        :title="app.title"
+        :description="app.description"
+        :route="app.route"
+        @card-click="openApp(app)"
       />
     </div>
 
     <h2 class="section-title">Tools</h2>
     <div class="application-list">
       <application-card
-        :image-url="appImages.default"
-        title="Kvitto Maker"
-        description="Generate 12-month rent receipt PDFs"
-        route="/admin/tools/kvitto"
-        @card-click="navigateTo"
+        v-for="tool in tools"
+        :key="tool.route"
+        :image-url="appImages[tool.icon] || ''"
+        :title="tool.title"
+        :description="tool.description"
+        :route="tool.route"
+        @card-click="openApp(tool)"
       />
     </div>
   </div>
@@ -102,6 +34,101 @@
   import AssetManager from '../../asset_manager';
   import ApplicationCard from '../../components/ApplicationCard.vue';
 
+  // The Admin roster (#4842) — the ONE definition of the admin landing tiles,
+  // lifted from the former inline <application-card> list so the two grids
+  // render with v-for, the way views/applications/Applications.vue and
+  // views/MemberView.vue already do. Titles, descriptions, routes, icons and
+  // order are unchanged from the markup this replaces.
+  //
+  // `route` is a full path (these are absolute, unlike the hub registries'
+  // suffixes); `icon` is an asset-manager key, and several tiles deliberately
+  // share `default` — there is no hand-drawn icon for them yet. `newTab: true`
+  // marks a destination nginx serves OUTSIDE the SPA: Penpot's canvas, the
+  // Histoire build, the system_3 console and the lake explorer are reverse-
+  // proxied paths, not Vue routes, so they need a real browser tab rather than
+  // a router push or an iframe embed.
+  const ADMIN_APPS = [
+    {
+      title: 'Assets',
+      description: 'Image files and stuff',
+      route: '/admin/assets',
+      icon: 'default',
+    },
+    {
+      title: 'User Resources',
+      description: 'User accounts and permissions',
+      route: '/admin/users',
+      icon: 'default_user',
+    },
+    {
+      title: 'Voice Commander',
+      description: 'Record voice commands and manage extracted tasks',
+      route: '/admin/voice-commander',
+      icon: 'default',
+    },
+    {
+      title: 'System Health',
+      description: 'Container metrics, disk usage, and database stats',
+      route: '/admin/system-health',
+      icon: 'system_health_icon',
+    },
+    {
+      title: 'Advisor',
+      description: 'Ask about contracts, insurance, and legal documents',
+      route: '/admin/advisor',
+      icon: 'default',
+    },
+    {
+      title: 'Browser Flows',
+      description: 'Server-rendered Selenium flow runner — proxy/geo/UA probes',
+      route: '/admin/browser-flows',
+      icon: 'default',
+    },
+    {
+      title: 'Penpot Design',
+      description:
+        'Self-hosted design tool — mockups, tokens, component libraries. Opens in a new tab (full canvas, not an iframe embed)',
+      route: '/admin/penpot/',
+      icon: 'penpot_design_icon',
+      newTab: true,
+    },
+    {
+      // Static Histoire build of the design system's stories (system_3 #2218).
+      title: 'Histoire — Design System',
+      description:
+        'Component workbench — stories and variants for @aspirant/design-system. Opens in a new tab',
+      route: '/admin/histoire/',
+      icon: 'histoire_icon',
+      newTab: true,
+    },
+    {
+      // The system_3 fleet's Vue frontend, reverse-proxied to the backend on
+      // the cell host (system_3 #2867).
+      title: 'System 3',
+      description: 'Agent fleet console — tasks, agents, health, chat. Opens in a new tab',
+      route: '/admin/apps/system_3/',
+      icon: 'default',
+      newTab: true,
+    },
+    {
+      // Encrypted data lake explorer (explorer over Garage + catalog).
+      title: 'Data Lake',
+      description: 'Browse encrypted lake — explorer over Garage + catalog. Opens in a new tab',
+      route: '/admin/explorer/',
+      icon: 'default',
+      newTab: true,
+    },
+  ];
+
+  const ADMIN_TOOLS = [
+    {
+      title: 'Kvitto Maker',
+      description: 'Generate 12-month rent receipt PDFs',
+      route: '/admin/tools/kvitto',
+      icon: 'default',
+    },
+  ];
+
   export default {
     components: {
       ApplicationCard,
@@ -109,21 +136,20 @@
 
     data() {
       return {
-        appImages: {
-          default_user: '',
-          default: '',
-          // Hand-drawn admin-tile icons (#4840). loadImages() iterates
-          // Object.keys(appImages), so listing a key here is enough to load it.
-          system_health_icon: '',
-          penpot_design_icon: '',
-          histoire_icon: '',
-        },
+        apps: ADMIN_APPS,
+        tools: ADMIN_TOOLS,
+        // Keyed by asset-manager key, not by route, because several tiles share
+        // `default`. Empty until loadImages() resolves; the keys it loads are
+        // the distinct `icon` values of the two registries, so a new tile needs
+        // no second edit here.
+        appImages: {},
       };
     },
     methods: {
       async loadImages() {
+        const keys = [...new Set([...ADMIN_APPS, ...ADMIN_TOOLS].map((app) => app.icon))];
         await Promise.all(
-          Object.keys(this.appImages).map(async (key) => {
+          keys.map(async (key) => {
             try {
               this.appImages[key] = await AssetManager.getAsset(key);
             } catch (error) {
@@ -132,13 +158,14 @@
           })
         );
       },
-      navigateTo(route) {
-        this.$router.push(route);
-      },
-      // For nginx-served (non-SPA) destinations like Penpot, which need a
-      // full browser tab rather than an in-app route or iframe.
-      openInNewTab(route) {
-        window.open(route, '_blank', 'noopener');
+      // One handler for both grids: an nginx-served destination gets a full
+      // browser tab, an in-app route gets a router push.
+      openApp(app) {
+        if (app.newTab) {
+          window.open(app.route, '_blank', 'noopener');
+          return;
+        }
+        this.$router.push(app.route);
       },
     },
     mounted() {

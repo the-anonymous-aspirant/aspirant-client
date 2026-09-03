@@ -4,38 +4,12 @@
     <h2 class="page-subtitle">Test your knowledge and discover your personality!</h2>
     <div class="quiz-list">
       <application-card
-        :image-url="quizImages.rbguesser"
-        title="RGB Guesser"
-        description="Test your color perception skills"
-        route="rbguesser"
-        @card-click="goToQuiz"
-      />
-      <application-card
-        :image-url="quizImages.sql"
-        title="Personality Test: SQL"
-        description="Find out which SQL predicate you are"
-        route="sql"
-        @card-click="goToQuiz"
-      />
-      <application-card
-        :image-url="quizImages.timeline_tech"
-        title="Innovation Quiz"
-        description="Learn about key innovations in history"
-        route="timeline-tech"
-        @card-click="goToQuiz"
-      />
-      <application-card
-        :image-url="quizImages.timeline_people"
-        title="People Quiz"
-        description="Learn about key historical figures"
-        route="timeline-people"
-        @card-click="goToQuiz"
-      />
-      <application-card
-        :image-url="quizImages.timeline_conflicts"
-        title="Conflict Quiz"
-        description="Learn about key conflicts in history"
-        route="timeline-conflicts"
+        v-for="quiz in quizzes"
+        :key="quiz.route"
+        :image-url="quizImages[quiz.route] || ''"
+        :title="quiz.title"
+        :description="quiz.description"
+        :route="quiz.route"
         @card-click="goToQuiz"
       />
     </div>
@@ -46,6 +20,54 @@
   import AssetManager from '../../asset_manager';
   import ApplicationCard from '../../components/ApplicationCard.vue';
 
+  // The Quiz Center roster (#4842) — the ONE definition of this hub's tiles,
+  // lifted from the former inline <application-card> list so the grid renders
+  // with v-for, the way views/applications/Applications.vue and
+  // views/MemberView.vue already do. Titles, descriptions, routes and icon
+  // keys are unchanged from the markup this replaces.
+  //
+  // `route` is the path suffix under `/quizzes/`; `icon` is an asset-manager
+  // key. Adding a quiz used to mean three edits in this file (a card block, a
+  // `quizImages` key, a `loadImages()` line) plus one in the router — it is
+  // now one row here plus the router entry.
+  //
+  // The route strings are still typed twice: here, and in the `// Quiz routes`
+  // block of src/router/router.js, which also needs the per-route component
+  // import. Unifying the two was left out of scope by #4842; if a route moves,
+  // both places move together.
+  const QUIZZES = [
+    {
+      title: 'RGB Guesser',
+      description: 'Test your color perception skills',
+      route: 'rbguesser',
+      icon: 'rbguesser_icon',
+    },
+    {
+      title: 'Personality Test: SQL',
+      description: 'Find out which SQL predicate you are',
+      route: 'sql',
+      icon: 'sql_icon',
+    },
+    {
+      title: 'Innovation Quiz',
+      description: 'Learn about key innovations in history',
+      route: 'timeline-tech',
+      icon: 'timeline_tech_icon',
+    },
+    {
+      title: 'People Quiz',
+      description: 'Learn about key historical figures',
+      route: 'timeline-people',
+      icon: 'timeline_people_icon',
+    },
+    {
+      title: 'Conflict Quiz',
+      description: 'Learn about key conflicts in history',
+      route: 'timeline-conflicts',
+      icon: 'timeline_conflicts_icon',
+    },
+  ];
+
   export default {
     name: 'QuizHub',
     components: {
@@ -53,13 +75,10 @@
     },
     data() {
       return {
-        quizImages: {
-          rbguesser: '',
-          sql: '',
-          timeline_tech: '',
-          timeline_people: '',
-          timeline_conflicts: '',
-        },
+        quizzes: QUIZZES,
+        // Keyed by route so the template looks an icon up by the same field
+        // the card is keyed on; empty until loadImages() resolves.
+        quizImages: {},
       };
     },
     methods: {
@@ -67,15 +86,15 @@
         this.$router.push({ path: `/quizzes/${quiz.toLowerCase()}` });
       },
       async loadImages() {
-        try {
-          this.quizImages.rbguesser = await AssetManager.getAsset('rbguesser_icon');
-          this.quizImages.sql = await AssetManager.getAsset('sql_icon');
-          this.quizImages.timeline_tech = await AssetManager.getAsset('timeline_tech_icon');
-          this.quizImages.timeline_people = await AssetManager.getAsset('timeline_people_icon');
-          this.quizImages.timeline_conflicts = await AssetManager.getAsset('timeline_conflicts_icon');
-        } catch (error) {
-          console.error('Failed to load quiz images:', error);
-        }
+        await Promise.all(
+          QUIZZES.map(async (quiz) => {
+            try {
+              this.quizImages[quiz.route] = await AssetManager.getAsset(quiz.icon);
+            } catch (error) {
+              console.error(`Failed to load ${quiz.icon}:`, error);
+            }
+          })
+        );
       },
     },
     mounted() {

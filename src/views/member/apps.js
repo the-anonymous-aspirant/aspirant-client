@@ -1,7 +1,10 @@
 // The Member area's app roster (#4184) — the ONE definition of the
-// shared/personal split, consumed by both the Member index page
-// (views/MemberView.vue) and the sidebar (components/sidebar/Sidebar.vue) so the
-// two cannot drift. The operator ratified this classification verbatim on #3617;
+// shared/personal split, consumed by the Member index page
+// (views/MemberView.vue). The sidebar does NOT read it: since #4198 its nav is
+// a single top-level "Member" link, because a per-app sub-nav duplicated these
+// cards and swamped the nav (components/sidebar/Sidebar.vue:192-196). This
+// header claimed both consumers until #4842 checked and corrected it.
+// The operator ratified this classification verbatim on #3617;
 // a hardcoded list is the sanctioned shape here (a per-app `scope` metadata
 // field was explicitly ruled out of scope for ~12 apps).
 //
