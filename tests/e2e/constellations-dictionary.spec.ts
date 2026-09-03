@@ -120,6 +120,14 @@ test.describe('#4807-B1 Constellations dictionary', () => {
     // The V card — the one the text-only extraction had dropped — is present.
     await expect(page.getByTestId('dictionary-cards').locator('li[data-goal-code="v"]')).toBeVisible();
 
+    // #4945 item 4: goal-card names render ALL CAPS too (the operator's
+    // "Monogamy" example). The seed name here is lowercase 'monogamy', so this
+    // pins the client's uppercasing, not the fixture.
+    const monogamyName = page
+      .locator('li[data-goal-code="monogamy"]')
+      .getByTestId('goal-card-name');
+    await expect(monogamyName).toHaveText('MONOGAMY');
+
     // Flipping back returns to the game (tap the active control again).
     await page.getByTestId('room-nav-dictionary').click();
     await expect(board).not.toHaveClass(/is-flipped/);
