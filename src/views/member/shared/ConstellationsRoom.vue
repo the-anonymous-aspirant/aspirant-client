@@ -795,7 +795,11 @@ onMounted(() => {
    defect behind "make it white". */
 .constellations-room-title {
   margin: 0;
-  font-size: 2rem;
+  /* Fixed at 2rem the word overran a 390px phone, running under the sidebar
+     toggle and the overlay back button — tolerable while it was left-aligned,
+     but centring a line that does not fit does not read as centred. It scales
+     down to fit and holds 2rem from ~34rem up. */
+  font-size: clamp(1.35rem, 6vw, 2rem);
   letter-spacing: 0.04em;
   text-align: center;
   color: #f8fafc;

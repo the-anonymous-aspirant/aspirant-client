@@ -86,10 +86,13 @@ test.describe('#4848 Constellations history + settings faces', () => {
 
     const items = page.getByTestId('history-list').locator('li');
     await expect(items).toHaveCount(2);
-    // A `set` reads as "<from> → <to>" with the type label.
+    // A `set` reads as "<from> → <to>" with the type label. #4883 item 7: the
+    // type name is ALL CAPS here as everywhere else — the seeded label is
+    // "Partner", so a case-sensitive assertion is what pins the rendering.
     await expect(items.nth(0)).toContainText('Vega');
     await expect(items.nth(0)).toContainText('Rigel');
-    await expect(items.nth(0)).toContainText('Partner');
+    await expect(items.nth(0)).toContainText('PARTNER');
+    await expect(items.nth(0).getByText('Partner', { exact: true })).toHaveCount(0);
     // A `clear` reads from the normalized pair and says the connection cleared.
     await expect(items.nth(1)).toContainText('connection cleared');
   });

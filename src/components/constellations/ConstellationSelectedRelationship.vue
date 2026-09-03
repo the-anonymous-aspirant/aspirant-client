@@ -33,7 +33,7 @@
           :style="{ background: relationship.colour }"
           aria-hidden="true"
         />
-        {{ relationship.label }}
+        {{ relationship.label.toUpperCase() }}
       </span>
       <span v-else class="constellation-selected-none" data-testid="selected-none">
         no connection yet
@@ -107,6 +107,9 @@ const idleHint = computed(() =>
   font-weight: 600;
 }
 
+/* The name is uppercased in the template, not here: a CSS-only transform
+   leaves the DOM text (and the accessible name) in the vocabulary's own case,
+   so the surface and what a screen reader or an assertion reads would differ. */
 .constellation-selected-type {
   display: inline-flex;
   align-items: center;
@@ -114,7 +117,6 @@ const idleHint = computed(() =>
   font-weight: 700;
   font-size: 0.85rem;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .constellation-selected-swatch {
