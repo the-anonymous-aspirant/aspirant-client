@@ -26,7 +26,9 @@
         <span class="constellation-history-dot" :style="{ background: e.kind === 'set' ? e.colour : '#475569' }" aria-hidden="true" />
         <span class="constellation-history-body">
           <span class="constellation-history-pair">{{ e.fromName }} <span class="constellation-history-arrow">{{ e.kind === 'set' ? '→' : '—' }}</span> {{ e.toName }}</span>
-          <span v-if="e.kind === 'set'" class="constellation-history-type" :style="{ color: e.colour }">{{ e.typeLabel }}</span>
+          <!-- #4883 item 7: ALL CAPS type name, same as the dictionary legend
+               and the selected-relationship box. -->
+          <span v-if="e.kind === 'set'" class="constellation-history-type" :style="{ color: e.colour }">{{ e.typeLabel.toUpperCase() }}</span>
           <span v-else class="constellation-history-type constellation-history-type-cleared">connection cleared</span>
         </span>
         <time v-if="e.time" class="constellation-history-time" :datetime="e.iso">{{ e.time }}</time>

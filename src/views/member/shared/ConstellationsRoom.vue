@@ -104,13 +104,6 @@
              layout, so without it the board's buttons stay tab-reachable and
              clickable through a face the viewer cannot see. -->
         <div class="constellations-room-face constellations-room-face-front" :inert="isFlipped">
-          <!-- Dice cluster (#4587-F3 / #4604). Faces come from the D1 poll's
-               `dice` field so every viewer converges on the same server-resolved
-               roll; rolling.vue talks to the roll endpoint directly. -->
-          <div class="constellations-room-dice" data-testid="dice-mount">
-            <ConstellationsDice v-if="code" :code="code" :dice="state?.dice ?? null" :loading="loading" />
-          </div>
-
           <p v-if="loading && !state" class="constellations-room-board-note">Connecting to the room…</p>
           <!-- F1 (#4602): the relationship graph — ring-laid avatars + typed coloured edges. -->
           <ConstellationGraph
@@ -121,25 +114,6 @@
             @select="toggleSelect"
           />
           <p v-else class="constellations-room-board-note">Waiting for players to join…</p>
-
-          <!-- F2 (#4603): pinned right-edge relationship control panel. Its
-               pair picker is scoped to a live selection (#4806 ask 3); the
-               history arrows inside it stay mounted regardless. -->
-          <div class="constellations-room-panel">
-            <ConstellationControlPanel
-              :types="relationshipTypes"
-              :open="selectedIds.length > 0"
-              :selected-count="selectedIds.length"
-              :pair-selected="selectedIds.length === 2"
-              :busy="editBusy"
-              @set-type="setType"
-              @clear="clearPair"
-              @undo="undo"
-              @redo="redo"
-              @dismiss="dismissPicker"
-            />
-            <p v-if="editError" class="constellations-room-error" data-testid="edit-error">{{ editError }}</p>
-          </div>
 
           <!-- Relationship summary: F4 (#4605). Mounted bottom-centre, matching
                the wireframe's POLYAMORY box (gate resolved in #4605's design
@@ -195,6 +169,50 @@
       </section>
     </div>
 
+    <!-- #4883 items 4, 5 and 8 — one layout decision, not three patches. The
+         operator asked for the relationship-forming interface and the die to
+         "appear underneath the game board", and for "a box for the selected
+         relationship" underneath the screen with the cards. They stack in the
+         order the gesture is performed: the board says who is connected, the
+         selected-relationship box says what the pair you are holding carries,
+         the picker changes it, and the die sits last as the turn-taking prop
+         that belongs to the table rather than to an edit.
+
+         The stack is game-face-only. The flip card is the whole screen when it
+         is showing rules, cards, history or settings, and leaving the die and
+         a pair picker under a settings page would be furniture from another
+         mode. Hidden with the board while entry is in flight or refused. -->
+    <div
+      v-if="!entering && !blocked && !isFlipped"
+      class="constellations-room-stack"
+      data-testid="board-stack"
+    >
+      <ConstellationSelectedRelationship
+        :pair="selectedPair"
+        :relationship="selectedRelationship"
+        :selected-count="selectedIds.length"
+      />
+
+      <ConstellationControlPanel
+        :types="relationshipTypes"
+        :open="selectedIds.length > 0"
+        :selected-count="selectedIds.length"
+        :pair-selected="selectedIds.length === 2"
+        :busy="editBusy"
+        @set-type="setType"
+        @clear="clearPair"
+        @dismiss="dismissPicker"
+      />
+      <p v-if="editError" class="constellations-room-error" data-testid="edit-error">{{ editError }}</p>
+
+      <!-- Dice cluster (#4587-F3 / #4604). Faces come from the D1 poll's
+           `dice` field so every viewer converges on the same server-resolved
+           roll. Moved off the board's top-left corner by #4883 item 5. -->
+      <div class="constellations-room-dice" data-testid="dice-mount">
+        <ConstellationsDice v-if="code" :code="code" :dice="state?.dice ?? null" :loading="loading" />
+      </div>
+    </div>
+
     <!-- #4848: the bottom bar is now a compact set of icon controls selecting
          which face the spinning card shows (game / rules / cards / history /
          settings). Leave moved into settings. Hidden while entry is in flight or
@@ -220,6 +238,7 @@ import ConstellationDictionary from '../../../components/constellations/Constell
 import ConstellationHistory from '../../../components/constellations/ConstellationHistory.vue';
 import ConstellationSettings from '../../../components/constellations/ConstellationSettings.vue';
 import ConstellationRoomNav from '../../../components/constellations/ConstellationRoomNav.vue';
+import ConstellationSelectedRelationship from '../../../components/constellations/ConstellationSelectedRelationship.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -550,6 +569,37 @@ async function clearGoal() {
   }
 }
 
+// #4883 item 8 — what the selected-relationship box reads. `selectedPair` is
+// the two picked players' display names, in pick order, and is null until two
+// are held; `selectedRelationship` is the edge they currently carry, read from
+// the SAME poll payload the board draws from (so the box and the lines can
+// never disagree), and is null when the pair carries none. Edges are
+// undirected for this purpose: the payload stores a direction, but "who is
+// connected to whom" does not depend on which of the two you clicked first.
+function displayNameFor(userId) {
+  const m = (state.value?.members || []).find((x) => x.user_id === userId);
+  if (!m) return 'Someone';
+  return m.game_username || `Player ${m.slot ?? '?'}`;
+}
+
+const selectedPair = computed(() => {
+  const [from, to] = selectedIds.value;
+  if (from == null || to == null) return null;
+  return { from: displayNameFor(from), to: displayNameFor(to) };
+});
+
+const selectedRelationship = computed(() => {
+  const [from, to] = selectedIds.value;
+  if (from == null || to == null) return null;
+  const rel = (state.value?.relationships || []).find(
+    (r) =>
+      (r.from_user_id === from && r.to_user_id === to) ||
+      (r.from_user_id === to && r.to_user_id === from),
+  );
+  if (!rel) return null;
+  return { label: rel.type_label, colour: rel.colour };
+});
+
 // Ask 3: the picker is a live gesture, so it needs a way out that is not an
 // edit. Dropping the selection closes it and leaves the graph untouched.
 function dismissPicker() {
@@ -607,17 +657,12 @@ function clearPair() {
   });
 }
 
-function undo() {
-  runEdit(() =>
-    axios.post(`/api/constellations/rooms/${encodeURIComponent(code.value)}/relationships/undo`),
-  );
-}
-
-function redo() {
-  runEdit(() =>
-    axios.post(`/api/constellations/rooms/${encodeURIComponent(code.value)}/relationships/redo`),
-  );
-}
+// #4883 item 1 — "I'd like to remove the back and forth buttons currently
+// placed on the game screen, we can retire that." The undo/redo arrows were
+// this shell's only callers of the C1 relationships/undo + /redo endpoints, so
+// the callers go with the buttons. The SERVER verbs and #4834's authorization
+// coverage of them are aspirant-server-side and deliberately untouched — this
+// is a UI retirement, not an API one.
 
 // ---- #4806 ask 1: entry -----------------------------------------------
 //
@@ -727,24 +772,33 @@ onMounted(() => {
   align-items: center;
 }
 
+/* #4883 item 6 — "let's also center the Constellations text, make it white."
+   The header is now a single centred cluster; nothing else has shared this row
+   since #4848 moved the room code, occupancy and QR into settings. */
 .constellations-room-header {
   width: 100%;
   max-width: 52rem;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: center;
   gap: 1.5rem;
   flex-wrap: wrap;
 }
 
 .constellations-room-heading {
-  text-align: left;
+  text-align: center;
 }
 
+/* The colour is stated explicitly rather than inherited: the room's own
+   `color: #f8fafc` reaches this h1 only in dark theme — in light theme the
+   app's global heading rule wins and the title renders grey, which is the
+   defect behind "make it white". */
 .constellations-room-title {
   margin: 0;
   font-size: 2rem;
   letter-spacing: 0.04em;
+  text-align: center;
+  color: #f8fafc;
 }
 
 /* Room code, occupancy and the join QR that used to sit in the header moved
@@ -802,9 +856,14 @@ onMounted(() => {
   position: relative;
   width: 100%;
   max-width: 52rem;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   margin-top: 1.5rem;
-  min-height: 22rem;
+  /* #4883 item 2: +25% vertical extent. The floor was 22rem; 22 x 1.25 =
+     27.5rem, which is what a phone gets (there the graph is width-bound at
+     roughly 21rem, so the floor is the driver). On a wider viewport the driver
+     is the graph's square cap, 30rem before this change — see the desktop
+     override below. */
+  min-height: 27.5rem;
   perspective: 1600px;
 }
 
@@ -837,11 +896,25 @@ onMounted(() => {
    rules / Leave buttons and swallowed their clicks. */
 .constellations-room-face-front {
   position: relative;
-  min-height: 22rem;
+  min-height: 27.5rem;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Above the mobile breakpoint the board's height was set by the graph's square
+   30rem cap, not by the 22rem floor — so the +25% that the operator asked for
+   is 30rem x 1.25 = 37.5rem, and both the stage and the front face carry it so
+   the back face (which is absolutely positioned into the front face's box)
+   grows with it. ConstellationGraph's own cap moves to 37.5rem in the same
+   change, so the ring fills the new height instead of floating in an empty
+   band. */
+@media (min-width: 48rem) {
+  .constellations-room-board-stage,
+  .constellations-room-face-front {
+    min-height: 37.5rem;
+  }
 }
 
 /* The BACK face is the one that is stacked, filling whatever box the front
@@ -867,10 +940,23 @@ onMounted(() => {
   }
 }
 
+/* #4883 items 4, 5 and 8: the stack under the board. The die, the relationship
+   picker and the selected-relationship box were three absolutely-positioned
+   children of the board face; they are now one centred column in flow beneath
+   it, which is also what fills the dead canvas the operator pointed at. */
+.constellations-room-stack {
+  width: 100%;
+  max-width: 52rem;
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .constellations-room-dice {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
+  display: flex;
+  justify-content: center;
 }
 
 .constellations-room-summary {
@@ -883,34 +969,10 @@ onMounted(() => {
   padding: 0 1rem;
 }
 
-/* F2: the control panel pins to the board's right edge (wireframe). On
-   narrow screens the overlay would cover the graph and swallow avatar taps,
-   so the panel drops into flow beneath the board instead. */
-.constellations-room-panel {
-  position: absolute;
-  right: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  max-width: 9rem;
-}
-
-@media (max-width: 48rem) {
-  .constellations-room-board {
-    flex-direction: column;
-    padding-bottom: 1rem;
-  }
-
-  .constellations-room-panel {
-    position: static;
-    transform: none;
-    margin-top: 1rem;
-    max-width: none;
-  }
-}
+/* The .constellations-room-panel wrapper and its narrow-screen override are
+   gone with #4883 item 4 — the control panel is a member of
+   .constellations-room-stack now, and the responsive special case that existed
+   only to un-pin the right-edge overlay on phones has nothing left to un-pin. */
 
 /* #4806 ask 1: the blocked panel replaces the board when entry is refused. It
    deliberately reuses the action row's button shapes rather than inventing a

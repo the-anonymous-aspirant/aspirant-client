@@ -1,7 +1,8 @@
 <template>
   <!--
-    #4603 / #4587-F2 — the relationship control panel. Pinned right-edge panel
-    (operator default, epic #4587 c25764 Q4). Per §3.100 this panel is CHROME,
+    #4603 / #4587-F2 — the relationship control panel. Originally a pinned
+    right-edge panel (operator default, epic #4587 c25764 Q4); since #4883
+    item 4 it sits in flow beneath the board. Per §3.100 this panel is CHROME,
     so it is DS Asp* + tokens; only the graph canvas is bespoke SVG. Type
     colours come from the vocabulary rows (A2 data), never frontend constants.
 
@@ -9,20 +10,27 @@
     calls; this component renders the vocabulary and emits intents.
 
     #4806 ask 3 — "I'd like for the modal that requests you to select two
-    players only appear when you click on a player." The panel used to render
-    unconditionally, standing on the board with every button disabled and a
-    "Select two players" hint nobody had asked for. It is now split by SCOPE,
-    not by position:
+    players only appear when you click on a player." The panel is pair-scoped:
+    the hint, the type buttons and Clear mount only while a selection is in
+    progress (`open`).
 
-      - the PAIR PICKER (hint + type buttons + Clear) is pair-scoped and mounts
-        only while a selection is in progress (`open`);
-      - the HISTORY arrows are board-scoped and stay mounted, because they are
-        not part of the select-two-players gesture. Hiding them with the picker
-        would put undo out of reach exactly when it is wanted — right after a
-        mis-click that has already been committed and deselected.
+    #4883 items 1 and 4 — the operator retired the back/forward arrows ("I'd
+    like to remove the back and forth buttons currently placed on the game
+    screen, we can retire that") and moved this interface off the board ("for
+    the relationship forming functionality, can we have the interface appear
+    underneath the game board?"). Two consequences:
+
+      - the `constellation-panel-history` arrows are gone, and with them this
+        component's only board-scoped content. The undo/redo SERVER verbs are
+        untouched — only their client callers go;
+      - with nothing board-scoped left, the whole component renders NOTHING
+        when `open` is false. It used to be an always-present box because the
+        arrows lived in it; below the board an empty bordered box would just be
+        a hole in the stack. What the player is holding is now said by
+        ConstellationSelectedRelationship, which sits above this.
   -->
-  <div class="constellation-panel" data-testid="control-panel">
-    <div v-if="open" class="constellation-panel-picker" data-testid="pair-picker">
+  <div v-if="open" class="constellation-panel" data-testid="control-panel">
+    <div class="constellation-panel-picker" data-testid="pair-picker">
       <div class="constellation-panel-picker-head">
         <p class="constellation-panel-hint" data-testid="panel-hint">{{ hint }}</p>
         <AspButton
@@ -45,7 +53,7 @@
         size="sm"
         :disabled="!pairSelected || busy"
         class="constellation-panel-type"
-        :title="t.label"
+        :title="t.label.toUpperCase()"
         data-testid="type-button"
         :data-type-code="t.code"
         @click="$emit('set-type', t.id)"
@@ -64,31 +72,6 @@
         @click="$emit('clear')"
       >
         Clear
-      </AspButton>
-    </div>
-
-    <div class="constellation-panel-history">
-      <AspButton
-        variant="ghost"
-        size="icon"
-        :disabled="busy"
-        title="Undo your last edit"
-        aria-label="Undo your last edit"
-        data-testid="undo-button"
-        @click="$emit('undo')"
-      >
-        ‹
-      </AspButton>
-      <AspButton
-        variant="ghost"
-        size="icon"
-        :disabled="busy"
-        title="Redo your last undone edit"
-        aria-label="Redo your last undone edit"
-        data-testid="redo-button"
-        @click="$emit('redo')"
-      >
-        ›
       </AspButton>
     </div>
   </div>
@@ -110,7 +93,7 @@ const props = defineProps({
   busy: { type: Boolean, default: false },
 });
 
-defineEmits(['set-type', 'clear', 'undo', 'redo', 'dismiss']);
+defineEmits(['set-type', 'clear', 'dismiss']);
 
 // The old copy was "Select two players", written for a panel that was always
 // on screen. Now that the picker only appears once you have clicked someone,
@@ -123,37 +106,53 @@ const hint = computed(() => {
 </script>
 
 <style scoped>
+/* #4883 item 4: the panel is no longer a pinned right-edge overlay on the
+   board — it sits in flow beneath it. Below the board there is horizontal room
+   the right edge never had, so the type buttons lay out as a centred wrapping
+   row rather than a narrow column, and the box tracks its content width
+   instead of a fixed 6.5rem gutter. */
 .constellation-panel {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem;
+  padding: 0.75rem 1rem;
   border: 1px solid #1e293b;
   border-radius: 12px;
   background: #0e1428;
-  min-width: 6.5rem;
+  width: 100%;
+  max-width: 32rem;
+  box-sizing: border-box;
 }
 
+/* The head, the type buttons and Clear are siblings inside the picker; they
+   flow as one centred wrapping row so a six-type vocabulary fits a phone
+   without a scroll, with the hint on its own first line. */
 .constellation-panel-picker {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .constellation-panel-picker-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: 0.25rem;
+  flex-basis: 100%;
 }
 
 .constellation-panel-hint {
-  margin: 0 0 0.25rem;
+  margin: 0;
   color: #94a3b8;
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   text-align: center;
-  max-width: 7rem;
   flex: 1 1 auto;
 }
 
@@ -172,20 +171,5 @@ const hint = computed(() => {
   border-radius: 50%;
   margin-right: 0.5rem;
   flex: none;
-}
-
-/* History arrows at the panel's foot (wireframe: back/forward at the bottom
-   of the right-edge panel). Board-scoped, so they outlive the picker — the
-   separating rule is only drawn when there is a picker above to separate. */
-.constellation-panel-history {
-  display: flex;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.constellation-panel-picker + .constellation-panel-history {
-  margin-top: 0.5rem;
-  border-top: 1px solid #1e293b;
-  padding-top: 0.5rem;
 }
 </style>
