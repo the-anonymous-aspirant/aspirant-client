@@ -97,6 +97,7 @@
       <section
         class="constellations-room-board"
         :class="{ 'is-flipped': isFlipped }"
+        :style="{ transform: `rotateY(${rotation}deg)` }"
         data-testid="board-canvas"
         aria-label="Relationship board"
       >
@@ -353,22 +354,71 @@ const dictionaryEverOpened = ref(false);
 const historyEverOpened = ref(false);
 const settingsEverOpened = ref(false);
 
-// One entry point for the nav: tapping the active face (or Game) flips back to
-// the board; tapping another flips to it, mounting it on first open. History
-// re-fetches on each open — the log is append-only, so a re-open should show
-// anything drawn since.
-function selectFace(face) {
-  if (face === 'game' || boardFace.value === face) {
-    boardFace.value = 'game';
-    return;
-  }
+// #4945 item 1: the flip is driven by an accumulating rotation angle, not a
+// boolean. The card has one front (game) and one back (whichever reference is
+// selected), so front is shown at even multiples of 180° and a back reference at
+// odd multiples. Every tab tap now produces a real rotation — including a
+// back→back switch (e.g. Rules → Cards), which the old boolean left as an
+// instant, motionless content swap. That asymmetry was the operator's report:
+// "clicking Rules/Cards/History/Settings does not flip the same way as Game."
+// A back→back switch spins the card a full 360° and swaps the back-face content
+// at the hidden mid-point, so it reads as the same flip as every other tab.
+const FLIP_MS = 620; // must match the CSS transition duration below
+const rotation = ref(0);
+let backSwapTimer = null;
+
+function markOpened(face) {
   if (face === 'rules') rulesEverOpened.value = true;
   else if (face === 'dictionary') dictionaryEverOpened.value = true;
   else if (face === 'history') {
     historyEverOpened.value = true;
     loadHistory();
   } else if (face === 'settings') settingsEverOpened.value = true;
-  boardFace.value = face;
+}
+
+// One entry point for the nav: tapping the active face (or Game) flips back to
+// the board; tapping another flips to it, mounting it on first open. History
+// re-fetches on each open — the log is append-only, so a re-open should show
+// anything drawn since.
+function selectFace(face) {
+  if (backSwapTimer) {
+    clearTimeout(backSwapTimer);
+    backSwapTimer = null;
+  }
+
+  // To the board: a half-flip back to the front face.
+  if (face === 'game' || boardFace.value === face) {
+    rotation.value += 180;
+    boardFace.value = 'game';
+    return;
+  }
+
+  markOpened(face);
+
+  if (isFlipped.value) {
+    // Already on a back face: full 360° spin so the switch is a flip, not an
+    // instant swap. Swap the shown reference at the hidden mid-point so the new
+    // face is the one that comes round. Under prefers-reduced-motion the card
+    // does not animate, so swap immediately rather than after a blank delay.
+    const reduceMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    rotation.value += 360;
+    if (reduceMotion) {
+      boardFace.value = face;
+    } else {
+      backSwapTimer = setTimeout(() => {
+        boardFace.value = face;
+        backSwapTimer = null;
+      }, FLIP_MS / 2);
+    }
+  } else {
+    // From the board: a half-flip to the back. backface-visibility hides the
+    // swap until past 90°, so the reference can change immediately.
+    rotation.value += 180;
+    boardFace.value = face;
+  }
 }
 
 // ---- #4848: relationship-event history (reads A1 / #4847) ------------------
@@ -784,7 +834,10 @@ onMounted(() => {
 .constellations-room {
   min-height: calc(100vh - 4rem);
   margin: -1rem;
-  padding: 2rem 1.5rem 3rem;
+  /* #4945 item 3: no bottom padding — the sticky nav owns the bottom edge (its
+     own padding, incl. the safe-area inset, provides the spacing), so the bar
+     sits flush at the bottom on every face. */
+  padding: 2rem 1.5rem 0;
   background: #0b1020;
   color: #f8fafc;
   display: flex;
@@ -896,10 +949,10 @@ onMounted(() => {
   width: 100%;
   transform-style: preserve-3d;
   transition: transform 620ms cubic-bezier(0.2, 0.7, 0.25, 1);
-}
-
-.constellations-room-board.is-flipped {
-  transform: rotateY(180deg);
+  /* #4945 item 1: the angle is bound inline (rotateY(<rotation>deg)); it
+     accumulates so every tab tap — including a back→back switch — is a real
+     rotation rather than an instant swap. The .is-flipped class is retained
+     only as a state hook for descendants. */
 }
 
 .constellations-room-face {

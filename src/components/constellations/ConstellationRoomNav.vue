@@ -8,21 +8,28 @@
        visible caption; the active face is marked. Icons are inline SVG (the app
        ships no icon font) drawn in currentColor, so they read light on the dark
        room chrome. -->
+  <!-- #4945 item 3: the bar is anchored to the bottom of the room, desktop and
+       mobile — it is a full-width sticky footer with the room's own dark ground,
+       so it holds a constant position at the bottom of the viewport regardless
+       of how tall the face above it is, and no longer rides up and down with the
+       game-face stack. The buttons stay centred within it at their max width. -->
   <nav class="constellation-room-nav" aria-label="Room panels" data-testid="room-nav">
-    <button
-      v-for="item in items"
-      :key="item.face"
-      type="button"
-      class="constellation-room-nav-btn"
-      :class="{ 'is-active': item.face === activeFace }"
-      :aria-pressed="item.face === activeFace"
-      :aria-label="item.label"
-      :data-testid="`room-nav-${item.face}`"
-      @click="$emit('select', item.face)"
-    >
-      <span class="constellation-room-nav-icon" aria-hidden="true" v-html="item.icon"></span>
-      <span class="constellation-room-nav-label">{{ item.label }}</span>
-    </button>
+    <div class="constellation-room-nav-inner">
+      <button
+        v-for="item in items"
+        :key="item.face"
+        type="button"
+        class="constellation-room-nav-btn"
+        :class="{ 'is-active': item.face === activeFace }"
+        :aria-pressed="item.face === activeFace"
+        :aria-label="item.label"
+        :data-testid="`room-nav-${item.face}`"
+        @click="$emit('select', item.face)"
+      >
+        <span class="constellation-room-nav-icon" aria-hidden="true" v-html="item.icon"></span>
+        <span class="constellation-room-nav-label">{{ item.label }}</span>
+      </button>
+    </div>
   </nav>
 </template>
 
@@ -67,14 +74,36 @@ const items = computed(() =>
 </script>
 
 <style scoped>
+/* Full-width sticky footer. `bottom: 0` pins it to the viewport's lower edge
+   while the room scrolls; the solid ground + top border keep the face above
+   from bleeding through. margin-top: auto lets it fall to the true bottom when
+   the room is shorter than the viewport (the room is a min-height:100vh flex
+   column), and stickiness holds it there once the content overflows. */
 .constellation-room-nav {
-  margin-top: 1.5rem;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: auto;
+  /* Fill the room's content width (override the room's align-items:center) and
+     bleed out over its 1.5rem side padding so the ground reaches the room edges,
+     without exceeding the viewport (no horizontal scroll). */
+  align-self: stretch;
+  width: auto;
+  margin-left: -1.5rem;
+  margin-right: -1.5rem;
+  background: #0b1020;
+  border-top: 1px solid #1e293b;
+  padding: 0.5rem 1.5rem calc(0.5rem + env(safe-area-inset-bottom));
+}
+
+.constellation-room-nav-inner {
   display: flex;
   justify-content: center;
   gap: 0.5rem;
   flex-wrap: nowrap;
   width: 100%;
   max-width: 30rem;
+  margin: 0 auto;
 }
 
 .constellation-room-nav-btn {
@@ -141,7 +170,7 @@ const items = computed(() =>
 /* Mobile: keep all controls on one row without wrapping. The icon chip shrinks
    a little and the label stays readable; five chips + gaps fit a 320px viewport. */
 @media (max-width: 30rem) {
-  .constellation-room-nav {
+  .constellation-room-nav-inner {
     gap: 0.25rem;
   }
   .constellation-room-nav-icon {
