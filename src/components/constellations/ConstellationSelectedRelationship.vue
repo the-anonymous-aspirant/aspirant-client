@@ -17,7 +17,10 @@
     <p class="constellation-selected-label">Selected relationship</p>
 
     <p v-if="!pair" class="constellation-selected-idle" data-testid="selected-idle">
-      {{ idleHint }}
+      <template v-if="pendingName">
+        <span class="constellation-selected-name">{{ pendingName }}</span> — select one more player
+      </template>
+      <template v-else>Select two players</template>
     </p>
 
     <p v-else class="constellation-selected-pair" data-testid="selected-pair">
@@ -44,22 +47,18 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
-
-const props = defineProps({
+defineProps({
   // { from, to } display names once two players are picked; null otherwise.
   pair: { type: Object, default: null },
   // { label, colour } for the edge the pair currently carries; null when they
   // carry none. Only meaningful while `pair` is set.
   relationship: { type: Object, default: null },
-  // How many avatars are picked (0-2) — drives the idle hint, so the box says
-  // what to do next rather than sitting blank.
-  selectedCount: { type: Number, default: 0 },
+  // The one player already held while the second is outstanding. Naming them
+  // here is what keeps this box from repeating the picker's own hint verbatim
+  // a few pixels below it — the name is the part the player cannot otherwise
+  // read back off the board.
+  pendingName: { type: String, default: '' },
 });
-
-const idleHint = computed(() =>
-  props.selectedCount === 1 ? 'Select one more player' : 'Select two players',
-);
 </script>
 
 <style scoped>

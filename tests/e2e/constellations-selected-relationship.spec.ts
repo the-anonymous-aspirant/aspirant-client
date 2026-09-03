@@ -160,9 +160,12 @@ test.describe('#4883 Constellations selected-relationship box', () => {
     expect(selectedBox).not.toBeNull();
     expect(selectedBox!.y).toBeGreaterThanOrEqual(boardBox!.y + boardBox!.height);
 
-    // One player picked is still not a pair: the hint advances, the pair does not.
+    // One player picked is still not a pair. The box NAMES who is held rather
+    // than repeating the picker's own "Select one more player" a few pixels
+    // below it — the name is the part the board does not otherwise show, since
+    // avatar names are hover-only.
     await avatar(page, 11).click();
-    await expect(page.getByTestId('selected-idle')).toHaveText('Select one more player');
+    await expect(page.getByTestId('selected-idle')).toHaveText('SUPERNOVA — select one more player');
     await expect(page.getByTestId('selected-pair')).toHaveCount(0);
   });
 
@@ -207,6 +210,7 @@ test.describe('#4883 Constellations selected-relationship box', () => {
     await page.locator('[data-testid="type-button"][data-type-code="D"]').click();
     await expect(page.getByTestId('board-edge')).toHaveCount(1);
     await expect(page.getByTestId('selected-idle')).toHaveText('Select two players');
+    await expect(page.getByTestId('selected-none')).toHaveCount(0);
 
     await avatar(page, 11).click();
     await avatar(page, 13).click();

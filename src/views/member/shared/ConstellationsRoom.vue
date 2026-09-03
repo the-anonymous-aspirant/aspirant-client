@@ -190,7 +190,7 @@
       <ConstellationSelectedRelationship
         :pair="selectedPair"
         :relationship="selectedRelationship"
-        :selected-count="selectedIds.length"
+        :pending-name="pendingName"
       />
 
       <ConstellationControlPanel
@@ -576,17 +576,20 @@ async function clearGoal() {
 // never disagree), and is null when the pair carries none. Edges are
 // undirected for this purpose: the payload stores a direction, but "who is
 // connected to whom" does not depend on which of the two you clicked first.
-function displayNameFor(userId) {
-  const m = (state.value?.members || []).find((x) => x.user_id === userId);
-  if (!m) return 'Someone';
-  return m.game_username || `Player ${m.slot ?? '?'}`;
-}
-
+// Names come from memberName(), the same resolver the history face uses.
 const selectedPair = computed(() => {
   const [from, to] = selectedIds.value;
   if (from == null || to == null) return null;
-  return { from: displayNameFor(from), to: displayNameFor(to) };
+  return { from: memberName(from), to: memberName(to) };
 });
+
+// The first pick, while the second is still outstanding. The box names who is
+// already held rather than repeating the picker's own "select one more" — two
+// controls a few pixels apart saying the same sentence is the redundancy this
+// avoids, and the name is the part the player cannot otherwise read back.
+const pendingName = computed(() =>
+  selectedIds.value.length === 1 ? memberName(selectedIds.value[0]) : '',
+);
 
 const selectedRelationship = computed(() => {
   const [from, to] = selectedIds.value;
