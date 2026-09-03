@@ -185,7 +185,11 @@
             :qr-url="qrUrl"
             :avatar-url="myAvatarUrl"
             :game-username="myGameUsername"
+            :is-creator="state?.is_creator === true"
+            :reveal-connections="state?.reveal_connections === true"
+            :reveal-cards="state?.reveal_cards === true"
             @leave="leave"
+            @set-reveal="setReveal"
           />
         </div>
       </section>
@@ -446,6 +450,26 @@ async function leave() {
     // Best-effort: navigating away must not depend on the call succeeding.
   }
   router.push({ path: '/member/shared/constellations' });
+}
+
+// #4835 — the room creator flips a transparency toggle. Only the creator's
+// call is accepted (the server enforces it in SetRoomReveal / 403s otherwise);
+// this handler does not gate on is_creator itself because the settings section
+// is creator-only in the UI and server truth is authoritative. One POST per
+// toggle, then refresh so the board (revealed lines/cards) and the checkbox
+// reconcile to server state — including reverting the checkbox if the call was
+// refused.
+async function setReveal({ field, value }) {
+  if (!code.value) return;
+  try {
+    await axios.post(
+      `/api/constellations/rooms/${encodeURIComponent(code.value)}/settings`,
+      { [field]: value },
+    );
+  } catch {
+    // Best-effort: the refresh below reconciles the toggle back to server truth.
+  }
+  await refresh();
 }
 
 // ---- F2 (#4603): selection + B1/C1 edit calls -----------------------------
