@@ -96,13 +96,14 @@ test.describe('#4807-B1 Constellations dictionary', () => {
     const board = page.getByTestId('board-canvas');
     await expect(board).not.toHaveClass(/is-flipped/);
 
-    await page.getByTestId('open-dictionary').click();
+    // #4848: the dictionary ("Cards") is reached from the icon nav now.
+    await page.getByTestId('room-nav-dictionary').click();
 
     // The board flips in place (no navigation) and the dictionary face shows.
     await expect(board).toHaveClass(/is-flipped/);
     await expect(page).toHaveURL(new RegExp(`/room/${ROOM_CODE}$`));
     await expect(page.getByTestId('dictionary-face')).toBeVisible();
-    await expect(page.getByTestId('open-dictionary')).toHaveText('Back to the game');
+    await expect(page.getByTestId('room-nav-dictionary')).toHaveAttribute('aria-pressed', 'true');
 
     // The six connection types form the legend.
     await expect(page.getByTestId('dictionary-legend').locator('li')).toHaveCount(6);
@@ -114,10 +115,10 @@ test.describe('#4807-B1 Constellations dictionary', () => {
     // The V card — the one the text-only extraction had dropped — is present.
     await expect(page.getByTestId('dictionary-cards').locator('li[data-goal-code="v"]')).toBeVisible();
 
-    // Flipping back returns to the game.
-    await page.getByTestId('open-dictionary').click();
+    // Flipping back returns to the game (tap the active control again).
+    await page.getByTestId('room-nav-dictionary').click();
     await expect(board).not.toHaveClass(/is-flipped/);
-    await expect(page.getByTestId('open-dictionary')).toHaveText('Dictionary');
+    await expect(page.getByTestId('room-nav-dictionary')).toHaveAttribute('aria-pressed', 'false');
   });
 
   test('the dictionary and the rulebook are separate faces of the same flip', async ({ page }) => {
@@ -130,13 +131,13 @@ test.describe('#4807-B1 Constellations dictionary', () => {
     const board = page.getByTestId('board-canvas');
 
     // Read the rules still flips to the rulebook (regression on #4811).
-    await page.getByTestId('read-rules').click();
+    await page.getByTestId('room-nav-rules').click();
     await expect(board).toHaveClass(/is-flipped/);
     await expect(page.getByTestId('rules-face')).toBeVisible();
     await expect(page.getByTestId('dictionary-face')).toHaveCount(0);
 
     // Switching to the dictionary swaps the back face; the rulebook is gone.
-    await page.getByTestId('open-dictionary').click();
+    await page.getByTestId('room-nav-dictionary').click();
     await expect(board).toHaveClass(/is-flipped/);
     await expect(page.getByTestId('dictionary-face')).toBeVisible();
     await expect(page.getByTestId('rules-face')).toHaveCount(0);

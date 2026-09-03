@@ -8,35 +8,13 @@
     from the poll, no reload.
   -->
   <div class="constellations-room">
+    <!-- #4848: the header is now just the title. The room code, live occupancy
+         and the Scan-to-join QR that used to sit here as board furniture moved
+         into the settings face — the operator asked to make the board "much
+         clearer", so chrome that is not the board comes off it. -->
     <header class="constellations-room-header">
       <div class="constellations-room-heading">
         <h1 class="constellations-room-title">Constellations</h1>
-        <p class="constellations-room-code">
-          Room
-          <span class="constellations-room-code-value" data-testid="room-code">{{ code }}</span>
-        </p>
-      </div>
-
-      <!-- Occupancy and the join QR are board furniture: while entry is refused
-           the occupancy has never loaded (it would read 0) and a "Scan to join"
-           code contradicts the refusal next to it. The room code stays — it
-           names which room turned you away. -->
-      <div v-if="!blocked" class="constellations-room-meta">
-        <div class="constellations-room-occupancy" data-testid="occupancy" :title="occupancyTitle">
-          <span class="constellations-room-occupancy-count">{{ occupancyLabel }}</span>
-          <span class="constellations-room-occupancy-label">in the room</span>
-        </div>
-        <figure class="constellations-room-qr">
-          <img
-            v-if="qrUrl"
-            :src="qrUrl"
-            :alt="`Join QR for room ${code}`"
-            width="112"
-            height="112"
-            data-testid="join-qr"
-          />
-          <figcaption>Scan to join</figcaption>
-        </figure>
       </div>
     </header>
 
@@ -189,40 +167,35 @@
             @select="selectGoal"
             @clear="clearGoal"
           />
+          <ConstellationHistory
+            v-else-if="showHistory && historyEverOpened"
+            :entries="historyEntries"
+            :loading="historyLoading"
+            :error="historyError"
+          />
+          <ConstellationSettings
+            v-else-if="showSettings && settingsEverOpened"
+            :code="code"
+            :occupancy-label="occupancyLabel"
+            :occupancy-title="occupancyTitle"
+            :qr-url="qrUrl"
+            :avatar-url="myAvatarUrl"
+            :game-username="myGameUsername"
+            @leave="leave"
+          />
         </div>
       </section>
     </div>
 
-    <!-- Hidden while entry is in flight or refused (#4806 ask 1): there is no
-         board to read the rules of, and no room to leave. -->
-    <div v-if="!entering && !blocked" class="constellations-room-actions">
-      <button
-        type="button"
-        class="constellations-room-rules"
-        data-testid="read-rules"
-        :aria-expanded="showRules"
-        @click="toggleRules"
-      >
-        {{ showRules ? 'Back to the game' : 'Read the rules' }}
-      </button>
-      <button
-        type="button"
-        class="constellations-room-rules"
-        data-testid="open-dictionary"
-        :aria-expanded="showDictionary"
-        @click="toggleDictionary"
-      >
-        {{ showDictionary ? 'Back to the game' : 'Dictionary' }}
-      </button>
-      <button
-        type="button"
-        class="constellations-room-leave"
-        data-testid="leave-room"
-        @click="leave"
-      >
-        Leave room
-      </button>
-    </div>
+    <!-- #4848: the bottom bar is now a compact set of icon controls selecting
+         which face the spinning card shows (game / rules / cards / history /
+         settings). Leave moved into settings. Hidden while entry is in flight or
+         refused (#4806 ask 1): there is no board to flip and no room to leave. -->
+    <ConstellationRoomNav
+      v-if="!entering && !blocked"
+      :active-face="boardFace"
+      @select="selectFace"
+    />
   </div>
 </template>
 
@@ -236,6 +209,9 @@ import ConstellationGraph from '../../../components/constellations/Constellation
 import ConstellationsSummary from '../../../components/constellations/ConstellationsSummary.vue';
 import ConstellationControlPanel from '../../../components/constellations/ConstellationControlPanel.vue';
 import ConstellationDictionary from '../../../components/constellations/ConstellationDictionary.vue';
+import ConstellationHistory from '../../../components/constellations/ConstellationHistory.vue';
+import ConstellationSettings from '../../../components/constellations/ConstellationSettings.vue';
+import ConstellationRoomNav from '../../../components/constellations/ConstellationRoomNav.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -333,32 +309,120 @@ const RULEBOOK_URL = '/constellations-rulebook.html';
 // the relationship/goal dictionary (#4807-B1). A single `boardFace` drives the
 // flip so both reuse the same in-place rotation the operator asked for; the
 // front is the game.
-const boardFace = ref('game'); // 'game' | 'rules' | 'dictionary'
+// #4848: the back face now carries one of four references — rules, the goal-card
+// dictionary, the relationship history, or settings — selected by the bottom
+// nav. The spinning card (#4806 ask 5) is unchanged; only WHAT it flips between
+// grew. The front is always the game.
+const boardFace = ref('game'); // 'game' | 'rules' | 'dictionary' | 'history' | 'settings'
 const isFlipped = computed(() => boardFace.value !== 'game');
 const showRules = computed(() => boardFace.value === 'rules');
 const showDictionary = computed(() => boardFace.value === 'dictionary');
+const showHistory = computed(() => boardFace.value === 'history');
+const showSettings = computed(() => boardFace.value === 'settings');
 // Each back-face reference is mounted lazily on its first flip and then kept, so
 // opening it does not cost a fetch on every board load and flipping is instant.
 const rulesEverOpened = ref(false);
 const dictionaryEverOpened = ref(false);
+const historyEverOpened = ref(false);
+const settingsEverOpened = ref(false);
 
-function toggleRules() {
-  if (boardFace.value === 'rules') {
+// One entry point for the nav: tapping the active face (or Game) flips back to
+// the board; tapping another flips to it, mounting it on first open. History
+// re-fetches on each open — the log is append-only, so a re-open should show
+// anything drawn since.
+function selectFace(face) {
+  if (face === 'game' || boardFace.value === face) {
     boardFace.value = 'game';
     return;
   }
-  rulesEverOpened.value = true;
-  boardFace.value = 'rules';
+  if (face === 'rules') rulesEverOpened.value = true;
+  else if (face === 'dictionary') dictionaryEverOpened.value = true;
+  else if (face === 'history') {
+    historyEverOpened.value = true;
+    loadHistory();
+  } else if (face === 'settings') settingsEverOpened.value = true;
+  boardFace.value = face;
 }
 
-function toggleDictionary() {
-  if (boardFace.value === 'dictionary') {
-    boardFace.value = 'game';
-    return;
+// ---- #4848: relationship-event history (reads A1 / #4847) ------------------
+//
+// A1's endpoint is oldest-first cursor pagination whose has_more/next_after_id
+// describe the SCANNED page, not the visible one (the privacy filter runs in the
+// serializer), so a page can return fewer visible events than it scanned while
+// has_more is still true. The client keeps paging until has_more is false. The
+// raw events are kept and resolved to display rows reactively, so names still
+// fill in if the room-state poll lands members after the history fetch.
+const historyEvents = ref([]);
+const historyLoading = ref(false);
+const historyError = ref(null);
+
+async function loadHistory() {
+  if (!code.value) return;
+  historyLoading.value = true;
+  historyError.value = null;
+  try {
+    const all = [];
+    let afterId = 0;
+    // Safety cap: a room's log is small, but never loop unbounded on a server
+    // that keeps answering has_more.
+    for (let page = 0; page < 100; page += 1) {
+      const res = await axios.get(
+        `/api/constellations/rooms/${encodeURIComponent(code.value)}/history`,
+        { params: { after_id: afterId, limit: 200 } },
+      );
+      const events = res.data?.events || [];
+      all.push(...events);
+      if (!res.data?.has_more) break;
+      const next = res.data?.next_after_id;
+      if (!next || next === afterId) break;
+      afterId = next;
+    }
+    historyEvents.value = all;
+  } catch (err) {
+    historyError.value = err.response?.data?.error?.message || 'Could not load the history.';
+  } finally {
+    historyLoading.value = false;
   }
-  dictionaryEverOpened.value = true;
-  boardFace.value = 'dictionary';
 }
+
+function memberName(userId) {
+  const m = (state.value?.members || []).find((x) => x.user_id === userId);
+  if (!m) return 'Someone';
+  return m.game_username || `Player ${m.slot ?? '?'}`;
+}
+
+function historyTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+// Resolved display rows, oldest-first. `set` carries a direction (from/to); a
+// `clear` normalizes from/to to 0 and only the pair columns are meaningful, so
+// name a clear from pair_low/pair_high.
+const historyEntries = computed(() =>
+  historyEvents.value.map((e) => {
+    const t = relationshipTypes.value.find((rt) => rt.id === e.type_id);
+    const isSet = e.kind === 'set';
+    return {
+      id: e.id,
+      kind: e.kind,
+      fromName: memberName(isSet ? e.from_user_id : e.pair_low),
+      toName: memberName(isSet ? e.to_user_id : e.pair_high),
+      typeLabel: t?.label || 'connection',
+      colour: t?.colour || '#6366f1',
+      time: historyTime(e.created_at),
+      iso: e.created_at,
+    };
+  }),
+);
+
+// The caller's own identity for the settings face (#4848 / operator c27361).
+// myMember is already the calling user's row (matched on the profile id), so the
+// avatar and game name are the SIGNED-IN player's, not a room slot's.
+const myAvatarUrl = computed(() => myMember.value?.avatar_url || '');
+const myGameUsername = computed(() => myMember.value?.game_username || '');
 
 // Leaving must tell the server (#4587-H1 / #4771). A bare router.push left
 // membership open server-side: occupancy never dropped, the room never emptied
@@ -655,62 +719,8 @@ onMounted(() => {
   letter-spacing: 0.04em;
 }
 
-.constellations-room-code {
-  margin: 0.5rem 0 0;
-  color: #94a3b8;
-  font-size: 1rem;
-}
-
-.constellations-room-code-value {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 1.5rem;
-  letter-spacing: 0.25em;
-  color: #f8fafc;
-}
-
-.constellations-room-meta {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-.constellations-room-occupancy {
-  text-align: right;
-  display: flex;
-  flex-direction: column;
-}
-
-.constellations-room-occupancy-count {
-  font-size: 1.5rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.constellations-room-occupancy-label {
-  color: #94a3b8;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.constellations-room-qr {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.constellations-room-qr img {
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 4px;
-}
-
-.constellations-room-qr figcaption {
-  color: #94a3b8;
-  font-size: 0.7rem;
-}
+/* Room code, occupancy and the join QR that used to sit in the header moved
+   into the settings face (#4848); their styles live in ConstellationSettings. */
 
 .constellations-room-error {
   margin: 1rem 0 0;
@@ -925,13 +935,9 @@ onMounted(() => {
   max-width: 26rem;
 }
 
-.constellations-room-actions {
-  margin-top: 2rem;
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-}
-
+/* The bottom action row was replaced by ConstellationRoomNav (#4848). The
+   .constellations-room-rules / -leave button shapes below are still used by the
+   blocked state and the in-room name prompt. */
 .constellations-room-rules,
 .constellations-room-leave {
   background: transparent;
