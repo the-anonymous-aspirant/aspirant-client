@@ -24,6 +24,22 @@
     <ol v-else class="constellation-history-list" data-testid="history-list">
       <li v-for="e in entries" :key="e.id" class="constellation-history-item" :data-kind="e.kind">
         <span class="constellation-history-dot" :style="{ background: e.kind === 'set' ? e.colour : '#475569' }" aria-hidden="true" />
+        <!-- #4945 item 8: the two participants' profile icons flank the status
+             change for readability. Avatars are resolved upstream from room
+             state (the already-visible members), so a missing one falls back to
+             a neutral placeholder rather than a broken image. Decorative — the
+             names carry the accessible meaning — so the icons are aria-hidden. -->
+        <img
+          v-if="e.fromAvatar"
+          class="constellation-history-avatar"
+          :src="e.fromAvatar"
+          alt=""
+          aria-hidden="true"
+          width="24"
+          height="24"
+          data-testid="history-avatar-from"
+        />
+        <span v-else class="constellation-history-avatar constellation-history-avatar-empty" aria-hidden="true" data-testid="history-avatar-from" />
         <span class="constellation-history-body">
           <span class="constellation-history-pair">{{ e.fromName }} <span class="constellation-history-arrow">{{ e.kind === 'set' ? '→' : '—' }}</span> {{ e.toName }}</span>
           <!-- #4883 item 7: ALL CAPS type name, same as the dictionary legend
@@ -31,6 +47,17 @@
           <span v-if="e.kind === 'set'" class="constellation-history-type" :style="{ color: e.colour }">{{ e.typeLabel.toUpperCase() }}</span>
           <span v-else class="constellation-history-type constellation-history-type-cleared">connection cleared</span>
         </span>
+        <img
+          v-if="e.toAvatar"
+          class="constellation-history-avatar"
+          :src="e.toAvatar"
+          alt=""
+          aria-hidden="true"
+          width="24"
+          height="24"
+          data-testid="history-avatar-to"
+        />
+        <span v-else class="constellation-history-avatar constellation-history-avatar-empty" aria-hidden="true" data-testid="history-avatar-to" />
         <time v-if="e.time" class="constellation-history-time" :datetime="e.iso">{{ e.time }}</time>
       </li>
     </ol>
@@ -99,6 +126,24 @@ defineProps({
   height: 10px;
   border-radius: 999px;
   flex: 0 0 auto;
+}
+
+/* #4945 item 8: the participant profile icons flanking each row. Fixed round
+   chips so a tall or wide avatar cannot distort the row; the empty variant is a
+   neutral filled circle for a participant with no avatar or one no longer in
+   the room. */
+.constellation-history-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  object-fit: cover;
+  flex: 0 0 auto;
+  background: #131a33;
+  border: 1px solid #334155;
+}
+
+.constellation-history-avatar-empty {
+  display: block;
 }
 
 .constellation-history-body {

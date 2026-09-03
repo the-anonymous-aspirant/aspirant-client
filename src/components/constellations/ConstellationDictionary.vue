@@ -27,8 +27,14 @@
       <h3 id="dict-goals-heading" class="constellation-dictionary-heading">Goal cards</h3>
       <p class="constellation-dictionary-note">Pick the relationship you are playing for; achieve its victory condition to win.</p>
       <ul class="constellation-dictionary-cards" data-testid="dictionary-cards">
+        <!-- #4945 item 6: the viewer's own picked goal sorts to the top of the
+             deck (see `sortedCards`) so it never has to be scrolled to, and gets
+             a distinct filled highlight — a border alone did not read as
+             "this is the one I chose". #4945 item 4: goal names read ALL CAPS,
+             like every other relationship/goal name surface (uppercased in the
+             template, not by CSS, so the accessible name matches the visible one). -->
         <li
-          v-for="card in goalCards"
+          v-for="card in sortedCards"
           :key="card.id"
           class="constellation-dictionary-card"
           :class="{
@@ -38,7 +44,7 @@
           :data-goal-code="card.code"
         >
           <div class="constellation-dictionary-card-head">
-            <span class="constellation-dictionary-card-name" data-testid="goal-card-name">{{ card.name }}</span>
+            <span class="constellation-dictionary-card-name" data-testid="goal-card-name">{{ card.name.toUpperCase() }}</span>
             <span
               v-if="card.id === selectedCardId && achieved"
               class="constellation-dictionary-card-badge"
@@ -50,6 +56,11 @@
               :title="`Not playable with fewer than ${card.minPlayers} players`"
             >{{ card.minPlayers }}+ players</span>
           </div>
+          <!-- #4945 item 5a: a consistent card template — every card reads
+               NAME / "To win" label / condition / floor / action — so the
+               victory condition is always introduced the same way and the
+               freeform server text is easier to parse. -->
+          <p class="constellation-dictionary-card-towin">To win</p>
           <p class="constellation-dictionary-card-condition" data-testid="goal-card-condition">{{ card.victoryCondition }}</p>
           <div class="constellation-dictionary-card-actions">
             <template v-if="card.id === selectedCardId">
@@ -89,9 +100,10 @@
 // `[{ id, code, name, victoryCondition, minPlayers }]`. selectedCardId is the
 // viewer's own chosen goal (private, from /state); achieved reflects A2's
 // server-side detection. Selecting/clearing is emitted up to the room shell.
+import { computed } from 'vue';
 import { AspButton } from '@aspirant/design-system';
 
-defineProps({
+const props = defineProps({
   relationshipTypes: { type: Array, default: () => [] },
   goalCards: { type: Array, default: () => [] },
   selectedCardId: { type: Number, default: null },
@@ -100,6 +112,18 @@ defineProps({
 });
 
 defineEmits(['select', 'clear']);
+
+// #4945 item 6: the viewer's own chosen goal moves to the front of the deck so
+// it is never behind a scroll. Stable otherwise — the server's deck order is
+// preserved for every other card (a non-mutating copy; the selected card is
+// lifted out and unshifted, the rest keep their relative order).
+const sortedCards = computed(() => {
+  const id = props.selectedCardId;
+  if (id == null) return props.goalCards;
+  const rest = props.goalCards.filter((c) => c.id !== id);
+  const mine = props.goalCards.find((c) => c.id === id);
+  return mine ? [mine, ...rest] : props.goalCards;
+});
 </script>
 
 <style scoped>
@@ -194,8 +218,8 @@ defineEmits(['select', 'clear']);
 
 .constellation-dictionary-card-name {
   font-weight: 700;
-  font-size: 0.95rem;
-  letter-spacing: 0.02em;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
 }
 
 .constellation-dictionary-card-floor {
@@ -207,24 +231,43 @@ defineEmits(['select', 'clear']);
   padding: 1px 8px;
 }
 
+/* #4945 item 5a: the "To win" eyebrow gives every card the same read order —
+   a small muted label above the condition, so the freeform victory text is
+   always introduced consistently. */
+.constellation-dictionary-card-towin {
+  margin: 0 0 2px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7c86a0;
+}
+
 .constellation-dictionary-card-condition {
   margin: 0;
-  font-size: 0.82rem;
-  line-height: 1.4;
-  color: #cbd5e1;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  /* #4945 item 5a: the condition is the card's payload — lift it off the muted
+     grey it shared with secondary chrome so it is fully readable. */
+  color: #e2e8f0;
 }
 
 /* The selecting player's own goal is lifted; achieving it turns the accent
    gold. Selection state is driven by the private /state goal, so it only ever
-   reflects the viewer's own choice. */
+   reflects the viewer's own choice. #4945 item 6: a border alone did not read
+   as "chosen" — the selected card now carries a distinct tinted fill and a
+   left accent bar as well, so it is unmistakable and (with the sort-to-top)
+   sits first in the deck. */
 .constellation-dictionary-card.is-selected {
-  border-color: #6366f1;
-  box-shadow: inset 0 0 0 1px #6366f1;
+  border-color: #818cf8;
+  background: #1b1f45;
+  box-shadow: inset 3px 0 0 0 #818cf8, 0 0 0 1px #818cf8;
 }
 
 .constellation-dictionary-card.is-achieved {
   border-color: #f5c518;
-  box-shadow: inset 0 0 0 1px #f5c518;
+  background: #2a2410;
+  box-shadow: inset 3px 0 0 0 #f5c518, 0 0 0 1px #f5c518;
 }
 
 .constellation-dictionary-card-actions {

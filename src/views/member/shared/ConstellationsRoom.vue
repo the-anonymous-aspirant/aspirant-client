@@ -418,6 +418,18 @@ function memberName(userId) {
   return m.game_username || `Player ${m.slot ?? '?'}`;
 }
 
+// #4945 item 8: the history rows show each participant's profile icon. The
+// avatar is resolved from the SAME room-state members the board already draws
+// — the already-visible data, not a new lookup — so this adds no way for a
+// viewer to resolve an identity they could not already see (arbiter rule on the
+// #4833 thread: history icons must come from the visible event/room data). A
+// participant no longer in the room (or with no avatar set) resolves to '' and
+// the row falls back to a neutral placeholder.
+function memberAvatar(userId) {
+  const m = (state.value?.members || []).find((x) => x.user_id === userId);
+  return m?.avatar_url || '';
+}
+
 function historyTime(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -432,11 +444,16 @@ const historyEntries = computed(() =>
   historyEvents.value.map((e) => {
     const t = relationshipTypes.value.find((rt) => rt.id === e.type_id);
     const isSet = e.kind === 'set';
+    const fromId = isSet ? e.from_user_id : e.pair_low;
+    const toId = isSet ? e.to_user_id : e.pair_high;
     return {
       id: e.id,
       kind: e.kind,
-      fromName: memberName(isSet ? e.from_user_id : e.pair_low),
-      toName: memberName(isSet ? e.to_user_id : e.pair_high),
+      fromName: memberName(fromId),
+      toName: memberName(toId),
+      // #4945 item 8: avatars flanking the row, resolved from room state.
+      fromAvatar: memberAvatar(fromId),
+      toAvatar: memberAvatar(toId),
       typeLabel: t?.label || 'connection',
       colour: t?.colour || '#6366f1',
       time: historyTime(e.created_at),
