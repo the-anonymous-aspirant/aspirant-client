@@ -70,7 +70,7 @@ function installGoalMock(page: Page, opts: { achieved?: boolean } = {}) {
 async function openDictionary(page: Page) {
   await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
   await dismissMobileSidebarIfPresent(page);
-  await page.getByTestId('open-dictionary').click();
+  await page.getByTestId('room-nav-dictionary').click();
   await page.getByTestId('dictionary-face').waitFor({ state: 'visible' });
 }
 

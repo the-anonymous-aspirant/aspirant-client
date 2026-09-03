@@ -143,6 +143,9 @@ test.describe('#4601 Constellations in-room shell', () => {
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.locator('.constellations-room-title')).toHaveText('Constellations');
+    // #4848: the room code and occupancy moved off the board into the settings
+    // face (declutter the board) — open it to read them.
+    await page.getByTestId('room-nav-settings').click();
     await expect(page.getByTestId('room-code')).toHaveText(ROOM_CODE);
     await expect(page.getByTestId('occupancy')).toContainText('2 / 4');
   });
@@ -154,6 +157,8 @@ test.describe('#4601 Constellations in-room shell', () => {
     await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
+    // #4848: occupancy lives in the settings face now.
+    await page.getByTestId('room-nav-settings').click();
     await expect(page.getByTestId('occupancy')).toContainText('1 / 4');
 
     // Another player joins — the next poll must reflect it without a reload.
@@ -178,6 +183,8 @@ test.describe('#4601 Constellations in-room shell', () => {
     await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
+    // #4848: Leave moved into the settings face.
+    await page.getByTestId('room-nav-settings').click();
     await page.getByTestId('leave-room').click();
 
     // The leave endpoint was called for this room, then we navigated to the lobby.
@@ -198,6 +205,8 @@ test.describe('#4601 Constellations in-room shell', () => {
     await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
+    // #4848: Leave moved into the settings face.
+    await page.getByTestId('room-nav-settings').click();
     await page.getByTestId('leave-room').click();
 
     await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
@@ -232,9 +241,9 @@ test.describe('#4601 Constellations in-room shell', () => {
     await page.goto(roomUrl);
     await dismissMobileSidebarIfPresent(page);
 
-    const rules = page.getByTestId('read-rules');
-    await expect(rules).toHaveText('Read the rules');
-    // It is a button now, not an anchor — there is no target to open a tab on.
+    // #4848: the rules are reached from the icon nav (game / rules / cards /
+    // history / settings), not a text button that toggles its own label.
+    const rules = page.getByTestId('room-nav-rules');
     expect(await rules.evaluate((el) => el.tagName)).toBe('BUTTON');
 
     await rules.click();
@@ -242,8 +251,7 @@ test.describe('#4601 Constellations in-room shell', () => {
     await expect(page).toHaveURL(new RegExp(`${ROOM_CODE}$`));
     await expect(page.getByTestId('board-canvas')).toHaveClass(/is-flipped/);
     await expect(page.getByTestId('rules-face')).toBeVisible();
-    await expect(rules).toHaveText('Back to the game');
-    await expect(rules).toHaveAttribute('aria-expanded', 'true');
+    await expect(rules).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('Back to the game flips the board back', async ({ page }) => {
@@ -253,14 +261,14 @@ test.describe('#4601 Constellations in-room shell', () => {
     await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
-    const rules = page.getByTestId('read-rules');
+    const rules = page.getByTestId('room-nav-rules');
     await rules.click();
-    await expect(rules).toHaveText('Back to the game');
+    await expect(rules).toHaveAttribute('aria-pressed', 'true');
 
+    // Tapping the active control again flips the board back (so does Game).
     await rules.click();
-    await expect(rules).toHaveText('Read the rules');
     await expect(page.getByTestId('board-canvas')).not.toHaveClass(/is-flipped/);
-    await expect(rules).toHaveAttribute('aria-expanded', 'false');
+    await expect(rules).toHaveAttribute('aria-pressed', 'false');
     // The board is back and usable — the dice affordance is on screen again.
     await expect(page.getByTestId('dice-roll')).toBeVisible();
   });
@@ -281,7 +289,7 @@ test.describe('#4601 Constellations in-room shell', () => {
     const board = page.getByTestId('board-canvas');
     const heightBefore = await board.evaluate((el) => (el as HTMLElement).offsetHeight);
 
-    await page.getByTestId('read-rules').click();
+    await page.getByTestId('room-nav-rules').click();
     const frame = page.getByTestId('rules-face');
     await expect(frame).toBeVisible();
 
