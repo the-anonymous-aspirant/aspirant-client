@@ -109,7 +109,14 @@ const selectedSet = computed(() => new Set(props.selectedIds));
 const SIZE = 480; // square viewBox; the room shell scales it responsively
 const CENTER = SIZE / 2;
 const RING_R = 168;
-const AVATAR_R = 34;
+// #4883 item 9 — "make the character icons 20 percent bigger". 34 x 1.2 = 40.8,
+// rounded to 41. The ring radius is deliberately unchanged: the ask is about
+// the icons, not the board's geometry. Adjacent-avatar clearance re-checked at
+// the new radius — the chord between neighbours is 2*RING_R*sin(pi/n), which
+// stays above the 82px diameter up to n = 12 players, and the outermost extent
+// (CENTER + RING_R + AVATAR_R + the name's 16px offset = 465) still fits the
+// 480 viewBox.
+const AVATAR_R = 41;
 
 const brokenAvatars = reactive(new Set());
 
@@ -159,9 +166,15 @@ const edges = computed(() => {
 </script>
 
 <style scoped>
+/* #4883 item 2 — the operator asked for 25% more vertical extent ("we are not
+   using the screen real estate fully"). This cap is what sets the board's
+   height: the viewBox is square, so the rendered board was exactly 30rem tall.
+   30rem x 1.25 = 37.5rem. Because the canvas is square, raising only the box's
+   height would open an empty band around the ring rather than a bigger board,
+   so the graph's own cap moves with it and the ring fills the new height. */
 .constellation-graph {
   width: 100%;
-  max-width: 30rem;
+  max-width: 37.5rem;
   height: auto;
   display: block;
 }

@@ -5,8 +5,14 @@ import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/moc
  * #4603 / #4587-F2 — the relationship control panel + edit interaction.
  * Covers the F2 acceptance: selecting two avatars enables the P/D/F+/F/A/R
  * controls, choosing a type calls B1 `set` and the edge draws from the
- * refreshed state without a reload, Clear removes it, and the back/forward
- * arrows call C1 undo/redo.
+ * refreshed state without a reload, and Clear removes it.
+ *
+ * #4883 items 1 and 4 retired the back/forward arrows and moved this panel off
+ * the board into the stack beneath it, so the undo/redo click test is gone and
+ * the "arrows stay reachable" lock is inverted into an absence lock. The undo
+ * and redo MOCK ROUTES below are kept deliberately: they are what makes the
+ * absence assertion meaningful — if a caller came back, the counters would
+ * move rather than the request 404ing into a silent no-op.
  *
  * Same in-process page.route() mock family as constellations-board.spec.ts.
  * The vocabulary GET serves gorm-shaped rows ("ID" from the untagged
@@ -214,19 +220,57 @@ test.describe('#4603 Constellations relationship control panel', () => {
     await expect(page.getByTestId('clear-button')).toBeEnabled();
   });
 
-  // The regression lock for the trap in ask 3: the C1 arrows are board-scoped,
-  // not part of the select-two-players gesture. Hiding them with the picker
-  // would put undo out of reach exactly when it is wanted — right after a
-  // mis-click that has already been committed and deselected.
-  test('the history arrows stay reachable with no selection in progress', async ({ page }) => {
+  // #4883 item 1 — "I'd like to remove the back and forth buttons currently
+  // placed on the game screen, we can retire that." This inverts the #4806
+  // ask-3 lock that used to hold the arrows on screen. They were the panel's
+  // only board-scoped content, so with them gone the whole panel renders
+  // nothing until a selection is in progress — an empty bordered box below the
+  // board would just be a hole in the stack.
+  test('the back/forward arrows are gone and the panel is absent with no selection', async ({
+    page,
+  }) => {
+    await seedTrustedSession(page);
+    const captured = await installMock(page, []);
+    await openRoom(page);
+
+    await expect(page.getByTestId('pair-picker')).toHaveCount(0);
+    await expect(page.getByTestId('undo-button')).toHaveCount(0);
+    await expect(page.getByTestId('redo-button')).toHaveCount(0);
+    await expect(page.getByTestId('control-panel')).toHaveCount(0);
+
+    // Selecting a pair brings the picker back, and still no arrows with it.
+    await avatar(page, 11).click();
+    await avatar(page, 12).click();
+    await expect(page.getByTestId('control-panel')).toBeVisible();
+    await expect(page.getByTestId('undo-button')).toHaveCount(0);
+    await expect(page.getByTestId('redo-button')).toHaveCount(0);
+
+    // Nothing in the room reaches the C1 endpoints any more. The routes are
+    // still installed, so a surviving caller would register here.
+    expect(captured.undo).toBe(0);
+    expect(captured.redo).toBe(0);
+  });
+
+  // #4883 items 4 and 5 — "can we have the interface appear underneath the game
+  // board? And the die as well." Asserted geometrically, not by DOM order: the
+  // failure this guards against is a CSS regression that re-pins the panel as
+  // an overlay on the board, which leaves the DOM order intact.
+  test('the picker and the die sit below the board, not on it', async ({ page }) => {
     await seedTrustedSession(page);
     await installMock(page, []);
     await openRoom(page);
 
-    await expect(page.getByTestId('pair-picker')).toHaveCount(0);
-    await expect(page.getByTestId('undo-button')).toBeVisible();
-    await expect(page.getByTestId('redo-button')).toBeVisible();
-    await expect(page.getByTestId('undo-button')).toBeEnabled();
+    const boardBox = await page.getByTestId('board-canvas').boundingBox();
+    const diceBox = await page.getByTestId('dice-mount').boundingBox();
+    expect(boardBox).not.toBeNull();
+    expect(diceBox).not.toBeNull();
+    expect(diceBox!.y).toBeGreaterThanOrEqual(boardBox!.y + boardBox!.height);
+
+    await avatar(page, 11).click();
+    await avatar(page, 12).click();
+    const pickerBox = await page.getByTestId('control-panel').boundingBox();
+    expect(pickerBox).not.toBeNull();
+    expect(pickerBox!.y).toBeGreaterThanOrEqual(boardBox!.y + boardBox!.height);
   });
 
   test('the hint tracks how many players are selected', async ({ page }) => {
@@ -294,21 +338,5 @@ test.describe('#4603 Constellations relationship control panel', () => {
 
     await expect(page.getByTestId('board-edge')).toHaveCount(0);
     expect(captured.clear).toEqual([{ from_user_id: 11, to_user_id: 12 }]);
-  });
-
-  test('the history arrows call undo and redo and re-render the graph', async ({ page }) => {
-    await seedTrustedSession(page);
-    const captured = await installMock(page, [PARTNER_EDGE]);
-    await openRoom(page);
-
-    await expect(page.getByTestId('board-edge')).toHaveCount(1);
-    await page.getByTestId('undo-button').click();
-    await expect(page.getByTestId('board-edge')).toHaveCount(0);
-    expect(captured.undo).toBe(1);
-
-    await page.getByTestId('redo-button').click();
-    await expect
-      .poll(() => captured.redo, { message: 'redo endpoint called' })
-      .toBe(1);
   });
 });
