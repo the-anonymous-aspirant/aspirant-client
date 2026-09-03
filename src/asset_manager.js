@@ -46,6 +46,13 @@ const assetMap = {
   pushups_icon: { hash: 'd7687996bb0b13bb83159afeb728ecbd', type: AssetType.IMAGE },
   jobs_icon: { hash: '4e6c654dece53e93029bc5cee19b3dbb', type: AssetType.IMAGE },
   vardeutlatande_icon: { hash: 'f728540c8354400762afab002220fdde', type: AssetType.IMAGE },
+  // Hand-drawn admin-tile icons (#4840): the three sketched glyphs that are not
+  // member apps — they belong to AdminView tiles (operator ruling). Same pipeline
+  // as the member icons: black-ink-on-transparent PNG, rendered white via the card
+  // invert(1); the object is fetched by the Trusted-cookie bypass, no publish entry.
+  system_health_icon: { hash: 'd74f5a750d12a74dad9796f3776fc22f', type: AssetType.IMAGE },
+  penpot_design_icon: { hash: '51eb033677d6675738e13d538b42915d', type: AssetType.IMAGE },
+  histoire_icon: { hash: '244a9444ce99c908734ec46dad78ef9b', type: AssetType.IMAGE },
   message_board_icon: { hash: 'cf9873f665af55d9a2dd41ae008dab9f', type: AssetType.IMAGE },
   quiz_center_icon: { hash: 'ebf52d7466f9a954ba3951d976f0af55', type: AssetType.IMAGE },
   game_center_icon: { hash: '346984b835ca32c12449b78cd3665901', type: AssetType.IMAGE },
