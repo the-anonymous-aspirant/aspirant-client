@@ -53,6 +53,40 @@
       </figure>
     </section>
 
+    <!-- #4835: the two creator-only transparency toggles. Rendered ONLY for the
+         room creator (server truth is_creator) — a non-creator never sees the
+         section, matching the server-side authorization (SetRoomReveal returns
+         403 for a non-creator, so a visible-but-disabled control for everyone
+         would be a hidden no-op). Each toggle relaxes one privacy rule for the
+         whole room: reveal others' connections, reveal others' relationship
+         cards. They are independent. -->
+    <section
+      v-if="isCreator"
+      class="constellation-settings-transparency"
+      data-testid="settings-transparency"
+    >
+      <h3 class="constellation-settings-subhead">Room transparency</h3>
+      <p class="constellation-settings-hint">Only you, the room creator, can change these.</p>
+      <label class="constellation-settings-toggle">
+        <input
+          type="checkbox"
+          data-testid="toggle-reveal-connections"
+          :checked="revealConnections"
+          @change="$emit('set-reveal', { field: 'reveal_connections', value: $event.target.checked })"
+        />
+        <span>Reveal everyone's connections</span>
+      </label>
+      <label class="constellation-settings-toggle">
+        <input
+          type="checkbox"
+          data-testid="toggle-reveal-cards"
+          :checked="revealCards"
+          @change="$emit('set-reveal', { field: 'reveal_cards', value: $event.target.checked })"
+        />
+        <span>Reveal everyone's relationship cards</span>
+      </label>
+    </section>
+
     <button
       type="button"
       class="constellation-settings-leave"
@@ -74,8 +108,14 @@ defineProps({
   qrUrl: { type: String, default: '' },
   avatarUrl: { type: String, default: '' },
   gameUsername: { type: String, default: '' },
+  // #4835 — creator-only transparency toggles. isCreator gates the whole
+  // section; the two reveal flags reflect current server state (echoed on the
+  // room-state DTO). The parent owns the POST + refresh; this stays presentational.
+  isCreator: { type: Boolean, default: false },
+  revealConnections: { type: Boolean, default: false },
+  revealCards: { type: Boolean, default: false },
 });
-defineEmits(['leave']);
+defineEmits(['leave', 'set-reveal']);
 </script>
 
 <style scoped>
@@ -186,6 +226,42 @@ defineEmits(['leave']);
 .constellation-settings-qr figcaption {
   color: #94a3b8;
   font-size: 0.75rem;
+}
+
+.constellation-settings-transparency {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid #1e293b;
+}
+
+.constellation-settings-subhead {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.constellation-settings-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.constellation-settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.constellation-settings-toggle input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  cursor: pointer;
+  accent-color: #38bdf8;
 }
 
 .constellation-settings-leave {
