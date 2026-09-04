@@ -99,7 +99,6 @@
       AssetManager.releaseAsset('files_icon');
       AssetManager.releaseAsset('translator_icon');
       AssetManager.releaseAsset('constellations_icon');
-      AssetManager.releaseAsset('wikipedia_hand_icon');
       AssetManager.releaseAsset('goal_trees_icon');
       AssetManager.releaseAsset('scratchpad_icon');
       AssetManager.releaseAsset('pushups_icon');
