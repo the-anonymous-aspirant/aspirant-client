@@ -13,7 +13,6 @@ import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/moc
 const REDIRECTS: Array<[string, RegExp]> = [
   ['/trusted', /\/member$/],
   ['/trusted/goals', /\/member\/shared\/goals$/],
-  ['/trusted/wikipedia', /\/member\/shared\/wikipedia$/],
   ['/trusted/translator', /\/member\/shared\/translator$/],
   ['/trusted/files', /\/member\/shared\/files$/],
   ['/trusted/message-board', /\/member\/shared\/message-board$/],
