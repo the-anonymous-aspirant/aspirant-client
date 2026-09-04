@@ -30,7 +30,6 @@ import SupportView from '../views/SupportView.vue';
 import ProfileView from '../views/ProfileView.vue';
 import ThirtyYearGiftView from '../views/member/personal/ThirtyYearGift.vue';
 import Translator from '../views/member/shared/Translator.vue';
-import Wikipedia from '../views/member/shared/Wikipedia.vue';
 import Goals from '../views/member/shared/Goals.vue';
 import GoalTreeCanvas from '../views/member/shared/GoalTreeCanvas.vue';
 import ValuationStatement from '../views/member/personal/ValuationStatement.vue';
@@ -100,7 +99,6 @@ const routes = [
   { path: '/member/shared/files', component: FilesManagerView, meta: MEMBER_ROLES },
   { path: '/member/shared/message-board', component: MessageBoardView, meta: MEMBER_ROLES },
   { path: '/member/shared/translator', component: Translator, meta: MEMBER_ROLES },
-  { path: '/member/shared/wikipedia', component: Wikipedia, meta: MEMBER_ROLES },
   { path: '/member/shared/goals', component: Goals, meta: MEMBER_ROLES },
   { path: '/member/shared/goals/:id', component: GoalTreeCanvas, meta: MEMBER_ROLES },
   { path: '/member/shared/remarkable-pdfs', component: RemarkablePdfsView, meta: MEMBER_ROLES },
@@ -126,7 +124,6 @@ const routes = [
   { path: '/trusted/message-board', redirect: '/member/shared/message-board' },
   { path: '/trusted/30-year-gift', redirect: '/member/personal/30-year-gift' },
   { path: '/trusted/translator', redirect: '/member/shared/translator' },
-  { path: '/trusted/wikipedia', redirect: '/member/shared/wikipedia' },
   { path: '/trusted/goals', redirect: '/member/shared/goals' },
   { path: '/trusted/goals/:id', redirect: (to) => `/member/shared/goals/${to.params.id}` },
   { path: '/trusted/valuation-statement', redirect: '/member/personal/valuation-statement' },

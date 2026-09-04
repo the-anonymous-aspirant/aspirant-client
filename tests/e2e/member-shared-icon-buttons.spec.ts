@@ -11,8 +11,8 @@ import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/moc
  * consumer's surface declares — and two of these surfaces declared none while
  * painting a dark background (#3027 / §3.18). Before this port the Goals card's
  * row glyphs measured 1.00:1, literally invisible, and porting them without
- * pairing the card's ink would have taken the Wikipedia toolbar from 10.05:1 to
- * 1.08:1. Nothing in the suite would have said so: the old rules that carried
+ * pairing the surface's ink would have collapsed another dark-surface toolbar
+ * from 10.05:1 to 1.08:1. Nothing in the suite would have said so: the old rules that carried
  * the ink were the very rules a port deletes. So each control is asserted at the
  * OUTCOME — a DS root, a name, a 44x44 square, and readable ink on its own
  * surface — not on the class list of the moment.
@@ -108,18 +108,6 @@ test.describe('#4448 member/shared glyph-only controls + file-source strip', () 
     await page.getByRole('button', { name: 'Swap languages' }).click();
     await expect(from).toHaveText(/Swedish \(sv\)/);
     await expect(to).toHaveText(/English \(en\)/);
-  });
-
-  test('Wikipedia toolbar controls read on the dark toolbar they sit on', async ({ page }) => {
-    await page.route(/\/api\/wikipedia\//, json({ suggestions: [] }));
-    await page.goto('/member/shared/wikipedia');
-    await dismissMobileSidebarIfPresent(page);
-
-    // #4326 dropped these two as out-of-contract residue; this child releases
-    // that hold, and their ink is the case that made the container fix
-    // necessary — they measured 10.05:1 before and 1.08:1 on the naive port.
-    await expectIconButton(page, 'Home');
-    await expectIconButton(page, 'Random article');
   });
 
   test('FilesManager source strip is a named radiogroup that still refetches on switch', async ({ page }) => {
