@@ -570,6 +570,16 @@ export async function seedTrustedSession(page: Page): Promise<void> {
   });
 }
 
+/** A viewer-tier session (#5113-A3). Applications require a viewer login since
+ *  D1, so a test that renders an application page needs at least this. A viewer
+ *  reaches applications but NOT the member area or the member-gated games. */
+export async function seedViewerSession(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('user_role', 'Viewer');
+    localStorage.setItem('user_name', 'e2e-viewer');
+  });
+}
+
 /** A Trusted session under a NAMED username. `seedTrustedSession` seeds the
  *  generic `e2e-tester`, which owns no personal app; since #4331 the /member
  *  index filters personal cards by owner, so a test that needs a personal card

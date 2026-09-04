@@ -16,6 +16,7 @@
   import Login from './Login.vue';
   import UserAvatar from '../UserAvatar.vue';
   import assetManager from '../../asset_manager';
+  import { meetsTier, TIER } from '../../lib/tiers.js';
 
   export default {
     name: 'Sidebar',
@@ -43,6 +44,11 @@
       const roleLabel = computed(() =>
         userRole.value === 'Trusted' ? 'Member' : userRole.value
       );
+      // Nav visibility by access tier (epic #5113-A3), matching the router
+      // guard and the deployed server: Member link at member+, Admin link at
+      // admin. meetsTier accepts both tier names and legacy names.
+      const canSeeMember = computed(() => meetsTier(userRole.value, TIER.member));
+      const canSeeAdmin = computed(() => meetsTier(userRole.value, TIER.admin));
       const aspiringHandImageUrl = ref('');
       // The logged-in user's own avatar URL (#4170), used both as the Profile
       // sidebar entry's icon and in the who-am-I strip. '' ⇒ the default_user
@@ -153,6 +159,8 @@
         username,
         userRole,
         roleLabel,
+        canSeeMember,
+        canSeeAdmin,
         refreshUserData,
         aspiringHandImageUrl,
         homeIconUrl,
@@ -194,7 +202,7 @@
            app catalog lives on the main-page card grid, not a per-app sidebar
            tree (#4198: the earlier Shared/Personal sub-nav duplicated the cards
            and swamped the nav). -->
-      <template v-if="userRole === 'Trusted' || userRole === 'Admin'">
+      <template v-if="canSeeMember">
         <SidebarLink
           :key="'member' + imagesLoaded"
           :image="memberIconUrl"
@@ -203,7 +211,7 @@
         >
       </template>
       <SidebarLink
-        v-if="userRole === 'Admin'"
+        v-if="canSeeAdmin"
         :key="'admin' + imagesLoaded"
         :image="adminIconUrl"
         to="/admin"
