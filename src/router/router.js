@@ -77,6 +77,13 @@ const routes = [
   { path: '/applications/transparencymapper', component: TransparencyMapperView, meta: VIEWER },
   { path: '/applications/qr-generator', component: QrGeneratorView, meta: VIEWER },
 
+  // Constellations (#4587) moved from the member area onto the applications
+  // page at the viewer tier (#5113-B1 / operator D2) — a signed-up viewer can
+  // create/join/play. The room component is a placeholder here (#4598/B3);
+  // #4601 mounts the board. Server enforces the per-room membership boundary.
+  { path: '/applications/constellations', component: Constellations, meta: VIEWER },
+  { path: '/applications/constellations/room/:code', component: ConstellationsRoom, meta: VIEWER },
+
   // Quiz routes
   { path: '/applications/quizzes', component: QuizHubView, meta: VIEWER },
   { path: '/quizzes', component: QuizHubView, meta: VIEWER },
@@ -107,10 +114,13 @@ const routes = [
   { path: '/member/shared/goals/:id', component: GoalTreeCanvas, meta: MEMBER_ROLES },
   { path: '/member/shared/remarkable-pdfs', component: RemarkablePdfsView, meta: MEMBER_ROLES },
   { path: '/member/shared/scratchpad', component: Scratchpad, meta: MEMBER_ROLES },
-  // Constellations (#4587): the landing/lobby and the in-room route it lands on.
-  // The room component is a placeholder here (#4598/B3); #4601 mounts the board.
-  { path: '/member/shared/constellations', component: Constellations, meta: MEMBER_ROLES },
-  { path: '/member/shared/constellations/room/:code', component: ConstellationsRoom, meta: MEMBER_ROLES },
+  // Constellations moved to /applications/constellations (#5113-B1); redirect
+  // the old member-area bookmarks, carrying the room code through.
+  { path: '/member/shared/constellations', redirect: '/applications/constellations' },
+  {
+    path: '/member/shared/constellations/room/:code',
+    redirect: (to) => `/applications/constellations/room/${to.params.code}`,
+  },
 
   // Personal
   { path: '/member/personal/ludde-analytics', component: LuddeAnalytics, meta: MEMBER_ROLES },

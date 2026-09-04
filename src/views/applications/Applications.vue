@@ -87,6 +87,12 @@
             route: 'qr-generator',
             imageKey: 'qrGenerator',
           },
+          {
+            title: 'Constellations',
+            description: 'A shared relationship-graph board for the card game',
+            route: 'constellations',
+            imageKey: 'constellations',
+          },
         ],
       };
     },
@@ -101,6 +107,7 @@
           emotionalExcellence: 'emotion_tracker_icon',
           transparencymapper: 'transparency_icon',
           qrGenerator: 'qr_code_icon',
+          constellations: 'constellations_icon',
           home_icon: 'home_icon',
         };
         await Promise.all(

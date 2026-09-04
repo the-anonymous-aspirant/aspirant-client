@@ -5,7 +5,7 @@ import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/moc
  * #4598 / #4587-B3 — the Constellations landing lobby. Covers the B3 acceptance
  * criteria: (1) the app appears on the member applications grid and opens the
  * landing view; (2) a game username can be set; (3) create and (4) join both
- * land on the in-room route (/member/shared/constellations/room/:code).
+ * land on the in-room route (/applications/constellations/room/:code).
  *
  * The constellations API (#4593 room lifecycle, #4595 game identity) is mocked
  * in-process via page.route() — no aspirant-server is required. The real
@@ -135,7 +135,7 @@ test.describe('#4598 Constellations landing lobby', () => {
   test('saves a game username', async ({ page }) => {
     await seedTrustedSession(page);
     const handles = await installMock(page, { game_username: '', avatar_url: '' });
-    await page.goto('/member/shared/constellations');
+    await page.goto('/applications/constellations');
     await dismissMobileSidebarIfPresent(page);
 
     await page.getByTestId('game-username').fill('Vega');
@@ -149,12 +149,12 @@ test.describe('#4598 Constellations landing lobby', () => {
     await seedTrustedSession(page);
     // Username already set → create is enabled on mount.
     const handles = await installMock(page, { game_username: 'Vega', avatar_url: '' });
-    await page.goto('/member/shared/constellations');
+    await page.goto('/applications/constellations');
     await dismissMobileSidebarIfPresent(page);
 
     await page.getByTestId('create-room').click();
 
-    await expect(page).toHaveURL(new RegExp(`/member/shared/constellations/room/${ROOM_CODE}$`));
+    await expect(page).toHaveURL(new RegExp(`/applications/constellations/room/${ROOM_CODE}$`));
     // #4848: the room code moved off the board into the settings face; the URL
     // above already carries it, so here we just confirm the room shell mounted.
     await expect(page.locator('.constellations-room-title')).toBeVisible();
@@ -165,7 +165,7 @@ test.describe('#4598 Constellations landing lobby', () => {
   test('joining a room by code lands on the in-room route', async ({ page }) => {
     await seedTrustedSession(page);
     const handles = await installMock(page, { game_username: 'Vega', avatar_url: '' });
-    await page.goto('/member/shared/constellations');
+    await page.goto('/applications/constellations');
     await dismissMobileSidebarIfPresent(page);
 
     // Switch to the Join panel via the segmented control (scoped so it doesn't
@@ -185,7 +185,7 @@ test.describe('#4598 Constellations landing lobby', () => {
   test('create refused while already in a game names the room and links to it', async ({ page }) => {
     await seedTrustedSession(page);
     await installMock(page, { game_username: 'Vega', avatar_url: '' }, ACTIVE_ROOM_CODE);
-    await page.goto('/member/shared/constellations');
+    await page.goto('/applications/constellations');
     await dismissMobileSidebarIfPresent(page);
 
     await page.getByTestId('create-room').click();
@@ -197,13 +197,13 @@ test.describe('#4598 Constellations landing lobby', () => {
     await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
 
     await page.getByTestId('go-to-active-room').click();
-    await expect(page).toHaveURL(new RegExp(`/member/shared/constellations/room/${ACTIVE_ROOM_CODE}$`));
+    await expect(page).toHaveURL(new RegExp(`/applications/constellations/room/${ACTIVE_ROOM_CODE}$`));
   });
 
   test('join refused while already in a game names the room', async ({ page }) => {
     await seedTrustedSession(page);
     await installMock(page, { game_username: 'Vega', avatar_url: '' }, ACTIVE_ROOM_CODE);
-    await page.goto('/member/shared/constellations');
+    await page.goto('/applications/constellations');
     await dismissMobileSidebarIfPresent(page);
 
     await page.locator('.segmented__item', { hasText: 'Join' }).click();

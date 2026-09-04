@@ -105,7 +105,7 @@ test.describe('#4605 Constellations relationship status line', () => {
       relationships: [],
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     mock.setRelationships([PARTNER_EDGE]);
@@ -128,7 +128,7 @@ test.describe('#4605 Constellations relationship status line', () => {
       relationships: [],
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     mock.setRelationships([PARTNER_EDGE, DATE_EDGE]);
@@ -156,7 +156,7 @@ test.describe('#4605 Constellations relationship status line', () => {
       relationships: [],
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     mock.setRelationships([PARTNER_EDGE]);
@@ -176,7 +176,7 @@ test.describe('#4605 Constellations relationship status line', () => {
       relationships: [PARTNER_EDGE, DATE_EDGE],
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     // Give the poll several ticks to prove nothing is queued behind the load.
@@ -196,7 +196,7 @@ test.describe('#4605 Constellations relationship status line', () => {
       relationships: [PARTNER_EDGE],
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     // Seeded silently, and repeated polls of the same edge stay silent.

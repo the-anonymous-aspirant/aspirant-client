@@ -116,7 +116,7 @@
         {{ actionError }}
         <router-link
           v-if="activeRoomCode"
-          :to="`/member/shared/constellations/room/${activeRoomCode}`"
+          :to="`/applications/constellations/room/${activeRoomCode}`"
           class="constellations-error-link"
           data-testid="go-to-active-room"
         >Go to room {{ activeRoomCode }}</router-link>
@@ -134,7 +134,7 @@ import { useProfile } from '../../../composables/useProfile.js';
 // Constellations landing / lobby (#4598 / #4587-B3). The app's shared
 // "Connections sheet": pick a game identity, then create or join a room. This
 // view owns the entry flow and the room route; the in-room board is #4601 and
-// mounts at /member/shared/constellations/room/:code.
+// mounts at /applications/constellations/room/:code.
 //
 // Options API + a bare `axios` with relative /api paths, matching the other
 // shared member views (FilesManager, Scratchpad). The session HttpOnly cookie
@@ -243,7 +243,7 @@ export default {
       this.activeRoomCode = '';
     },
     goToRoom(code) {
-      this.$router.push({ path: `/member/shared/constellations/room/${code}` });
+      this.$router.push({ path: `/applications/constellations/room/${code}` });
     },
     // Reads the { code, message, active_room_code } error detail an aspirant-server
     // refusal carries (server/handlers/common.go ErrorDetail, widened for the
