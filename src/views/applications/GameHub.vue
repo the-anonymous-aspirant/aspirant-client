@@ -19,6 +19,7 @@
 <script>
   import AssetManager from '../../asset_manager';
   import ApplicationCard from '../../components/ApplicationCard.vue';
+  import { meetsTier, TIER } from '../../lib/tiers.js';
 
   // The Game Center roster (#4842) — the ONE definition of this hub's tiles,
   // lifted from the former inline <application-card> list so the grid renders
@@ -50,15 +51,15 @@
     },
     {
       // Gated in the router since it was added: router.js's /games/easter-hunt
-      // entry carries meta:{roles:['Trusted','Admin']}. The tile used to render
-      // for everyone, so a signed-out visitor was offered a card the guard then
-      // bounced to '/' (#4841 audit, site 3). The `roles` field below is what
-      // stops the hub advertising it.
+      // entry carries meta:{minTier:TIER.member}. The tile used to render for
+      // everyone, so a signed-out visitor was offered a card the guard then
+      // bounced to '/' (#4841 audit, site 3). The `minTier` field below is what
+      // stops the hub advertising it below the member tier.
       title: 'Easter Egg Hunt',
       description: 'Reveal squares to find hidden eggs',
       route: 'easter-hunt',
       icon: 'easter_hunt_icon',
-      roles: ['Trusted', 'Admin'],
+      minTier: TIER.member,
     },
   ];
 
@@ -68,13 +69,12 @@
   // visibility mismatch: a tile whose route would immediately bounce. Same
   // shape and same caveat as visiblePersonalApps() in views/member/apps.js.
   //
-  // The predicate is the router guard's, character for character
-  // (`!role || !requiredRoles.includes(role)` at router.js:178) — an
-  // exact, case-sensitive match — so the tile is offered exactly when the
-  // guard would let the click through. A looser check here would put the
-  // mismatch back, just quieter.
+  // The predicate is the router guard's (epic #5113-A3): a tile is offered
+  // exactly when the guard's tier floor would let the click through, so the hub
+  // never advertises a card the guard would bounce. A game with no minTier is
+  // offered to anyone who can reach the hub.
   function visibleGames(role) {
-    return GAMES.filter((game) => !game.roles || (!!role && game.roles.includes(role)));
+    return GAMES.filter((game) => game.minTier == null || meetsTier(role, game.minTier));
   }
 
   export default {
