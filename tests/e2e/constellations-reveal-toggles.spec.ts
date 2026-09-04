@@ -69,7 +69,7 @@ async function installRoomMock(
 }
 
 async function openSettings(page: Page) {
-  await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+  await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
   await dismissMobileSidebarIfPresent(page);
   await page.getByTestId('room-nav-settings').click();
   await expect(page.getByTestId('settings-face')).toBeVisible();

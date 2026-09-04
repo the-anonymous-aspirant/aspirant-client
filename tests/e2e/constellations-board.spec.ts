@@ -100,7 +100,7 @@ test.describe('#4602 Constellations relationship graph', () => {
       relationships: [PARTNER_EDGE, FRIEND_EDGE],
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.getByTestId('board-graph')).toBeVisible();
@@ -124,7 +124,7 @@ test.describe('#4602 Constellations relationship graph', () => {
       relationships: [PARTNER_EDGE],
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     const jim = page.locator('[data-testid="board-avatar"][data-user-id="12"]');
@@ -146,7 +146,7 @@ test.describe('#4602 Constellations relationship graph', () => {
       relationships: [PARTNER_EDGE],
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.getByTestId('board-edge')).toHaveCount(1);

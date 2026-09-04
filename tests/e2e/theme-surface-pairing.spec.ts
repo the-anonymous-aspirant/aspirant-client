@@ -124,7 +124,7 @@ for (const theme of ['light', 'dark'] as const) {
       await seedTrustedSession(page);
       await page.route(/\/api\//, (route: Route) => route.fulfill({ status: 204, body: '' }));
       await page.route(/\/api\/constellations\/profile$/, json({ game_username: 'Vega', avatar_url: '' }));
-      await page.goto('/member/shared/constellations');
+      await page.goto('/applications/constellations');
       await dismissMobileSidebarIfPresent(page);
 
       // The segmented "Create"/"Join" toggle is literally the create/join control

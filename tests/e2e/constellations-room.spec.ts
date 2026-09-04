@@ -139,7 +139,7 @@ test.describe('#4601 Constellations in-room shell', () => {
     await seedTrustedSession(page);
     await installMock(page, { occupancy: 2, player_count: 4, members: [{ user_id: 1 }, { user_id: 2 }] });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.locator('.constellations-room-title')).toHaveText('Constellations');
@@ -154,7 +154,7 @@ test.describe('#4601 Constellations in-room shell', () => {
     await seedTrustedSession(page);
     const mock = await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     // #4848: occupancy lives in the settings face now.
@@ -180,7 +180,7 @@ test.describe('#4601 Constellations in-room shell', () => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     // #4848: Leave moved into the settings face.
@@ -189,7 +189,7 @@ test.describe('#4601 Constellations in-room shell', () => {
 
     // The leave endpoint was called for this room, then we navigated to the lobby.
     await expect.poll(() => leftCode).toBe(ROOM_CODE);
-    await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
+    await expect(page).toHaveURL(/\/applications\/constellations$/);
   });
 
   // #4587-H1 / #4771 — a failed leave call must never trap the player in the
@@ -202,14 +202,14 @@ test.describe('#4601 Constellations in-room shell', () => {
       await route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":{"message":"boom"}}' });
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     // #4848: Leave moved into the settings face.
     await page.getByTestId('room-nav-settings').click();
     await page.getByTestId('leave-room').click();
 
-    await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
+    await expect(page).toHaveURL(/\/applications\/constellations$/);
   });
 
   // #4587-H2 / #4772 established that the rulebook must actually be SERVED —
@@ -221,7 +221,7 @@ test.describe('#4601 Constellations in-room shell', () => {
     await seedTrustedSession(page);
     await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     const res = await page.request.get('/constellations-rulebook.html');
@@ -237,7 +237,7 @@ test.describe('#4601 Constellations in-room shell', () => {
     await seedTrustedSession(page);
     await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
 
-    const roomUrl = `/member/shared/constellations/room/${ROOM_CODE}`;
+    const roomUrl = `/applications/constellations/room/${ROOM_CODE}`;
     await page.goto(roomUrl);
     await dismissMobileSidebarIfPresent(page);
 
@@ -258,7 +258,7 @@ test.describe('#4601 Constellations in-room shell', () => {
     await seedTrustedSession(page);
     await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     const rules = page.getByTestId('room-nav-rules');
@@ -280,7 +280,7 @@ test.describe('#4601 Constellations in-room shell', () => {
     await seedTrustedSession(page);
     await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     const board = page.getByTestId('board-canvas');
@@ -311,7 +311,7 @@ test.describe('#4601 Constellations in-room shell', () => {
     await seedTrustedSession(page);
     await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     const nav = page.getByTestId('room-nav');
@@ -329,7 +329,7 @@ test.describe('#4601 Constellations in-room shell', () => {
     await seedTrustedSession(page);
     await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     // offsetHeight, not boundingBox: the card is mid-rotateY under perspective
@@ -376,7 +376,7 @@ test.describe('#4822 Constellations: in-room game-name affordance', () => {
     });
     await installProfileMock(page, 1);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     const prompt = page.getByTestId('name-prompt');
@@ -399,7 +399,7 @@ test.describe('#4822 Constellations: in-room game-name affordance', () => {
     });
     await installProfileMock(page, 1);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     // The board itself is proof the room loaded; the prompt must be absent.
@@ -421,7 +421,7 @@ test.describe('#4822 Constellations: in-room game-name affordance', () => {
     // not the caller's problem to fix from inside this client.
     await installProfileMock(page, 1);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.getByTestId('board-canvas')).toBeVisible();
@@ -448,7 +448,7 @@ test.describe('#4810 Constellations scanned-link auto-join', () => {
     await seedTrustedSession(page);
     const mock = await installMock(page, SEATED);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.getByTestId('board-canvas')).toBeVisible();
@@ -462,7 +462,7 @@ test.describe('#4810 Constellations scanned-link auto-join', () => {
     await seedTrustedSession(page);
     await installMock(page, SEATED);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     // Watched across the whole entry, not merely asserted at the end: a naive
@@ -485,7 +485,7 @@ test.describe('#4810 Constellations scanned-link auto-join', () => {
       room_player_count: 4,
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.getByTestId('blocked-state')).toBeVisible();
@@ -512,7 +512,7 @@ test.describe('#4810 Constellations scanned-link auto-join', () => {
       message: 'That game has ended',
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.getByTestId('blocked-title')).toHaveText('This game has ended');
@@ -530,7 +530,7 @@ test.describe('#4810 Constellations scanned-link auto-join', () => {
       message: 'Room not found',
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.getByTestId('blocked-title')).toHaveText('No room with that code');
@@ -547,14 +547,14 @@ test.describe('#4810 Constellations scanned-link auto-join', () => {
       active_room_code: 'ZK4TQ',
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.getByTestId('blocked-title')).toHaveText('You’re already in another game');
     await expect(page.getByTestId('blocked-message')).toContainText('ZK4TQ');
     const link = page.getByTestId('go-to-active-room');
     await expect(link).toHaveText('Go to room ZK4TQ');
-    await expect(link).toHaveAttribute('href', '/member/shared/constellations/room/ZK4TQ');
+    await expect(link).toHaveAttribute('href', '/applications/constellations/room/ZK4TQ');
   });
 
   test('every blocked state offers a way back to the lobby', async ({ page }) => {
@@ -562,11 +562,11 @@ test.describe('#4810 Constellations scanned-link auto-join', () => {
     await installMock(page, SEATED);
     await refuseJoin(page, 409, { code: 'conflict', reason: 'room_full', message: 'Room is full' });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await page.getByTestId('back-to-lobby').click();
-    await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
+    await expect(page).toHaveURL(/\/applications\/constellations$/);
   });
 
   // The already_in_game panel links to the room you ARE in — the SAME route
@@ -605,7 +605,7 @@ test.describe('#4810 Constellations scanned-link auto-join', () => {
       });
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.getByTestId('blocked-state')).toBeVisible();
@@ -625,7 +625,7 @@ test.describe('#4810 Constellations scanned-link auto-join', () => {
       message: 'The room is sealed for the next round.',
     });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.getByTestId('blocked-title')).toHaveText('You could not join this room');

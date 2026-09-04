@@ -74,7 +74,7 @@
       <div class="constellations-room-blocked-actions">
         <router-link
           v-if="blocked.activeRoomCode"
-          :to="`/member/shared/constellations/room/${blocked.activeRoomCode}`"
+          :to="`/applications/constellations/room/${blocked.activeRoomCode}`"
           class="constellations-room-rules"
           data-testid="go-to-active-room"
         >Go to room {{ blocked.activeRoomCode }}</router-link>
@@ -314,7 +314,7 @@ async function saveGameUsername() {
 const qrUrl = computed(() => {
   if (!code.value) return '';
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const joinUrl = `${origin}/member/shared/constellations/room/${encodeURIComponent(code.value)}`;
+  const joinUrl = `${origin}/applications/constellations/room/${encodeURIComponent(code.value)}`;
   return `https://api.qrserver.com/v1/create-qr-code/?size=112x112&margin=0&data=${encodeURIComponent(joinUrl)}`;
 });
 
@@ -535,7 +535,7 @@ async function leave() {
   } catch {
     // Best-effort: navigating away must not depend on the call succeeding.
   }
-  router.push({ path: '/member/shared/constellations' });
+  router.push({ path: '/applications/constellations' });
 }
 
 // #4835 — the room creator flips a transparency toggle. Only the creator's
@@ -793,7 +793,7 @@ const blockedGuidance = computed(() => {
 });
 
 function backToLobby() {
-  router.push({ path: '/member/shared/constellations' });
+  router.push({ path: '/applications/constellations' });
 }
 
 async function enterRoom() {

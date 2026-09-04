@@ -78,7 +78,7 @@ test.describe('#4604 Constellations dice roller', () => {
     await seedTrustedSession(page);
     await installMock(page, null);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.getByTestId('dice-status')).toHaveText('Not rolled yet');
@@ -94,7 +94,7 @@ test.describe('#4604 Constellations dice roller', () => {
     await seedTrustedSession(page);
     const mock = await installMock(page, null);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await expect(page.getByTestId('dice-status')).toHaveText('Not rolled yet');
@@ -112,7 +112,7 @@ test.describe('#4604 Constellations dice roller', () => {
     await seedTrustedSession(page);
     await installMock(page, null);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     const die = page.getByTestId('dice-roll');
@@ -133,7 +133,7 @@ test.describe('#4604 Constellations dice roller', () => {
     await seedTrustedSession(page);
     await installMock(page, { faces: [4], nonce: 7, rolled_at: '2026-08-31T00:00:00Z' });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     const status = page.getByTestId('dice-status');
@@ -154,7 +154,7 @@ test.describe('#4604 Constellations dice roller', () => {
     await seedTrustedSession(page);
     const mock = await installMock(page, null);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
     await expect(page.getByTestId('dice-status')).toHaveText('Not rolled yet');
 
@@ -170,7 +170,7 @@ test.describe('#4604 Constellations dice roller', () => {
     await seedTrustedSession(page);
     await installMock(page, null);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await page.getByTestId('dice-roll').click();

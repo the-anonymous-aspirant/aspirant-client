@@ -76,7 +76,7 @@ test.describe('#4848 Constellations history + settings faces', () => {
     await seedTrustedSession(page);
     await installRoomMock(page);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await page.getByTestId('room-nav-history').click();
@@ -114,7 +114,7 @@ test.describe('#4848 Constellations history + settings faces', () => {
     ];
     await installRoomMock(page, { history: events, members: membersWithAvatars });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
     await page.getByTestId('room-nav-history').click();
 
@@ -132,7 +132,7 @@ test.describe('#4848 Constellations history + settings faces', () => {
     await seedTrustedSession(page);
     await installRoomMock(page, { history: [] });
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await page.getByTestId('room-nav-history').click();
@@ -143,7 +143,7 @@ test.describe('#4848 Constellations history + settings faces', () => {
     await seedTrustedSession(page);
     await installRoomMock(page);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     await page.getByTestId('room-nav-settings').click();
@@ -162,7 +162,7 @@ test.describe('#4848 Constellations history + settings faces', () => {
     await seedTrustedSession(page);
     await installRoomMock(page);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     // Before opening settings, the board is clear of the moved chrome (#4848).

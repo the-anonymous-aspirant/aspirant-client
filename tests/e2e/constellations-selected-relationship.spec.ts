@@ -132,7 +132,7 @@ async function installMock(page: Page, initialRelationships: Relationship[]) {
 }
 
 async function openRoom(page: Page) {
-  await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+  await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
   await dismissMobileSidebarIfPresent(page);
   await expect(page.getByTestId('board-graph')).toBeVisible();
 }
