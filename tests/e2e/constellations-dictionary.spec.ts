@@ -90,7 +90,7 @@ test.describe('#4807-B1 Constellations dictionary', () => {
     await seedTrustedSession(page);
     await installDictionaryMock(page);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     const board = page.getByTestId('board-canvas');
@@ -138,7 +138,7 @@ test.describe('#4807-B1 Constellations dictionary', () => {
     await seedTrustedSession(page);
     await installDictionaryMock(page);
 
-    await page.goto(`/member/shared/constellations/room/${ROOM_CODE}`);
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
     await dismissMobileSidebarIfPresent(page);
 
     const board = page.getByTestId('board-canvas');
