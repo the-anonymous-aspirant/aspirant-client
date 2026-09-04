@@ -100,7 +100,10 @@ test.describe('#4842 GameHub registry', () => {
     await expect(page).toHaveURL(/\/games\/easter-hunt$/);
   });
 
-  test('an ungated tile still routes for an anonymous visitor', async ({ page }) => {
+  test('a viewer-tier tile routes for a viewer', async ({ page }) => {
+    // Since #5113-A3/D1 the games are viewer-tier (no longer anonymous-public),
+    // so a viewer reaches the hub and a tile at or below their tier routes.
+    await seedViewerSession(page);
     await page.goto('/games');
     await dismissMobileSidebarIfPresent(page);
 
