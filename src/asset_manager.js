@@ -40,7 +40,6 @@ const assetMap = {
   files_icon: { hash: '72af3794839dce8f89a2a215fd17d376', type: AssetType.IMAGE },
   translator_icon: { hash: '400a2a027d03b287b581011e99731016', type: AssetType.IMAGE },
   constellations_icon: { hash: 'cf6483ecea33f0d297a9c25e0d3749af', type: AssetType.IMAGE },
-  wikipedia_hand_icon: { hash: '7e8ff8c811be6e55ce610155bf49463a', type: AssetType.IMAGE },
   goal_trees_icon: { hash: '0f1d8b910f7694dfbe2dbfd4116f2b6d', type: AssetType.IMAGE },
   scratchpad_icon: { hash: '621aa988d8f497aeb841466d81f7e872', type: AssetType.IMAGE },
   pushups_icon: { hash: 'd7687996bb0b13bb83159afeb728ecbd', type: AssetType.IMAGE },

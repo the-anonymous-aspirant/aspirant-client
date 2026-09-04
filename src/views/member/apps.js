@@ -39,7 +39,6 @@ export const SHARED_APPS = [
   { title: 'Files', description: 'Upload, download, and share files.', route: 'files', icon: 'files_icon' },
   { title: 'Message Board', description: 'Leave messages for the crew.', route: 'message-board', icon: 'message_board_icon' },
   { title: 'Translator', description: 'Translate text between languages', route: 'translator', icon: 'translator_icon' },
-  { title: 'Wikipedia', description: 'Browse the English Wikipedia offline', route: 'wikipedia', icon: 'wikipedia_hand_icon' },
   { title: 'Goal Trees', description: 'Plan and track your goals', route: 'goals', icon: 'goal_trees_icon' },
   { title: 'Remarkable PDFs', description: 'Generate PDFs for your Remarkable tablet', route: 'remarkable-pdfs', icon: 'home_icon' },
   { title: 'Scratchpad', description: 'A personal note that syncs live across your devices', route: 'scratchpad', icon: 'scratchpad_icon' },
