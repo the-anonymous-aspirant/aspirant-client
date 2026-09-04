@@ -18,6 +18,9 @@ import { dismissMobileSidebarIfPresent } from './helpers/mockBackend';
  */
 
 async function openQr(page: Page): Promise<void> {
+  // Applications require a viewer login since #5113-A3/D1; without a session the
+  // router guard bounces to '/'.
+  await page.addInitScript(() => localStorage.setItem('user_role', 'Viewer'));
   await page.goto('/applications/qr-generator');
   await dismissMobileSidebarIfPresent(page);
   await expect(page.getByRole('heading', { name: 'QR Code Generator' })).toBeVisible();

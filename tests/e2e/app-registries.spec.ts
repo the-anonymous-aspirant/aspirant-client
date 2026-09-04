@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import {
   seedAdminSession,
   seedTrustedSession,
+  seedViewerSession,
   dismissMobileSidebarIfPresent,
 } from './helpers/mockBackend';
 
@@ -49,6 +50,7 @@ const ADMIN_ROUTED_TITLES = [
 
 test.describe('#4842 QuizHub registry', () => {
   test('renders one card per registry row', async ({ page }) => {
+    await seedViewerSession(page); // applications require a viewer login (#5113-A3/D1)
     await page.goto('/quizzes');
     await dismissMobileSidebarIfPresent(page);
 
@@ -60,6 +62,7 @@ test.describe('#4842 QuizHub registry', () => {
   });
 
   test("the row's route field still drives the click", async ({ page }) => {
+    await seedViewerSession(page);
     await page.goto('/quizzes');
     await dismissMobileSidebarIfPresent(page);
 
@@ -69,7 +72,12 @@ test.describe('#4842 QuizHub registry', () => {
 });
 
 test.describe('#4842 GameHub registry', () => {
-  test('an anonymous visitor is not offered the role-gated game', async ({ page }) => {
+  test('a viewer is not offered the member-gated game', async ({ page }) => {
+    // Applications require a viewer login (#5113-A3/D1), so GameHub is reached
+    // by a viewer, not an anonymous visitor. The member-gated Easter Hunt tile
+    // (minTier member) must not be offered to a viewer — the visibleGames tier
+    // filter matches the router guard, so no tile the guard would bounce shows.
+    await seedViewerSession(page);
     await page.goto('/games');
     await dismissMobileSidebarIfPresent(page);
 
@@ -77,8 +85,6 @@ test.describe('#4842 GameHub registry', () => {
     await expect(cards).toHaveCount(2);
     await expect(cards.filter({ hasText: 'WordWeaver' })).toHaveCount(1);
     await expect(cards.filter({ hasText: 'Flappy Duo' })).toHaveCount(1);
-    // router.js gates /games/easter-hunt on ['Trusted','Admin']; before #4842
-    // the tile rendered here anyway and the guard bounced the click to '/'.
     await expect(cards.filter({ hasText: 'Easter Egg Hunt' })).toHaveCount(0);
   });
 
@@ -94,7 +100,10 @@ test.describe('#4842 GameHub registry', () => {
     await expect(page).toHaveURL(/\/games\/easter-hunt$/);
   });
 
-  test('an ungated tile still routes for an anonymous visitor', async ({ page }) => {
+  test('a viewer-tier tile routes for a viewer', async ({ page }) => {
+    // Since #5113-A3/D1 the games are viewer-tier (no longer anonymous-public),
+    // so a viewer reaches the hub and a tile at or below their tier routes.
+    await seedViewerSession(page);
     await page.goto('/games');
     await dismissMobileSidebarIfPresent(page);
 

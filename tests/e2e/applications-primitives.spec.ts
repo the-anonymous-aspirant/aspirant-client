@@ -1,5 +1,17 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import {
+  seedTrustedSession,
+  seedViewerSession,
+  dismissMobileSidebarIfPresent,
+} from './helpers/mockBackend';
+
+// Applications require a viewer login since #5113-A3/D1, so every app page here
+// needs at least a viewer session. The easter-hunt describe below re-seeds a
+// Trusted (member) session — it runs after this and the last write wins, so its
+// member-gated page still resolves.
+test.beforeEach(async ({ page }) => {
+  await seedViewerSession(page);
+});
 
 /**
  * #4446 (#4442-A10d) — the /applications, /games and /quizzes surfaces adopt two
