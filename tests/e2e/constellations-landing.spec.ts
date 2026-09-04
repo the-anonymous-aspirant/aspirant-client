@@ -126,7 +126,9 @@ test.describe('#4598 Constellations landing lobby', () => {
     await page.goto('/applications');
     await dismissMobileSidebarIfPresent(page);
 
-    const card = page.locator('.application-card', { hasText: 'Constellations' });
+    // The /applications grid renders AspCard tiles (.app-card), not the member
+    // grid's .application-card.
+    const card = page.locator('.app-card', { hasText: 'Constellations' });
     await expect(card).toBeVisible();
     await card.click();
 
