@@ -118,17 +118,19 @@ async function installMock(page: Page, initial: Profile, alreadyInRoom?: string)
 }
 
 test.describe('#4598 Constellations landing lobby', () => {
-  test('appears on the member grid and opens the landing view', async ({ page }) => {
+  test('appears on the applications grid and opens the landing view', async ({ page }) => {
+    // Constellations moved from the member area onto the applications page at
+    // the viewer tier (#5113-B1).
     await seedTrustedSession(page);
     await installMock(page, { game_username: '', avatar_url: '' });
-    await page.goto('/member');
+    await page.goto('/applications');
     await dismissMobileSidebarIfPresent(page);
 
     const card = page.locator('.application-card', { hasText: 'Constellations' });
     await expect(card).toBeVisible();
     await card.click();
 
-    await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
+    await expect(page).toHaveURL(/\/applications\/constellations$/);
     await expect(page.getByTestId('game-username')).toBeVisible();
   });
 
@@ -174,7 +176,7 @@ test.describe('#4598 Constellations landing lobby', () => {
     await page.getByTestId('join-code').fill('xbvgr');
     await page.getByTestId('join-room').click();
 
-    await expect(page).toHaveURL(/\/member\/shared\/constellations\/room\/XBVGR$/);
+    await expect(page).toHaveURL(/\/applications\/constellations\/room\/XBVGR$/);
     await expect.poll(() => handles.joinCodes).toContain('XBVGR');
   });
 
@@ -194,7 +196,7 @@ test.describe('#4598 Constellations landing lobby', () => {
     await expect(error).toBeVisible();
     await expect(error).toContainText(ACTIVE_ROOM_CODE);
     // Still on the lobby — the refusal did not navigate anywhere on its own.
-    await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
+    await expect(page).toHaveURL(/\/applications\/constellations$/);
 
     await page.getByTestId('go-to-active-room').click();
     await expect(page).toHaveURL(new RegExp(`/applications/constellations/room/${ACTIVE_ROOM_CODE}$`));

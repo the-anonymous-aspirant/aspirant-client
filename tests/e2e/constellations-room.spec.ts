@@ -189,7 +189,7 @@ test.describe('#4601 Constellations in-room shell', () => {
 
     // The leave endpoint was called for this room, then we navigated to the lobby.
     await expect.poll(() => leftCode).toBe(ROOM_CODE);
-    await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
+    await expect(page).toHaveURL(/\/applications\/constellations$/);
   });
 
   // #4587-H1 / #4771 — a failed leave call must never trap the player in the
@@ -209,7 +209,7 @@ test.describe('#4601 Constellations in-room shell', () => {
     await page.getByTestId('room-nav-settings').click();
     await page.getByTestId('leave-room').click();
 
-    await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
+    await expect(page).toHaveURL(/\/applications\/constellations$/);
   });
 
   // #4587-H2 / #4772 established that the rulebook must actually be SERVED —
@@ -566,7 +566,7 @@ test.describe('#4810 Constellations scanned-link auto-join', () => {
     await dismissMobileSidebarIfPresent(page);
 
     await page.getByTestId('back-to-lobby').click();
-    await expect(page).toHaveURL(/\/member\/shared\/constellations$/);
+    await expect(page).toHaveURL(/\/applications\/constellations$/);
   });
 
   // The already_in_game panel links to the room you ARE in — the SAME route
