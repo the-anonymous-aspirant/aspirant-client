@@ -44,6 +44,8 @@ import FlowDetail from '../views/admin/browser-flows/FlowDetail.vue';
 import RunForensic from '../views/admin/browser-flows/RunForensic.vue';
 import KvittoMaker from '../views/admin/tools/KvittoMaker.vue';
 import LoginView from '../views/LoginView.vue';
+import VerifyEmailView from '../views/VerifyEmailView.vue';
+import ResetPasswordView from '../views/ResetPasswordView.vue';
 import NotFound from '../views/NotFound.vue';
 import { TIER, tierOf } from '../lib/tiers.js';
 
@@ -59,6 +61,15 @@ const ADMIN = { minTier: TIER.admin };
 const routes = [
   { path: '/', component: HomeView },
   { path: '/login', component: LoginView },
+  // The landing pages for the two links a sign-up email can carry (system_3
+  // #5228). Public by definition: whoever follows them has no session yet, and
+  // in the recovery case cannot get one. They exist as PAGES rather than the
+  // mail linking straight at a GET endpoint on the API because mail scanners
+  // follow links inside messages and both tokens are single-use — one prefetch
+  // would spend the token and leave the person holding a link that reports
+  // itself invalid.
+  { path: '/verify-email', component: VerifyEmailView },
+  { path: '/reset-password', component: ResetPasswordView },
   { path: '/admin', component: AdminView, meta: ADMIN },
   { path: '/admin/users', component: UserAdmin, meta: ADMIN },
   { path: '/admin/assets', component: Assets, meta: ADMIN },
