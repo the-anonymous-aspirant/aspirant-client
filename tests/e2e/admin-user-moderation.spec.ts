@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { seedAdminSession } from './helpers/mockBackend';
+import { dismissMobileSidebarIfPresent, seedAdminSession } from './helpers/mockBackend';
 
 /**
  * system_3 #5291 (#5120-B1) — the operator's moderation screen.
@@ -58,6 +58,9 @@ async function openUserAdmin(page: Page, options: Options = {}): Promise<void> {
     return json({ signup_enabled: signupEnabled })(route);
   });
   await page.goto('/admin/users');
+  // On the mobile project the sidebar overlay sits over the page and eats every
+  // click; the other admin specs dismiss it the same way.
+  await dismissMobileSidebarIfPresent(page);
   await expect(page.getByTestId('signup-state')).toBeVisible();
 }
 
@@ -169,6 +172,7 @@ test.describe('admin user roster', () => {
     );
 
     await page.goto('/admin/users');
+    await dismissMobileSidebarIfPresent(page);
 
     await expect(page.getByTestId('roster-error')).toBeVisible();
     await expect(page.getByText('No users.')).toHaveCount(0);
