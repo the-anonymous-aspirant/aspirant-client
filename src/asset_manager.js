@@ -90,8 +90,8 @@ const assetMap = {
   'game-score-sound': { hash: '93da53623e880afed235e170f55894ab', type: AssetType.AUDIO },
   'game-fanfare-sound': { hash: '60c112c8f24954a645593514ec1fdad6', type: AssetType.AUDIO },
   'game-flappyduo-sound': { hash: 'd2846c0c7beaae70942256c443315912', type: AssetType.AUDIO },
-  'quiz_success_sound': { hash: '6cc726019d4324f4815f32742fdec010', type: AssetType.AUDIO },
-  'quiz_fail_sound': { hash: '734a637eed4f663b4b07ba99b96202d7', type: AssetType.AUDIO },
+  quiz_success_sound: { hash: '6cc726019d4324f4815f32742fdec010', type: AssetType.AUDIO },
+  quiz_fail_sound: { hash: '734a637eed4f663b4b07ba99b96202d7', type: AssetType.AUDIO },
   'birthday-fanfare': { hash: '0ab465040e6198fae962940358d24f68', type: AssetType.AUDIO },
   robbans_tusen: { hash: '7b75b7470155e2bf077bd69f605b98f5', type: AssetType.AUDIO },
 };
@@ -105,6 +105,13 @@ class AssetManager {
   }
 
   async _initCache() {
+    // CacheStorage exists in a browser secure context only. Feature-detect
+    // rather than catch: importing this module in Node — which a spec does, to
+    // assert the pure-logic paths (#5162) — otherwise prints a ReferenceError
+    // stack trace inside a passing run, and a red-looking trace in green
+    // output teaches readers to skip traces. Every read of `this._cache` is
+    // already optional-chained, so a null cache degrades to fetch-every-time.
+    if (typeof caches === 'undefined') return;
     try {
       this._cache = await caches.open('aspirant-assets');
     } catch (error) {

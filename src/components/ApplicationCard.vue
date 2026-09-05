@@ -1,6 +1,6 @@
 <template>
   <div class="application-card" @click="$emit('card-click', route)">
-    <img v-if="imageUrl" :src="imageUrl" :alt="title" class="app-image" />
+    <img v-if="shownImageUrl" :src="shownImageUrl" :alt="title" class="app-image" />
     <div v-else class="app-image app-image-placeholder"></div>
     <div class="card-content">
       <h2>{{ title }}</h2>
@@ -12,6 +12,8 @@
 </template>
 
 <script>
+  import AssetManager from '../asset_manager';
+
   export default {
     name: 'ApplicationCard',
     props: {
@@ -30,6 +32,53 @@
       route: {
         type: String,
         required: true,
+      },
+    },
+    data() {
+      return {
+        // The generic app image, resolved only when this card has no image of
+        // its own. `null` until then, so a card with a working icon costs no
+        // extra request.
+        fallbackImageUrl: null,
+      };
+    },
+    computed: {
+      shownImageUrl() {
+        return this.imageUrl || this.fallbackImageUrl;
+      },
+    },
+    watch: {
+      imageUrl: {
+        immediate: true,
+        handler(url) {
+          if (url) return;
+          this.loadFallback();
+        },
+      },
+    },
+    methods: {
+      /**
+       * A card whose icon could not be fetched showed an EMPTY BOX — the
+       * `v-else` div below. That is what nine member cards and two admin tiles
+       * rendered for ~41 hours after twelve asset hashes were registered whose
+       * bytes were never uploaded (system_3 #4840): visibly worse than the
+       * generic placeholder they replaced.
+       *
+       * Scoped to this component rather than to `AssetManager.getAsset` on
+       * purpose. A fallback inside the asset layer also puts images into every
+       * OTHER consumer — the sidebar most of all — which changes layout for
+       * viewers whose assets are gated, and measurably destabilised the mobile
+       * card grid (four app-registries specs went red on mobile-safari, green
+       * again once the fallback moved here).
+       */
+      async loadFallback() {
+        try {
+          this.fallbackImageUrl = await AssetManager.getAsset('default');
+        } catch (error) {
+          // Even the generic image is unreachable — keep the empty box rather
+          // than retry; the placeholder is the honest last resort.
+          console.warn('Default application image could not be loaded:', error);
+        }
       },
     },
   };
