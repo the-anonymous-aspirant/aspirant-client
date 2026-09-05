@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Sign-up: the two links a sign-up email carries now land somewhere. `/verify-email`
+  confirms a new address and `/reset-password` sets a new one, both public and both
+  reading their single-use token from the query string. They exist as pages rather
+  than the mail pointing straight at a GET endpoint on the API because mail scanners
+  and link-preview fetchers follow links inside messages — one prefetch would spend
+  the token and leave the person holding a link that reports itself invalid, which
+  they cannot diagnose and support cannot reproduce. So confirming takes a button
+  press rather than firing on load, and the reset page checks the confirmation match
+  and both length bounds before it sends anything: a rejected submission would burn
+  the link and send someone back to their inbox for another one. Length is counted in
+  bytes to match bcrypt's 72-byte limit and the server's own check. Neither page
+  renders its token. Until this, a person clicking the link in their inbox reached a
+  404 (system_3 #5228, client half of #5119).
+
 - Constellations: a scanned room link now adds you to the game, and says which
   condition blocked it when it cannot. Opening `/member/shared/constellations/
   room/:code` went straight to the state poll, which answers a non-member with
