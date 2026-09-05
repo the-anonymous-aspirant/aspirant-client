@@ -90,11 +90,31 @@ const assetMap = {
   'game-score-sound': { hash: '93da53623e880afed235e170f55894ab', type: AssetType.AUDIO },
   'game-fanfare-sound': { hash: '60c112c8f24954a645593514ec1fdad6', type: AssetType.AUDIO },
   'game-flappyduo-sound': { hash: 'd2846c0c7beaae70942256c443315912', type: AssetType.AUDIO },
-  'quiz_success_sound': { hash: '6cc726019d4324f4815f32742fdec010', type: AssetType.AUDIO },
-  'quiz_fail_sound': { hash: '734a637eed4f663b4b07ba99b96202d7', type: AssetType.AUDIO },
+  quiz_success_sound: { hash: '6cc726019d4324f4815f32742fdec010', type: AssetType.AUDIO },
+  quiz_fail_sound: { hash: '734a637eed4f663b4b07ba99b96202d7', type: AssetType.AUDIO },
   'birthday-fanfare': { hash: '0ab465040e6198fae962940358d24f68', type: AssetType.AUDIO },
   robbans_tusen: { hash: '7b75b7470155e2bf077bd69f605b98f5', type: AssetType.AUDIO },
 };
+
+/**
+ * The image rendered in place of one whose bytes are not in the store.
+ *
+ * An asset is registered here by md5 and served by the server out of its own
+ * object store; the two can drift, and when they do `_loadAsset` rejects and
+ * every consumer of that icon rendered an EMPTY BOX — `ApplicationCard`'s
+ * `v-else` placeholder div. That is what nine member cards and two admin tiles
+ * showed for ~41 hours after aspirant-client#270/#271 merged twelve hashes
+ * whose bytes had not been uploaded (system_3 task #4840).
+ *
+ * Falling back here rather than in each consumer means one place decides, and
+ * `getAssetByHash` (the raw path) keeps rejecting for callers that want the
+ * real failure.
+ *
+ * IMAGES ONLY, deliberately: handing a consumer the default *picture* when it
+ * asked for `ludde-sound` would put an image blob behind an <audio src>, which
+ * fails later and further from the cause than the rejection it replaced.
+ */
+const FALLBACK_IMAGE_ASSET = 'default';
 
 class AssetManager {
   constructor() {
@@ -105,6 +125,13 @@ class AssetManager {
   }
 
   async _initCache() {
+    // The CacheStorage API exists in the browser and in a secure context only.
+    // Feature-detect rather than catch: importing this module in Node (a spec
+    // asserting the pure-logic paths, #5162) otherwise prints a ReferenceError
+    // stack trace inside a passing run, and a red-looking trace in green output
+    // teaches readers to skip traces. Every read of `this._cache` is already
+    // optional-chained, so a null cache degrades to fetch-every-time.
+    if (typeof caches === 'undefined') return;
     try {
       this._cache = await caches.open('aspirant-assets');
     } catch (error) {
@@ -119,11 +146,28 @@ class AssetManager {
    */
   async getAsset(name) {
     if (!assetMap[name]) {
+      // A name that is not in the map is a programming error, not drift —
+      // no fallback can be right, and swallowing it would hide a typo'd key
+      // behind a plausible-looking icon.
       throw new Error(`Asset with name "${name}" not found in asset map`);
     }
 
     const { hash, type } = assetMap[name];
-    return this.getAssetByHash(hash, type);
+    try {
+      return await this.getAssetByHash(hash, type);
+    } catch (error) {
+      // Only images fall back, and the fallback itself never does — one extra
+      // fetch at most, and if `default` is missing too the caller gets the
+      // original rejection and the consumer's own placeholder.
+      if (type !== AssetType.IMAGE || name === FALLBACK_IMAGE_ASSET) {
+        throw error;
+      }
+      console.warn(
+        `Asset "${name}" (${hash}) could not be loaded; rendering the default image instead.`,
+        error
+      );
+      return this.getAsset(FALLBACK_IMAGE_ASSET);
+    }
   }
 
   /**
