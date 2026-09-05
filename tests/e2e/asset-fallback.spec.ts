@@ -16,6 +16,13 @@ import { seedViewerSession, dismissMobileSidebarIfPresent } from './helpers/mock
  * every `/api/fetch-object/<md5>`, and the second test additionally serves a
  * real PNG for the `default` hash. Registration order matters — Playwright's
  * LAST matching route wins, so the catch-all is installed first.
+ *
+ * The fallback lives in ApplicationCard rather than in AssetManager.getAsset,
+ * and that placement is load-bearing: an asset-layer fallback also feeds every
+ * other consumer — the sidebar above all — which changes layout for viewers
+ * whose assets are gated. Measured, not assumed: four app-registries specs
+ * went red on mobile-safari with the fallback in getAsset and green with it
+ * here, against an unchanged baseline.
  */
 
 // The `default` entry of src/asset_manager.js's assetMap.
