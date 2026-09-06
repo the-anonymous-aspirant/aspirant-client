@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page, type Route } from '@playwright/test';
+import { dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -45,7 +46,19 @@ const SRC = path.resolve(HERE, '..', '..', 'src');
  * had a reason to. An entry here is a visible edit with a reason attached, not
  * a silent gap.
  */
-const ALLOW: Array<{ file: string; line: number; why: string }> = [];
+const ALLOW: Array<{ file: string; line: number; why: string }> = [
+  {
+    file: 'src/components/sidebar/Login.vue',
+    line: 159,
+    why:
+      'This file uses `fetch`, not axios, and throws its own Error with product ' +
+      'prose for a rejected sign-in — `err.rejected` marks that arm. The message ' +
+      'read there is ours or the API\'s, never a transport string; the network ' +
+      'arm beside it gets its own sentence. The detector cannot tell a ' +
+      'hand-thrown Error from a transport one, which is exactly why an entry ' +
+      'here is a visible edit with a reason rather than a silent skip.',
+  },
+];
 
 /** Strip comment context so the check counts code, not prose about code. */
 export function stripComments(source: string): string {
@@ -159,5 +172,59 @@ test.describe('#5304 no axios error reaches a person', () => {
       files.some((f) => f.endsWith('components/ReadState.vue')),
       'the scan should reach the component this whole epic child is about',
     ).toBe(true);
+  });
+});
+
+/**
+ * The sign-in form, which is the one site where the static rule was wrong.
+ *
+ * `Login.vue` uses `fetch`, not axios, and throws its own `Error` carrying
+ * product prose when the server says no — so the `err.message` the detector
+ * flagged there was never a transport string. The §3.90 capture is what caught
+ * it: the before frame already read "Invalid username or password".
+ *
+ * The conversion still earned its place, because collapsing both arms into the
+ * credentials sentence would tell an offline person their password is wrong.
+ * These two cases pin the split so a later tidy cannot merge them again.
+ */
+test.describe('#5304 the sign-in form tells the truth about which failure it hit', () => {
+  const attempt = async (page: Page, handler: (route: Route) => unknown) => {
+    await page.route('**/api/login', handler);
+    await page.goto('/login');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('input').first().fill('someone');
+    await page.locator('input[type="password"]').first().fill('wrong-password');
+    await page.getByRole('button', { name: /log ?in|sign ?in/i }).first().click();
+  };
+
+  test('a rejected sign-in talks about the credentials', async ({ page }) => {
+    await attempt(page, (route) =>
+      route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }),
+    );
+    await expect(page.locator('body')).toContainText('username and password did not match');
+    await expect(page.locator('body')).not.toContainText('could not reach the server');
+  });
+
+  test('a rejected sign-in prefers the server\'s own words when it sent any', async ({ page }) => {
+    // A locked account or a rate limit is something the person can act on, and
+    // "wrong password" would be false in both cases.
+    await attempt(page, (route) =>
+      route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'Too many attempts. Try again in 15 minutes.' } }),
+      }),
+    );
+    await expect(page.locator('body')).toContainText('Too many attempts');
+  });
+
+  test('a network failure does NOT claim the password was wrong', async ({ page }) => {
+    // The regression this pair exists to prevent. Telling someone whose
+    // connection dropped that their credentials are wrong is a false statement,
+    // and it is the failure a single collapsed message produces.
+    await attempt(page, (route) => route.abort('failed'));
+    await expect(page.locator('body')).toContainText('could not reach the server');
+    await expect(page.locator('body')).not.toContainText('did not match');
+    await expect(page.locator('body')).not.toContainText('Failed to fetch');
   });
 });
