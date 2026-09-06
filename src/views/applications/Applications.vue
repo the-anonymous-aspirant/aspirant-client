@@ -4,94 +4,89 @@
     <h2 class="page-subtitle">Odds and ends. Some clever. Some stupid. Some just....weird</h2>
     <div class="application-list">
       <!--
-        Dogfood spike (#1979): ApplicationCard replaced with the design-system
-        AspCard. Title -> #header slot, image + description -> body, an "Open"
-        hint -> #footer slot; interactive+@click preserves the original
-        card-click-to-route behaviour.
+        #5284 (§3.106 R6b): this grid rendered AspCard tiles — title in a
+        #header slot, a centered glyph in the body, a trailing "Open →" in a
+        #footer — while /member, /admin, /quizzes and /games all rendered
+        ApplicationCard: drawn icon on top, then title and description, with
+        the WHOLE CARD as the affordance. One question ("launch an app"), two
+        grammars. The ruling picks the icon-led whole-card one, so this hub
+        adopts the component the other four already use rather than restyling
+        an AspCard to resemble it — which is also what makes "the hubs render
+        one grammar" checkable by a selector instead of by eye.
+
+        The dogfood spike that introduced the AspCard here (#1979) is therefore
+        reverted on this surface, deliberately and by ruling.
       -->
-      <AspCard
+      <application-card
         v-for="app in apps"
         :key="app.route"
-        class="app-card"
-        variant="default"
-        padding="sm"
-        interactive
-        @click="goToApplication(app.route)"
-      >
-        <template #header>{{ app.title }}</template>
-        <img
-          v-if="appImages[app.imageKey]"
-          :src="appImages[app.imageKey]"
-          :alt="app.title"
-          class="app-card__image"
-        />
-        <div v-else class="app-card__image app-card__image--placeholder"></div>
-        <p class="app-card__desc">
-          <em>{{ app.description }}</em>
-        </p>
-        <template #footer>Open →</template>
-      </AspCard>
+        :image-url="appImages[app.route] || ''"
+        :title="app.title"
+        :description="app.description"
+        :route="app.route"
+        @card-click="goToApplication(app.route)"
+      />
     </div>
   </div>
 </template>
 
 <script>
   import AssetManager from '../../asset_manager';
-  import { AspCard } from '@aspirant/design-system';
+  import ApplicationCard from '../../components/ApplicationCard.vue';
 
   export default {
     name: 'Applications',
     components: {
-      AspCard,
+      ApplicationCard,
     },
     data() {
       return {
-        appImages: {
-          quiz: '',
-          games: '',
-          emotionalExcellence: '',
-          transparencymapper: '',
-          qrGenerator: '',
-          home_icon: '',
-        },
-        // App tiles, lifted from the former inline card list so the AspCard
-        // grid can render them with v-for. Order and values are unchanged.
+        // Keyed by route, the way MemberView.vue keys it, so one lookup serves
+        // the template regardless of how the registry is ordered or grouped.
+        appImages: {},
+        // App tiles. `icon` is an asset-manager key; it replaced the former
+        // `imageKey` indirection — a second name for the same thing, kept in
+        // step by hand across three places (the row, the appImages seed, the
+        // loadImages map) and already out of step: the Constellations row had
+        // no seed entry while loadImages fetched its icon. Harmless under Vue
+        // 3's reactivity, which is why it went unnoticed. Order, titles,
+        // descriptions and routes are unchanged.
         apps: [
           {
             title: 'Transperator',
             description: 'Quickly make parts of pngs transparent',
             route: 'transparencymapper',
-            imageKey: 'transparencymapper',
+            icon: 'transparency_icon',
           },
           {
             title: 'Quiz Center',
             description: 'Quizzes and personality tests galore',
             route: 'quizzes',
-            imageKey: 'quiz',
+            icon: 'quiz_center_icon',
           },
           {
             title: 'Game Center',
             description: 'Fun and engaging games to pass the time',
             route: 'games',
-            imageKey: 'games',
+            icon: 'game_center_icon',
           },
           {
             title: 'Emotional Excellence',
             description: 'Track and analyze your emotions.',
             route: 'emotional-excellence',
-            imageKey: 'emotionalExcellence',
+            icon: 'emotion_tracker_icon',
           },
           {
             title: 'QR Generator',
             description: 'Generate QR codes from any text or URL.',
             route: 'qr-generator',
-            imageKey: 'qrGenerator',
+            icon: 'qr_code_icon',
           },
           {
             title: 'Constellations',
             description: 'A shared relationship-graph board for the card game',
             route: 'constellations',
-            imageKey: 'constellations',
+            icon: 'constellations_icon',
           },
         ],
       };
@@ -101,21 +96,16 @@
         this.$router.push({ path: `/applications/${application.toLowerCase()}` });
       },
       async loadImages() {
-        const assets = {
-          quiz: 'quiz_center_icon',
-          games: 'game_center_icon',
-          emotionalExcellence: 'emotion_tracker_icon',
-          transparencymapper: 'transparency_icon',
-          qrGenerator: 'qr_code_icon',
-          constellations: 'constellations_icon',
-          home_icon: 'home_icon',
-        };
+        // Iterates the registry rather than a hand-kept parallel map. The old
+        // map also fetched `home_icon`, which no card on this page reads;
+        // Sidebar.vue acquires and releases that asset independently, so
+        // dropping the fetch here cannot blank the sidebar icon.
         await Promise.all(
-          Object.entries(assets).map(async ([key, assetName]) => {
+          this.apps.map(async (app) => {
             try {
-              this.appImages[key] = await AssetManager.getAsset(assetName);
+              this.appImages[app.route] = await AssetManager.getAsset(app.icon);
             } catch (error) {
-              console.error(`Failed to load ${assetName}:`, error);
+              console.error(`Failed to load ${app.icon}:`, error);
             }
           })
         );
@@ -124,6 +114,12 @@
     mounted() {
       this.loadImages();
     },
+    // No release hook, matching this view before the change. MemberView.vue has
+    // one spelled `beforeDestroy` — a Vue 2 name Vue 3 never calls, so those
+    // releases have never fired (five views carry the dead hook). Adding a
+    // WORKING `beforeUnmount` here would make /applications the only hub that
+    // actually drops its asset refcounts, which is a behaviour change this
+    // ruling did not ask for. Filed separately instead.
   };
 </script>
 
@@ -153,62 +149,33 @@
     padding: var(--space-sm);
   }
 
-  /* The card fills its grid column but is content-height, not row-stretched:
-     `height: 100%` stretched every card to the tallest row's height, producing
-     the over-tall cards with a large empty body. `min-width: 0` lets the 1fr /
-     auto-fill columns shrink below the card's intrinsic content width — without
-     it the grid items kept their min-content width and overflowed the viewport
-     on the 2-column mobile layout (the "too wide + overlapping" report). This
-     matches the /member grid, whose ApplicationCard is content-sized the same
-     way. */
-  .application-list .app-card {
+  /* Identical to the MemberView / AdminView blocks: the three hubs are sized by
+     one rule set, which is the other half of "one grammar" (§3.106 R6b). The
+     values restate ApplicationCard's own defaults rather than override them —
+     kept explicit here so a change to the hub grid is visible at the hub. */
+  .application-list :deep(.application-card) {
     width: 100%;
-    min-width: 0;
+    height: 160px;
   }
 
-  /* AspCard runs at padding="sm" for this dense tile grid: at padding="lg" the
-     DS `.card--padding-lg .card__*` rules (which out-specify a consumer :deep
-     override) inflated every section — header/footer 69px each, a 393px card
-     with a stretched-empty body that read as the "too tall / too wide" tiles.
-     The horizontal md padding below keeps the header/footer captions off the
-     card edge; the DS `sm` vertical padding is what compacts the tile. */
-  .application-list :deep(.card__header) {
-    font-size: var(--text-sm);
-    padding: var(--space-sm) var(--space-md);
+  .application-list :deep(.app-image) {
+    height: 60px;
+    padding: var(--space-xs);
+    padding-top: var(--space-sm);
   }
 
-  .application-list :deep(.card__body) {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+  .application-list :deep(.card-content) {
+    padding: var(--space-sm);
     gap: var(--space-2xs);
-    padding: var(--space-sm) var(--space-md);
   }
 
-  .application-list :deep(.card__footer) {
-    padding: var(--space-2xs) var(--space-md);
-    text-align: right;
+  .application-list :deep(.card-content h2) {
+    font-size: var(--text-sm);
+    margin: 0 0 var(--space-2xs);
   }
 
-  .app-card__image {
-    width: 100%;
-    height: 48px;
-    object-fit: contain;
-    filter: invert(1);
-  }
-
-  .app-card__image--placeholder {
-    height: 48px;
-    width: 100%;
-    background: var(--surface-card-inner);
-    border-radius: var(--radius-sm);
-  }
-
-  .app-card__desc {
-    margin: 0;
+  .application-list :deep(.card-content p) {
     font-size: var(--text-xs);
-    color: var(--text-on-dark);
-    text-align: center;
   }
 
   @media (max-width: 767px) {
@@ -221,9 +188,9 @@
       gap: var(--space-md);
     }
 
-    .application-list .app-card {
+    .application-list :deep(.application-card) {
       max-width: none;
-      height: 100%;
+      height: 160px;
     }
   }
 </style>
