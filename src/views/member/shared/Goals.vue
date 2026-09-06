@@ -12,7 +12,13 @@
       </div>
 
       <div v-if="loading" class="loading-text">Loading trees...</div>
-      <div v-else-if="error" class="error-text">{{ error }}</div>
+      <ReadState
+        v-else-if="error"
+        state="failed"
+        heading="Your goal trees did not load"
+        message="We could not reach the server. This is usually temporary."
+        @retry="fetchTrees"
+      />
       <div v-else-if="trees.length === 0" class="empty-text">
         No goal trees yet. Create one to get started.
       </div>
@@ -118,16 +124,17 @@
 
 <script>
 import axios from 'axios';
+import ReadState from '../../../components/ReadState.vue';
 import { AspButton, AspInput, AspModal, AspTooltip } from '@aspirant/design-system';
 import { overlayHistoryWatch } from '../../../directives/overlayHistory.js';
 
 export default {
-  components: { AspButton, AspInput, AspModal, AspTooltip },
+  components: { AspButton, AspInput, AspModal, AspTooltip, ReadState },
   data() {
     return {
       trees: [],
       loading: true,
-      error: null,
+      error: false,
 
       showCreateDialog: false,
       newTreeName: '',
@@ -154,7 +161,11 @@ export default {
         const resp = await axios.get('/api/goals/trees');
         this.trees = resp.data;
       } catch (err) {
-        this.error = 'Failed to load trees: ' + (err.response?.data?.error?.message || err.message);
+        // The console keeps the detail; the page says what happened (#5303).
+        // The old line put "Failed to load trees: Request failed with status
+        // code 401" on screen as the page body.
+        console.error('Goals: could not load trees', err);
+        this.error = true;
       }
       this.loading = false;
     },
@@ -173,7 +184,10 @@ export default {
         this.newTreeName = '';
         await this.fetchTrees();
       } catch (err) {
-        this.createError = err.response?.data?.error?.message || err.message;
+        // The API's own message is product prose and stays; `err.message`
+        // was axios's, and that is the part that leaked (#5303).
+        this.createError =
+          err.response?.data?.error?.message || 'The tree could not be created. Try again.';
       }
       this.creating = false;
     },
@@ -208,7 +222,10 @@ export default {
         this.renameValue = '';
         await this.fetchTrees();
       } catch (err) {
-        this.renameError = err.response?.data?.error?.message || err.message;
+        // The API's own message is product prose and stays; `err.message`
+        // was axios's, and that is the part that leaked (#5303).
+        this.renameError =
+          err.response?.data?.error?.message || 'The tree could not be renamed. Try again.';
       }
       this.renaming = false;
     },
@@ -236,7 +253,10 @@ export default {
         this.deleteTarget = null;
         await this.fetchTrees();
       } catch (err) {
-        this.deleteError = err.response?.data?.error?.message || err.message;
+        // The API's own message is product prose and stays; `err.message`
+        // was axios's, and that is the part that leaked (#5303).
+        this.deleteError =
+          err.response?.data?.error?.message || 'The tree could not be deleted. Try again.';
       }
       this.deleting = false;
     },
