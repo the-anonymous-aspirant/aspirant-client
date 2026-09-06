@@ -317,7 +317,13 @@
     align-items: center;
     min-height: 100vh;
     width: 100%;
-    max-width: 1000px;
+    /* Nine columns wide: with a long email address the roster measures ~1250px,
+       so a 1000px cap put the Actions column past the right edge of the DS
+       scroller on screens with room to spare (system_3 #5355). The cap is here
+       to bound the prose above the table, not the table — it now sits above the
+       roster's natural width, and narrow viewports still scroll, cued by the
+       scroller's own edge fade. */
+    max-width: 1400px;
     margin: 0 auto;
     color: var(--text-on-light);
   }
