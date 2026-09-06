@@ -34,9 +34,18 @@
 
     <!-- Overall Status Banner -->
     <template v-if="health">
-      <div class="status-banner" :class="health.status">
-        <span class="status-dot" :class="health.status"></span>
-        <span class="status-label">{{ health.status.toUpperCase() }}</span>
+      <!-- `status` is guarded, not assumed (#5317). Unguarded,
+           `health.status.toUpperCase()` throws on any 200 whose body omits it —
+           and a thrown render does not fall back, it FREEZES: Vue stops
+           updating the component and whatever was on screen at the time, in
+           practice the loading skeleton, stays there forever. A page whose job
+           is reporting health should not be the thing that breaks when a health
+           check answers oddly. Same fault class as #5312, which existed because
+           this file read a shape the server had stopped serving; the shape has
+           already moved under it once. -->
+      <div class="status-banner" :class="health.status || 'unknown'">
+        <span class="status-dot" :class="health.status || 'unknown'"></span>
+        <span class="status-label">{{ (health.status || 'unknown').toUpperCase() }}</span>
       </div>
 
       <!-- Server checks. `/health` serves `{status, service, checks}` and
@@ -336,6 +345,24 @@ export default {
   color: var(--brand-primary);
 }
 
+/* `ok` is what the server actually sends — `{"status":"ok"}`, read live
+   2026-09-06T04:52Z. Only `healthy` and `degraded` were styled, so the banner
+   has been rendering as bare unstyled text for the one value it receives: no
+   box, no border, no dot. It looked deliberate in the frame and was not.
+   `unknown` is the guarded fallback added with #5317 and gets the muted
+   treatment on purpose — an unrecognised status is not a healthy one. */
+.status-banner.ok {
+  background-color: var(--surface-elevated);
+  border: 2px solid var(--feedback-success);
+  color: var(--feedback-success);
+}
+
+.status-banner.unknown {
+  background-color: var(--surface-elevated);
+  border: 2px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
 .status-dot {
   width: 12px;
   height: 12px;
@@ -349,6 +376,14 @@ export default {
 
 .status-dot.degraded {
   background-color: var(--brand-primary);
+}
+
+.status-dot.ok {
+  background-color: var(--feedback-success);
+}
+
+.status-dot.unknown {
+  background-color: var(--text-muted);
 }
 
 /* Health Grid */

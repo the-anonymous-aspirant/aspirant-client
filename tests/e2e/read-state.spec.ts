@@ -363,15 +363,65 @@ test.describe('#5312 system health tells empty and failed apart', () => {
   test('an empty read says empty things, and specifically NOT the failure words', async ({
     page,
   }) => {
-    await load(page, 'ok');
-    // The assertion is the DIFFERENCE, because the bug was the two states
-    // sharing one sentence. Naming only what empty should say would have
-    // passed against the broken build too, since the failure copy is also a
-    // string that renders.
+    // Driven by a NULL /health body, and that detail is the whole point (#5317).
+    //
+    // As first written this test used the real /health body with the system
+    // endpoints answering empty — the scenario the #5305 gate found the bug
+    // through. #5312's own fix closed that path: `health` now populates, so the
+    // page renders `ready`, where the failure copy is absent too. The test
+    // passed without ever reaching the branch it names.
+    //
+    // So it asserts PRESENCE as well as absence now. Absence alone is satisfied
+    // by any page that does not happen to say those words, including a page
+    // that never rendered the state at all.
+    await seedAdminSession(page);
+    await page.route('**/api/health', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: 'null' }),
+    );
+    for (const r of SYSTEM) await page.route(r, json({ containers: [], disks: [], volumes: [], data: null }));
+    await page.goto('/admin/system-health');
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByTestId('read-state-empty')).toBeVisible();
+    await expect(page.locator('body')).toContainText('No system data yet');
+
     const body = page.locator('body');
     await expect(body).not.toContainText('System health did not load');
     await expect(body).not.toContainText('None of the system endpoints answered');
     await expect(body).not.toContainText('rest of the admin area is unaffected');
+  });
+
+  test('the scenario that used to reach empty now reaches ready, and says so', async ({ page }) => {
+    // The other half of the same finding, pinned so nobody re-points the test
+    // above at this scenario. /health answering with a real body means there IS
+    // something true to show, so `ready` is correct — and `empty` must not be
+    // claimed for it.
+    await load(page, 'ok');
+    await expect(page.getByTestId('read-state-empty')).toHaveCount(0);
+    await expect(page.getByTestId('read-state-failed')).toHaveCount(0);
+    await expect(page.locator('body')).toContainText('database');
+  });
+
+  test('a 200 with an unexpected body renders instead of freezing the page', async ({ page }) => {
+    // `health.status.toUpperCase()` threw on any body without `status`, and a
+    // thrown Vue render does not fall back — it stops updating the component,
+    // leaving whatever was on screen (the loading skeleton) there forever.
+    //
+    // The assertion is a pageerror listener, not a locator, because the symptom
+    // of the bug was a stale-but-plausible DOM: every locator on the page still
+    // resolved, to the previous frame.
+    const crashes: string[] = [];
+    page.on('pageerror', (e) => crashes.push(e.message));
+
+    await seedAdminSession(page);
+    await page.route('**/api/health', json({}));
+    for (const r of SYSTEM) await page.route(r, json({ containers: [], disks: [], volumes: [] }));
+    await page.goto('/admin/system-health');
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByTestId('read-state-loading')).toHaveCount(0);
+    expect(crashes, `the page threw: ${crashes[0]}`).toEqual([]);
+    await expect(page.locator('body')).toContainText('UNKNOWN');
   });
 
   test('a total failure still says the failure words', async ({ page }) => {
