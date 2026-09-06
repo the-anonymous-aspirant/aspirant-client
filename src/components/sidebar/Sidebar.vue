@@ -37,7 +37,8 @@
       // carry a second, different auth form in the rail beside it. On /signup
       // that was literally two `name="username"` inputs on one screen,
       // competing for the same intent.
-      const onAuthPage = computed(() => route.path === '/login' || route.path === '/signup');
+      const AUTH_PAGES = ['/login', '/signup', '/forgot-password'];
+      const onAuthPage = computed(() => AUTH_PAGES.includes(route.path));
       const username = ref(localStorage.getItem('user_name'));
       const userRole = ref(localStorage.getItem('user_role'));
       // Display label for the who-am-I strip. The role IDENTIFIER stays

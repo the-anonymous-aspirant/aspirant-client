@@ -47,6 +47,7 @@ import LoginView from '../views/LoginView.vue';
 import VerifyEmailView from '../views/VerifyEmailView.vue';
 import ResetPasswordView from '../views/ResetPasswordView.vue';
 import SignupView from '../views/SignupView.vue';
+import ForgotPasswordView from '../views/ForgotPasswordView.vue';
 import NotFound from '../views/NotFound.vue';
 import { TIER, tierOf } from '../lib/tiers.js';
 
@@ -78,6 +79,9 @@ const routes = [
   // view and enforced by the server, not expressed as a route guard, because
   // a closed door should say so rather than 404.
   { path: '/signup', component: SignupView },
+  // The start of recovery (#5339). Public for the same reason as the rest of
+  // this flow: whoever needs it cannot sign in, which is the whole problem.
+  { path: '/forgot-password', component: ForgotPasswordView },
   { path: '/admin', component: AdminView, meta: ADMIN },
   { path: '/admin/users', component: UserAdmin, meta: ADMIN },
   { path: '/admin/assets', component: Assets, meta: ADMIN },
