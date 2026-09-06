@@ -177,6 +177,30 @@
 
     <!-- Step 3: Review -->
     <ValuationStep v-if="step === 'review'" title="3. Granska och justera" wide>
+      <!-- #5362: an extraction that recognised nothing used to arrive here as
+           a blank form with no explanation, and the operator typed all 18
+           fields without knowing anything had gone wrong. -->
+      <div
+        v-if="unreadableDocs.length"
+        class="extract-warning"
+        role="status"
+        data-testid="extract-warning"
+      >
+        <AspBadge status="caution" size="sm">Inget hittades</AspBadge>
+        <div>
+          <p class="extract-warning__lead">
+            Inga värden kunde läsas ur
+            <strong>{{ unreadableDocs.map(d => d.filename).join(', ') }}</strong>.
+            Fälten nedan är tomma därför — inte för att underlaget saknar dem.
+          </p>
+          <p class="extract-warning__hint">
+            Kontrollera att du laddat upp rätt rapporttyp. Går det inte, skicka
+            filen vidare så kan underlagstypen läggas till — du behöver inte
+            fylla i allt för hand varje gång.
+          </p>
+        </div>
+      </div>
+
       <p class="muted">
         Klicka på ett värde för att redigera. Färgerna visar konfidensgrad:
         <span class="chip confident">säker</span>
@@ -562,7 +586,7 @@
 </template>
 
 <script>
-import { AspButton, AspCheckbox, AspInput, AspSegmented, AspSelect, AspTextarea } from '@aspirant/design-system';
+import { AspBadge, AspButton, AspCheckbox, AspInput, AspSegmented, AspSelect, AspTextarea } from '@aspirant/design-system';
 import axios from 'axios';
 
 import ValuationStep from '@/components/ValuationStep.vue';
@@ -621,7 +645,7 @@ const BLANK_CONFIDENCE = () => ({
 });
 
 export default {
-  components: { AspButton, AspCheckbox, AspInput, AspSegmented, AspSelect, AspTextarea, ValuationStep },
+  components: { AspBadge, AspButton, AspCheckbox, AspInput, AspSegmented, AspSelect, AspTextarea, ValuationStep },
   data() {
     return {
       step: 'upload',
@@ -689,6 +713,25 @@ export default {
     },
     likviditetOptions() {
       return ['god', 'normal', 'låg'].map(v => ({ value: v, label: v }));
+    },
+
+    /** Documents the extractor could not read a single value out of.
+     *
+     *  Prefers commander's own `outcome` (system_3 #5361), which distinguishes
+     *  an uncovered layout from a strategy that matched and still missed. When
+     *  the field is absent — an older commander than this client — fall back to
+     *  counting filled value slots, so this surfaces either way rather than
+     *  going quiet against a server that has not shipped yet.
+     */
+    unreadableDocs() {
+      const SEMANTIC_PRIMITIVES = ['source_class', 'property_shape'];
+      return (this.extractedDocs || []).filter(doc => {
+        if (typeof doc.outcome === 'string') return doc.outcome !== 'extracted';
+        const filled = (doc.fields || []).filter(
+          f => f.confidence !== 'not_found' && !SEMANTIC_PRIMITIVES.includes(f.key),
+        );
+        return filled.length === 0;
+      });
     },
 
     extractingStatus() {
@@ -1328,6 +1371,29 @@ export default {
 .muted { color: var(--text-muted); }
 .small { font-size: var(--text-xs); }
 .error-text { color: var(--feedback-error); font-size: var(--text-sm); margin: var(--space-sm) 0; }
+
+/* Not an error — the request succeeded and the wizard works. It is a caution:
+   the form below is blank because nothing was recognised, and the operator
+   needs to know that before typing 18 fields (#5362). */
+.extract-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  margin: 0 0 var(--space-md);
+  border: 1px solid var(--feedback-warning, var(--border-card));
+  border-radius: var(--radius-md);
+  background: var(--surface-card-inner, transparent);
+  text-align: left;
+}
+
+.extract-warning__lead { margin: 0; font-size: var(--text-sm); }
+
+.extract-warning__hint {
+  margin: var(--space-2xs) 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
 
 .dropzone {
   border: 2px dashed var(--border-card);

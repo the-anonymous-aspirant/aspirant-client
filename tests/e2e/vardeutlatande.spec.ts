@@ -678,3 +678,71 @@ async function unzipDocx(buf: Buffer): Promise<{ documentXml: string }> {
   }
   throw new Error('word/document.xml not found in docx');
 }
+
+/**
+ * system_3 #5362 — a run that recognised nothing must say so.
+ *
+ * Twice in September the extractor returned HTTP 200 with an empty field set,
+ * and the review step rendered its 18 blank inputs exactly as it does for a
+ * document it read perfectly. The operator typed everything by hand without
+ * knowing anything had failed, and it took a database read two days later to
+ * find out. What is asserted here is the difference: with nothing extracted
+ * the step says so and names the file, and with a normal response nothing
+ * changes.
+ */
+test.describe('#5362 an extraction that recognised nothing', () => {
+  const NOTHING_EXTRACTED = {
+    documents: [
+      {
+        filename: 'FastighetPlus_Karlskrona_INGLATORP_1-46.pdf',
+        outcome: 'unrecognised',
+        fields: [
+          { key: 'objekt', value: null, confidence: 'not_found', source_page: null },
+          { key: 'adress', value: null, confidence: 'not_found', source_page: null },
+          { key: 'kommun', value: null, confidence: 'not_found', source_page: null },
+        ],
+      },
+    ],
+    operator_defaults: {},
+  };
+
+  test('says so, names the file, and does not call it an error', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, { extractResponse: NOTHING_EXTRACTED });
+    await walkToReview(page);
+
+    const warning = page.getByTestId('extract-warning');
+    await expect(warning).toBeVisible();
+    await expect(warning).toContainText('FastighetPlus_Karlskrona_INGLATORP_1-46.pdf');
+    // It explains why the form below is blank — that was the missing half.
+    await expect(warning).toContainText(/tomma därför/i);
+    // The request succeeded; presenting this as a failed request would send
+    // the operator to retry an upload that worked.
+    await expect(page.locator('.error-text')).toHaveCount(0);
+  });
+
+  test('falls back to counting fields when the server sends no outcome', async ({ page }) => {
+    // An older commander than this client: no `outcome` on the document. The
+    // notice must still fire, or shipping the two repos in either order leaves
+    // a window where the blank form is silent again.
+    const withoutOutcome = {
+      documents: [{ ...NOTHING_EXTRACTED.documents[0] }],
+      operator_defaults: {},
+    };
+    delete withoutOutcome.documents[0].outcome;
+
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, { extractResponse: withoutOutcome });
+    await walkToReview(page);
+
+    await expect(page.getByTestId('extract-warning')).toBeVisible();
+  });
+
+  test('stays out of the way when the extractor read the documents', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installCommanderMocks(page);
+    await walkToReview(page);
+
+    await expect(page.getByTestId('extract-warning')).toHaveCount(0);
+  });
+});
