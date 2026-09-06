@@ -105,6 +105,8 @@ export interface InstallOpts {
   pdfReturns503?: boolean;
   /** Delay /extract response in ms, holding the per-file spinner on screen. */
   extractDelayMs?: number;
+  /** Replace the whole /extract body (e.g. a run that recognised nothing). */
+  extractResponse?: unknown;
   /** Delay /generate response in ms, holding the full spinner on screen. */
   generateDelayMs?: number;
 }
@@ -135,7 +137,7 @@ export async function installCommanderMocks(page: Page, opts: InstallOpts = {}):
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(EXTRACT_RESPONSE),
+      body: JSON.stringify(opts.extractResponse ?? EXTRACT_RESPONSE),
     });
   });
 
