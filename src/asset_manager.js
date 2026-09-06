@@ -226,18 +226,28 @@ class AssetManager {
     return Object.keys(assetMap);
   }
 
-  /**
-   * Clean up URLs and release object URLs
+  /*
+   * `releaseAsset(name)` used to live here and is deliberately gone (#5330).
+   *
+   * It revoked an object URL out of `_cachedAssets`, which is a FLAT map keyed
+   * by CONTENT HASH and shared by every consumer in the app, with no reference
+   * counting. So "release" meant "revoke this URL for everyone", including
+   * components still mounted and still displaying it — and six hashes in
+   * `assetMap` are reachable under two names, so releasing one name could kill
+   * a second name's asset too.
+   *
+   * That is not hypothetical. `HomeView` released `aspiring_hand` on unmount,
+   * which is also the sidebar's logo; leaving `/` left the permanently-mounted
+   * sidebar holding a dangling blob URL (#5330). Four other views declared
+   * releases under the Vue 2 hook name and were saved only by never running
+   * (#5324).
+   *
+   * The cache is bounded by `assetMap` and lives for the page session, which is
+   * the right lifetime while it is shared and uncounted. If per-consumer
+   * lifetime is ever genuinely needed, it comes back WITH reference counting —
+   * acquire increments, release decrements, revoke at zero — not as a bare
+   * revoke.
    */
-  releaseAsset(name) {
-    if (!assetMap[name]) return;
-
-    const { hash } = assetMap[name];
-    if (this._cachedAssets.has(hash)) {
-      URL.revokeObjectURL(this._cachedAssets.get(hash));
-      this._cachedAssets.delete(hash);
-    }
-  }
 }
 
 // Export a singleton instance
