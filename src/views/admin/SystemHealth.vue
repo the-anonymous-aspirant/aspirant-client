@@ -3,8 +3,20 @@
     <h1>System Health</h1>
     <h2 class="page-subtitle">Container metrics, disk usage, and database statistics</h2>
 
-    <div v-if="loading" class="loading-text">Loading system data...</div>
-    <div v-if="error" class="error-text">{{ error }}</div>
+    <!-- One treatment for the three things this read can be doing (#5302).
+         Before this, a total failure rendered the heading, the Refresh button
+         and nothing else — indistinguishable from a healthy system with no
+         data yet — and the catch arm put `err.message` on the page. -->
+    <ReadState
+      v-if="readState !== 'ready'"
+      :state="readState"
+      heading="System health did not load"
+      message="None of the system endpoints answered. The services may be restarting, or the monitor sidecar may be down."
+      still-works="The rest of the admin area is unaffected — this page reads its own endpoints."
+      skeleton="block"
+      height="12rem"
+      @retry="fetchAll"
+    />
 
     <!-- Overall Status Banner -->
     <template v-if="health">
@@ -157,11 +169,13 @@
 
 <script>
 import axios from 'axios';
+import ReadState from '../../components/ReadState.vue';
 import { AspButton } from '@aspirant/design-system';
 
 export default {
   components: {
     AspButton,
+    ReadState,
   },
   data() {
     return {
@@ -180,6 +194,18 @@ export default {
   computed: {
     runningCount() {
       return this.containers.filter(c => c.status === 'running').length;
+    },
+  },
+  computed: {
+    // Four-way, and the order matters: a page that is refreshing on its 30s
+    // timer already has data, so `loading` only wins on the first read. `empty`
+    // is reachable in principle (every endpoint answers, none has anything to
+    // say) and must not look like the failure above it.
+    readState() {
+      if (this.loading) return 'loading';
+      if (this.error) return 'failed';
+      if (!this.health && !this.containers.length && !this.disks.length && !this.dbStats) return 'empty';
+      return 'ready';
     },
   },
   methods: {
@@ -221,10 +247,13 @@ export default {
         // Show error only if all requests failed
         const allFailed = [healthRes, containersRes, diskRes, dbRes].every(r => r.status === 'rejected');
         if (allFailed) {
-          this.error = 'Failed to reach system endpoints';
+          this.error = 'all-endpoints-failed';
         }
       } catch (err) {
-        this.error = 'Unexpected error: ' + (err.message || 'Unknown');
+        // The transport detail goes to the console, where it helps; the page
+        // says what happened in words the operator can act on (#5302).
+        console.error('System health fetch failed unexpectedly:', err);
+        this.error = 'unexpected';
       }
       this.loading = false;
     },
