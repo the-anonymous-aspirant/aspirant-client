@@ -114,13 +114,11 @@
     mounted() {
       this.loadImages();
     },
-    // No release hook, deliberately. AssetManager has no reference counting —
-    // `_cachedAssets` is a flat hash -> objectURL Map and `releaseAsset`
-    // revokes unconditionally — so a per-view release revokes URLs other
-    // mounted components still hold. #5324 removed the dead `beforeDestroy`
-    // release hooks elsewhere for the same reason; #5330 tracks the one
-    // consumer whose equivalent hook IS spelled correctly and does exactly
-    // that to the sidebar's logo. Icons stay cached for the session.
+    // No release hook, deliberately. AssetManager's cache is a flat,
+    // un-refcounted, process-wide hash -> objectURL map, so a per-view release
+    // revoked URLs other mounted components still held. #5324 removed the dead
+    // `beforeDestroy` release hooks; #5330 removed the two live ones and the
+    // release API with them. Icons stay cached for the page session.
   };
 </script>
 
