@@ -228,6 +228,14 @@
     border-radius: var(--radius-lg);
     padding: var(--space-sm);
     background-color: var(--surface-card);
+    /* This element paints --surface-card, which is DARK in BOTH themes, so it
+       owns the ink for everything inside it (§3.18 — ink follows its setter).
+       It did not, and nothing noticed while the only children were message rows
+       carrying their own colours. The moment a read state mounted here, its
+       heading measured 1.00:1 — rgb(66,66,66) text on rgb(66,66,66) — text
+       present, visible in the DOM, invisible on screen. The Playwright
+       assertions passed; the §3.90 frame is what caught it. */
+    color: var(--text-on-dark);
     scrollbar-width: thin;
     scrollbar-color: var(--brand-accent) var(--surface-card);
   }

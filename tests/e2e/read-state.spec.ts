@@ -154,3 +154,64 @@ test.describe('#5302 system health read states', () => {
     await expect(page.getByTestId('read-state-failed')).toHaveCount(0);
   });
 });
+
+/**
+ * The defect the §3.90 frames caught and the assertions above did not.
+ *
+ * `.messages-container` paints `--surface-card`, which is dark in BOTH themes,
+ * and set no ink. Nothing noticed while its only children were message rows
+ * carrying their own colours — but the moment a read state mounted inside it,
+ * the heading measured rgb(66,66,66) on rgb(66,66,66): 1.00:1, present in the
+ * DOM and invisible on screen. Every `toContainText` above passed.
+ *
+ * So the assertion has to be a RATIO, not a token name and not the presence of
+ * text. A ratio is the only form of this claim that a future re-theme cannot
+ * quietly break.
+ */
+const AA_TEXT = 4.5;
+
+test.describe('#5302 read-state ink pairs with the surface it lands on', () => {
+  for (const theme of ['light', 'dark'] as const) {
+    test(`the failed state is legible inside the message board's dark card — ${theme}`, async ({
+      page,
+    }) => {
+      await page.addInitScript((t) => {
+        try {
+          localStorage.setItem('theme', t);
+        } catch {}
+        document.documentElement.setAttribute('data-theme', t);
+      }, theme);
+      await board(page, { messages: 'fail' });
+
+      const heading = page.getByTestId('read-state-failed').locator('.empty-state__heading, h2, h3').first();
+      await expect(heading).toBeVisible();
+
+      const ratio = await heading.evaluate((el) => {
+        const parse = (s: string) => (s.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
+        const lum = (rgb: number[]) => {
+          const f = (v: number) => {
+            const x = v / 255;
+            return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+          };
+          return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2]);
+        };
+        // Walk up for the first ancestor that actually paints a background.
+        let bg = 'rgba(0, 0, 0, 0)';
+        for (let n: Element | null = el; n; n = n.parentElement) {
+          const c = getComputedStyle(n).backgroundColor;
+          if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) {
+            bg = c;
+            break;
+          }
+        }
+        const a = lum(parse(getComputedStyle(el).color));
+        const b = lum(parse(bg));
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      });
+
+      expect(ratio, `failed-state heading ink vs its surface in ${theme}`).toBeGreaterThanOrEqual(
+        AA_TEXT,
+      );
+    });
+  }
+});
