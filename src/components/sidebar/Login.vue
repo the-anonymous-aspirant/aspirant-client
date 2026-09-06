@@ -117,7 +117,15 @@
           });
 
           if (!response.ok) {
-            throw new Error('Invalid username or password');
+            // Carry the server's own words when it sent any — a locked
+            // account or a rate limit is something the person can act on, and
+            // "wrong password" would be a lie in both cases.
+            const body = await response.json().catch(() => null);
+            const err = new Error(
+              body?.error?.message || 'That username and password did not match. Check them and try again.',
+            );
+            err.rejected = true;
+            throw err;
           }
 
           const data = await response.json();
@@ -131,15 +139,25 @@
           localStorage.setItem('user_role', this.role);
           this.$emit('login');
         } catch (err) {
-          // The worst of the 39: a failed sign-in used to read "Request failed
-          // with status code 401", which tells a person nothing about the one
-          // thing they can act on. The server's own message when it sent one
-          // (a locked account, a rate limit), and otherwise the sentence that
-          // describes what actually happened (#5304).
+          // Two failures, two sentences, and the difference matters (#5304).
+          //
+          // `err.rejected` is set above for a server that answered and said no
+          // — that message is ours (or the API's) and is safe to show. Anything
+          // else reaching here is `fetch` failing to complete: DNS, offline, a
+          // dead connection. Telling that person their password is wrong would
+          // be false, and telling them "TypeError: Failed to fetch" would be
+          // useless, so it gets its own sentence.
+          //
+          // A first pass at this collapsed both arms into the credentials
+          // message. The §3.90 capture is what caught it: the before frame
+          // already read "Invalid username or password", because this file uses
+          // `fetch` and threw that string itself — it was never an axios
+          // message. The guard cannot tell a hand-thrown Error from a transport
+          // one, and this is the site where that mattered.
           console.error('Login failed', err);
-          this.error =
-            err.response?.data?.error?.message ||
-            'That username and password did not match. Check them and try again.';
+          this.error = err.rejected
+            ? err.message
+            : 'We could not reach the server. Check your connection and try again.';
           this.success = '';
         }
       },
