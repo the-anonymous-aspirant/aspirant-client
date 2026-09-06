@@ -117,6 +117,13 @@ test.describe('#5284 one hub-card grammar (§3.106 R6b)', () => {
     await dismissMobileSidebarIfPresent(page);
 
     const card = page.locator('.application-list .application-card', { hasText: 'QR Generator' });
+
+    // Scroll it into view BEFORE measuring. `boundingBox()` is viewport-
+    // relative, and at 390x844 this card sits below the fold, so its y is off
+    // screen and the `elementFromPoint` probes below return null — which reads
+    // as "the card does not own its bottom band" when the truth is "the point
+    // was not on screen". `click()` auto-scrolls and hid this on desktop.
+    await card.scrollIntoViewIfNeeded();
     const b = await box(card);
 
     // §3.99 tier 1: 24x24 CSS px is the universal floor for an interactive
@@ -130,26 +137,37 @@ test.describe('#5284 one hub-card grammar (§3.106 R6b)', () => {
       'card clears the 24px target floor (height)'
     ).toBeGreaterThanOrEqual(24);
 
-    // The bottom band — the old tile's `Open →` footer territory, and the only
-    // region of it that announced itself as the way in. A title click would
-    // have passed before this change too, so it is not evidence.
+    // Two regions far from the heading, hit-tested before anything is clicked:
+    // the bottom band (the old tile's `Open →` footer territory) and the right
+    // edge at mid-height. `elementFromPoint` is the honest form of "the card
+    // owns this pixel" — and it costs no second navigation, which matters
+    // because re-running `dismissMobileSidebarIfPresent` after a `goBack()`
+    // RE-OPENS the sidebar (the helper's toggle click is unconditional) and
+    // hangs on mobile-safari.
     //
     // NOT the literal bottom-right corner: ApplicationCard is `border-radius:
     // var(--radius-pill)` = 40px, so a point 6px in from the corner falls
     // OUTSIDE the rounded shape and lands on the grid container (Playwright
     // reports `.application-list intercepts pointer events`). That is true of
-    // /member and /admin too — it is the shared grammar's shape, not something
-    // this change introduced — so the assertion uses points that are actually
-    // on the card.
+    // /member and /admin too — the shared grammar's shape, not something this
+    // change introduced — so both probes sit on edges, not on the corner.
+    const owns = await page.evaluate(
+      ([x1, y1, x2, y2]) => {
+        const cardAt = (x: number, y: number) => {
+          const el = document.elementFromPoint(x, y);
+          const c = el && (el as Element).closest('.application-card');
+          return !!c && (c.textContent ?? '').includes('QR Generator');
+        };
+        return { bottom: cardAt(x1, y1), right: cardAt(x2, y2) };
+      },
+      [b.x + b.width / 2, b.y + b.height - 6, b.x + b.width - 6, b.y + b.height / 2]
+    );
+    expect(owns.bottom, 'the card owns its bottom band').toBe(true);
+    expect(owns.right, 'the card owns its right edge').toBe(true);
+
+    // And the bottom band actually routes — a title click would have passed
+    // before this change too, so it would not be evidence.
     await card.click({ position: { x: b.width / 2, y: b.height - 6 } });
     await expect(page, 'bottom band routes').toHaveURL(/\/applications\/qr-generator$/);
-
-    // And the right edge at mid-height, which is body, not heading.
-    await page.goBack();
-    await dismissMobileSidebarIfPresent(page);
-    const again = page.locator('.application-list .application-card', { hasText: 'QR Generator' });
-    const b2 = await box(again);
-    await again.click({ position: { x: b2.width - 6, y: b2.height / 2 } });
-    await expect(page, 'right edge routes').toHaveURL(/\/applications\/qr-generator$/);
   });
 });
