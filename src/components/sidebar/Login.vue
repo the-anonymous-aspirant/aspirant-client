@@ -43,6 +43,18 @@
         </div>
         <AspButton type="submit" class="login-button">Login</AspButton>
       </form>
+      <!-- The way in for someone who has no account (#5338, under #5296).
+           Placed in this SHARED component rather than on LoginView, and that
+           is the whole decision: Sidebar.vue renders this same component for
+           every anonymous visitor on every page (`v-if="!username &&
+           !onLoginPage"`), whereas /login is reached mainly by being bounced
+           off a gated route. The operator's ask in #5113 is "easy sign up for
+           people without a user"; putting the link only on /login would hide
+           it from the surface those people actually see. It sits inside the
+           `!loggedIn` branch, so it never appears to a signed-in viewer. -->
+      <p class="signup-prompt">
+        <RouterLink to="/signup" data-testid="signup-link">Create an account</RouterLink>
+      </p>
       <p v-if="error" class="error-message">{{ error }}</p>
       <p v-if="success" class="success-message">{{ success }}</p>
     </div>
@@ -166,6 +178,16 @@
 </script>
 
 <style scoped>
+  .signup-prompt {
+    margin: var(--space-sm) 0 0;
+    font-size: var(--text-sm);
+    text-align: center;
+  }
+
+  .signup-prompt a {
+    color: var(--text-body);
+  }
+
   .login-card {
     padding: var(--space-sm);
     border-radius: var(--radius-md);
@@ -238,5 +260,4 @@
   .logout-card {
     cursor: pointer;
   }
-
 </style>
