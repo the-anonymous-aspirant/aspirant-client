@@ -32,7 +32,12 @@
       // bounced elsewhere by LoginView's own guard before this matters.
       // `route` is reactive (vue-router), so this stays correct across SPA
       // navigation into and out of /login, not just on a fresh mount.
-      const onLoginPage = computed(() => route.path === '/login');
+      // #5338: `/signup` joins `/login` here, for the reason this suppression
+      // already had — a page whose whole job is an auth form should not also
+      // carry a second, different auth form in the rail beside it. On /signup
+      // that was literally two `name="username"` inputs on one screen,
+      // competing for the same intent.
+      const onAuthPage = computed(() => route.path === '/login' || route.path === '/signup');
       const username = ref(localStorage.getItem('user_name'));
       const userRole = ref(localStorage.getItem('user_role'));
       // Display label for the who-am-I strip. The role IDENTIFIER stays
@@ -170,7 +175,7 @@
         imagesLoaded,
         isMobile,
         sidebarHidden,
-        onLoginPage,
+        onAuthPage,
       };
     },
   };
@@ -227,7 +232,7 @@
 
     <transition name="sidebar-login-transition" mode="out-in">
       <div v-if="!collapsed" class="auth-section">
-        <div v-if="!username && !onLoginPage">
+        <div v-if="!username && !onAuthPage">
           <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="false"></Login>
         </div>
         <div v-else-if="username" class="user-info">
