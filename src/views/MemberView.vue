@@ -90,20 +90,19 @@
     mounted() {
       this.loadImages();
     },
-    beforeDestroy() {
-      AssetManager.releaseAsset('ludde_meal_tracker_icon');
-      AssetManager.releaseAsset('home_icon');
-      AssetManager.releaseAsset('message_board_icon');
-      AssetManager.releaseAsset('30year_gift_icon');
-      // Hand-drawn member-app icons (#4840): release what loadImages acquires.
-      AssetManager.releaseAsset('files_icon');
-      AssetManager.releaseAsset('translator_icon');
-      AssetManager.releaseAsset('goal_trees_icon');
-      AssetManager.releaseAsset('scratchpad_icon');
-      AssetManager.releaseAsset('pushups_icon');
-      AssetManager.releaseAsset('jobs_icon');
-      AssetManager.releaseAsset('vardeutlatande_icon');
-    },
+    // #5324: an asset-release hook spelled `beforeDestroy` stood here. Vue 3
+    // never calls that name, so it had never run — deleting it is a runtime
+    // no-op. It is deleted rather than renamed on purpose: AssetManager has no
+    // reference counting (`_cachedAssets` is a flat hash -> objectURL Map and
+    // `releaseAsset` revokes unconditionally), the cache is shared
+    // process-wide, and several of these names share a hash with assets other
+    // mounted components hold. A working release here would revoke object URLs
+    // out from under the permanently-mounted sidebar — which is not a
+    // prediction: #5330 measures exactly that happening today via HomeView,
+    // whose equivalent hook IS spelled correctly.
+    //
+    // The icons stay cached for the session, which is the behaviour that has
+    // always shipped.
   };
 </script>
 

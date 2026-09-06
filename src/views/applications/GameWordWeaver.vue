@@ -389,13 +389,22 @@
       this.updateSeed();
       this.fetchAudioFiles();
     },
-    beforeDestroy() {
+    // #5324: this was spelled `beforeDestroy`, the Vue 2 name, which Vue 3
+    // never calls — so none of it has ever run. A keydown listener, a resize
+    // listener and the setInterval game tick outlived the component, and the
+    // background music kept playing after you navigated away.
+    //
+    // `$refs.bgMusic` is optional-chained because this body has never
+    // executed: an unguarded throw here would break unmount (and so
+    // navigation) the first time the ref is absent. The file already guards
+    // the same ref where it stops the music on game-over.
+    beforeUnmount() {
       window.removeEventListener('keydown', this.handleKeyPress);
       window.removeEventListener('resize', this.handleResize);
       if (this.intervalId) {
         clearInterval(this.intervalId);
       }
-      this.$refs.bgMusic.pause();
+      this.$refs.bgMusic?.pause();
     },
     methods: {
       setLanguage(lang) {
