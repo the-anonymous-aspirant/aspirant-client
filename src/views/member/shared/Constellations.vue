@@ -383,9 +383,13 @@ export default {
 }
 
 /* identityError and actionError render inside .constellations-card (dark in
-   both themes); the page-level loadError above keeps the theme-tracking token. */
+   both themes); the page-level loadError above keeps the theme-tracking token.
+   The token is the TEXT-role sibling minted by DS #5343 (the mark-fill
+   --feedback-error-on-dark is 3:1-floor and reads 3.98 on the light theme's
+   card); the fallback carries the same value, so this renders correctly even
+   against a DS build that predates the token. */
 .constellations-card .constellations-error {
-  color: var(--feedback-error-on-dark, #ff7a7c);
+  color: var(--feedback-error-text-on-dark, #ff9a9c);
 }
 
 .constellations-error-link {
