@@ -10,8 +10,18 @@
       <RobbansTusen></RobbansTusen>
     </div>
 
-    <div v-if="loading" class="loading-text">Laddar…</div>
-    <div v-else-if="loadError" class="error-text">{{ loadError }}</div>
+    <ReadState
+      v-if="loading || loadError"
+      :state="loading ? 'loading' : 'failed'"
+      heading="Utmaningen kunde inte laddas"
+      message="Vi nådde inte servern. Det är oftast tillfälligt."
+      loading-label="Laddar"
+      retry-label="Försök igen"
+      skeleton="row"
+      :rows="6"
+      :columns="3"
+      @retry="fetchAll"
+    />
 
     <template v-else>
       <transition name="toast">
@@ -99,6 +109,7 @@
 <script>
   import { AspInput } from '@aspirant/design-system';
   import axios from 'axios';
+  import ReadState from '../../../components/ReadState.vue';
   import {
     Chart,
     LineController,
@@ -193,14 +204,14 @@
 
   export default {
     name: 'PappasPushups',
-    components: { AspInput, RobbansTusen },
+    components: { AspInput, RobbansTusen, ReadState },
     data() {
       return {
         target: TARGET,
         entries: [],
         milestones: [],
         loading: true,
-        loadError: null,
+        loadError: false,
         savingDates: new Set(),
         errorDates: new Set(),
         activeToast: null,
@@ -285,7 +296,10 @@
           this.entries = entriesResp.data.entries || [];
           this.milestones = milestonesResp.data.milestones || [];
         } catch (err) {
-          this.loadError = err.response?.data?.error?.message || err.message || 'Kunde inte hämta data';
+          // The transport detail goes to the console; the page says it in
+          // Swedish, like every other word on it (#5303).
+          console.error('Pushups: kunde inte hämta data', err);
+          this.loadError = true;
         }
         this.loading = false;
         this.$nextTick(() => this.renderChart());
@@ -316,8 +330,12 @@
         } catch (err) {
           this.errorDates.add(row.date);
           event.target.value = row.count ?? '';
-          const msg = err.response?.data?.error?.message || err.message;
-          this.flashToast(`Kunde inte spara: ${msg}`);
+          // A per-row save failure is a toast, not a read state — the page is
+          // fine and one cell did not save. Keep the SERVER's message when it
+          // sent one (that is product prose from the API) and drop the axios
+          // fallback, which is the only part that leaked (#5303).
+          const msg = err.response?.data?.error?.message;
+          this.flashToast(msg ? `Kunde inte spara: ${msg}` : 'Kunde inte spara. Försök igen.');
         } finally {
           this.savingDates.delete(row.date);
         }

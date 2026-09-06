@@ -225,3 +225,94 @@ test.describe('#5302 read-state ink pairs with the surface it lands on', () => {
     });
   }
 });
+
+/**
+ * #5303 (#5278-B1) — the renders that showed the WRONG state.
+ *
+ * Two of the four the finding named turned out not to be read states at all,
+ * and are covered here as the boundary rather than as adoptions. See the task
+ * comment; the short version is that `/applications/constellations` shows a
+ * DEGRADATION banner above content that still works, and `/profile`'s error
+ * line is an inline notice shared with its save and upload actions. Replacing
+ * either page's content with a failed state would take away the thing the
+ * message says still works.
+ */
+test.describe('#5303 pushups', () => {
+  const seed = async (page: Page, ok: boolean) => {
+    await seedTrustedSession(page);
+    await page.addInitScript(() => localStorage.setItem('user_name', 'robert'));
+    await page.route('**/api/pushups/entries', (route) =>
+      ok ? json({ entries: [] })(route) : dead(route),
+    );
+    await page.route('**/api/pushups/milestones', (route) =>
+      ok ? json({ milestones: [] })(route) : dead(route),
+    );
+    await page.goto('/member/personal/pappas-pushups');
+    await dismissMobileSidebarIfPresent(page);
+  };
+
+  test('a load failure speaks Swedish, not axios', async ({ page }) => {
+    await seed(page, false);
+    const failed = page.getByTestId('read-state-failed');
+    await expect(failed).toBeVisible();
+    // This page's copy is Swedish and stays Swedish. A shared component that
+    // Anglicised one page's failure would be a regression wearing a fix's
+    // clothes, which is why the component takes the words rather than owning
+    // them.
+    await expect(failed).toContainText('Utmaningen kunde inte laddas');
+    await expect(page.getByTestId('read-state-retry')).toHaveText('Försök igen');
+    await expect(page.locator('body')).not.toContainText('status code');
+    await expect(page.locator('body')).not.toContainText('Kunde inte hämta data');
+  });
+
+  test('control: entries answering renders the challenge and no read state', async ({ page }) => {
+    await seed(page, true);
+    await expect(page.getByTestId('read-state-failed')).toHaveCount(0);
+  });
+});
+
+test.describe('#5303 goals', () => {
+  const seed = async (page: Page, ok: boolean) => {
+    await seedTrustedSession(page);
+    await page.route('**/api/goals/trees', (route) =>
+      ok ? json({ trees: [] })(route) : dead(route),
+    );
+    await page.goto('/member/shared/goals');
+    await dismissMobileSidebarIfPresent(page);
+  };
+
+  test('a load failure drops the transport prefix', async ({ page }) => {
+    await seed(page, false);
+    await expect(page.getByTestId('read-state-failed')).toBeVisible();
+    // The exact string that used to be the page body.
+    await expect(page.locator('body')).not.toContainText('Failed to load trees');
+    await expect(page.locator('body')).not.toContainText('status code');
+  });
+
+  test('control: trees answering renders the list and no read state', async ({ page }) => {
+    await seed(page, true);
+    await expect(page.getByTestId('read-state-failed')).toHaveCount(0);
+  });
+});
+
+test.describe('#5303 profile keeps its inline notice and gains a skeleton', () => {
+  test('the load state is a skeleton, and the inline error line is untouched', async ({ page }) => {
+    await seedTrustedSession(page);
+    // Hold the profile read open so the loading state is observable rather
+    // than a frame nobody sees.
+    let release: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    await page.route('**/api/profile', async (route) => {
+      await held;
+      return json({ data: { username: 'someone', display_name: 'Someone' } })(route);
+    });
+    await page.goto('/profile');
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByTestId('read-state-loading')).toBeVisible();
+    release!();
+    await expect(page.getByTestId('read-state-loading')).toHaveCount(0);
+    // The inline notice is not a read state and must not have become one.
+    await expect(page.getByTestId('read-state-failed')).toHaveCount(0);
+  });
+});

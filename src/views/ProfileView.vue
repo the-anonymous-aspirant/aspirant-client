@@ -4,6 +4,7 @@
 
   import { useProfile } from '../composables/useProfile.js';
   import UserAvatar from '../components/UserAvatar.vue';
+  import ReadState from '../components/ReadState.vue';
   import PixelAvatarDraw from '../components/PixelAvatarDraw.vue';
 
   // ProfileView — the logged-in user's own profile surface (#4170). A full page
@@ -13,7 +14,7 @@
   // is the temporal display name (never the login credential).
   export default {
     name: 'ProfileView',
-    components: { AspInput, AspButton, UserAvatar, PixelAvatarDraw },
+    components: { AspInput, AspButton, UserAvatar, PixelAvatarDraw, ReadState },
     setup() {
       const { getProfile, updateDisplayName, uploadAvatar, clearAvatar } = useProfile();
 
@@ -158,7 +159,12 @@
     <div class="profile-card">
       <h1 class="profile-title">Your profile</h1>
 
-      <div v-if="loading" class="profile-loading">Loading…</div>
+      <!-- The read state. The `error` line further down is NOT one — it is an
+           inline notice shared by the load failure and by the save/upload
+           actions, and it sits inside the loaded card next to the field it is
+           about. Replacing the card with a failed state would take the form
+           away from a person whose display-name save failed (#5303). -->
+      <ReadState v-if="loading" state="loading" skeleton="text" :lines="4" loading-label="Loading your profile" />
 
       <template v-else>
         <div class="avatar-block">
