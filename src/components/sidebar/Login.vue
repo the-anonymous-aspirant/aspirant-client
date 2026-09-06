@@ -55,6 +55,15 @@
       <p class="signup-prompt">
         <RouterLink to="/signup" data-testid="signup-link">Create an account</RouterLink>
       </p>
+      <!-- Beside the sign-up link and in the same shared component, for the
+           same reason (#5339): Sidebar.vue renders this for every signed-out
+           visitor on every page, and someone who cannot remember their
+           password is by definition someone who cannot get past this form. -->
+      <p class="forgot-prompt">
+        <RouterLink to="/forgot-password" data-testid="forgot-link"
+          >Forgot your password?</RouterLink
+        >
+      </p>
       <p v-if="error" class="error-message">{{ error }}</p>
       <p v-if="success" class="success-message">{{ success }}</p>
     </div>
@@ -184,8 +193,15 @@
     text-align: center;
   }
 
-  .signup-prompt a {
+  .signup-prompt a,
+  .forgot-prompt a {
     color: var(--text-body);
+  }
+
+  .forgot-prompt {
+    margin: var(--space-2xs) 0 0;
+    font-size: var(--text-sm);
+    text-align: center;
   }
 
   .login-card {
