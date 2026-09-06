@@ -738,6 +738,34 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     await expect(page.getByTestId('extract-warning')).toBeVisible();
   });
 
+  test('does not widen the review step on a phone', async ({ page }) => {
+    // The filename is one unbreakable token in a flex row, and flex items do
+    // not shrink below their content by default. The first cut of this block
+    // pushed the document to 460px against a 390px viewport and shifted the
+    // whole review step off-centre — clipped on both edges.
+    //
+    // The assertion is differential rather than an absolute width, because the
+    // step already overflows this viewport by ~30px on main: what must not
+    // change is that the warning adds nothing to it. The existing #992 bounds
+    // test cannot catch this — it runs the default mock, where this block
+    // never renders.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedTrustedSession(page);
+
+    await installCommanderMocks(page);
+    await walkToReview(page);
+    const withoutWarning = await page.evaluate(() => document.documentElement.scrollWidth);
+    await expect(page.getByTestId('extract-warning')).toHaveCount(0);
+
+    await page.reload();
+    await installCommanderMocks(page, { extractResponse: NOTHING_EXTRACTED });
+    await walkToReview(page);
+    await expect(page.getByTestId('extract-warning')).toBeVisible();
+    const withWarning = await page.evaluate(() => document.documentElement.scrollWidth);
+
+    expect(withWarning).toBeLessThanOrEqual(withoutWarning);
+  });
+
   test('stays out of the way when the extractor read the documents', async ({ page }) => {
     await seedTrustedSession(page);
     await installCommanderMocks(page);
