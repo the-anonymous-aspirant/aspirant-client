@@ -46,14 +46,18 @@ const SRC = path.resolve(HERE, '..', '..', 'src');
  * had a reason to. An entry here is a visible edit with a reason attached, not
  * a silent gap.
  */
-const ALLOW: Array<{ file: string; line: number; why: string }> = [
+const ALLOW: Array<{ file: string; snippet: string; why: string }> = [
   {
     file: 'src/components/sidebar/Login.vue',
-    // 159 -> 171 in #5338: the code is untouched; adding the "Create an
-    // account" affordance above it shifted it down. This entry is keyed by
-    // LINE NUMBER, so any edit earlier in the file re-reds this guard with a
-    // violation that is really a stale anchor. Filed separately.
-    line: 171,
+    // Keyed by the CODE, not by where it sits (#5349). This entry was
+    // `line: 159`, then `line: 171` after #5338 added an affordance above it —
+    // the pardoned line had not changed at all, but the anchor had gone stale
+    // and the guard reported a leak that did not exist: real file, real line,
+    // real pattern, wrong conclusion. It also failed the other way, which is
+    // the dangerous one — a genuine new violation shifted ONTO a sanctioned
+    // line would have been pardoned silently, because a position cannot tell a
+    // stale anchor from a real match.
+    snippet: '? err.message',
     why:
       'This file uses `fetch`, not axios, and throws its own Error with product ' +
       'prose for a rejected sign-in — `err.rejected` marks that arm. The message ' +
@@ -101,7 +105,7 @@ export function violations(source: string, file = '<inline>'): string[] {
     .forEach((line, i) => {
       if (!TRANSPORT.test(line)) return;
       if (LOG_ONLY.test(line)) return;
-      if (ALLOW.some((a) => a.file === file && a.line === i + 1)) return;
+      if (ALLOW.some((a) => a.file === file && a.snippet === line.trim())) return;
       out.push(`${file}:${i + 1}: ${line.trim()}`);
     });
   return out;
@@ -163,6 +167,40 @@ test.describe('#5304 no axios error reaches a person', () => {
         found.join('\n'),
       ].join('\n'),
     ).toEqual([]);
+  });
+
+  test('every allowlist entry still matches exactly one line in its file', () => {
+    // The allowlist is now content-keyed, which fixes the shift problem but
+    // introduces two of its own — and this is the test that closes both.
+    //
+    //   STALE: the pardoned code is edited or deleted, and the entry silently
+    //   pardons nothing. Harmless today, but it hides the fact that a recorded
+    //   exception no longer describes the codebase, and the next reader trusts
+    //   a `why` that is about code which is gone.
+    //
+    //   AMBIGUOUS: the same snippet appears twice in the file, and one entry
+    //   pardons BOTH — including a genuine new violation that happens to be
+    //   spelled identically. That is the over-pardoning failure the
+    //   line-keyed version had, arriving by a different road.
+    //
+    // Requiring exactly one match makes an out-of-date allowlist fail AS an
+    // out-of-date allowlist, which is the whole complaint against the old
+    // anchoring: the previous failure said "you leaked a transport string"
+    // when the truth was "this entry points at the wrong place" (#5349).
+    for (const entry of ALLOW) {
+      const full = path.resolve(HERE, '..', '..', entry.file);
+      const matches = stripComments(readFileSync(full, 'utf8'))
+        .split('\n')
+        .filter((line) => line.trim() === entry.snippet);
+      expect(
+        matches.length,
+        `ALLOW entry for ${entry.file} snippet ${JSON.stringify(entry.snippet)}: ` +
+          `expected exactly 1 matching line, found ${matches.length}. ` +
+          (matches.length === 0
+            ? 'The pardoned code changed or moved out of this file — update or remove the entry.'
+            : 'The snippet is ambiguous in this file, so the entry would pardon every copy.'),
+      ).toBe(1);
+    }
   });
 
   test('the scan actually reads files', () => {
