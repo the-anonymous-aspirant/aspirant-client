@@ -175,13 +175,23 @@ test.describe('#5302 read-state ink pairs with the surface it lands on', () => {
     test(`the failed state is legible inside the message board's dark card — ${theme}`, async ({
       page,
     }) => {
+      // Seed the session FIRST and make this script throw-proof. On webkit the
+      // unguarded `document.documentElement.setAttribute` in an init script
+      // threw before `seedTrustedSession`'s own init script had run, so the
+      // router guard saw no role and redirected to `/` — the locator below then
+      // reported "element(s) not found" on a page that was never the one under
+      // test. Chromium passed throughout, which is the whole reason the suite
+      // runs two engines.
+      await board(page, { messages: 'fail' });
       await page.addInitScript((t) => {
         try {
           localStorage.setItem('theme', t);
         } catch {}
-        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement?.setAttribute('data-theme', t);
       }, theme);
-      await board(page, { messages: 'fail' });
+      await page.reload();
+      await dismissMobileSidebarIfPresent(page);
+      await expect(page.getByTestId('read-state-failed')).toBeVisible();
 
       const heading = page.getByTestId('read-state-failed').locator('.empty-state__heading, h2, h3').first();
       await expect(heading).toBeVisible();
