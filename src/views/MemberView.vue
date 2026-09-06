@@ -140,31 +140,6 @@
     padding: var(--space-sm);
   }
 
-  .application-list :deep(.application-card) {
-    width: 100%;
-    height: 160px;
-  }
-
-  .application-list :deep(.app-image) {
-    height: 60px;
-    padding: var(--space-xs);
-    padding-top: var(--space-sm);
-  }
-
-  .application-list :deep(.card-content) {
-    padding: var(--space-sm);
-    gap: var(--space-2xs);
-  }
-
-  .application-list :deep(.card-content h2) {
-    font-size: var(--text-sm);
-    margin: 0 0 var(--space-2xs);
-  }
-
-  .application-list :deep(.card-content p) {
-    font-size: var(--text-xs);
-  }
-
   @media (max-width: 767px) {
     .member {
       padding: var(--space-md) var(--space-sm);
@@ -175,9 +150,13 @@
       gap: var(--space-md);
     }
 
-    .application-list :deep(.application-card) {
-      max-width: none;
-      height: 160px;
-    }
   }
+  /* #5327: the per-hub `.application-list :deep(...)` restatement of ApplicationCard's own
+     defaults was deleted here. Every declaration in it (card height, image
+     height/padding, card-content padding/gap, h2 font-size/margin, p
+     font-size) was byte-identical to the component's own scoped style, in all
+     five hubs — so it was restatement, not customisation, and five copies of
+     one number is what #5323's acceptance names as the thing not to do. The
+     component governs; a hub that genuinely needs to differ should say so and
+     say why. */
 </style>
