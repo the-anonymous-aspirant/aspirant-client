@@ -474,7 +474,7 @@ export default {
 
         await this.fetchMessages();
       } catch (err) {
-        this.recordError = 'Upload failed: ' + (err.response?.data?.error || err.message);
+        this.recordError = 'Upload failed: ' + (err.response?.data?.error || 'The recording could not be uploaded. Try again.');
       }
       this.recordState = 'idle';
     },
@@ -488,7 +488,7 @@ export default {
         this.messagesError = null;
       } catch (err) {
         if (this.messages.length === 0) {
-          this.messagesError = 'Failed to load messages: ' + (err.response?.data?.error || err.message);
+          this.messagesError = 'Failed to load messages: ' + (err.response?.data?.error || 'The voice messages could not be loaded.');
         }
       }
       this.messagesLoading = false;
@@ -499,7 +499,7 @@ export default {
         await axios.delete(`/api/voice-messages/${id}`);
         this.messages = this.messages.filter(m => m.id !== id);
       } catch (err) {
-        this.messagesError = 'Delete failed: ' + (err.response?.data?.error || err.message);
+        this.messagesError = 'Delete failed: ' + (err.response?.data?.error || 'That could not be deleted. Try again.');
       }
     },
 
@@ -532,7 +532,7 @@ export default {
         this.tasksError = null;
       } catch (err) {
         if (this.tasks.length === 0) {
-          this.tasksError = 'Failed to load tasks: ' + (err.response?.data?.error || err.message);
+          this.tasksError = 'Failed to load tasks: ' + (err.response?.data?.error || 'The tasks could not be loaded.');
         }
       }
       this.tasksLoading = false;
@@ -544,7 +544,7 @@ export default {
         await axios.post('/api/commander/process');
         await this.fetchTasks();
       } catch (err) {
-        this.tasksError = 'Process failed: ' + (err.response?.data?.error || err.message);
+        this.tasksError = 'Process failed: ' + (err.response?.data?.error || 'The process could not be started. Try again.');
       }
       this.processing = false;
     },
@@ -554,7 +554,7 @@ export default {
         await axios.patch(`/api/commander/tasks/${id}`, { status: 'closed' });
         await this.fetchTasks();
       } catch (err) {
-        this.tasksError = 'Close failed: ' + (err.response?.data?.error || err.message);
+        this.tasksError = 'Close failed: ' + (err.response?.data?.error || 'The task could not be closed. Try again.');
       }
     },
 
@@ -563,7 +563,7 @@ export default {
         await axios.patch(`/api/commander/tasks/${id}`, { status: 'open' });
         await this.fetchTasks();
       } catch (err) {
-        this.tasksError = 'Reopen failed: ' + (err.response?.data?.error || err.message);
+        this.tasksError = 'Reopen failed: ' + (err.response?.data?.error || 'The task could not be reopened. Try again.');
       }
     },
 
@@ -572,7 +572,7 @@ export default {
         await axios.delete(`/api/commander/tasks/${id}`);
         this.tasks = this.tasks.filter(t => t.id !== id);
       } catch (err) {
-        this.tasksError = 'Delete failed: ' + (err.response?.data?.error || err.message);
+        this.tasksError = 'Delete failed: ' + (err.response?.data?.error || 'That could not be deleted. Try again.');
       }
     },
 
@@ -623,7 +623,7 @@ export default {
         this.notesError = null;
       } catch (err) {
         if (this.notes.length === 0) {
-          this.notesError = 'Failed to load notes: ' + (err.response?.data?.error || err.message);
+          this.notesError = 'Failed to load notes: ' + (err.response?.data?.error || 'The notes could not be loaded.');
         }
       }
       this.notesLoading = false;
@@ -634,7 +634,7 @@ export default {
         await axios.delete(`/api/commander/notes/${id}`);
         this.notes = this.notes.filter(n => n.id !== id);
       } catch (err) {
-        this.notesError = 'Delete failed: ' + (err.response?.data?.error || err.message);
+        this.notesError = 'Delete failed: ' + (err.response?.data?.error || 'That could not be deleted. Try again.');
       }
     },
 
@@ -661,7 +661,7 @@ export default {
         this.vocabulary = resp.data;
         this.vocabularyError = null;
       } catch (err) {
-        this.vocabularyError = 'Failed to load vocabulary: ' + (err.response?.data?.error || err.message);
+        this.vocabularyError = 'Failed to load vocabulary: ' + (err.response?.data?.error || 'The vocabulary could not be loaded.');
       }
       this.vocabularyLoading = false;
     },

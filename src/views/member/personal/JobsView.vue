@@ -430,7 +430,6 @@
           this.loadError =
             err.response?.data?.error?.message ||
             err.response?.data?.detail ||
-            err.message ||
             'Could not fetch jobs';
           this.jobs = [];
           this.total = 0;
@@ -452,7 +451,6 @@
           this.loadError =
             err.response?.data?.error?.message ||
             err.response?.data?.detail ||
-            err.message ||
             'Could not save row';
         } finally {
           this.actingIds.delete(job.id);
@@ -470,7 +468,6 @@
           this.aboutLoadError =
             err.response?.data?.error?.message ||
             err.response?.data?.detail ||
-            err.message ||
             'Could not load target description';
           this.about = null;
         }
@@ -486,7 +483,6 @@
           this.sourcesLoadError =
             err.response?.data?.error?.message ||
             err.response?.data?.detail ||
-            err.message ||
             'Could not fetch sources';
           this.sources = [];
           this.globalCriteria = null;
@@ -511,7 +507,6 @@
           this.loadError =
             err.response?.data?.error?.message ||
             err.response?.data?.detail ||
-            err.message ||
             'Could not hide row';
         } finally {
           this.actingIds.delete(job.id);

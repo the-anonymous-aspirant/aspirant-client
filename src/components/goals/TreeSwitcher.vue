@@ -272,7 +272,7 @@ export default {
         renameTarget.value = null;
         renameValue.value = '';
       } catch (err) {
-        renameError.value = err.response?.data?.error?.message || err.message;
+        renameError.value = err.response?.data?.error?.message || 'The tree could not be renamed. Try again.';
       }
       renaming.value = false;
     }
@@ -306,7 +306,7 @@ export default {
         router.push(`/member/shared/goals/${newTree.id}`);
         emit('tree-created', newTree.id);
       } catch (err) {
-        createError.value = err.response?.data?.error?.message || err.message;
+        createError.value = err.response?.data?.error?.message || 'The tree could not be created. Try again.';
       }
       creating.value = false;
     }
@@ -344,7 +344,7 @@ export default {
           }
         }
       } catch (err) {
-        deleteError.value = err.response?.data?.error?.message || err.message;
+        deleteError.value = err.response?.data?.error?.message || 'The tree could not be deleted. Try again.';
       }
       deleting.value = false;
     }
