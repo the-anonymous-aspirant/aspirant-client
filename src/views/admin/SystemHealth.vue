@@ -4,15 +4,29 @@
     <h2 class="page-subtitle">Container metrics, disk usage, and database statistics</h2>
 
     <!-- One treatment for the three things this read can be doing (#5302).
-         Before this, a total failure rendered the heading, the Refresh button
-         and nothing else — indistinguishable from a healthy system with no
-         data yet — and the catch arm put `err.message` on the page. -->
+         Before that, a total failure rendered the heading, the Refresh button
+         and nothing else — indistinguishable from a healthy system with no data
+         yet — and the catch arm put `err.message` on the page.
+
+         The copy switches on the state (#5312). It did not, and this was the
+         one call site where that mattered: every other page pins its `state`
+         to a literal, so static words are correct there, while this one passes
+         a variable and so said "System health did not load" under an empty
+         state's icon. `MessageBoardView.vue` is the pattern. -->
     <ReadState
       v-if="readState !== 'ready'"
       :state="readState"
-      heading="System health did not load"
-      message="None of the system endpoints answered. The services may be restarting, or the monitor sidecar may be down."
-      still-works="The rest of the admin area is unaffected — this page reads its own endpoints."
+      :heading="readState === 'failed' ? 'System health did not load' : 'No system data yet'"
+      :message="
+        readState === 'failed'
+          ? 'None of the system endpoints answered. The services may be restarting, or the monitor sidecar may be down.'
+          : 'The endpoints answered but reported nothing to show. The monitor sidecar may still be starting up.'
+      "
+      :still-works="
+        readState === 'failed'
+          ? 'The rest of the admin area is unaffected — this page reads its own endpoints.'
+          : ''
+      "
       skeleton="block"
       height="12rem"
       @retry="fetchAll"
@@ -25,37 +39,27 @@
         <span class="status-label">{{ health.status.toUpperCase() }}</span>
       </div>
 
-      <!-- Server + Memory Grid -->
+      <!-- Server checks. `/health` serves `{status, service, checks}` and
+           nothing else: the Server and Memory cards that used to sit here read
+           `commit`, `uptime`, `go_version` and `memory.*`, which this endpoint
+           deliberately does not send (CWE-200, #3865). They rendered nothing in
+           production because `health` was undefined; wiring the real shape
+           without removing them would have rendered `undefined MB` instead,
+           which is worse. What IS served is shown (#5312). -->
       <div class="health-grid">
         <div class="health-card">
           <h3>Server</h3>
           <div class="info-rows">
-            <div class="info-row"><span class="info-label">Commit</span><span class="info-value mono">{{ health.commit }}</span></div>
-            <div class="info-row"><span class="info-label">Uptime</span><span class="info-value">{{ health.uptime }}</span></div>
-            <div class="info-row"><span class="info-label">Go Version</span><span class="info-value mono">{{ health.go_version }}</span></div>
+            <div class="info-row"><span class="info-label">Service</span><span class="info-value mono">{{ health.service || '—' }}</span></div>
             <div class="info-row"><span class="info-label">Checked at</span><span class="info-value">{{ checkedAt }}</span></div>
           </div>
         </div>
 
-        <div class="health-card">
+        <div class="health-card" v-for="(value, name) in (health.checks || {})" :key="name">
           <h3>
-            Database
-            <span class="status-badge" :class="health.database?.status">{{ health.database?.status || 'unknown' }}</span>
+            {{ name }}
+            <span class="status-badge" :class="value">{{ value }}</span>
           </h3>
-          <div class="info-rows">
-            <div class="info-row" v-if="health.database?.error"><span class="info-label">Error</span><span class="info-value error-text">{{ health.database.error }}</span></div>
-          </div>
-        </div>
-
-        <div class="health-card">
-          <h3>Memory</h3>
-          <div class="info-rows">
-            <div class="info-row"><span class="info-label">Allocated</span><span class="info-value">{{ health.memory?.alloc_mb }} MB</span></div>
-            <div class="info-row"><span class="info-label">System</span><span class="info-value">{{ health.memory?.sys_mb }} MB</span></div>
-            <div class="info-row"><span class="info-label">Heap Objects</span><span class="info-value">{{ health.memory?.heap_objects?.toLocaleString() }}</span></div>
-            <div class="info-row"><span class="info-label">GC Cycles</span><span class="info-value">{{ health.memory?.gc_cycles }}</span></div>
-            <div class="info-row"><span class="info-label">Goroutines</span><span class="info-value">{{ health.memory?.goroutines }}</span></div>
-          </div>
         </div>
       </div>
     </template>
@@ -226,7 +230,17 @@ export default {
         ]);
 
         if (healthRes.status === 'fulfilled') {
-          this.health = healthRes.value.data.data;
+          // `/health` serves `{status, service, checks}` flat — read live at
+          // 2026-09-06T04:52Z. It has never served the commit/uptime/memory
+          // fields this page's cards were written against: `misc.go:14-18`
+          // records them being dropped from this unauthenticated surface under
+          // CWE-200 (#3865), and names this file as a reader of fields it does
+          // not serve. Reading `.data.data` therefore left `health` undefined
+          // and the whole banner block silently unrendered in production
+          // (#5312). Reading the flat body renders what is actually served;
+          // the rows for the unserved fields are gone rather than printing
+          // `undefined MB` at an operator.
+          this.health = healthRes.value.data;
           this.checkedAt = new Date().toLocaleTimeString();
         }
 
