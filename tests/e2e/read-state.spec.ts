@@ -26,6 +26,9 @@ const json = (body: unknown) => (route: Route) =>
 
 const dead = (route: Route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
 
+/** What `GET /api/health` actually returns — flat, no `data` envelope. */
+const HEALTH_BODY = { status: 'ok', service: 'server', checks: { database: 'connected' } };
+
 const MESSAGE = {
   ID: 1,
   Content: 'first post',
@@ -126,7 +129,13 @@ test.describe('#5302 system health read states', () => {
 
   test('control: endpoints answering renders the data and no read state', async ({ page }) => {
     await seedAdminSession(page);
-    await page.route('**/api/health', json({ data: { status: 'ok', uptime_seconds: 10 } }));
+    // The shape the server actually serves, read live 2026-09-06T04:52Z:
+    // {"checks":{"database":"connected"},"service":"server","status":"ok"} —
+    // flat, no `data` envelope. The old mock wrapped it, which made
+    // `this.health` truthy in the test and undefined in production, so the
+    // partial-failure case below passed against a response nobody serves
+    // (#5312).
+    await page.route('**/api/health', json(HEALTH_BODY));
     await page.route('**/api/system/containers', json({ containers: [] }));
     await page.route('**/api/system/disk', json({ disks: [], volumes: [], images: {} }));
     await page.route('**/api/system/db-stats', json({ data: { size_mb: 1 } }));
@@ -143,7 +152,13 @@ test.describe('#5302 system health read states', () => {
     // blanked the page whenever one endpoint was down would be a regression
     // dressed as a fix.
     await seedAdminSession(page);
-    await page.route('**/api/health', json({ data: { status: 'ok', uptime_seconds: 10 } }));
+    // The shape the server actually serves, read live 2026-09-06T04:52Z:
+    // {"checks":{"database":"connected"},"service":"server","status":"ok"} —
+    // flat, no `data` envelope. The old mock wrapped it, which made
+    // `this.health` truthy in the test and undefined in production, so the
+    // partial-failure case below passed against a response nobody serves
+    // (#5312).
+    await page.route('**/api/health', json(HEALTH_BODY));
     await page.route('**/api/system/containers', dead);
     await page.route('**/api/system/disk', dead);
     await page.route('**/api/system/db-stats', dead);
@@ -314,5 +329,78 @@ test.describe('#5303 profile keeps its inline notice and gains a skeleton', () =
     await expect(page.getByTestId('read-state-loading')).toHaveCount(0);
     // The inline notice is not a read state and must not have become one.
     await expect(page.getByTestId('read-state-failed')).toHaveCount(0);
+  });
+});
+
+/**
+ * #5312 — system health's `empty` state must not wear the `failed` state's words.
+ *
+ * Filed by the #5305 validation gate against #5278. It is the one `ReadState`
+ * call site where a variable `:state` met a fixed `heading`/`message`, so an
+ * empty read said "System health did not load" under an empty-state icon. Every
+ * other page pins its state to a literal, which is why static copy is right
+ * there and was wrong only here.
+ *
+ * The state is reachable in this page's most likely real failure — server up,
+ * monitor sidecar down — so the cases below drive it the way production does
+ * rather than by forcing the branch.
+ */
+test.describe('#5312 system health tells empty and failed apart', () => {
+  const SYSTEM = ['**/api/system/containers', '**/api/system/disk', '**/api/system/db-stats'];
+
+  const load = async (page: Page, health: 'ok' | 'dead') => {
+    await seedAdminSession(page);
+    await page.route('**/api/health', (route) =>
+      health === 'ok' ? json(HEALTH_BODY)(route) : dead(route),
+    );
+    // Answering with nothing, not failing: this is the sidecar-up-but-empty
+    // shape, which is what makes `empty` reachable at all.
+    for (const r of SYSTEM) await page.route(r, json({ containers: [], disks: [], volumes: [], data: null }));
+    await page.goto('/admin/system-health');
+    await dismissMobileSidebarIfPresent(page);
+  };
+
+  test('an empty read says empty things, and specifically NOT the failure words', async ({
+    page,
+  }) => {
+    await load(page, 'ok');
+    // The assertion is the DIFFERENCE, because the bug was the two states
+    // sharing one sentence. Naming only what empty should say would have
+    // passed against the broken build too, since the failure copy is also a
+    // string that renders.
+    const body = page.locator('body');
+    await expect(body).not.toContainText('System health did not load');
+    await expect(body).not.toContainText('None of the system endpoints answered');
+    await expect(body).not.toContainText('rest of the admin area is unaffected');
+  });
+
+  test('a total failure still says the failure words', async ({ page }) => {
+    // The other half of the same claim: the failed copy must not have been
+    // deleted while separating them.
+    await seedAdminSession(page);
+    await page.route('**/api/health', dead);
+    for (const r of SYSTEM) await page.route(r, dead);
+    await page.goto('/admin/system-health');
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByTestId('read-state-failed')).toBeVisible();
+    await expect(page.locator('body')).toContainText('System health did not load');
+  });
+
+  test('the banner renders from the shape the server actually serves', async ({ page }) => {
+    // It never rendered in production: the page read `.data.data` while
+    // `/health` serves a flat body, so `health` was undefined and the whole
+    // `v-if="health"` block was silently absent.
+    await seedAdminSession(page);
+    await page.route('**/api/health', json(HEALTH_BODY));
+    for (const r of SYSTEM) await page.route(r, json({ containers: [], disks: [], volumes: [] }));
+    await page.goto('/admin/system-health');
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.getByText('OK', { exact: true })).toBeVisible();
+    await expect(page.locator('body')).toContainText('database');
+    await expect(page.locator('body')).toContainText('connected');
+    // And nothing invents values the endpoint does not send.
+    await expect(page.locator('body')).not.toContainText('undefined');
   });
 });
