@@ -178,3 +178,48 @@ test.describe('admin user roster', () => {
     await expect(page.getByText('No users.')).toHaveCount(0);
   });
 });
+
+/**
+ * system_3 #5355 — the row actions have to be on screen to be used.
+ *
+ * The roster is nine columns and the view capped itself at 1000px, so on a wide
+ * screen the Actions column sat past the right edge of the design system's
+ * horizontal scroller: reachable by dragging sideways, but not visible. The cap
+ * was the binding constraint, not the screen — measured on `origin/main`
+ * 07bbf04 at a 1600px viewport, the page had 1336px of room and the view took
+ * 1000 of it, leaving a 952px scroll box around a table this fixture renders at
+ * 995px.
+ *
+ * This does NOT claim the roster never scrolls. A long email address alone
+ * takes the table past 1250px, and below roughly 1100px of available width it
+ * scrolls whatever the cap says — which is the case the DS scroller's
+ * edge-fade cue is for. What is asserted is narrower and is the part that was
+ * wrong: the view no longer clips itself below the width the screen offers.
+ */
+test.describe('admin roster width', () => {
+  test.use({ viewport: { width: 1600, height: 900 } });
+
+  test('the row actions are on screen without scrolling sideways', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'a phone scrolls the roster by design; this is about a desktop-width screen');
+
+    await openUserAdmin(page);
+
+    const scroll = page.locator('.data-table__scroll');
+    const deleteButton = page.getByRole('button', { name: 'Delete' }).first();
+    await expect(deleteButton).toBeVisible();
+
+    const box = await deleteButton.boundingBox();
+    const viewport = await scroll.boundingBox();
+    expect(box).not.toBeNull();
+    expect(viewport).not.toBeNull();
+
+    // Read before anything scrolls: the question is whether the operator has to
+    // drag, not whether dragging works.
+    expect(await scroll.evaluate((el) => el.scrollLeft)).toBe(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.x + viewport!.width);
+
+    // And the mechanism behind it, so a failure says which half moved.
+    const overflow = await scroll.evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+  });
+});
