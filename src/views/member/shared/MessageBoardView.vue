@@ -10,6 +10,23 @@
       </div>
 
       <div class="messages-container">
+        <!-- Before #5302 this section had no states at all: every fetch failure
+             went to console.error and left the same empty rectangle a thread
+             with no messages produces. Loading, failed and empty are now three
+             different things on screen. -->
+        <ReadState
+          :state="readState"
+          :heading="readState === 'failed' ? 'The message board did not load' : 'Nothing here yet'"
+          :message="
+            readState === 'failed'
+              ? 'We could not fetch the messages. This is usually temporary.'
+              : 'Be the first to say something — the box above posts to everyone.'
+          "
+          :still-works="readState === 'failed' ? 'You can still post; your message will appear once the board loads.' : ''"
+          skeleton="text"
+          :lines="4"
+          @retry="loadBoard"
+        >
         <ul class="messageboard-list">
           <li
             v-for="(message, index) in messages"
@@ -31,22 +48,28 @@
             </div>
           </li>
         </ul>
+        </ReadState>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-  import { ref, onMounted } from 'vue';
+  import { computed, ref, onMounted } from 'vue';
   import axios from 'axios';
   import assetManager from '../../../asset_manager.js';
   import { AspTimeSince, AspInput, AspButton } from '@aspirant/design-system';
   import UserAvatar from '../../../components/UserAvatar.vue';
+  import ReadState from '../../../components/ReadState.vue';
 
   export default {
-    components: { UserAvatar, AspTimeSince, AspInput, AspButton },
+    components: { UserAvatar, AspTimeSince, AspInput, AspButton, ReadState },
     setup() {
       const messages = ref([]);
+      // Three-way, not a boolean: `failed` has to survive a reload that returns
+      // no messages, or a broken board would quietly become an empty one.
+      const loadFailed = ref(false);
+      const loading = ref(true);
       const newMessage = ref('');
       const usersMap = ref({});
       const messageUserIconUrl = ref('');
@@ -74,7 +97,10 @@
           const response = await axios.get('/api/data_models/message');
           messages.value = response.data.items || response.data.data;
         } catch (error) {
+          // Logged AND recorded. The console line is for us; the flag is what
+          // the page renders from. Before this, only the first existed.
           console.error('Error fetching messages:', error);
+          throw error;
         }
       };
 
@@ -123,6 +149,27 @@
         return (user && user.avatar_url) || '';
       };
 
+      // The board is the messages. A failure to resolve author names or the
+      // icon degrades the render; a failure to fetch messages IS the failure,
+      // which is why only that one sets the state.
+      const loadBoard = async () => {
+        loading.value = true;
+        loadFailed.value = false;
+        try {
+          await fetchMessages();
+        } catch {
+          loadFailed.value = true;
+        } finally {
+          loading.value = false;
+        }
+      };
+
+      const readState = computed(() => {
+        if (loading.value) return 'loading';
+        if (loadFailed.value) return 'failed';
+        return messages.value.length ? 'ready' : 'empty';
+      });
+
       onMounted(async () => {
         // Load the message user icon
         try {
@@ -130,15 +177,17 @@
         } catch (error) {
           console.error('Error loading message user icon:', error);
         }
-        
+
         await fetchAllUsers();
-        await fetchMessages();
+        await loadBoard();
       });
 
       return {
         messages,
         newMessage,
         messageUserIconUrl,
+        readState,
+        loadBoard,
         submitForm,
         formatSender,
         senderAvatarUrl,
@@ -179,6 +228,14 @@
     border-radius: var(--radius-lg);
     padding: var(--space-sm);
     background-color: var(--surface-card);
+    /* This element paints --surface-card, which is DARK in BOTH themes, so it
+       owns the ink for everything inside it (§3.18 — ink follows its setter).
+       It did not, and nothing noticed while the only children were message rows
+       carrying their own colours. The moment a read state mounted here, its
+       heading measured 1.00:1 — rgb(66,66,66) text on rgb(66,66,66) — text
+       present, visible in the DOM, invisible on screen. The Playwright
+       assertions passed; the §3.90 frame is what caught it. */
+    color: var(--text-on-dark);
     scrollbar-width: thin;
     scrollbar-color: var(--brand-accent) var(--surface-card);
   }
