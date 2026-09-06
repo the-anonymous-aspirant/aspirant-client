@@ -1387,6 +1387,18 @@ export default {
   text-align: left;
 }
 
+/* The filename is a single unbreakable token and this is a flex row, whose
+   items refuse to shrink below their content by default (min-width: auto).
+   Without both of these the block widened the whole review step past a 390px
+   viewport and pushed it off-centre — measured 460px of document against a
+   390px window (#5362). */
+.extract-warning > div { min-width: 0; }
+
+.extract-warning__lead,
+.extract-warning__hint {
+  overflow-wrap: anywhere;
+}
+
 .extract-warning__lead { margin: 0; font-size: var(--text-sm); }
 
 .extract-warning__hint {
