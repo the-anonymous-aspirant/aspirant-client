@@ -126,9 +126,10 @@ test.describe('#4598 Constellations landing lobby', () => {
     await page.goto('/applications');
     await dismissMobileSidebarIfPresent(page);
 
-    // The /applications grid renders AspCard tiles (.app-card), not the member
-    // grid's .application-card.
-    const card = page.locator('.app-card', { hasText: 'Constellations' });
+    // Since #5284 (§3.106 R6b) the /applications grid renders the same
+    // .application-card the member/admin/quiz/game hubs do — the AspCard
+    // tiles (.app-card) this used to select are gone from the surface.
+    const card = page.locator('.application-card', { hasText: 'Constellations' });
     await expect(card).toBeVisible();
     await card.click();
 
