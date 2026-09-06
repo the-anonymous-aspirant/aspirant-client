@@ -46,6 +46,7 @@ import KvittoMaker from '../views/admin/tools/KvittoMaker.vue';
 import LoginView from '../views/LoginView.vue';
 import VerifyEmailView from '../views/VerifyEmailView.vue';
 import ResetPasswordView from '../views/ResetPasswordView.vue';
+import SignupView from '../views/SignupView.vue';
 import NotFound from '../views/NotFound.vue';
 import { TIER, tierOf } from '../lib/tiers.js';
 
@@ -70,6 +71,13 @@ const routes = [
   // itself invalid.
   { path: '/verify-email', component: VerifyEmailView },
   { path: '/reset-password', component: ResetPasswordView },
+  // The START of the same flow (#5338, under #5296). Public for the same
+  // reason the two landings are: whoever needs it has no session. Note this
+  // route carries NO minTier — a tier gate here would bounce exactly the
+  // people it exists for. The site-wide kill-switch (#5289) is read by the
+  // view and enforced by the server, not expressed as a route guard, because
+  // a closed door should say so rather than 404.
+  { path: '/signup', component: SignupView },
   { path: '/admin', component: AdminView, meta: ADMIN },
   { path: '/admin/users', component: UserAdmin, meta: ADMIN },
   { path: '/admin/assets', component: Assets, meta: ADMIN },

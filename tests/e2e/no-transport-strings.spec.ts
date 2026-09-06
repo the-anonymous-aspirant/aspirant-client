@@ -49,7 +49,11 @@ const SRC = path.resolve(HERE, '..', '..', 'src');
 const ALLOW: Array<{ file: string; line: number; why: string }> = [
   {
     file: 'src/components/sidebar/Login.vue',
-    line: 159,
+    // 159 -> 171 in #5338: the code is untouched; adding the "Create an
+    // account" affordance above it shifted it down. This entry is keyed by
+    // LINE NUMBER, so any edit earlier in the file re-reds this guard with a
+    // violation that is really a stale anchor. Filed separately.
+    line: 171,
     why:
       'This file uses `fetch`, not axios, and throws its own Error with product ' +
       'prose for a rejected sign-in — `err.rejected` marks that arm. The message ' +
