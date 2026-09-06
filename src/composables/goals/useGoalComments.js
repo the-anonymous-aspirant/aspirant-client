@@ -14,7 +14,7 @@ export function useGoalComments(nodeId) {
       const resp = await axios.get(`/api/goals/nodes/${nodeId.value}/comments`);
       comments.value = resp.data || [];
     } catch (err) {
-      error.value = err.response?.data?.error?.message || err.message;
+      error.value = err.response?.data?.error?.message || 'That comment could not be saved. Try again.';
     }
     loading.value = false;
   }

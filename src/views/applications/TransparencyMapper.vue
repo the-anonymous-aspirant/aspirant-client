@@ -264,7 +264,7 @@
           }
         } catch (error) {
           console.error('Error uploading image:', error);
-          alert('Error uploading image: ' + error.message);
+          alert('That image could not be uploaded. Try a different file, or try again in a moment.');
         }
       },
       async uploadImageById(imageData) {
@@ -298,7 +298,7 @@
           }
         } catch (error) {
           console.error('Error uploading image:', error);
-          alert('Error uploading image: ' + error.message);
+          alert('That image could not be uploaded. Try a different file, or try again in a moment.');
         }
       },
       async uploadAllImages() {

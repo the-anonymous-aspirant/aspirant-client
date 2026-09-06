@@ -278,7 +278,7 @@ export default {
         if (status === 422) {
           createError.value = data?.error?.message || data?.detail || 'Validation failed: maximum nesting depth exceeded.';
         } else {
-          createError.value = data?.error?.message || err.message;
+          createError.value = data?.error?.message || 'The node could not be created. Try again.';
         }
       }
       creating.value = false;

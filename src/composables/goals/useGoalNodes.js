@@ -18,7 +18,7 @@ export function useGoalNodes(treeId) {
         .filter((n) => n.parent_id)
         .map((n) => ({ from_id: n.parent_id, to_id: n.id }));
     } catch (err) {
-      error.value = err.response?.data?.error?.message || err.message;
+      error.value = err.response?.data?.error?.message || 'That change could not be saved. Try again.';
     }
     loading.value = false;
   }

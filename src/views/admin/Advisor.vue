@@ -285,7 +285,7 @@ export default {
         this.sources = resp.data;
         this.sourcesError = null;
       } catch (err) {
-        this.sourcesError = 'Failed to load sources: ' + (err.response?.data?.detail || err.message);
+        this.sourcesError = 'Failed to load sources: ' + (err.response?.data?.detail || 'the advisor service did not answer');
       }
       this.sourcesLoading = false;
     },
@@ -356,7 +356,10 @@ export default {
 
     formatError(err) {
       const detail = err.response?.data?.detail;
-      if (!detail) return err.message;
+      // The service's own detail when it sent one; page prose otherwise. This
+      // used to return err.message, which is how "Request failed with status
+      // code 502" reached the screen from every caller of this helper (#5304).
+      if (!detail) return 'The advisor service did not answer. Try again.';
       if (typeof detail === 'string') return detail;
       if (Array.isArray(detail)) {
         return detail.map(d => d.msg || JSON.stringify(d)).join('; ');
@@ -417,7 +420,7 @@ export default {
         await axios.delete(`/api/advisor/documents/${id}`);
         await Promise.all([this.fetchSources(), this.fetchDocuments()]);
       } catch (err) {
-        alert('Delete failed: ' + (err.response?.data?.detail || err.message));
+        alert('Delete failed: ' + (err.response?.data?.detail || 'the advisor service did not answer'));
       }
       this.deleting = null;
     },
