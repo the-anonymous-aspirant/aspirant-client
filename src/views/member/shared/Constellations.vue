@@ -368,14 +368,28 @@ export default {
 
 .constellations-notice {
   margin: 0;
-  color: var(--text-success, #15803d);
+  /* Only ever rendered inside .constellations-card, whose --surface-card is
+     dark in BOTH themes — hence the fixed on-dark variant, not the
+     theme-tracking one (#5340: measured 1.24:1 with the tracking token on the
+     light theme's #424242 card). */
+  color: var(--feedback-success-on-dark, #4de292);
   font-size: 0.9rem;
 }
 
 .constellations-error {
   margin: 0.75rem 0 0;
-  color: var(--text-danger, #b91c1c);
+  color: var(--feedback-error-text, #8b0f10);
   font-size: 0.9rem;
+}
+
+/* identityError and actionError render inside .constellations-card (dark in
+   both themes); the page-level loadError above keeps the theme-tracking token.
+   The token is the TEXT-role sibling minted by DS #5343 (the mark-fill
+   --feedback-error-on-dark is 3:1-floor and reads 3.98 on the light theme's
+   card); the fallback carries the same value, so this renders correctly even
+   against a DS build that predates the token. */
+.constellations-card .constellations-error {
+  color: var(--feedback-error-text-on-dark, #ff9a9c);
 }
 
 .constellations-error-link {

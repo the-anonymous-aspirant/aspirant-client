@@ -180,11 +180,11 @@
   }
 
   .message--error {
-    color: var(--text-danger, #b3261e);
+    color: var(--feedback-error-text, #8b0f10);
   }
 
   .message--success {
-    color: var(--text-success, #1b5e20);
+    color: var(--feedback-success-text, #005d26);
   }
 
   .next {
