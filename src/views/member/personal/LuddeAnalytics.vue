@@ -296,10 +296,10 @@
       this.fetchFeedingTimes();
       this.fetchLuddeAssets();
     },
-    beforeDestroy() {
-      assetManager.releaseAsset('ludde');
-      assetManager.releaseAsset('ludde-sound');
-    },
+    // #5324: dead `beforeDestroy` asset-release hook removed rather than
+    // renamed — see the note in MemberView.vue. `ludde` shares its hash with
+    // `ludde_meal_tracker_icon` and `ludde-sound` with `game-score-sound`, so
+    // a working release here would revoke another consumer's URL.
   };
 </script>
 

@@ -114,12 +114,13 @@
     mounted() {
       this.loadImages();
     },
-    // No release hook, matching this view before the change. MemberView.vue has
-    // one spelled `beforeDestroy` — a Vue 2 name Vue 3 never calls, so those
-    // releases have never fired (five views carry the dead hook). Adding a
-    // WORKING `beforeUnmount` here would make /applications the only hub that
-    // actually drops its asset refcounts, which is a behaviour change this
-    // ruling did not ask for. Filed separately instead.
+    // No release hook, deliberately. AssetManager has no reference counting —
+    // `_cachedAssets` is a flat hash -> objectURL Map and `releaseAsset`
+    // revokes unconditionally — so a per-view release revokes URLs other
+    // mounted components still hold. #5324 removed the dead `beforeDestroy`
+    // release hooks elsewhere for the same reason; #5330 tracks the one
+    // consumer whose equivalent hook IS spelled correctly and does exactly
+    // that to the sidebar's logo. Icons stay cached for the session.
   };
 </script>
 

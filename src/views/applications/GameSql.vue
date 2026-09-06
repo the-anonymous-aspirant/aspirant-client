@@ -223,7 +223,9 @@
         });
       },
     },
-    beforeDestroy() {
+    // #5324: was `beforeDestroy`, the Vue 2 name Vue 3 never calls, so the
+    // Chart.js instance was never destroyed and outlived the component.
+    beforeUnmount() {
       if (this.chart) {
         this.chart.destroy();
       }
