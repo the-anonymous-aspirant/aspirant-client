@@ -6,7 +6,9 @@ function extractError(err, fallback) {
   return (
     err.response?.data?.error?.message ||
     err.response?.data?.detail ||
-    err.message ||
+    // `err.message ||` sat here. Every caller already passes product prose as
+    // `fallback`, and axios always has a message, so the good copy was
+    // unreachable (#5304).
     fallback
   );
 }

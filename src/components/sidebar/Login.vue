@@ -131,7 +131,15 @@
           localStorage.setItem('user_role', this.role);
           this.$emit('login');
         } catch (err) {
-          this.error = err.message;
+          // The worst of the 39: a failed sign-in used to read "Request failed
+          // with status code 401", which tells a person nothing about the one
+          // thing they can act on. The server's own message when it sent one
+          // (a locked account, a rate limit), and otherwise the sentence that
+          // describes what actually happened (#5304).
+          console.error('Login failed', err);
+          this.error =
+            err.response?.data?.error?.message ||
+            'That username and password did not match. Check them and try again.';
           this.success = '';
         }
       },

@@ -222,7 +222,7 @@ export default {
         this.languagesData = resp.data;
         this.languagesError = null;
       } catch (err) {
-        this.languagesError = 'Failed to load languages: ' + (err.response?.data?.error?.message || err.message);
+        this.languagesError = 'Failed to load languages: ' + (err.response?.data?.error?.message || 'the translator service did not answer');
       }
       this.languagesLoading = false;
     },
@@ -247,7 +247,7 @@ export default {
         this.translationResult = resp.data;
       } catch (err) {
         const errData = err.response?.data?.error;
-        this.translateError = errData?.message || err.message;
+        this.translateError = errData?.message || 'That did not translate. The translator service may be down.';
       }
       this.translating = false;
     },
@@ -266,7 +266,7 @@ export default {
         await this.fetchLanguages();
       } catch (err) {
         const errData = err.response?.data?.error;
-        this.installMessage = errData?.message || err.message;
+        this.installMessage = errData?.message || 'That language could not be installed. Try again.';
         this.installMessageClass = 'error';
       }
       this.installing = false;
