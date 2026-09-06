@@ -1,6 +1,6 @@
 <script setup lang="js">
   import axios from 'axios';
-  import { ref, onMounted, onBeforeUnmount } from 'vue';
+  import { ref, onMounted } from 'vue';
   import { debugMode, toggleDebugMode } from '../global_state_manager.js';
   import assetManager from '../asset_manager.js';
 
@@ -44,10 +44,17 @@
     }
   });
 
-  // Clean up resources when component is unmounted
-  onBeforeUnmount(() => {
-    assetManager.releaseAsset('aspiring_hand');
-  });
+  // #5330: an `onBeforeUnmount` here released `aspiring_hand` on every
+  // navigation away from `/`. Unlike the dead Vue 2 hooks #5324 removed, this
+  // one is spelled correctly and RAN — and `aspiring_hand` is also the
+  // sidebar's logo. AssetManager has no reference counting, so the release
+  // revoked the object URL the permanently-mounted sidebar was still pointing
+  // at, leaving it on a dangling blob URL. Measured: alive:true on `/`,
+  // alive:false after one in-app navigation, same DOM node, never recovering.
+  //
+  // The cache is bounded by assetMap and lives for the page session; that is
+  // the correct lifetime for it while a single flat hash -> objectURL map is
+  // shared by every consumer.
 
   function blobToBase64(blob) {
     return new Promise((resolve, reject) => {

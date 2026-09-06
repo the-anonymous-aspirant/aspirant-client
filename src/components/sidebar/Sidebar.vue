@@ -1,5 +1,5 @@
 <script>
-  import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+  import { ref, computed, onMounted } from 'vue';
   import { useRoute } from 'vue-router';
   import {
     debugMode,
@@ -139,16 +139,13 @@
         }
       });
 
-      // Clean up when component is destroyed
-      onBeforeUnmount(() => {
-        assetManager.releaseAsset('aspiring_hand');
-        assetManager.releaseAsset('home_icon');
-        assetManager.releaseAsset('applications');
-        assetManager.releaseAsset('family');
-        assetManager.releaseAsset('admin');
-        assetManager.releaseAsset('default_user');
-        assetManager.releaseAsset('coffemug');
-      });
+      // #5330: the mirror of the HomeView release removed in the same change.
+      // This one is latent rather than live — the sidebar sits outside
+      // <router-view> and does not unmount during a session — but it is the
+      // same unsafe shape: seven revocations against a flat, un-refcounted,
+      // process-wide cache whose entries other mounted views hold, including
+      // two names (`default_user`, `home_icon`) that share a hash with a
+      // second name. Removed rather than left as a trap.
 
       return {
         collapsed,

@@ -92,14 +92,13 @@
     },
     // #5324: an asset-release hook spelled `beforeDestroy` stood here. Vue 3
     // never calls that name, so it had never run — deleting it is a runtime
-    // no-op. It is deleted rather than renamed on purpose: AssetManager has no
-    // reference counting (`_cachedAssets` is a flat hash -> objectURL Map and
-    // `releaseAsset` revokes unconditionally), the cache is shared
-    // process-wide, and several of these names share a hash with assets other
-    // mounted components hold. A working release here would revoke object URLs
-    // out from under the permanently-mounted sidebar — which is not a
-    // prediction: #5330 measures exactly that happening today via HomeView,
-    // whose equivalent hook IS spelled correctly.
+    // no-op. It was deleted rather than renamed because AssetManager's cache is
+    // a flat, un-refcounted, process-wide hash -> objectURL map, and several of
+    // these names share a hash with assets other mounted components hold — so a
+    // working release here would have revoked URLs out from under the
+    // permanently-mounted sidebar. #5330 then measured exactly that happening
+    // via HomeView, whose equivalent hook WAS spelled correctly, and removed
+    // the release API entirely.
     //
     // The icons stay cached for the session, which is the behaviour that has
     // always shipped.
