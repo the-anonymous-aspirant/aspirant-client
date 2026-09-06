@@ -368,14 +368,24 @@ export default {
 
 .constellations-notice {
   margin: 0;
-  color: var(--text-success, #15803d);
+  /* Only ever rendered inside .constellations-card, whose --surface-card is
+     dark in BOTH themes — hence the fixed on-dark variant, not the
+     theme-tracking one (#5340: measured 1.24:1 with the tracking token on the
+     light theme's #424242 card). */
+  color: var(--feedback-success-on-dark, #4de292);
   font-size: 0.9rem;
 }
 
 .constellations-error {
   margin: 0.75rem 0 0;
-  color: var(--text-danger, #b91c1c);
+  color: var(--feedback-error-text, #8b0f10);
   font-size: 0.9rem;
+}
+
+/* identityError and actionError render inside .constellations-card (dark in
+   both themes); the page-level loadError above keeps the theme-tracking token. */
+.constellations-card .constellations-error {
+  color: var(--feedback-error-on-dark, #ff7a7c);
 }
 
 .constellations-error-link {
