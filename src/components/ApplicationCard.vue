@@ -91,7 +91,22 @@
     cursor: pointer;
     transition: all var(--transition-base);
     width: 100%;
-    height: 160px;
+    /* #5327 / §3.107: NO fixed height. A `height: 160px` here sat around
+       unconstrained children (60px image + an unclamped title + the
+       description's own 3-line clamp), so `overflow: hidden` cut whatever did
+       not fit — at whatever pixel the box edge landed on, which is what got
+       reported as "clips mid-word". Measured at 390x844 across all five hubs,
+       34 cards overflowed.
+
+       The fix is not a bigger number: 190px still clipped 15 of them (every
+       2-line title by 3px, because this box is `border-box` with a 3px border,
+       plus /admin's 3-line "Histoire — Design System" by 23px), and the value
+       that cleared everything left the majority 1-line cards with a third of
+       the card empty. The hub grids are CSS grid, whose default
+       `align-items: stretch` already makes every card in a row match the
+       tallest one — so letting content set the height keeps rows even, cannot
+       clip by construction, and has no number to re-derive when a title grows.
+       Ruling on #5327; §3.107 amended. */
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -142,6 +157,12 @@
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
+    /* Declared explicitly rather than relying on the engine: an engaged
+       `-webkit-line-clamp` already renders the ellipsis in current Chromium
+       without this, but that is an undocumented default other engines have not
+       always shared. Safety net for a description that still exceeds 3 lines
+       now that the card grows to its content (#5327). */
+    text-overflow: ellipsis;
   }
 
   /* Touch device improvements */

@@ -171,3 +171,107 @@ test.describe('#5284 one hub-card grammar (§3.106 R6b)', () => {
     await expect(page, 'bottom band routes').toHaveURL(/\/applications\/qr-generator$/);
   });
 });
+
+/**
+ * #5327 (§3.107) — the hub card sizes to its content, so nothing is clipped.
+ *
+ * `.application-card` used to be a fixed `height: 160px` with `overflow:
+ * hidden` around unconstrained children, so anything that did not fit was cut
+ * at whatever pixel the box edge landed on. Measured across all five hubs at
+ * 390x844, 34 of 35 cards overflowed. Raising the number did not fix it (190px
+ * still clipped 15, because the box is `border-box` with a 3px border and
+ * /admin carries a 3-line title), and a number large enough to clear everything
+ * left most cards a third empty. The ruling was to drop the fixed height and
+ * let the grid's default `align-items: stretch` keep each row even.
+ *
+ * These assert the property, not a number — a future longer title cannot
+ * reintroduce the defect without failing here.
+ */
+const CARD_HUBS: { path: string; seed: (page: Page) => Promise<void>; label: string }[] = [
+  { path: '/applications', seed: seedViewerSession, label: 'applications' },
+  { path: '/quizzes', seed: seedViewerSession, label: 'quizzes' },
+  { path: '/games', seed: seedViewerSession, label: 'games' },
+  { path: '/member', seed: seedTrustedSession, label: 'member' },
+  { path: '/admin', seed: seedAdminSession, label: 'admin' },
+];
+
+test.describe('#5327 hub cards size to their content', () => {
+  for (const hub of CARD_HUBS) {
+    test(`${hub.label}: no card overflows its own box`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await hub.seed(page);
+      await page.goto(hub.path);
+      await dismissMobileSidebarIfPresent(page);
+      await expect(page.locator('.application-card').first()).toBeVisible();
+
+      const bad = await page.evaluate(() =>
+        [...document.querySelectorAll('.application-card')]
+          .map((el) => ({
+            title: el.querySelector('h2')?.textContent?.trim() ?? '?',
+            over: el.scrollHeight - el.clientHeight,
+          }))
+          .filter((c) => c.over > 1)
+      );
+      expect(bad, `${hub.path}: cards clipping their own content`).toEqual([]);
+    });
+
+    test(`${hub.label}: every card in a row is the same height`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await hub.seed(page);
+      await page.goto(hub.path);
+      await dismissMobileSidebarIfPresent(page);
+      await expect(page.locator('.application-card').first()).toBeVisible();
+
+      // Dropping the fixed height is only acceptable because the grid keeps a
+      // ROW even; without this the fix would trade clipping for a ragged grid.
+      const ragged = await page.evaluate(() => {
+        const rows: Record<number, number[]> = {};
+        for (const el of document.querySelectorAll('.application-card')) {
+          const r = el.getBoundingClientRect();
+          (rows[Math.round(r.top)] ||= []).push(Math.round(r.height));
+        }
+        return Object.entries(rows)
+          .filter(([, hs]) => new Set(hs).size > 1)
+          .map(([top, hs]) => ({ top, hs }));
+      });
+      expect(ragged, `${hub.path}: rows with mismatched card heights`).toEqual([]);
+    });
+  }
+
+  test('a description too long for 3 lines is absorbed by the clamp, not by the card', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedViewerSession(page);
+    await page.goto('/applications');
+    await dismissMobileSidebarIfPresent(page);
+    await expect(page.locator('.application-card').first()).toBeVisible();
+
+    // The registry has no description long enough to exceed 3 lines now that
+    // the card grows, so the safety net is exercised by injecting one.
+    //
+    // Asserted as "the paragraph's own clamp engages while the CARD does not
+    // overflow", not as "the text ends with an ellipsis": the ellipsis is
+    // painted by the engine and never appears in the DOM text, so a
+    // string-ending assertion would be untestable here and would pass or fail
+    // for reasons unrelated to what it claims.
+    const result = await page.evaluate(() => {
+      const card = document.querySelector('.application-card') as HTMLElement;
+      const p = card.querySelector('.card-content p') as HTMLElement;
+      p.textContent = 'x '.repeat(200).trim();
+      // force layout
+      void card.offsetHeight;
+      return {
+        clampEngaged: p.scrollHeight > p.clientHeight + 1,
+        cardOverflow: card.scrollHeight - card.clientHeight,
+        textOverflow: getComputedStyle(p).textOverflow,
+        lineClamp: getComputedStyle(p).webkitLineClamp,
+      };
+    });
+
+    expect(result.clampEngaged, 'the paragraph clamp absorbs the overflow').toBe(true);
+    expect(result.cardOverflow, 'the card itself still does not clip').toBeLessThanOrEqual(1);
+    expect(result.lineClamp, 'the 3-line clamp is in force').toBe('3');
+    expect(result.textOverflow, 'the ellipsis affordance is declared explicitly').toBe('ellipsis');
+  });
+});
