@@ -716,8 +716,42 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     await expect(warning).toContainText('FastighetPlus_Karlskrona_INGLATORP_1-46.pdf');
     // It explains why the form below is blank — that was the missing half.
     await expect(warning).toContainText(/tomma därför/i);
+    // An `unrecognised` layout is a report-type / coverage question — telling
+    // the user to check the report type is the right advice here.
+    await expect(page.getByTestId('extract-warning-hint')).toContainText(/rätt rapporttyp/i);
     // The request succeeded; presenting this as a failed request would send
     // the operator to retry an upload that worked.
+    await expect(page.locator('.error-text')).toHaveCount(0);
+  });
+
+  test('#5359-F2 a scanned PDF gets the scan caution, not the report-type one', async ({ page }) => {
+    // F1's `no_text` outcome means no fingerprint could ever have matched —
+    // "check the report type" is wrong advice, and "send the file on" cannot
+    // work because there is no layout to add.
+    const NO_TEXT = {
+      documents: [
+        {
+          filename: 'skannat_dokument.pdf',
+          outcome: 'no_text',
+          fields: [
+            { key: 'objekt', value: null, confidence: 'not_found', source_page: null },
+            { key: 'adress', value: null, confidence: 'not_found', source_page: null },
+            { key: 'kommun', value: null, confidence: 'not_found', source_page: null },
+          ],
+        },
+      ],
+      operator_defaults: {},
+    };
+
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, { extractResponse: NO_TEXT });
+    await walkToReview(page);
+
+    const warning = page.getByTestId('extract-warning');
+    await expect(warning).toBeVisible();
+    const hint = page.getByTestId('extract-warning-hint');
+    await expect(hint).toContainText(/skanning|foto/i);
+    await expect(hint).not.toContainText(/rätt rapporttyp/i);
     await expect(page.locator('.error-text')).toHaveCount(0);
   });
 
@@ -736,6 +770,9 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     await walkToReview(page);
 
     await expect(page.getByTestId('extract-warning')).toBeVisible();
+    // No `outcome` to key on: this must stay the generic report-type
+    // caution, never the scan-specific one.
+    await expect(page.getByTestId('extract-warning-hint')).toContainText(/rätt rapporttyp/i);
   });
 
   test('does not widen the review step on a phone', async ({ page }) => {
