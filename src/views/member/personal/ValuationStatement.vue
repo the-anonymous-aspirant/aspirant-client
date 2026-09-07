@@ -193,7 +193,12 @@
             <strong>{{ unreadableDocs.map(d => d.filename).join(', ') }}</strong>.
             Fälten nedan är tomma därför — inte för att underlaget saknar dem.
           </p>
-          <p class="extract-warning__hint">
+          <p v-if="unreadableIsScan" class="extract-warning__hint" data-testid="extract-warning-hint">
+            Inget kunde läsas ur filen — det ser ut som en skanning eller ett
+            foto snarare än en digitalt skapad PDF. En textbaserad export av
+            samma underlag går att läsa.
+          </p>
+          <p v-else class="extract-warning__hint" data-testid="extract-warning-hint">
             Kontrollera att du laddat upp rätt rapporttyp. Går det inte, skicka
             filen vidare så kan underlagstypen läggas till — du behöver inte
             fylla i allt för hand varje gång.
@@ -732,6 +737,25 @@ export default {
         );
         return filled.length === 0;
       });
+    },
+
+    /** True when every unreadable document is a scan or photograph
+     *  (commander's `no_text` outcome — system_3 #5359-F1), never a mix.
+     *
+     *  `unrecognised` and `recognised_no_fields` mean "the report type may be
+     *  wrong, or the layout isn't covered yet" — sending the file on can add
+     *  a fingerprint. `no_text` means there is no text layer at all, so no
+     *  fingerprint could ever match and "check the report type" is wrong
+     *  advice for a problem that isn't about the report type. An older
+     *  commander that never sends `outcome`, or any future outcome value
+     *  this client doesn't recognise, falls through to the existing
+     *  report-type caution rather than going quiet.
+     */
+    unreadableIsScan() {
+      return (
+        this.unreadableDocs.length > 0 &&
+        this.unreadableDocs.every(doc => doc.outcome === 'no_text')
+      );
     },
 
     extractingStatus() {
