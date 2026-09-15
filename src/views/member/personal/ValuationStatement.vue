@@ -229,6 +229,24 @@
         </div>
       </div>
 
+      <div
+        v-if="incompleteDocs.length"
+        class="extract-warning"
+        role="status"
+        data-testid="extract-incomplete-warning"
+      >
+        <AspBadge status="caution" size="sm">Fält saknas</AspBadge>
+        <div>
+          <p class="extract-warning__hint" data-testid="extract-incomplete-hint">
+            Vissa förväntade fält lästes inte ur
+            <strong>{{ incompleteDocs.map(d => d.filename).join(', ') }}</strong>
+            — <strong>{{ incompleteMissedLabels }}</strong>. De är tomma nedan för
+            att extraheringen missade dem, inte för att underlaget saknar dem —
+            fyll i dem för hand.
+          </p>
+        </div>
+      </div>
+
       <p class="muted">
         Klicka på ett värde för att redigera. Färgerna visar konfidensgrad:
         <span class="chip confident">säker</span>
@@ -829,6 +847,41 @@ export default {
           doc.diagnostics.ocr_used === true &&
           this.filledValueCount(doc) > 0,
       );
+    },
+
+    /** Digital `partial` documents — read some values, missed an expected one,
+     *  no OCR (system_3 #5912).
+     *
+     *  These left `unreadableDocs` when #5910 stopped calling a partial
+     *  "unreadable", and they are not OCR so they get no verify-values banner
+     *  either — so an expected field the extractor missed now looks like the
+     *  document simply lacks it, the exact inference the review banner exists
+     *  to block. This selects that case for its own copy. Disjoint from the
+     *  other two banner sets by construction, so no document renders two of the
+     *  three at once (the class of bug #5910 closed): `unreadableDocs` is zero
+     *  filled, `ocrRecoveredDocs` is OCR + filled, this is non-OCR + filled +
+     *  a missed expected slot. An absent `missed_expected_slots` (an older
+     *  commander) yields false — no banner, today's behaviour.
+     */
+    incompleteDocs() {
+      return (this.extractedDocs || []).filter(
+        doc =>
+          doc.diagnostics &&
+          doc.diagnostics.ocr_used !== true &&
+          Array.isArray(doc.diagnostics.missed_expected_slots) &&
+          doc.diagnostics.missed_expected_slots.length > 0 &&
+          this.filledValueCount(doc) > 0,
+      );
+    },
+
+    /** The expected slots the incomplete documents missed, as human labels —
+     *  named so the banner points the operator at which fields are the gap. */
+    incompleteMissedLabels() {
+      const keys = new Set();
+      for (const doc of this.incompleteDocs) {
+        for (const key of doc.diagnostics.missed_expected_slots || []) keys.add(key);
+      }
+      return [...keys].map(key => this.slotLabel(key)).join(', ');
     },
 
     extractingStatus() {
