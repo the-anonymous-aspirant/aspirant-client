@@ -163,6 +163,39 @@ test.describe('Dedicated /login page', () => {
     await expect(page).toHaveURL('/');
   });
 
+  // #5937 fix-forward (§6.2 independent review): a dot-segment path resolves
+  // same-origin yet normalizes to a protocol-relative PATHNAME — `/..//evil` has
+  // our origin (so a plain origin check passes) but pathname `//evil`, which
+  // window.location (the SINK, which re-parses the returned string) reads
+  // off-origin. Rejected to home by re-validating the exact returned string.
+  //
+  // The attacker host is routed to a fulfilled 200 on purpose: were the guard
+  // to leak, an unresolved evil.example.com would fail SILENTLY and leave the
+  // page on-origin — a regression would look green. Fulfilling it lets a leak
+  // actually commit and records the request, so `offOriginRequests` is a loud,
+  // race-free witness: it stays empty only if no navigation was ever aimed at
+  // the attacker host.
+  test('a dot-segment target normalizing to a protocol-relative path is rejected, landing on home', async ({ page }) => {
+    await mockLoginSuccess(page);
+    const offOriginRequests: string[] = [];
+    // Match only requests whose HOST is the attacker — not the /login page load,
+    // whose ?redirect= query merely contains the string "evil.example.com".
+    await page.route(
+      (url) => {
+        try { return new URL(url).host === 'evil.example.com'; } catch { return false; }
+      },
+      async (route) => {
+        offOriginRequests.push(route.request().url());
+        await route.fulfill({ status: 200, contentType: 'text/html', body: 'off-origin-leak' });
+      },
+    );
+    await page.goto('/login?redirect=' + encodeURIComponent('/..//evil.example.com'));
+    await dismissMobileSidebarIfPresent(page);
+    await fillAndSubmitLogin(page);
+    await expect(page).toHaveURL('/');
+    expect(offOriginRequests).toEqual([]);
+  });
+
   // Both mounts of this form, measured as a RATIO rather than as a token.
   //
   // The captions are `color: inherit` (AspInput's .field__label sets no
