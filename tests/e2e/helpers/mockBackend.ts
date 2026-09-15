@@ -183,7 +183,12 @@ export async function installCommanderMocks(page: Page, opts: InstallOpts = {}):
       await route.fulfill({ status: 204, body: '' });
       return;
     }
-    await route.fallback();
+    // GET mirrors the block /extract embeds — the source for manual entry (#5914).
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(OPERATOR_DEFAULTS),
+    });
   });
 
   // ---------- processed-valuations store ('Tidigare värderingar' tab, #1154) ----------

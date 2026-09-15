@@ -150,7 +150,20 @@
         >
           Extrahera värden →
         </AspButton>
+        <!-- #5914: a way into the review form with no readable document, or
+             none at all. Deliberately NOT gated on uploadedFiles.length — that
+             is the whole point — so it is reachable from a cold Skapa tab. -->
+        <AspButton
+          variant="secondary"
+          @click="startManualEntry"
+          data-testid="manual-entry"
+        >
+          Fyll i för hand →
+        </AspButton>
       </div>
+      <p class="muted step-actions__hint">
+        Ingen läsbar PDF? Fyll i värdena för hand — samma formulär, tomt att fylla i.
+      </p>
     </ValuationStep>
 
     <!-- Step 2: Extracting (progress bar + cycling status) -->
@@ -974,6 +987,34 @@ export default {
       } finally {
         this.stopStatusCycle();
       }
+    },
+
+    async startManualEntry() {
+      // A second entrance to the review form for a user with no readable
+      // document — or none at all: skip extraction entirely and open the review
+      // with every extracted slot empty and 'not_found', so a hand-typed value
+      // is marked manual on input exactly as an edited extracted one is, and a
+      // figure is never rendered as though a document produced it (system_3
+      // #5914). No file and no extract call — the only round-trip is the
+      // operator-defaults read, which `/extract` embeds too, so manual entry
+      // still carries the operator's own defaults ("no source document", not
+      // "no defaults").
+      this.uploadError = '';
+      this.extractedDocs = [];
+      this.currentInputFiles = [];
+      this.currentProcessedId = null;
+      let operatorDefaults = {};
+      try {
+        const resp = await axios.get(
+          '/api/commander/valuation-statement/operator-defaults',
+        );
+        operatorDefaults = resp.data || {};
+      } catch (err) {
+        // Defaults are a convenience; manual entry must still open without them.
+        operatorDefaults = {};
+      }
+      this.hydrateReview([], operatorDefaults);
+      this.step = 'review';
     },
 
     hydrateReview(docs, operatorDefaults) {

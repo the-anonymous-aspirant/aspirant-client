@@ -901,3 +901,59 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     await expect(page.getByTestId('extract-warning')).toHaveCount(0);
   });
 });
+
+test.describe('#5914 manual data-entry route', () => {
+  test('cold Skapa tab, zero files: reach the review form, fill by hand, generate', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installCommanderMocks(page);
+    await page.goto('/member/personal/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await expect(page.locator('h1', { hasText: 'Värdeutlåtande' })).toBeVisible();
+
+    // With no file uploaded, extract is blocked but manual entry is NOT — that
+    // is the whole point, so it cannot share the uploadedFiles.length guard.
+    await expect(page.getByRole('button', { name: /Extrahera värden/ })).toBeDisabled();
+    const manual = page.getByTestId('manual-entry');
+    await expect(manual).toBeVisible();
+    await expect(manual).toBeEnabled();
+
+    await manual.click();
+
+    // Jumps straight to review, skipping the extracting step.
+    await expect(page.getByRole('heading', { name: /Granska och justera/ })).toBeVisible();
+
+    // operator_defaults still populate their slots — "no source document", not
+    // "no defaults".
+    const ort = page.locator('.field-row', { hasText: /^Ort/ }).locator('input');
+    await expect(ort).toHaveValue('Nynäshamn');
+
+    // A doc-derived slot starts empty and is never 'confident' — nothing was
+    // extracted for it.
+    const adressRow = page.locator('.field-row', { hasText: /^Adress/ });
+    await expect(adressRow.locator('input')).toHaveValue('');
+    await expect(adressRow).not.toHaveClass(/confident/);
+
+    // Typing marks it manual — a hand-typed figure is never rendered as though
+    // a document produced it.
+    await adressRow.locator('input').fill('Storgatan 1');
+    await expect(adressRow).toHaveClass(/\bmanual\b/);
+
+    // Generate produces the värdeutlåtande, same artifact as the extracted path.
+    await page.getByRole('button', { name: /Generera värdeutlåtande/ }).click();
+    await expect(page.getByRole('heading', { name: /Klart/ })).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('no extraction banners on a manual review — there is no document to describe', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installCommanderMocks(page);
+    await page.goto('/member/personal/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await page.getByTestId('manual-entry').click();
+    await expect(page.getByRole('heading', { name: /Granska och justera/ })).toBeVisible();
+
+    // extractedDocs is empty, so none of the #5907/#5910/#5912 banners fire.
+    await expect(page.getByTestId('extract-warning')).toHaveCount(0);
+    await expect(page.getByTestId('extract-ocr-warning')).toHaveCount(0);
+    await expect(page.getByTestId('extract-incomplete-warning')).toHaveCount(0);
+  });
+});
