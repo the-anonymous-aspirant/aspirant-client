@@ -142,6 +142,27 @@ test.describe('Dedicated /login page', () => {
     await expect(page).toHaveURL('/');
   });
 
+  // #5937: a backslash protocol-relative target bypasses a naive
+  // startsWith('/') && !startsWith('//') filter, because the browser reads a
+  // backslash as a slash in the authority — `/\evil` resolves to
+  // https://evil. The guard must reject it (land on home), never forward the
+  // fresh credential holder off-origin. Locked with the URL-origin check.
+  test('a backslash protocol-relative redirect target is rejected, landing on home', async ({ page }) => {
+    await mockLoginSuccess(page);
+    await page.goto('/login?redirect=' + encodeURIComponent('/\\evil.example.com'));
+    await dismissMobileSidebarIfPresent(page);
+    await fillAndSubmitLogin(page);
+    await expect(page).toHaveURL('/');
+  });
+
+  test('a mixed slash-backslash redirect target is rejected, landing on home', async ({ page }) => {
+    await mockLoginSuccess(page);
+    await page.goto('/login?redirect=' + encodeURIComponent('/\\/evil.example.com'));
+    await dismissMobileSidebarIfPresent(page);
+    await fillAndSubmitLogin(page);
+    await expect(page).toHaveURL('/');
+  });
+
   // Both mounts of this form, measured as a RATIO rather than as a token.
   //
   // The captions are `color: inherit` (AspInput's .field__label sets no
