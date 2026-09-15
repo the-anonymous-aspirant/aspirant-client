@@ -1089,3 +1089,28 @@ test.describe('#5915 OCR announcement + estimate on the extract step', () => {
     await expect(page.getByRole('heading', { name: /Granska och justera/ })).toBeVisible({ timeout: 10_000 });
   });
 });
+
+test.describe('#5915 /decide fallback (old commander)', () => {
+  test('a 404 from /decide falls back to the generic phases, never a half-init OCR banner, and extract still proceeds', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, { extractDelayMs: 1800 });
+    // An older commander has no /decide: 404 the pre-flight. Registered AFTER
+    // installCommanderMocks so it wins (page.route is LIFO). This is the
+    // old-commander + new-client deploy window (#5915 c33972/manager c24256):
+    // the catch must leave the spinner in its pre-#5915 (generic) state, not a
+    // half-initialised OCR announcement — pinned distinctly, not by equivalence
+    // to the digital-path test.
+    await page.route(/\/api\/commander\/valuation-statement\/decide$/, route =>
+      route.fulfill({ status: 404, body: '' }),
+    );
+    await page.goto('/member/personal/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
+    await page.getByRole('button', { name: /Extrahera värden/ }).click();
+
+    const status = page.locator('.progress-status');
+    await expect(status).not.toContainText(/skannar|OCR/i);
+    // Extraction still completes into review — the 404 never blocks getting values.
+    await expect(page.getByRole('heading', { name: /Granska och justera/ })).toBeVisible({ timeout: 10_000 });
+  });
+});
