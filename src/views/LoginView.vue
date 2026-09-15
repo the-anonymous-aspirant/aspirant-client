@@ -34,6 +34,18 @@
       // resolves them to https://evil.com (#5937). Origin comparison closes
       // every such backslash / tab / mixed-slash variant by construction,
       // because it asks the real parser instead of guessing its output.
+      //
+      // Validate the EXACT string handed to the sink, not just the resolved
+      // reference. The sink is a full-page navigation that RE-PARSES the
+      // returned value (`window.location.href = redirectTarget` /
+      // `.assign(redirectTarget)` below), and a same-origin resolve can still
+      // yield a protocol-relative PATHNAME: `/..//evil.com` resolves to our
+      // origin (so the first check passes) but its pathname is `//evil.com`,
+      // which window.location reads as https://evil.com. Returning that bare
+      // pathname re-opened the redirect (§6.2 independent review of #5937, actor
+      // 204; fix-forward for the #309 merge). Re-resolving `target` against our
+      // origin and re-checking rejects any `//`-normalizing path to home,
+      // because it asks the parser about the very string the sink will re-parse.
       redirectTarget() {
         const raw = this.$route.query.redirect;
         if (typeof raw !== 'string') {
@@ -41,8 +53,10 @@
         }
         try {
           const u = new URL(raw, window.location.origin);
-          if (u.origin === window.location.origin) {
-            return u.pathname + u.search + u.hash;
+          const target = u.pathname + u.search + u.hash;
+          if (u.origin === window.location.origin &&
+              new URL(target, window.location.origin).origin === window.location.origin) {
+            return target;
           }
         } catch {
           // Not a parseable reference (e.g. `javascript:`); fall through.
