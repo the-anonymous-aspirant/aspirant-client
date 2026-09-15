@@ -19,14 +19,30 @@
     name: 'LoginView',
     components: { Login },
     computed: {
-      // Where to land after login. Only same-origin paths are honoured: a
-      // value that does not start with exactly one '/' (or starts with '//',
-      // which the URL parser reads as protocol-relative) could send a fresh
-      // credential holder to another origin.
+      // Where to land after login. Only same-origin paths are honoured, or a
+      // crafted /login?redirect=<x> could hand a fresh credential holder's next
+      // navigation to another origin. Resolve the candidate through the SAME
+      // parser the navigation will use (`new URL` = the WHATWG parser behind
+      // window.location) and honour it only when it stays on this origin.
+      //
+      // A string prefix test (startsWith('/') && !startsWith('//')) is NOT
+      // enough: the browser treats a backslash as a slash in the authority, so
+      // `/\evil.com` and `/\/evil.com` pass such a filter yet window.location
+      // resolves them to https://evil.com (#5937). Origin comparison closes
+      // every such backslash / tab / mixed-slash variant by construction,
+      // because it asks the real parser instead of guessing its output.
       redirectTarget() {
         const raw = this.$route.query.redirect;
-        if (typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//')) {
-          return raw;
+        if (typeof raw !== 'string') {
+          return '/';
+        }
+        try {
+          const u = new URL(raw, window.location.origin);
+          if (u.origin === window.location.origin) {
+            return u.pathname + u.search + u.hash;
+          }
+        } catch {
+          // Not a parseable reference (e.g. `javascript:`); fall through.
         }
         return '/';
       },
