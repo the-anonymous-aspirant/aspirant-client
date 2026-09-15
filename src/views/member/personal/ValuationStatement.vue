@@ -193,7 +193,12 @@
             <strong>{{ unreadableDocs.map(d => d.filename).join(', ') }}</strong>.
             Fälten nedan är tomma därför — inte för att underlaget saknar dem.
           </p>
-          <p v-if="unreadableIsScan" class="extract-warning__hint" data-testid="extract-warning-hint">
+          <p v-if="unreadableIsReprintedVector" class="extract-warning__hint" data-testid="extract-warning-hint">
+            Filen ser ut att vara en digitalt skapad PDF som skrivits ut till
+            PDF på nytt, så textlagret har gått förlorat. Ladda upp originalfilen
+            i stället — den går att läsa in direkt, utan OCR.
+          </p>
+          <p v-else-if="unreadableIsScan" class="extract-warning__hint" data-testid="extract-warning-hint">
             Inget kunde läsas ur filen — det ser ut som en skanning eller ett
             foto snarare än en digitalt skapad PDF. En textbaserad export av
             samma underlag går att läsa.
@@ -202,6 +207,24 @@
             Kontrollera att du laddat upp rätt rapporttyp. Går det inte, skicka
             filen vidare så kan underlagstypen läggas till — du behöver inte
             fylla i allt för hand varje gång.
+          </p>
+        </div>
+      </div>
+
+      <div
+        v-if="ocrRecoveredDocs.length"
+        class="extract-warning"
+        role="status"
+        data-testid="extract-ocr-warning"
+      >
+        <AspBadge status="caution" size="sm">Lästes med OCR</AspBadge>
+        <div>
+          <p class="extract-warning__hint" data-testid="extract-ocr-hint">
+            Vissa värden lästes med OCR ur
+            <strong>{{ ocrRecoveredDocs.map(d => d.filename).join(', ') }}</strong>
+            (en skannad eller omtryckt PDF) och kan innehålla fel — kontrollera
+            dem mot originalet innan du sparar. Finns en digitalt skapad
+            originalfil läses den in utan OCR.
           </p>
         </div>
       </div>
@@ -755,6 +778,45 @@ export default {
       return (
         this.unreadableDocs.length > 0 &&
         this.unreadableDocs.every(doc => doc.outcome === 'no_text')
+      );
+    },
+
+    /** True when every unreadable document is a re-printed vector PDF —
+     *  commander's `no_text` sub-kind `reprinted_vector` (system_3 #5910).
+     *
+     *  A digital PDF (typically a UC report) re-printed through "Print to PDF"
+     *  turns every glyph into drawn outlines, so the text layer is gone but the
+     *  ORIGINAL file would extract cleanly. "It looks like a scan" is wrong
+     *  advice here — the right answer is "upload the original". Only fires when
+     *  every doc carries the field and matches; an absent sub-kind (an older
+     *  commander than this client) or `raster_scan`/`unknown` falls through to
+     *  the scan copy, never asserting the new advice against an unknown — the
+     *  same discipline `unreadableIsScan` uses for unrecognised outcomes.
+     */
+    unreadableIsReprintedVector() {
+      return (
+        this.unreadableIsScan &&
+        this.unreadableDocs.every(
+          doc =>
+            doc.diagnostics &&
+            doc.diagnostics.no_text_subkind === 'reprinted_vector',
+        )
+      );
+    },
+
+    /** Documents whose values were recovered by OCR — commander's
+     *  `diagnostics.ocr_used` (system_3 #5907/#5910).
+     *
+     *  These are NOT in `unreadableDocs`: OCR turned a no-text scan into an
+     *  `extracted`/`partial` result, so without this banner the form would
+     *  look clean while carrying values read off a raster, which can be
+     *  silently wrong — a half-filled valuation that reads as complete. An
+     *  absent `ocr_used` (an older commander) yields false: no banner, exactly
+     *  today's behaviour.
+     */
+    ocrRecoveredDocs() {
+      return (this.extractedDocs || []).filter(
+        doc => doc.diagnostics && doc.diagnostics.ocr_used === true,
       );
     },
 
