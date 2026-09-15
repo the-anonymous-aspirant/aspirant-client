@@ -752,14 +752,17 @@ export default {
      *  going quiet against a server that has not shipped yet.
      */
     unreadableDocs() {
-      const SEMANTIC_PRIMITIVES = ['source_class', 'property_shape'];
-      return (this.extractedDocs || []).filter(doc => {
-        if (typeof doc.outcome === 'string') return doc.outcome !== 'extracted';
-        const filled = (doc.fields || []).filter(
-          f => f.confidence !== 'not_found' && !SEMANTIC_PRIMITIVES.includes(f.key),
-        );
-        return filled.length === 0;
-      });
+      // Unreadable is "read not a single value", so key it on the filled count
+      // directly — not on `outcome !== 'extracted'`. A `partial` (and an
+      // OCR-recovered) document read SOME slots and missed others; calling it
+      // unreadable prints "no values could be read" over a form that has three,
+      // and pairs with the OCR banner into a contradiction on a scan OCR could
+      // not crack (system_3 #5910, caught in the deployed behaviour). Zero
+      // filled is the true unreadable set; `outcome` still steers the hint
+      // below, and drives the fallback when no field detail is present.
+      return (this.extractedDocs || []).filter(
+        doc => this.filledValueCount(doc) === 0,
+      );
     },
 
     /** True when every unreadable document is a scan or photograph
@@ -804,19 +807,27 @@ export default {
       );
     },
 
-    /** Documents whose values were recovered by OCR — commander's
-     *  `diagnostics.ocr_used` (system_3 #5907/#5910).
+    /** Documents whose values were RECOVERED by OCR — commander's
+     *  `diagnostics.ocr_used` AND at least one value read (system_3 #5907/#5910).
      *
-     *  These are NOT in `unreadableDocs`: OCR turned a no-text scan into an
-     *  `extracted`/`partial` result, so without this banner the form would
-     *  look clean while carrying values read off a raster, which can be
-     *  silently wrong — a half-filled valuation that reads as complete. An
-     *  absent `ocr_used` (an older commander) yields false: no banner, exactly
-     *  today's behaviour.
+     *  `ocr_used` is set when OCR was ATTEMPTED, not when it succeeded, so it
+     *  alone is the wrong predicate: a scan OCR cannot crack keeps `no_text`
+     *  with `ocr_used=true` and zero filled, and gating on `ocr_used` alone put
+     *  it in this list AND in `unreadableDocs` — "no values could be read" and
+     *  "verify the OCR values" about the same file, the second inviting the
+     *  user to check values that do not exist (caught in the deployed
+     *  behaviour, #5910). The property the banner wants is "OCR recovered a
+     *  value", so gate on the filled count. Mutually exclusive with
+     *  `unreadableDocs` by construction: zero filled → unreadable only;
+     *  filled > 0 with OCR → recovered only. An absent `ocr_used` yields false:
+     *  no banner, today's behaviour.
      */
     ocrRecoveredDocs() {
       return (this.extractedDocs || []).filter(
-        doc => doc.diagnostics && doc.diagnostics.ocr_used === true,
+        doc =>
+          doc.diagnostics &&
+          doc.diagnostics.ocr_used === true &&
+          this.filledValueCount(doc) > 0,
       );
     },
 
@@ -841,6 +852,19 @@ export default {
     },
   },
   methods: {
+    /** Value fields the extractor filled — the shared predicate behind
+     *  `unreadableDocs` (zero of these) and `ocrRecoveredDocs` (some of these),
+     *  which is what makes those two mutually exclusive (system_3 #5910). The
+     *  two semantic primitives carry classifier state, not an operator-typed
+     *  value, so they never count as "read a value".
+     */
+    filledValueCount(doc) {
+      const SEMANTIC_PRIMITIVES = ['source_class', 'property_shape'];
+      return (doc.fields || []).filter(
+        f => f.confidence !== 'not_found' && !SEMANTIC_PRIMITIVES.includes(f.key),
+      ).length;
+    },
+
     formatBytes(n) {
       if (n < 1024) return `${n} B`;
       if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
