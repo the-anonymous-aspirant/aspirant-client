@@ -843,6 +843,86 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     // It recovered two values, so it is NOT "unreadable" — the "no values could
     // be read" banner must not print over a form that has them (#5910).
     await expect(page.getByTestId('extract-warning')).toHaveCount(0);
+    // ...and an OCR partial is not a digital partial — no missing-field banner.
+    await expect(page.getByTestId('extract-incomplete-warning')).toHaveCount(0);
+  });
+
+  test('#5912 a digital partial names the missed field as an extraction gap', async ({ page }) => {
+    // Recognised document, read some values, missed an expected one, no OCR.
+    // #5910 stopped calling it "unreadable" (it has values) and it is not OCR,
+    // so without this banner the empty field looks like the document lacks it.
+    const digitalPartial = {
+      documents: [
+        {
+          filename: 'digital_partial.pdf',
+          outcome: 'partial',
+          diagnostics: { ocr_used: false, missed_expected_slots: ['marknadsvarde_kr'] },
+          fields: [
+            { key: 'adress', value: 'Storgatan 1', confidence: 'confident', source_page: 1 },
+            { key: 'kommun', value: 'Lund', confidence: 'confident', source_page: 1 },
+            { key: 'objekt', value: 'LGH 1', confidence: 'confident', source_page: 1 },
+            { key: 'upplatelseform', value: 'Bostadsrätt', confidence: 'confident', source_page: 1 },
+            { key: 'marknadsvarde_kr', value: null, confidence: 'not_found', source_page: null },
+          ],
+        },
+      ],
+      operator_defaults: {},
+    };
+
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, { extractResponse: digitalPartial });
+    await walkToReview(page);
+
+    const hint = page.getByTestId('extract-incomplete-hint');
+    await expect(hint).toBeVisible();
+    await expect(hint).toContainText('digital_partial.pdf');
+    await expect(hint).toContainText('Marknadsvärde'); // the missed slot, named
+    await expect(hint).toContainText(/inte för att underlaget saknar dem/i);
+    // The other two banners must NOT fire — no document renders two at once.
+    await expect(page.getByTestId('extract-warning')).toHaveCount(0);
+    await expect(page.getByTestId('extract-ocr-warning')).toHaveCount(0);
+  });
+
+  test('#5912 no document renders two of the three banners at once', async ({ page }) => {
+    // One doc per banner class, in a single batch: unreadable (0 filled),
+    // OCR-recovered (ocr_used + filled), digital-incomplete (non-OCR + filled +
+    // missed slot). Each must light exactly one banner, none two.
+    const mixed = {
+      documents: [
+        {
+          filename: 'blank.pdf', outcome: 'no_text',
+          diagnostics: { no_text_subkind: 'raster_scan', ocr_used: true },
+          fields: [{ key: 'adress', value: null, confidence: 'not_found', source_page: null }],
+        },
+        {
+          filename: 'ocr.pdf', outcome: 'partial',
+          diagnostics: { no_text_subkind: 'reprinted_vector', ocr_used: true },
+          fields: [{ key: 'adress', value: 'A', confidence: 'uncertain', source_page: 1 }],
+        },
+        {
+          filename: 'digital.pdf', outcome: 'partial',
+          diagnostics: { ocr_used: false, missed_expected_slots: ['kommun'] },
+          fields: [
+            { key: 'adress', value: 'B', confidence: 'confident', source_page: 1 },
+            { key: 'kommun', value: null, confidence: 'not_found', source_page: null },
+          ],
+        },
+      ],
+      operator_defaults: {},
+    };
+
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, { extractResponse: mixed });
+    await walkToReview(page);
+
+    // All three banners present (one per class), but each names only its own file.
+    // The unreadable banner names its file in the lead, not the hint.
+    await expect(page.getByTestId('extract-warning')).toContainText('blank.pdf');
+    await expect(page.getByTestId('extract-warning')).not.toContainText(/ocr\.pdf|digital\.pdf/);
+    await expect(page.getByTestId('extract-ocr-hint')).toContainText('ocr.pdf');
+    await expect(page.getByTestId('extract-ocr-hint')).not.toContainText(/blank\.pdf|digital\.pdf/);
+    await expect(page.getByTestId('extract-incomplete-hint')).toContainText('digital.pdf');
+    await expect(page.getByTestId('extract-incomplete-hint')).not.toContainText(/blank\.pdf|ocr\.pdf/);
   });
 
   test('falls back to counting fields when the server sends no outcome', async ({ page }) => {
