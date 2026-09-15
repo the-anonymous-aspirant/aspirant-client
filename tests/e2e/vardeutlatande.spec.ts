@@ -782,6 +782,9 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     await expect(hint).toContainText(/originalfilen/i);
     await expect(hint).not.toContainText(/skanning|foto/i);
     await expect(hint).not.toContainText(/rätt rapporttyp/i);
+    // OCR was attempted (ocr_used) but recovered nothing (0 filled) — the OCR
+    // "verify these values" banner must NOT appear alongside "no values read".
+    await expect(page.getByTestId('extract-ocr-hint')).toHaveCount(0);
   });
 
   test('#5910 a true raster scan still gets the scan caution', async ({ page }) => {
@@ -792,6 +795,9 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     const hint = page.getByTestId('extract-warning-hint');
     await expect(hint).toContainText(/skanning|foto/i);
     await expect(hint).not.toContainText(/originalfilen/i);
+    // The Aspstigen case: a true scan OCR could not read (0 filled). Only the
+    // scan caution — never the contradictory OCR verify banner (#5910).
+    await expect(page.getByTestId('extract-ocr-hint')).toHaveCount(0);
   });
 
   test('#5910 an unknown sub-kind falls back to the scan caution, never the new copy', async ({ page }) => {
@@ -804,6 +810,7 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     const hint = page.getByTestId('extract-warning-hint');
     await expect(hint).toContainText(/skanning|foto/i);
     await expect(hint).not.toContainText(/originalfilen/i);
+    await expect(page.getByTestId('extract-ocr-hint')).toHaveCount(0);
   });
 
   test('#5910 OCR-recovered values get a verify-against-original banner', async ({ page }) => {
@@ -833,6 +840,9 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     await expect(ocrHint).toContainText(/OCR/i);
     await expect(ocrHint).toContainText(/kontrollera/i);
     await expect(ocrHint).toContainText('ocr_partial.pdf');
+    // It recovered two values, so it is NOT "unreadable" — the "no values could
+    // be read" banner must not print over a form that has them (#5910).
+    await expect(page.getByTestId('extract-warning')).toHaveCount(0);
   });
 
   test('falls back to counting fields when the server sends no outcome', async ({ page }) => {
