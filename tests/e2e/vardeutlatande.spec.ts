@@ -755,6 +755,86 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     await expect(page.locator('.error-text')).toHaveCount(0);
   });
 
+  // #5910: `no_text` splits into two sub-kinds that want opposite advice.
+  const noTextDoc = (subkind, filename) => ({
+    documents: [
+      {
+        filename,
+        outcome: 'no_text',
+        diagnostics: { no_text_subkind: subkind, ocr_used: true },
+        fields: [
+          { key: 'objekt', value: null, confidence: 'not_found', source_page: null },
+          { key: 'adress', value: null, confidence: 'not_found', source_page: null },
+        ],
+      },
+    ],
+    operator_defaults: {},
+  });
+
+  test('#5910 a re-printed vector PDF is told to upload the original, not called a scan', async ({ page }) => {
+    // A digital PDF re-printed to outlined glyphs: the text layer is gone but
+    // the original extracts cleanly. "It's a scan" is wrong advice.
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, { extractResponse: noTextDoc('reprinted_vector', 'omtryckt.pdf') });
+    await walkToReview(page);
+
+    const hint = page.getByTestId('extract-warning-hint');
+    await expect(hint).toContainText(/originalfilen/i);
+    await expect(hint).not.toContainText(/skanning|foto/i);
+    await expect(hint).not.toContainText(/rätt rapporttyp/i);
+  });
+
+  test('#5910 a true raster scan still gets the scan caution', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, { extractResponse: noTextDoc('raster_scan', 'foto.pdf') });
+    await walkToReview(page);
+
+    const hint = page.getByTestId('extract-warning-hint');
+    await expect(hint).toContainText(/skanning|foto/i);
+    await expect(hint).not.toContainText(/originalfilen/i);
+  });
+
+  test('#5910 an unknown sub-kind falls back to the scan caution, never the new copy', async ({ page }) => {
+    // The absent-value discipline: only assert the re-printed advice when the
+    // field is present and matches. `unknown` (and absent) must fall through.
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, { extractResponse: noTextDoc('unknown', 'okänt.pdf') });
+    await walkToReview(page);
+
+    const hint = page.getByTestId('extract-warning-hint');
+    await expect(hint).toContainText(/skanning|foto/i);
+    await expect(hint).not.toContainText(/originalfilen/i);
+  });
+
+  test('#5910 OCR-recovered values get a verify-against-original banner', async ({ page }) => {
+    // OCR turned a no-text scan into a `partial` result. Without this banner a
+    // half-filled form reads as clean, which is worse than a blank one.
+    const ocrPartial = {
+      documents: [
+        {
+          filename: 'ocr_partial.pdf',
+          outcome: 'partial',
+          diagnostics: { no_text_subkind: 'reprinted_vector', ocr_used: true },
+          fields: [
+            { key: 'adress', value: 'Gryningsvägen 13', confidence: 'uncertain', source_page: 1, note: 'OCR' },
+            { key: 'kommun', value: 'Partille', confidence: 'uncertain', source_page: 1, note: 'OCR' },
+          ],
+        },
+      ],
+      operator_defaults: {},
+    };
+
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, { extractResponse: ocrPartial });
+    await walkToReview(page);
+
+    const ocrHint = page.getByTestId('extract-ocr-hint');
+    await expect(ocrHint).toBeVisible();
+    await expect(ocrHint).toContainText(/OCR/i);
+    await expect(ocrHint).toContainText(/kontrollera/i);
+    await expect(ocrHint).toContainText('ocr_partial.pdf');
+  });
+
   test('falls back to counting fields when the server sends no outcome', async ({ page }) => {
     // An older commander than this client: no `outcome` on the document. The
     // notice must still fire, or shipping the two repos in either order leaves
