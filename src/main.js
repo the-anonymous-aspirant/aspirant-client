@@ -62,19 +62,12 @@ axios.interceptors.response.use(
       localStorage.removeItem('user_name');
       localStorage.removeItem('user_role');
 
-      // The session is gone, not just this request — take the user to log in
-      // rather than leaving them on a page where every action fails and the
-      // failure looks like a server outage (#5925). Carry the current path so
-      // they return after re-login, and `expired` so login says the session
-      // ended rather than looking like a fresh visit. Guard against redundant
-      // navigation, and against a loop should the login page itself ever 401.
-      const current = router.currentRoute.value;
-      if (current.path !== '/login') {
-        router.push({
-          path: '/login',
-          query: { redirect: current.fullPath, expired: '1' },
-        });
-      }
+      // Deliberately NOT a global redirect here: a 401 can surface from a
+      // background poll on a page whose foreground still works, and yanking
+      // every such caller to /login is worse than the half-step. Clearing the
+      // cached role is enough — the route guard now sends the next navigation to
+      // /login (not home, #5925), and the flows where a 401 is a dead end for
+      // the action in hand route there themselves (see doExtract).
     }
     return Promise.reject(error);
   }

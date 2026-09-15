@@ -1077,12 +1077,17 @@ export default {
         const status = err.response?.status;
         const serverMsg = err.response?.data?.error?.message;
         if (status === 401) {
-          // Session gone, not a slow server (#5925). The 401 interceptor is
-          // already routing to login; this is a brief bridge that must NOT
-          // advise a retry — retrying without a session fails forever, which is
-          // exactly the trap the old shared "Servern svarade inte. Försök igen."
-          // message set.
-          this.uploadError = 'Din session har gått ut. Loggar in dig igen…';
+          // Session gone, not a slow server (#5925). The old shared "Servern
+          // svarade inte. Försök igen." message sent this user to retry forever
+          // — retrying without a session cannot succeed. The 401 interceptor has
+          // already cleared the cached identity; route to login (carrying the
+          // return path and an expired flag so login names the cause) instead of
+          // rendering any extract-step message.
+          this.$router.push({
+            path: '/login',
+            query: { redirect: this.$route.fullPath, expired: '1' },
+          });
+          return;
         } else if (status === 504) {
           // #5919: the proxy answers 504 when extraction ran past its deadline
           // — OCR on a scan is slow and slower still under concurrent load — not
