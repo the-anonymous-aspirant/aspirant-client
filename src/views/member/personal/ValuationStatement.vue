@@ -722,6 +722,11 @@ export default {
       pdfFilename: 'vardeutlatande.pdf',
       statusPhase: 0,
       statusTimer: null,
+      // #5915: the server's /decide answer when OCR is coming — {estimated_seconds,
+      // documents,…}, or null on the digital path. Drives the scanning message +
+      // estimate on the extracting step. `extractStart` anchors the countdown.
+      ocrDecision: null,
+      extractStart: 0,
       aboutSlots: valuationAbout.slots,
       aboutGeneratedAt: valuationAbout.generated_at || null,
       aboutSchemaVersion: valuationAbout.schema_version ?? null,
@@ -898,6 +903,20 @@ export default {
     },
 
     extractingStatus() {
+      // When the server told us OCR is coming (#5915), say so and estimate it,
+      // rather than cycling generic phases through a ~24s silent wait. The
+      // `statusPhase` read keeps this re-evaluating on the 1.8s tick so the
+      // countdown advances; `extractStart` anchors the elapsed time.
+      if (this.ocrDecision) {
+        void this.statusPhase;
+        const est = this.ocrDecision.estimated_seconds || 0;
+        const elapsed = Math.max(0, Math.round((Date.now() - this.extractStart) / 1000));
+        if (elapsed >= est) {
+          // Honest overrun — still working, never "done" or "stalled".
+          return `Skannar bilden — det tar längre tid än väntat (${elapsed} s)…`;
+        }
+        return `Ingen läsbar text i filen — skannar bilden (OCR), ca ${est - elapsed} s kvar…`;
+      }
       const phases = [
         'Läser PDF-filer…',
         'Klassificerar dokument…',
@@ -1014,6 +1033,8 @@ export default {
 
     async doExtract() {
       this.step = 'extracting';
+      this.ocrDecision = null;
+      this.extractStart = Date.now();
       this.startStatusCycle();
       // Capture the filenames so the persisted iteration carries the
       // operator's actual source list (separate from extractedDocs, which
@@ -1022,6 +1043,26 @@ export default {
       // A fresh extract is a new iteration — drop any prior history-row
       // binding so doGenerate POSTs rather than PATCHes.
       this.currentProcessedId = null;
+      // #5915: ask the server what is coming before the blocking extract. It
+      // knows within ~1.4s whether OCR is required, the sub-kind and the page
+      // count — everything to say "scanning, about N seconds". Advisory: any
+      // failure (older commander, network) just keeps the generic phases and
+      // proceeds to extract, so this never blocks getting the values.
+      try {
+        const dform = new FormData();
+        for (const f of this.uploadedFiles) dform.append('files', f, f.name);
+        const dresp = await axios.post(
+          '/api/commander/valuation-statement/decide',
+          dform,
+        );
+        if (dresp.data && dresp.data.any_ocr_required) {
+          this.ocrDecision = dresp.data;
+          // Anchor the countdown at the OCR start, not including the decide read.
+          this.extractStart = Date.now();
+        }
+      } catch (e) {
+        this.ocrDecision = null;
+      }
       const form = new FormData();
       for (const f of this.uploadedFiles) form.append('files', f, f.name);
       try {
@@ -1039,6 +1080,7 @@ export default {
         this.step = 'upload';
       } finally {
         this.stopStatusCycle();
+        this.ocrDecision = null;
       }
     },
 

@@ -1037,3 +1037,55 @@ test.describe('#5914 manual data-entry route', () => {
     await expect(page.getByTestId('extract-incomplete-warning')).toHaveCount(0);
   });
 });
+
+test.describe('#5915 OCR announcement + estimate on the extract step', () => {
+  const PDF_UPLOAD = PDF_UPLOAD_PAYLOAD;
+
+  test('an OCR upload announces scanning and an estimate, not the generic phases', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, {
+      decideResponse: {
+        documents: [{ filename: 'scan.pdf', ocr_required: true, no_text_subkind: 'reprinted_vector', page_count: 3, estimated_ocr_seconds: 24 }],
+        any_ocr_required: true,
+        estimated_seconds: 24,
+      },
+      extractDelayMs: 2500, // hold the extracting step so the status is readable
+      extractResponse: {
+        documents: [{ filename: 'scan.pdf', outcome: 'partial', diagnostics: { ocr_used: true, no_text_subkind: 'reprinted_vector' }, fields: [{ key: 'adress', value: 'X', confidence: 'uncertain', source_page: 1 }] }],
+        operator_defaults: {},
+      },
+    });
+    await page.goto('/member/personal/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD);
+    await page.getByRole('button', { name: /Extrahera värden/ }).click();
+
+    const status = page.locator('.progress-status');
+    await expect(status).toContainText(/skannar/i);
+    await expect(status).toContainText(/OCR/i);
+    await expect(status).toContainText(/\d+\s*s/); // an estimate in seconds
+    await expect(status).not.toContainText(/Läser PDF-filer/);
+
+    await expect(page.getByRole('heading', { name: /Granska och justera/ })).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('a digital upload shows the generic phases, no scanning message', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, {
+      decideResponse: {
+        documents: [{ filename: 'digital.pdf', ocr_required: false, no_text_subkind: null, page_count: 1, estimated_ocr_seconds: 0 }],
+        any_ocr_required: false,
+        estimated_seconds: 0,
+      },
+      extractDelayMs: 1800,
+    });
+    await page.goto('/member/personal/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD);
+    await page.getByRole('button', { name: /Extrahera värden/ }).click();
+
+    const status = page.locator('.progress-status');
+    await expect(status).not.toContainText(/skannar|OCR/i);
+    await expect(page.getByRole('heading', { name: /Granska och justera/ })).toBeVisible({ timeout: 10_000 });
+  });
+});
