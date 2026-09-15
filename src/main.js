@@ -61,6 +61,13 @@ axios.interceptors.response.use(
       // Display state only.
       localStorage.removeItem('user_name');
       localStorage.removeItem('user_role');
+
+      // Deliberately NOT a global redirect here: a 401 can surface from a
+      // background poll on a page whose foreground still works, and yanking
+      // every such caller to /login is worse than the half-step. Clearing the
+      // cached role is enough — the route guard now sends the next navigation to
+      // /login (not home, #5925), and the flows where a 401 is a dead end for
+      // the action in hand route there themselves (see doExtract).
     }
     return Promise.reject(error);
   }

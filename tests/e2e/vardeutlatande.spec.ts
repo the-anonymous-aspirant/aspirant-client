@@ -875,6 +875,41 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     await expect(page.getByRole('button', { name: /Extrahera värden/ })).toBeVisible();
   });
 
+  test('#5925 a 401 on extract routes to login with a session-expired notice, not a retry', async ({ page }) => {
+    // A logged-out member's upload 401s. It must NOT reach the timeout/retry
+    // message (retrying without a session fails forever) — the 401 interceptor
+    // takes them to login and says the session ended.
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, {
+      extractStatus: 401,
+      extractErrorBody: { error: { message: 'unauthorized' } },
+    });
+    await page.goto('/member/personal/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
+    await page.getByRole('button', { name: /Extrahera värden/ }).click();
+
+    // Lands on login, carrying the return path, and says the session expired —
+    // never the "Servern svarade inte. Försök igen." retry trap.
+    await expect(page).toHaveURL(/\/login\?.*expired=1/);
+    await expect(page.locator('.session-expired-notice')).toContainText(/session har gått ut/i);
+    await expect(page.locator('body')).not.toContainText(/Servern svarade inte/);
+  });
+
+  test('#5925 a member with no session reaching the tool lands on login, not the tool', async ({ page }) => {
+    // The route guard must send a visitor with no cached identity to login
+    // (carrying the target), rather than rendering a tool every action will fail.
+    await page.addInitScript(() => {
+      try {
+        localStorage.removeItem('user_role');
+        localStorage.removeItem('user_name');
+      } catch { /* private mode */ }
+    });
+    await page.goto('/member/personal/valuation-statement');
+    await expect(page).toHaveURL(/\/login\?.*redirect=/);
+    await expect(page.locator('h1', { hasText: 'Värdeutlåtande' })).toHaveCount(0);
+  });
+
   test('#5919 a non-timeout extract failure keeps the generic failure framing', async ({ page }) => {
     // A genuine 502 (commander down) is NOT slowness — it must stay the generic
     // message, so the 504 slowness copy stays specific to the timeout it names.

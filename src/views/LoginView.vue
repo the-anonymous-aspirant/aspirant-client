@@ -2,6 +2,9 @@
   <div class="login-view">
     <div class="login-view-card">
       <h1>Login</h1>
+      <p v-if="sessionExpired" class="session-expired-notice" role="status">
+        Din session har gått ut. Logga in igen för att fortsätta.
+      </p>
       <Login :loggedIn="false" @login="onLogin" />
     </div>
   </div>
@@ -29,6 +32,12 @@
           return raw;
         }
         return '/';
+      },
+      // The 401 interceptor sets ?expired=1 when it routes here from a dead
+      // session (#5925), so the page can say the session ended rather than
+      // looking like a plain visit. Absent for a first-time / anonymous visit.
+      sessionExpired() {
+        return this.$route.query.expired === '1';
       },
     },
     created() {
@@ -103,5 +112,15 @@
     text-align: center;
     margin-bottom: var(--space-sm);
     font-size: var(--text-lg);
+  }
+
+  .session-expired-notice {
+    margin: 0 0 var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    background: var(--surface-caution, var(--surface-2));
+    color: var(--text-body);
+    font-size: var(--text-sm);
+    text-align: center;
   }
 </style>
