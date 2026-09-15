@@ -17,9 +17,12 @@ test.describe('Penpot design service entry', () => {
     await installNoiseCatchAll(page);
   });
 
-  test('anonymous visitor is redirected away from the admin page', async ({ page }) => {
+  test('anonymous visitor is redirected to login from the admin page', async ({ page }) => {
     await page.goto('/admin');
-    await expect(page).not.toHaveURL(/\/admin/);
+    // #5925: a gated route with no session lands on /login (carrying the target
+    // in ?redirect=), not silently home. Assert the destination is /login rather
+    // than "not /admin" — the redirect query itself contains /admin.
+    await expect(page).toHaveURL(/\/login\?/);
   });
 
   test('admin card opens Penpot in a new tab at /admin/penpot/', async ({ page, context }) => {

@@ -171,11 +171,13 @@ test.describe('Profile surface (#4170)', () => {
     await expect(page.locator('.profile-card .user-avatar-initials')).toBeVisible();
   });
 
-  test('a logged-out visitor has no Profile entry and /profile redirects home', async ({ page }) => {
+  test('a logged-out visitor has no Profile entry and /profile redirects to login', async ({ page }) => {
     // No seedTrustedSession → anonymous.
     await installProfileMocks(page);
     await page.goto('/profile');
-    await expect(page).toHaveURL('/');
+    // #5925: a gated route with no session lands on /login (carrying the target),
+    // not home — so an anonymous visitor can authenticate and reach it.
+    await expect(page).toHaveURL(/\/login/);
     await expect(page.locator('a[href="/profile"]')).toHaveCount(0);
   });
 });
