@@ -1074,9 +1074,22 @@ export default {
         this.hydrateReview(this.extractedDocs, resp.data.operator_defaults || {});
         this.step = 'review';
       } catch (err) {
-        this.uploadError =
-          'Misslyckades att extrahera: ' +
-          (err.response?.data?.error?.message || 'Servern svarade inte. Försök igen.');
+        const status = err.response?.status;
+        const serverMsg = err.response?.data?.error?.message;
+        if (status === 504) {
+          // #5919: the proxy answers 504 when extraction ran past its deadline
+          // — OCR on a scan is slow and slower still under concurrent load — not
+          // because the file was refused. The operator's first reading of the
+          // old bare 502 was that the *file* was at fault; name slowness and
+          // invite a retry, since the same upload usually succeeds once load
+          // clears. Prefer the server's own Swedish phrasing when present.
+          this.uploadError = serverMsg ||
+            'Underlaget tog för lång tid att läsa. Skannade PDF:er kan ta upp till en minut — försök igen.';
+        } else {
+          this.uploadError =
+            'Misslyckades att extrahera: ' +
+            (serverMsg || 'Servern svarade inte. Försök igen.');
+        }
         this.step = 'upload';
       } finally {
         this.stopStatusCycle();
