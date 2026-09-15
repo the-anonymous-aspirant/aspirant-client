@@ -847,6 +847,53 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     await expect(page.getByTestId('extract-incomplete-warning')).toHaveCount(0);
   });
 
+  test('#5919 a commander timeout names slowness and keeps the upload step for a retry', async ({ page }) => {
+    // The proxy answers 504 when OCR-era extraction runs past its deadline
+    // (jenny's user-reported 502). The client must say "took too long", not the
+    // generic "Misslyckades att extrahera" that reads as "your file was refused".
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, {
+      extractStatus: 504,
+      extractErrorBody: {
+        error: {
+          message:
+            'Underlaget tog för lång tid att läsa. Skannade PDF:er kan ta upp till en minut — försök igen.',
+        },
+      },
+    });
+    await page.goto('/member/personal/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
+    await page.getByRole('button', { name: /Extrahera värden/ }).click();
+
+    const err = page.locator('.error-text');
+    await expect(err).toBeVisible();
+    await expect(err).toContainText(/lång tid/i);
+    await expect(err).not.toContainText(/Misslyckades att extrahera/);
+    // Stays on the upload step so the exact same file can be retried once load
+    // clears — the whole point is that this was a slow success, not a refusal.
+    await expect(page.getByRole('button', { name: /Extrahera värden/ })).toBeVisible();
+  });
+
+  test('#5919 a non-timeout extract failure keeps the generic failure framing', async ({ page }) => {
+    // A genuine 502 (commander down) is NOT slowness — it must stay the generic
+    // message, so the 504 slowness copy stays specific to the timeout it names.
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, {
+      extractStatus: 502,
+      extractErrorBody: { error: { message: 'Commander service unavailable' } },
+    });
+    await page.goto('/member/personal/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
+    await page.getByRole('button', { name: /Extrahera värden/ }).click();
+
+    const err = page.locator('.error-text');
+    await expect(err).toBeVisible();
+    await expect(err).toContainText(/Misslyckades att extrahera/);
+    await expect(err).not.toContainText(/lång tid/i);
+  });
+
   test('#5912 a digital partial names the missed field as an extraction gap', async ({ page }) => {
     // Recognised document, read some values, missed an expected one, no OCR.
     // #5910 stopped calling it "unreadable" (it has values) and it is not OCR,

@@ -107,6 +107,11 @@ export interface InstallOpts {
   extractDelayMs?: number;
   /** Replace the whole /extract body (e.g. a run that recognised nothing). */
   extractResponse?: unknown;
+  /** Force the /extract status (default 200). 504 = commander timed out (#5919);
+   *  pair with extractErrorBody for the server's error envelope. */
+  extractStatus?: number;
+  /** Body for a non-200 /extract (the server's {error:{message}} envelope). */
+  extractErrorBody?: unknown;
   /** Replace the /decide pre-flight body (#5915). Default: no OCR required. */
   decideResponse?: unknown;
   /** Delay /generate response in ms, holding the full spinner on screen. */
@@ -136,10 +141,15 @@ export async function installCommanderMocks(page: Page, opts: InstallOpts = {}):
     if (opts.extractDelayMs) {
       await new Promise(resolve => setTimeout(resolve, opts.extractDelayMs));
     }
+    const status = opts.extractStatus ?? 200;
     await route.fulfill({
-      status: 200,
+      status,
       contentType: 'application/json',
-      body: JSON.stringify(opts.extractResponse ?? EXTRACT_RESPONSE),
+      body: JSON.stringify(
+        status === 200
+          ? (opts.extractResponse ?? EXTRACT_RESPONSE)
+          : (opts.extractErrorBody ?? { error: { message: 'error' } }),
+      ),
     });
   });
 
