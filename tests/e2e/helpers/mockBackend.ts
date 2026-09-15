@@ -107,6 +107,8 @@ export interface InstallOpts {
   extractDelayMs?: number;
   /** Replace the whole /extract body (e.g. a run that recognised nothing). */
   extractResponse?: unknown;
+  /** Replace the /decide pre-flight body (#5915). Default: no OCR required. */
+  decideResponse?: unknown;
   /** Delay /generate response in ms, holding the full spinner on screen. */
   generateDelayMs?: number;
 }
@@ -138,6 +140,18 @@ export async function installCommanderMocks(page: Page, opts: InstallOpts = {}):
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(opts.extractResponse ?? EXTRACT_RESPONSE),
+    });
+  });
+
+  // #5915: the pre-flight the client calls before /extract to announce OCR.
+  // Default: no OCR (the fixed EXTRACT_RESPONSE docs are digital).
+  await page.route(/\/api\/commander\/valuation-statement\/decide$/, async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        opts.decideResponse ?? { documents: [], any_ocr_required: false, estimated_seconds: 0 },
+      ),
     });
   });
 
