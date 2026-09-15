@@ -1076,7 +1076,14 @@ export default {
       } catch (err) {
         const status = err.response?.status;
         const serverMsg = err.response?.data?.error?.message;
-        if (status === 504) {
+        if (status === 401) {
+          // Session gone, not a slow server (#5925). The 401 interceptor is
+          // already routing to login; this is a brief bridge that must NOT
+          // advise a retry — retrying without a session fails forever, which is
+          // exactly the trap the old shared "Servern svarade inte. Försök igen."
+          // message set.
+          this.uploadError = 'Din session har gått ut. Loggar in dig igen…';
+        } else if (status === 504) {
           // #5919: the proxy answers 504 when extraction ran past its deadline
           // — OCR on a scan is slow and slower still under concurrent load — not
           // because the file was refused. The operator's first reading of the

@@ -210,6 +210,15 @@ router.beforeEach((to) => {
   // tierOf(null) is the blocked tier, so an anonymous visitor is bounced.
   const role = localStorage.getItem('user_role');
 
+  // No cached identity at all: an anonymous visitor, or one whose session the
+  // 401 interceptor just cleared. Send them to log in — not home — and carry
+  // the target so they return after authenticating (#5925). A logged-in visitor
+  // who simply lacks the tier is a permissions bounce, handled below by going
+  // home, and must NOT be routed to login.
+  if (role == null) {
+    return { path: '/login', query: { redirect: to.fullPath } };
+  }
+
   if (tierOf(role) < minTier) {
     return '/';
   }

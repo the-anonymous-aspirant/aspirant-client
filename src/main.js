@@ -61,6 +61,20 @@ axios.interceptors.response.use(
       // Display state only.
       localStorage.removeItem('user_name');
       localStorage.removeItem('user_role');
+
+      // The session is gone, not just this request — take the user to log in
+      // rather than leaving them on a page where every action fails and the
+      // failure looks like a server outage (#5925). Carry the current path so
+      // they return after re-login, and `expired` so login says the session
+      // ended rather than looking like a fresh visit. Guard against redundant
+      // navigation, and against a loop should the login page itself ever 401.
+      const current = router.currentRoute.value;
+      if (current.path !== '/login') {
+        router.push({
+          path: '/login',
+          query: { redirect: current.fullPath, expired: '1' },
+        });
+      }
     }
     return Promise.reject(error);
   }
