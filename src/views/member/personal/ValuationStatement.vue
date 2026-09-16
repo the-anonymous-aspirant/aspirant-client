@@ -173,7 +173,8 @@
       </div>
       <p class="progress-status" aria-live="polite">{{ extractingStatus }}</p>
       <ul class="progress-files">
-        <li v-for="f in uploadedFiles" :key="f.name">
+        <li v-for="f in uploadedFiles" :key="f.name"
+            :data-testid="`file-status-${(fileStatus[f.name] && fileStatus[f.name].state) || 'processing'}`">
           <span class="file-icon" aria-hidden="true">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                  xmlns="http://www.w3.org/2000/svg">
@@ -184,12 +185,39 @@
             </svg>
           </span>
           <span>{{ f.name }}</span>
+          <!-- #5972: each file carries its own extract request, so each shows
+               its own state as that request settles. -->
+          <span v-if="fileStatus[f.name] && fileStatus[f.name].state === 'done'"
+                class="file-state file-state--done">✓ klar</span>
+          <span v-else-if="fileStatus[f.name] && fileStatus[f.name].state === 'failed'"
+                class="file-state file-state--failed">✕ {{ fileStatus[f.name].reason }}</span>
+          <span v-else class="file-state file-state--processing" aria-live="polite">bearbetar…</span>
         </li>
       </ul>
     </ValuationStep>
 
     <!-- Step 3: Review -->
     <ValuationStep v-if="step === 'review'" title="3. Granska och justera" wide>
+      <!-- #5972: one file failed while at least one other succeeded. Its result
+           is not silently dropped: name the file and why, and keep the rest so
+           the operator does not lose the whole upload to one slow document. -->
+      <div
+        v-if="fileFailures.length"
+        class="extract-warning"
+        role="status"
+        data-testid="file-failures-warning"
+      >
+        <AspBadge status="caution" size="sm">Delvis misslyckad</AspBadge>
+        <div>
+          <p class="extract-warning__lead">
+            <strong>{{ fileFailures.map(f => f.name).join(', ') }}</strong>
+            kunde inte läsas in — {{ fileFailures.map(f => f.reason).join('; ') }}.
+            Övriga filer lästes in och värdena nedan kommer från dem; ladda upp
+            den saknade filen på nytt om du vill komplettera.
+          </p>
+        </div>
+      </div>
+
       <!-- #5362: an extraction that recognised nothing used to arrive here as
            a blank form with no explanation, and the operator typed all 18
            fields without knowing anything had gone wrong. -->
@@ -711,6 +739,13 @@ export default {
       isDragging: false,
       uploadedFiles: [],
       uploadError: null,
+      // #5972: per-file extraction status for the multi-file dispatch — each
+      // file gets its own /extract request so the ~100s edge cuts one file, not
+      // the batch. Maps f.name -> { state: 'processing'|'done'|'failed', reason }.
+      fileStatus: {},
+      // Files that failed while at least one other succeeded — surfaced on the
+      // review step so a partial loss is named and the rest is not discarded.
+      fileFailures: [],
       extractedDocs: [],
       reviewedFields: BLANK_REVIEW(),
       fieldConfidence: BLANK_CONFIDENCE(),
@@ -1063,49 +1098,114 @@ export default {
       } catch (e) {
         this.ocrDecision = null;
       }
-      const form = new FormData();
-      for (const f of this.uploadedFiles) form.append('files', f, f.name);
-      try {
-        const resp = await axios.post(
-          '/api/commander/valuation-statement/extract',
-          form
-        );
-        this.extractedDocs = resp.data.documents || [];
-        this.hydrateReview(this.extractedDocs, resp.data.operator_defaults || {});
+      // #5972: dispatch ONE /extract request PER FILE. A single combined request
+      // had to outlive the SUM of every file's extraction, and the ~100s
+      // Cloudflare edge (#5969/#5971) cut it at ~128s — the server finished at
+      // ~153s but the answer never arrived and the member's work was discarded.
+      // Separate requests give each file the full edge budget; results merge
+      // client-side exactly as before (extraction is already per-document and
+      // hydrateReview merges by source_class, #5947). A per-file failure names
+      // that file and is isolated — the other files' results are kept.
+      const statuses = {};
+      for (const f of this.uploadedFiles) statuses[f.name] = { state: 'processing', reason: null };
+      this.fileStatus = statuses;
+      this.fileFailures = [];
+
+      let sessionGone = false;
+      let operatorDefaults = {};
+      const results = await Promise.all(
+        this.uploadedFiles.map(async (f) => {
+          const form = new FormData();
+          form.append('files', f, f.name);
+          try {
+            const resp = await axios.post(
+              '/api/commander/valuation-statement/extract',
+              form,
+            );
+            this.fileStatus[f.name] = { state: 'done', reason: null };
+            // Every file's response embeds the same operator defaults; the last
+            // one wins (they are identical).
+            if (resp.data && resp.data.operator_defaults) {
+              operatorDefaults = resp.data.operator_defaults;
+            }
+            return (resp.data && resp.data.documents) || [];
+          } catch (err) {
+            if (err.response?.status === 401) {
+              // Session gone (#5925), not a slow server. No file can succeed
+              // without a session, so abandon the whole pass and route to login.
+              sessionGone = true;
+              return [];
+            }
+            const status = err.response?.status;
+            const serverMsg = err.response?.data?.error?.message;
+            // Distinguish a timeout / no-response (the request outlived a
+            // ceiling: commander 504, the ~100s Cloudflare edge 524 whose body
+            // is HTML with no error envelope, or a dropped connection with no
+            // response at all) from a structured server rejection. The old code
+            // collapsed all of these into "Servern svarade inte" (#5969).
+            const isTimeout = status == null || status === 504 || status === 524;
+            const reason = isTimeout
+              ? (serverMsg ||
+                 'tog för lång tid att läsa – skannade PDF:er kan ta upp till en minut, försök igen')
+              : (serverMsg || 'avvisades av servern');
+            this.fileStatus[f.name] = {
+              state: 'failed',
+              reason,
+              kind: isTimeout ? 'timeout' : 'rejected',
+            };
+            return [];
+          }
+        }),
+      );
+
+      this.stopStatusCycle();
+      this.ocrDecision = null;
+
+      if (sessionGone) {
+        // The 401 interceptor already cleared the cached identity; carry the
+        // return path and an expired flag so login names the cause.
+        this.$router.push({
+          path: '/login',
+          query: { redirect: this.$route.fullPath, expired: '1' },
+        });
+        return;
+      }
+
+      const docs = results.flat();
+      const failed = this.uploadedFiles.filter(
+        f => this.fileStatus[f.name]?.state === 'failed',
+      );
+
+      if (docs.length) {
+        // At least one file extracted: proceed to review with what we have,
+        // merged as before, and name any file that failed so its loss is visible
+        // and the succeeded files' work is NOT discarded (#5969 acceptance).
+        this.extractedDocs = docs;
+        this.fileFailures = failed.map(f => ({
+          name: f.name,
+          reason: this.fileStatus[f.name].reason,
+        }));
+        this.hydrateReview(this.extractedDocs, operatorDefaults);
         this.step = 'review';
-      } catch (err) {
-        const status = err.response?.status;
-        const serverMsg = err.response?.data?.error?.message;
-        if (status === 401) {
-          // Session gone, not a slow server (#5925). The old shared "Servern
-          // svarade inte. Försök igen." message sent this user to retry forever
-          // — retrying without a session cannot succeed. The 401 interceptor has
-          // already cleared the cached identity; route to login (carrying the
-          // return path and an expired flag so login names the cause) instead of
-          // rendering any extract-step message.
-          this.$router.push({
-            path: '/login',
-            query: { redirect: this.$route.fullPath, expired: '1' },
-          });
-          return;
-        } else if (status === 504) {
-          // #5919: the proxy answers 504 when extraction ran past its deadline
-          // — OCR on a scan is slow and slower still under concurrent load — not
-          // because the file was refused. The operator's first reading of the
-          // old bare 502 was that the *file* was at fault; name slowness and
-          // invite a retry, since the same upload usually succeeds once load
-          // clears. Prefer the server's own Swedish phrasing when present.
-          this.uploadError = serverMsg ||
-            'Underlaget tog för lång tid att läsa. Skannade PDF:er kan ta upp till en minut — försök igen.';
+      } else {
+        // Every file failed: back to the upload step. Preserve the #5919 UX
+        // distinction — a pure-timeout failure names slowness and invites a
+        // retry (NOT "Misslyckades att extrahera", which reads as "refused"),
+        // while any real rejection keeps the generic failure framing. Either
+        // way each file is named, never a bare "Servern svarade inte" (#5969).
+        const allTimeouts = failed.every(f => this.fileStatus[f.name].kind === 'timeout');
+        if (allTimeouts) {
+          this.uploadError = failed.length === 1
+            ? `${failed[0].name}: ${this.fileStatus[failed[0].name].reason}`
+            : 'Underlagen tog för lång tid att läsa: ' +
+              failed.map(f => f.name).join(', ') +
+              '. Skannade PDF:er kan ta upp till en minut — försök igen.';
         } else {
           this.uploadError =
             'Misslyckades att extrahera: ' +
-            (serverMsg || 'Servern svarade inte. Försök igen.');
+            failed.map(f => `${f.name} (${this.fileStatus[f.name].reason})`).join('; ');
         }
         this.step = 'upload';
-      } finally {
-        this.stopStatusCycle();
-        this.ocrDecision = null;
       }
     },
 
@@ -1121,6 +1221,7 @@ export default {
       // "no defaults").
       this.uploadError = '';
       this.extractedDocs = [];
+      this.fileFailures = [];
       this.currentInputFiles = [];
       this.currentProcessedId = null;
       let operatorDefaults = {};
@@ -1892,6 +1993,14 @@ export default {
   font-size: var(--text-sm);
   color: var(--text-muted);
 }
+/* #5972: per-file extract state, right-aligned on each row. */
+.file-state {
+  margin-left: auto;
+  font-weight: 500;
+}
+.file-state--processing { color: var(--text-muted); }
+.file-state--done { color: var(--feedback-success); }
+.file-state--failed { color: var(--feedback-error); }
 
 /* Review-step fields. The bordered fieldset boxes carry box-sizing:
    border-box + min-width: 0 so the rendered box never exceeds its

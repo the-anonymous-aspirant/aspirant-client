@@ -929,6 +929,81 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     await expect(err).not.toContainText(/lång tid/i);
   });
 
+  test('#5972 two files dispatch as two separate extract requests, one per file', async ({ page }) => {
+    // #5969: a single combined /extract had to outlive the SUM of both files'
+    // extraction and the ~100s Cloudflare edge cut it. The fix sends one request
+    // per file so each gets the full edge budget; the results merge as before.
+    await seedTrustedSession(page);
+    const extractBodies: string[] = [];
+    page.on('request', r => {
+      if (/valuation-statement\/extract$/.test(r.url())) extractBodies.push(r.postData() ?? '');
+    });
+    await installCommanderMocks(page);
+    await walkToReview(page); // uploads both fixtures, waits for the review step
+
+    // Two files → two separate requests (not one combined request).
+    expect(extractBodies).toHaveLength(2);
+    // Each request carried exactly one file, and between them both files were sent.
+    const names = extractBodies
+      .flatMap(b => [...b.matchAll(/filename="([^"]+)"/g)].map(m => m[1]))
+      .sort();
+    for (const b of extractBodies) {
+      expect([...b.matchAll(/filename="([^"]+)"/g)]).toHaveLength(1);
+    }
+    expect(names).toEqual(['datavardering.pdf', 'lgh_utdrag.pdf']);
+  });
+
+  test('#5972 one file failing keeps the other file’s result and names the failure', async ({ page }) => {
+    // Per-file isolation: if one file times out at the edge, its failure is named
+    // and the succeeded file's extraction is NOT discarded — the member keeps the
+    // work that landed instead of losing the whole upload (#5969).
+    await seedTrustedSession(page);
+    await installCommanderMocks(page);
+    // Override /extract (registered last, so it wins): datavardering succeeds,
+    // lgh_utdrag times out (504, the edge/commander deadline).
+    await page.route(/valuation-statement\/extract$/, async route => {
+      const body = route.request().postData() ?? '';
+      if (body.includes('datavardering.pdf')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            documents: [{
+              filename: 'datavardering.pdf',
+              fields: [
+                { key: 'source_class', value: 'datavardering', confidence: 'confident', source_page: 1 },
+                { key: 'marknadsvarde_kr', value: '3050000', confidence: 'uncertain', source_page: 3 },
+              ],
+            }],
+            operator_defaults: OPERATOR_DEFAULTS,
+          }),
+        });
+      } else {
+        await route.fulfill({
+          status: 504,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { message: 'Underlaget tog för lång tid att läsa.' } }),
+        });
+      }
+    });
+
+    await page.goto('/member/personal/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
+    await page.getByRole('button', { name: /Extrahera värden/ }).click();
+
+    // Review still opens (the succeeded file), with a banner naming the failed
+    // file and why — the other file's result is not thrown away.
+    await expect(page.getByRole('heading', { name: /Granska och justera/ }))
+      .toBeVisible({ timeout: 15_000 });
+    const warn = page.getByTestId('file-failures-warning');
+    await expect(warn).toBeVisible();
+    await expect(warn).toContainText('lgh_utdrag.pdf');
+    await expect(warn).toContainText(/lång tid/i);
+    // The failure was a timeout, not the bare "Servern svarade inte" catch-all.
+    await expect(page.locator('body')).not.toContainText(/Servern svarade inte/);
+  });
+
   test('#5912 a digital partial names the missed field as an extraction gap', async ({ page }) => {
     // Recognised document, read some values, missed an expected one, no OCR.
     // #5910 stopped calling it "unreadable" (it has values) and it is not OCR,
