@@ -116,6 +116,11 @@ export interface InstallOpts {
   decideResponse?: unknown;
   /** Delay /generate response in ms, holding the full spinner on screen. */
   generateDelayMs?: number;
+  /** #5979: GET /jobs/:id returns status=failed (the async job crashed). */
+  jobFails?: boolean;
+  /** #5979: POST /extract-async 404s, so the client falls back to sync /extract
+   *  (the #5920 graceful-fallback path against an older server). */
+  asyncUnsupported?: boolean;
 }
 
 /** Install routes for every backend endpoint the Värdeutlåtande view calls.
@@ -144,6 +149,24 @@ export async function installCommanderMocks(page: Page, opts: InstallOpts = {}):
   // uploaded file (the #5362/#5912 scenario bodies) is delivered once, on the
   // first request, so per-file dispatch collects it exactly once rather than N×.
   let extractSeq = 0;
+  // Shared per-request document selection (#5972): return the pool docs whose
+  // filename matches the file in THIS request; a custom fixture whose filenames
+  // match no uploaded file is delivered once (first request) so per-file dispatch
+  // collects it exactly once. Used by both sync /extract and async /extract-async.
+  const selectDocs = (posted: string) => {
+    const pool = (opts.extractResponse ?? EXTRACT_RESPONSE) as {
+      documents?: Array<{ filename?: string }>;
+      operator_defaults?: unknown;
+    };
+    const poolDocs = pool.documents ?? [];
+    const uploaded = [...posted.matchAll(/filename="([^"]+)"/g)].map(m => m[1]);
+    let docs = poolDocs.filter(d => d.filename != null && uploaded.includes(d.filename));
+    const seq = extractSeq++;
+    if (docs.length === 0) docs = seq === 0 ? poolDocs : [];
+    return { documents: docs, operator_defaults: pool.operator_defaults ?? OPERATOR_DEFAULTS };
+  };
+
+  // Sync /extract — kept for the graceful fallback (older server) and direct use.
   await page.route(/\/api\/commander\/valuation-statement\/extract$/, async (route: Route) => {
     if (opts.extractDelayMs) {
       await new Promise(resolve => setTimeout(resolve, opts.extractDelayMs));
@@ -157,29 +180,53 @@ export async function installCommanderMocks(page: Page, opts: InstallOpts = {}):
       });
       return;
     }
-    const pool = (opts.extractResponse ?? EXTRACT_RESPONSE) as {
-      documents?: Array<{ filename?: string }>;
-      operator_defaults?: unknown;
-    };
-    const poolDocs = pool.documents ?? [];
-    const posted = route.request().postData() ?? '';
-    const uploaded = [...posted.matchAll(/filename="([^"]+)"/g)].map(m => m[1]);
-    let docs = poolDocs.filter(d => d.filename != null && uploaded.includes(d.filename));
-    const seq = extractSeq++;
-    if (docs.length === 0) {
-      // No filename match: a custom fixture describing a scenario rather than the
-      // uploaded fixtures (or a body Playwright could not decode). Deliver the
-      // whole pool once so per-file dispatch collects it exactly once.
-      docs = seq === 0 ? poolDocs : [];
-    }
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        documents: docs,
-        operator_defaults: pool.operator_defaults ?? OPERATOR_DEFAULTS,
-      }),
+      body: JSON.stringify(selectDocs(route.request().postData() ?? '')),
     });
+  });
+
+  // #5979: async extraction. POST /extract-async captures the file's result under
+  // a job id; GET /jobs/:id serves it. `extractStatus`/`extractErrorBody` apply to
+  // the SUBMIT (so the existing 504/502/401 error tests exercise the same client
+  // error handling on the async path), `asyncUnsupported` 404s the submit (the
+  // fallback path), and `jobFails` makes the poll return a failed job.
+  const jobs = new Map<string, unknown>();
+  let jobSeq = 0;
+  await page.route(/\/api\/commander\/valuation-statement\/extract-async$/, async (route: Route) => {
+    if (opts.extractDelayMs) {
+      await new Promise(resolve => setTimeout(resolve, opts.extractDelayMs));
+    }
+    if (opts.asyncUnsupported) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'Not Found' }) });
+      return;
+    }
+    const status = opts.extractStatus ?? 200;
+    if (status !== 200) {
+      await route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(opts.extractErrorBody ?? { error: { message: 'error' } }),
+      });
+      return;
+    }
+    const jobId = `job-${jobSeq++}`;
+    jobs.set(jobId, selectDocs(route.request().postData() ?? ''));
+    await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ job_id: jobId }) });
+  });
+  await page.route(/\/api\/commander\/valuation-statement\/jobs\/[^/?]+$/, async (route: Route) => {
+    const id = route.request().url().split('/').pop()?.split('?')[0] ?? '';
+    if (opts.jobFails) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'failed', result: null, error: 'extraheringen misslyckades' }) });
+      return;
+    }
+    const result = jobs.get(id);
+    if (result === undefined) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'Extraction job not found.' }) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'done', result, error: null }) });
   });
 
   // #5915: the pre-flight the client calls before /extract to announce OCR.
