@@ -929,54 +929,45 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     await expect(err).not.toContainText(/lång tid/i);
   });
 
-  test('#5972 two files dispatch as two separate extract requests, one per file', async ({ page }) => {
-    // #5969: a single combined /extract had to outlive the SUM of both files'
-    // extraction and the ~100s Cloudflare edge cut it. The fix sends one request
-    // per file so each gets the full edge budget; the results merge as before.
+  test('#5972/#5979 two files dispatch as two separate async submits, one per file', async ({ page }) => {
+    // #5969: a single combined request had to outlive the SUM of both files'
+    // extraction and the ~100s edge cut it. The fix sends one request per file;
+    // #5979 makes each an async submit (extract-async) so a single long file also
+    // survives. Here: two files → two separate submits.
     await seedTrustedSession(page);
-    const extractBodies: string[] = [];
+    const submitBodies: string[] = [];
     page.on('request', r => {
-      if (/valuation-statement\/extract$/.test(r.url())) extractBodies.push(r.postData() ?? '');
+      if (/valuation-statement\/extract-async$/.test(r.url())) submitBodies.push(r.postData() ?? '');
     });
     await installCommanderMocks(page);
     await walkToReview(page); // uploads both fixtures, waits for the review step
 
-    // Two files → two separate requests (not one combined request).
-    expect(extractBodies).toHaveLength(2);
-    // Each request carried exactly one file, and between them both files were sent.
-    const names = extractBodies
+    // Two files → two separate async submits (not one combined request).
+    expect(submitBodies).toHaveLength(2);
+    // Each submit carried exactly one file, and between them both files were sent.
+    const names = submitBodies
       .flatMap(b => [...b.matchAll(/filename="([^"]+)"/g)].map(m => m[1]))
       .sort();
-    for (const b of extractBodies) {
+    for (const b of submitBodies) {
       expect([...b.matchAll(/filename="([^"]+)"/g)]).toHaveLength(1);
     }
     expect(names).toEqual(['datavardering.pdf', 'lgh_utdrag.pdf']);
   });
 
-  test('#5972 one file failing keeps the other file’s result and names the failure', async ({ page }) => {
-    // Per-file isolation: if one file times out at the edge, its failure is named
-    // and the succeeded file's extraction is NOT discarded — the member keeps the
-    // work that landed instead of losing the whole upload (#5969).
+  test('#5972/#5979 one file failing keeps the other file’s result and names the failure', async ({ page }) => {
+    // Per-file isolation over the async path: if one file's job/submit fails, its
+    // failure is named and the succeeded file's extraction is NOT discarded (#5969).
     await seedTrustedSession(page);
     await installCommanderMocks(page);
-    // Override /extract (registered last, so it wins): datavardering succeeds,
-    // lgh_utdrag times out (504, the edge/commander deadline).
-    await page.route(/valuation-statement\/extract$/, async route => {
+    // Override the async submit (registered last, so it wins): datavardering gets a
+    // job, lgh_utdrag times out (504) at submit.
+    await page.route(/valuation-statement\/extract-async$/, async route => {
       const body = route.request().postData() ?? '';
       if (body.includes('datavardering.pdf')) {
         await route.fulfill({
-          status: 200,
+          status: 202,
           contentType: 'application/json',
-          body: JSON.stringify({
-            documents: [{
-              filename: 'datavardering.pdf',
-              fields: [
-                { key: 'source_class', value: 'datavardering', confidence: 'confident', source_page: 1 },
-                { key: 'marknadsvarde_kr', value: '3050000', confidence: 'uncertain', source_page: 3 },
-              ],
-            }],
-            operator_defaults: OPERATOR_DEFAULTS,
-          }),
+          body: JSON.stringify({ job_id: 'dv-job' }),
         });
       } else {
         await route.fulfill({
@@ -985,6 +976,27 @@ test.describe('#5362 an extraction that recognised nothing', () => {
           body: JSON.stringify({ error: { message: 'Underlaget tog för lång tid att läsa.' } }),
         });
       }
+    });
+    // The datavardering job completes with its document.
+    await page.route(/valuation-statement\/jobs\/[^/?]+$/, async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'done',
+          result: {
+            documents: [{
+              filename: 'datavardering.pdf',
+              fields: [
+                { key: 'source_class', value: 'datavardering', confidence: 'confident', source_page: 1 },
+                { key: 'marknadsvarde_kr', value: '3050000', confidence: 'uncertain', source_page: 3 },
+              ],
+            }],
+            operator_defaults: OPERATOR_DEFAULTS,
+          },
+          error: null,
+        }),
+      });
     });
 
     await page.goto('/member/personal/valuation-statement');
@@ -1000,8 +1012,53 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     await expect(warn).toBeVisible();
     await expect(warn).toContainText('lgh_utdrag.pdf');
     await expect(warn).toContainText(/lång tid/i);
-    // The failure was a timeout, not the bare "Servern svarade inte" catch-all.
     await expect(page.locator('body')).not.toContainText(/Servern svarade inte/);
+  });
+
+  test('#5979 a job that completes via polling reaches the merged review', async ({ page }) => {
+    // The async happy path: submit → poll → done → merge. Asserts the client hits
+    // extract-async and the jobs poll, then renders the review.
+    await seedTrustedSession(page);
+    let sawSubmit = false;
+    let sawPoll = false;
+    page.on('request', r => {
+      if (/valuation-statement\/extract-async$/.test(r.url())) sawSubmit = true;
+      if (/valuation-statement\/jobs\//.test(r.url())) sawPoll = true;
+    });
+    await installCommanderMocks(page);
+    await walkToReview(page);
+    expect(sawSubmit).toBe(true);
+    expect(sawPoll).toBe(true);
+  });
+
+  test('#5979 a failed async job names the file, never the bare catch-all', async ({ page }) => {
+    // A job that crashes server-side surfaces as a named failure, not the opaque
+    // "Servern svarade inte".
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, { jobFails: true });
+    await page.goto('/member/personal/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('input[type="file"]').setInputFiles(PDF_UPLOAD_PAYLOAD);
+    await page.getByRole('button', { name: /Extrahera värden/ }).click();
+    // Every file's job failed → back to the upload step with a named error.
+    const err = page.locator('.error-text');
+    await expect(err).toBeVisible({ timeout: 15_000 });
+    await expect(err).toContainText(/misslyckades|avvisades/i);
+    await expect(page.locator('body')).not.toContainText(/Servern svarade inte/);
+  });
+
+  test('#5979 falls back to sync /extract when the server has no async route', async ({ page }) => {
+    // Graceful fallback (#5920 pattern): an older server without extract-async
+    // 404s the submit; the client falls back to sync /extract and still reaches
+    // the review, so the feature is never dark.
+    await seedTrustedSession(page);
+    let sawSyncExtract = false;
+    page.on('request', r => {
+      if (/valuation-statement\/extract$/.test(r.url())) sawSyncExtract = true;
+    });
+    await installCommanderMocks(page, { asyncUnsupported: true });
+    await walkToReview(page);
+    expect(sawSyncExtract).toBe(true);
   });
 
   test('#5912 a digital partial names the missed field as an extraction gap', async ({ page }) => {

@@ -1066,6 +1066,61 @@ export default {
       this.statusPhase = 0;
     },
 
+    /** #5979: run one file's extraction as an async job — submit, then poll — so
+     *  a single file that alone exceeds the ~100s Cloudflare edge (#5969) still
+     *  completes: no single HTTP request outlives the edge, only the background
+     *  job does. Returns a `{ data: { documents, operator_defaults } }` shape so
+     *  the per-file map body is otherwise unchanged. Throws axios-shaped errors
+     *  the caller's catch already handles: a `failed` job as a rejection (422 +
+     *  the job's error), a poll that never terminates as a timeout (504).
+     *
+     *  Graceful fallback (#5920 pattern): if the server has no async route yet
+     *  (extract-async 404s), fall back to the synchronous /extract so the feature
+     *  is never dark against an older server. */
+    async _extractViaJob(form) {
+      let jobId;
+      try {
+        const submit = await axios.post(
+          '/api/commander/valuation-statement/extract-async',
+          form,
+        );
+        jobId = submit.data && submit.data.job_id;
+      } catch (err) {
+        if (err.response?.status === 404) {
+          return await axios.post(
+            '/api/commander/valuation-statement/extract',
+            form,
+          );
+        }
+        throw err; // 401 / other → the caller's catch handles it
+      }
+      if (!jobId) {
+        throw { response: { status: 502, data: { error: { message: 'inget jobb-id från servern' } } } };
+      }
+      // Each poll is its own short request, safely under the edge; the extraction
+      // may take far longer than any single request could. Cap generously.
+      const deadline = Date.now() + 5 * 60 * 1000;
+      while (Date.now() < deadline) {
+        let job = null;
+        try {
+          job = (await axios.get(`/api/commander/valuation-statement/jobs/${jobId}`)).data;
+        } catch (err) {
+          if (err.response?.status === 401) throw err; // session gone → login
+          // A transient poll error: keep trying until the deadline.
+        }
+        if (job) {
+          if (job.status === 'done') {
+            return { data: job.result || { documents: [], operator_defaults: {} } };
+          }
+          if (job.status === 'failed') {
+            throw { response: { status: 422, data: { error: { message: job.error || 'extraheringen misslyckades' } } } };
+          }
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      throw { response: { status: 504, data: { error: { message: 'extraheringen tog för lång tid – försök igen' } } } };
+    },
+
     async doExtract() {
       this.step = 'extracting';
       this.ocrDecision = null;
@@ -1118,10 +1173,10 @@ export default {
           const form = new FormData();
           form.append('files', f, f.name);
           try {
-            const resp = await axios.post(
-              '/api/commander/valuation-statement/extract',
-              form,
-            );
+            // #5979: submit an async job and poll, so a single file that alone
+            // exceeds the ~100s edge still completes (per-file dispatch only
+            // splits the batch). Falls back to sync /extract on an older server.
+            const resp = await this._extractViaJob(form);
             this.fileStatus[f.name] = { state: 'done', reason: null };
             // Every file's response embeds the same operator defaults; the last
             // one wins (they are identical).
