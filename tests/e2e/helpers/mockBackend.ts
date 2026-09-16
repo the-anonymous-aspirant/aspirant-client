@@ -137,19 +137,48 @@ export async function installCommanderMocks(page: Page, opts: InstallOpts = {}):
   // page.route's URL glob matches path + query as one string; "?" is a
   // single-char wildcard in globs, so a regex is the safer match anchor for
   // endpoints that vary by query string.
+  // #5972: the client now sends ONE /extract request per uploaded file (so the
+  // ~100s Cloudflare edge cuts one file, not the batch). Model that faithfully —
+  // return, per request, the pool documents whose filename matches the file in
+  // THIS request's multipart body. A custom fixture whose doc filenames match no
+  // uploaded file (the #5362/#5912 scenario bodies) is delivered once, on the
+  // first request, so per-file dispatch collects it exactly once rather than N×.
+  let extractSeq = 0;
   await page.route(/\/api\/commander\/valuation-statement\/extract$/, async (route: Route) => {
     if (opts.extractDelayMs) {
       await new Promise(resolve => setTimeout(resolve, opts.extractDelayMs));
     }
     const status = opts.extractStatus ?? 200;
+    if (status !== 200) {
+      await route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(opts.extractErrorBody ?? { error: { message: 'error' } }),
+      });
+      return;
+    }
+    const pool = (opts.extractResponse ?? EXTRACT_RESPONSE) as {
+      documents?: Array<{ filename?: string }>;
+      operator_defaults?: unknown;
+    };
+    const poolDocs = pool.documents ?? [];
+    const posted = route.request().postData() ?? '';
+    const uploaded = [...posted.matchAll(/filename="([^"]+)"/g)].map(m => m[1]);
+    let docs = poolDocs.filter(d => d.filename != null && uploaded.includes(d.filename));
+    const seq = extractSeq++;
+    if (docs.length === 0) {
+      // No filename match: a custom fixture describing a scenario rather than the
+      // uploaded fixtures (or a body Playwright could not decode). Deliver the
+      // whole pool once so per-file dispatch collects it exactly once.
+      docs = seq === 0 ? poolDocs : [];
+    }
     await route.fulfill({
-      status,
+      status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(
-        status === 200
-          ? (opts.extractResponse ?? EXTRACT_RESPONSE)
-          : (opts.extractErrorBody ?? { error: { message: 'error' } }),
-      ),
+      body: JSON.stringify({
+        documents: docs,
+        operator_defaults: pool.operator_defaults ?? OPERATOR_DEFAULTS,
+      }),
     });
   });
 
