@@ -1155,6 +1155,20 @@ export default {
       const lgh = indexed.find(x => x.sourceClass === 'lagenhetsforteckning') || null;
       const fu = indexed.find(x => x.sourceClass === 'fastighetsutdrag') || null;
 
+      // Documents whose overall layout classified to none of the three
+      // sources above (source_class null or an unrecognised value) match
+      // none of dv/lgh/fu and would otherwise be consulted by no slot at
+      // all. Their identity fields (objekt etc.) still resolve — the objekt
+      // strategy chain runs independently of source_class — so keep them as
+      // a lowest-priority fallback for the identity slots rather than
+      // silently dropping a value the user did upload (#5947).
+      const CLASSIFIED_SOURCES = new Set([
+        'datavardering',
+        'lagenhetsforteckning',
+        'fastighetsutdrag',
+      ]);
+      const unclassified = indexed.filter(x => !CLASSIFIED_SOURCES.has(x.sourceClass));
+
       // Walk an ordered list of (doc, fieldKey) pairs and return the first
       // non-null value alongside the source's confidence bucket; 'not_found'
       // when no source had a value.
@@ -1182,9 +1196,14 @@ export default {
 
       // Identifier slots — prefer the appraisal (datavardering), then the
       // lägenhetsförteckning (HSB carries an explicit förening identifier),
-      // then the fastighetsutdrag.
+      // then the fastighetsutdrag, then any unclassified document last.
       for (const key of ['objekt', 'objekt_short', 'adress', 'kommun']) {
-        const w = pickWinner([dv, key], [lgh, key], [fu, key]);
+        const w = pickWinner(
+          [dv, key],
+          [lgh, key],
+          [fu, key],
+          ...unclassified.map(u => [u, key]),
+        );
         review[key] = w.value || '';
         conf[key] = w.value ? w.confidence : 'not_found';
       }
