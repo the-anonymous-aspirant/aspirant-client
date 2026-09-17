@@ -233,15 +233,15 @@
       >
         <div data-testid="samintecknad-modal">
           <p>
-            Fastighetsutdraget visar att fastigheten är samintecknad, det vill
-            säga att en inteckning även belastar en annan fastighet.
+            Fastigheten verkar vara samintecknad — en eller flera inteckningar
+            belastar även en annan fastighet.
           </p>
           <ul class="samintecknad-list">
             <li v-for="line in samintecknadSummary" :key="line">{{ line }}</li>
           </ul>
           <p class="muted">
-            Kontrollera fastighetsutdraget innan du går vidare med värderingen.
-            Varningen ligger kvar överst i granskningen.
+            Kontrollera pantbreven innan du går vidare. Varningen ligger kvar
+            överst i granskningen.
           </p>
         </div>
         <template #footer>

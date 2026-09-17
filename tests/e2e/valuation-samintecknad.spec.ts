@@ -71,6 +71,8 @@ test.describe('#6006 OBS! samintecknad', () => {
 
     const dialog = page.getByRole('dialog', { name: 'OBS! samintecknad' });
     await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Fastigheten verkar vara samintecknad');
+    await expect(dialog).toContainText('Kontrollera pantbreven innan du går vidare.');
     await expect(dialog).toContainText('Inteckning nr 2 och 3 belastar även Testby EKLUNDA 1:11.');
     await expect(dialog).toContainText('Köpet från 2022-04-28 avser även en annan fastighet.');
 
