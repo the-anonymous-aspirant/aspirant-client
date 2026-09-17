@@ -198,6 +198,57 @@
 
     <!-- Step 3: Review -->
     <ValuationStep v-if="step === 'review'" title="3. Granska och justera" wide>
+      <!-- #6006: the fastighetsutdrag shows the property is samintecknad (a
+           mortgage also encumbers another property). About the property, not the
+           extraction, so it leads the stack, and it stays after the modal that
+           announced it is closed. -->
+      <div
+        v-if="samintecknadDocs.length"
+        class="extract-warning"
+        role="status"
+        data-testid="samintecknad-warning"
+      >
+        <AspBadge status="caution" size="sm">OBS! samintecknad</AspBadge>
+        <div>
+          <p class="extract-warning__lead">
+            <strong>{{ samintecknadDocs.map(d => d.filename).join(', ') }}</strong>
+            visar att fastigheten är samintecknad.
+          </p>
+          <p
+            v-for="line in samintecknadSummary"
+            :key="line"
+            class="extract-warning__hint"
+          >{{ line }}</p>
+        </div>
+      </div>
+
+      <!-- AspModal, Options API: Back-close binds via overlayHistoryWatch on
+           samintecknadModalOpen, since the directive cannot reach AspModal's
+           teleported root (#4446, the GameTimeline pattern). -->
+      <AspModal
+        :open="samintecknadModalOpen"
+        title="OBS! samintecknad"
+        size="sm"
+        @update:open="(open) => (open ? null : closeSamintecknadModal())"
+      >
+        <div data-testid="samintecknad-modal">
+          <p>
+            Fastighetsutdraget visar att fastigheten är samintecknad, det vill
+            säga att en inteckning även belastar en annan fastighet.
+          </p>
+          <ul class="samintecknad-list">
+            <li v-for="line in samintecknadSummary" :key="line">{{ line }}</li>
+          </ul>
+          <p class="muted">
+            Kontrollera fastighetsutdraget innan du går vidare med värderingen.
+            Varningen ligger kvar överst i granskningen.
+          </p>
+        </div>
+        <template #footer>
+          <AspButton variant="primary" @click="closeSamintecknadModal">Jag förstår</AspButton>
+        </template>
+      </AspModal>
+
       <!-- #5972: one file failed while at least one other succeeded. Its result
            is not silently dropped: name the file and why, and keep the rest so
            the operator does not lose the whole upload to one slow document. -->
@@ -673,8 +724,10 @@
 </template>
 
 <script>
-import { AspBadge, AspButton, AspCheckbox, AspInput, AspSegmented, AspSelect, AspTextarea } from '@aspirant/design-system';
+import { AspBadge, AspButton, AspCheckbox, AspInput, AspModal, AspSegmented, AspSelect, AspTextarea } from '@aspirant/design-system';
 import axios from 'axios';
+
+import { overlayHistoryWatch } from '@/directives/overlayHistory.js';
 
 import ValuationStep from '@/components/ValuationStep.vue';
 // Build-time snapshot of the commander's field-first slot extractor
@@ -732,7 +785,7 @@ const BLANK_CONFIDENCE = () => ({
 });
 
 export default {
-  components: { AspBadge, AspButton, AspCheckbox, AspInput, AspSegmented, AspSelect, AspTextarea, ValuationStep },
+  components: { AspBadge, AspButton, AspCheckbox, AspInput, AspModal, AspSegmented, AspSelect, AspTextarea, ValuationStep },
   data() {
     return {
       step: 'upload',
@@ -747,6 +800,10 @@ export default {
       // review step so a partial loss is named and the rest is not discarded.
       fileFailures: [],
       extractedDocs: [],
+      // #6006: the "OBS! samintecknad" modal, opened once when an extraction
+      // lands on review with a samintecknad document. The banner does not
+      // depend on it.
+      samintecknadModalOpen: false,
       reviewedFields: BLANK_REVIEW(),
       fieldConfidence: BLANK_CONFIDENCE(),
       saveOperatorDefaults: false,
@@ -893,6 +950,46 @@ export default {
      *  filled > 0 with OCR → recovered only. An absent `ocr_used` yields false:
      *  no banner, today's behaviour.
      */
+    /** Documents the commander flagged samintecknad (system_3 #6006): a mortgage
+     *  row reading `Belastar även`, or the current owners' purchase `avser även
+     *  annan fastighet`. Keyed on the stated flag, not re-derived here. An older
+     *  commander without the field yields none: no warning, today's behaviour.
+     */
+    samintecknadDocs() {
+      return (this.extractedDocs || []).filter(doc => doc.samintecknad === true);
+    },
+
+    /** The evidence as Swedish sentences, one per kind: the mortgage Nr grouped
+     *  by the property they also encumber, then the current purchase dates. */
+    samintecknadSummary() {
+      const byProperty = new Map();
+      const purchases = [];
+      for (const doc of this.samintecknadDocs) {
+        for (const ev of doc.samintecknad_evidence || []) {
+          if (ev.section === 'inteckningar') {
+            const key = ev.other_property || '';
+            if (!byProperty.has(key)) byProperty.set(key, []);
+            if (ev.row && !byProperty.get(key).includes(ev.row)) byProperty.get(key).push(ev.row);
+          } else if (ev.section === 'agare' && ev.row && !purchases.includes(ev.row)) {
+            purchases.push(ev.row);
+          }
+        }
+      }
+      const joinSv = items =>
+        items.length > 1 ? `${items.slice(0, -1).join(', ')} och ${items[items.length - 1]}` : items.join('');
+      const lines = [];
+      for (const [property, rows] of byProperty) {
+        const subject = rows.length
+          ? `Inteckning nr ${joinSv(rows)} belastar`
+          : 'En inteckning belastar';
+        lines.push(property ? `${subject} även ${property}.` : `${subject} även en annan fastighet.`);
+      }
+      if (purchases.length) {
+        lines.push(`Köpet från ${joinSv(purchases)} avser även en annan fastighet.`);
+      }
+      return lines;
+    },
+
     ocrRecoveredDocs() {
       return (this.extractedDocs || []).filter(
         doc =>
@@ -971,7 +1068,15 @@ export default {
       return phases[this.statusPhase % phases.length];
     },
   },
+  watch: {
+    // Back closes the samintecknad modal rather than leaving the page (#4172).
+    samintecknadModalOpen: overlayHistoryWatch('closeSamintecknadModal'),
+  },
   methods: {
+    closeSamintecknadModal() {
+      this.samintecknadModalOpen = false;
+    },
+
     /** Value fields the extractor filled — the shared predicate behind
      *  `unreadableDocs` (zero of these) and `ocrRecoveredDocs` (some of these),
      *  which is what makes those two mutually exclusive (system_3 #5910). The
@@ -1242,6 +1347,7 @@ export default {
         }));
         this.hydrateReview(this.extractedDocs, operatorDefaults);
         this.step = 'review';
+        this.samintecknadModalOpen = this.samintecknadDocs.length > 0;
       } else {
         // Every file failed: back to the upload step. Preserve the #5919 UX
         // distinction — a pure-timeout failure names slowness and invites a
@@ -1276,6 +1382,7 @@ export default {
       // "no defaults").
       this.uploadError = '';
       this.extractedDocs = [];
+      this.samintecknadModalOpen = false;
       this.fileFailures = [];
       this.currentInputFiles = [];
       this.currentProcessedId = null;
@@ -1851,6 +1958,11 @@ export default {
   margin: var(--space-2xs) 0 0;
   font-size: var(--text-sm);
   color: var(--text-muted);
+}
+
+.samintecknad-list {
+  margin: var(--space-sm) 0;
+  padding-left: var(--space-lg);
 }
 
 .dropzone {
