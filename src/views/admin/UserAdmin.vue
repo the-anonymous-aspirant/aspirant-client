@@ -33,6 +33,15 @@
       >
         {{ signup.enabled ? 'Close sign-up' : 'Open sign-up' }}
       </AspButton>
+      <!-- A refused WRITE, reported separately from a failed READ and without
+           taking the button away (system_3 #7042). The server's own sentence is
+           shown because it is the only thing that says what to do about it: a
+           409 from aspirant-server#123 names the four SMTP variables this
+           deployment is missing, and that reason reaches the operator nowhere
+           else. -->
+      <p v-if="signup.writeError" class="signup-switch__note" data-testid="signup-write-error">
+        {{ signup.writeError }}
+      </p>
     </section>
 
     <AspButton variant="primary" @click="resetForm(); showUserForm = true;">
@@ -158,7 +167,13 @@
         // console.error and render an empty table, so a backend that was down
         // and a site with no users looked identical.
         roster: { state: 'loading' },
-        signup: { state: 'loading', enabled: true, saving: false },
+        // `state` is the READ's state; `writeError` is the last write's
+        // refusal, held separately on purpose. They used to be one field, so a
+        // refused PUT rendered the read's copy ("Could not read the sign-up
+        // status") and replaced the button with a Try-again that re-ran the
+        // read — naming the wrong operation and removing the only control that
+        // could retry the right one (#7042).
+        signup: { state: 'loading', enabled: true, saving: false, writeError: null },
         confirmingClose: false,
         // The row awaiting a block confirmation, or null.
         blocking: null,
@@ -199,23 +214,30 @@
         this.signup = { ...this.signup, state: 'loading' };
         try {
           const response = await axios.get('/api/signup/status');
-          this.signup = { state: 'ready', enabled: !!response.data.signup_enabled, saving: false };
+          // writeError clears here and only here: a read that comes back after
+          // a successful write is the evidence the refusal no longer holds.
+          this.signup = {
+            state: 'ready',
+            enabled: !!response.data.signup_enabled,
+            saving: false,
+            writeError: null,
+          };
         } catch (error) {
           // A 404 is not a failure to report as one: it means the running
           // server predates the kill-switch. The page stays usable and says so,
           // rather than showing a control that cannot work.
           if (error.response && error.response.status === 404) {
-            this.signup = { state: 'unavailable', enabled: true, saving: false };
+            this.signup = { state: 'unavailable', enabled: true, saving: false, writeError: null };
             return;
           }
           console.error('Error reading sign-up status:', error);
-          this.signup = { state: 'failed', enabled: true, saving: false };
+          this.signup = { state: 'failed', enabled: true, saving: false, writeError: null };
         }
       },
 
       async setSignup(enabled) {
         this.confirmingClose = false;
-        this.signup = { ...this.signup, saving: true };
+        this.signup = { ...this.signup, saving: true, writeError: null };
         try {
           await axios.put('/api/settings/signup', { enabled });
           // Re-read rather than trust the local flip: the server is the
@@ -224,7 +246,22 @@
           await this.fetchSignupStatus();
         } catch (error) {
           console.error('Error updating sign-up status:', error);
-          this.signup = { ...this.signup, state: 'failed', saving: false };
+          // `state` is deliberately untouched: the read is still good, so the
+          // badge keeps telling the truth and the button stays on screen to be
+          // pressed again once the reason below is dealt with.
+          //
+          // The fallback is reached only when there is no server sentence at
+          // all — an unreachable server, or a proxy answering with no body.
+          // `error.message` is deliberately NOT consulted before it: axios
+          // always has one, so putting it first makes the product copy
+          // unreachable (the #5304 lesson in useBrowserFlows.js).
+          this.signup = {
+            ...this.signup,
+            saving: false,
+            writeError:
+              error.response?.data?.error?.message ||
+              'Could not change the sign-up status, and the server did not say why. It may be unreachable — try again.',
+          };
         }
       },
 
