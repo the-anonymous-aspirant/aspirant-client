@@ -114,6 +114,108 @@ test.describe('admin sign-up kill-switch', () => {
     await expect.poll(() => bodies).toEqual([{ enabled: true }]);
   });
 
+  // --- a refused write (system_3 #7042, server half aspirant-server#123) ----
+  //
+  // These fulfil a real HTTP 409 with aspirant-server's actual error envelope
+  // rather than rejecting the axios call, so the accessor path
+  // (`error.response.data.error.message`) is exercised against real response
+  // bytes. A rejected promise would have proved the template and nothing about
+  // the path, and the path is the whole defect.
+
+  // The sentence aspirant-server#123 returns when the deployment has no relay.
+  // Abbreviated, but its load-bearing part — the variable names — is verbatim:
+  // they are what tells the operator what to actually do.
+  const RELAY_REFUSAL =
+    'Sign-up cannot be opened: this deployment has no mail relay, so a new account\'s ' +
+    'verification link would be written to the server log and never delivered. Set SMTP_HOST, ' +
+    'SMTP_USERNAME, SMTP_PASSWORD and SMTP_FROM on this service (SMTP_USER is a different ' +
+    'variable and is not read), restart it, and try again.';
+
+  const refuse = (status: number, body: unknown) => (route: Route) =>
+    route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+
+  test("a refused open shows the server's reason, naming the variables to set", async ({ page }) => {
+    await openUserAdmin(page, { signupEnabled: false });
+    await page.route(
+      '**/api/settings/signup',
+      refuse(409, { error: { code: 'conflict', message: RELAY_REFUSAL } }),
+    );
+
+    await page.getByTestId('signup-action').click();
+
+    const reason = page.getByTestId('signup-write-error');
+    await expect(reason).toBeVisible();
+    // The variable names, not just "some error appeared": an admin who has
+    // filled in SMTP_USER needs to be told it is the wrong name, and that
+    // sentence reaches them nowhere else.
+    await expect(reason).toContainText('SMTP_USERNAME');
+    await expect(reason).toContainText('SMTP_FROM');
+    await expect(reason).toContainText('SMTP_USER is a different variable');
+  });
+
+  test('a refused write leaves the button pressable and the badge honest', async ({ page }) => {
+    // The failure this replaces: the refusal set the READ's failed state, which
+    // swapped the button for a Try-again that re-ran the read. The reason was
+    // unreachable, and so was a second attempt.
+    await openUserAdmin(page, { signupEnabled: false });
+    await page.route(
+      '**/api/settings/signup',
+      refuse(409, { error: { code: 'conflict', message: RELAY_REFUSAL } }),
+    );
+
+    await page.getByTestId('signup-action').click();
+    await expect(page.getByTestId('signup-write-error')).toBeVisible();
+
+    // Still the real control, still enabled, and still saying what it will do.
+    await expect(page.getByTestId('signup-action')).toHaveText('Open sign-up');
+    await expect(page.getByTestId('signup-action')).toBeEnabled();
+    // The read never failed, so the state must not claim it did.
+    await expect(page.getByTestId('signup-state')).toHaveText('Closed');
+    await expect(page.getByTestId('signup-error')).toHaveCount(0);
+  });
+
+  test('the reason clears once the write succeeds', async ({ page }) => {
+    await openUserAdmin(page, { signupEnabled: false });
+
+    let allow = false;
+    await page.route('**/api/settings/signup', (route) => {
+      if (!allow) {
+        return refuse(409, { error: { code: 'conflict', message: RELAY_REFUSAL } })(route);
+      }
+      return json({ status: 'ok' })(route);
+    });
+
+    await page.getByTestId('signup-action').click();
+    await expect(page.getByTestId('signup-write-error')).toBeVisible();
+
+    // The relay lands; the same button now works and the stale reason goes.
+    allow = true;
+    await page.unroute('**/api/signup/status');
+    await page.route('**/api/signup/status', json({ signup_enabled: true }));
+    await page.getByTestId('signup-action').click();
+
+    await expect(page.getByTestId('signup-state')).toHaveText('Open');
+    await expect(page.getByTestId('signup-write-error')).toHaveCount(0);
+  });
+
+  test('a refusal with no body falls back to product copy rather than axios prose', async ({ page }) => {
+    // An unreachable server or a proxy answering with nothing. The operator
+    // must not be shown "Request failed with status code 502" — and must not be
+    // shown an empty paragraph either.
+    await openUserAdmin(page, { signupEnabled: false });
+    await page.route('**/api/settings/signup', (route) =>
+      route.fulfill({ status: 502, contentType: 'application/json', body: '{}' }),
+    );
+
+    await page.getByTestId('signup-action').click();
+
+    const reason = page.getByTestId('signup-write-error');
+    await expect(reason).toBeVisible();
+    await expect(reason).toContainText('the server did not say why');
+    await expect(reason).not.toContainText('status code');
+    await expect(page.getByTestId('signup-action')).toBeEnabled();
+  });
+
   test('a server without the endpoint says so instead of showing a dead control', async ({ page }) => {
     // The client and the server deploy separately. On a server that predates
     // #5289 the status route 404s, and the honest answer is that the switch
