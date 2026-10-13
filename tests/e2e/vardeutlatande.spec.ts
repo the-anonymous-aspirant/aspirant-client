@@ -1061,6 +1061,77 @@ test.describe('#5362 an extraction that recognised nothing', () => {
     expect(sawSyncExtract).toBe(true);
   });
 
+  test('#7730 a second document of the same source_class contributes the fields the first one missed', async ({ page }) => {
+    // Two documents can share a source_class (e.g. a prose BR värdeutlåtande and
+    // a UC-BR bostadsvärdering both classify as 'datavardering', #5680 c32472).
+    // hydrateReview used to pick the class's FIRST document only (`.find`), so a
+    // second document's fields were invisible even when the first one had none —
+    // identical in shape to the unclassified-document drop #5947 fixed. Fixture:
+    // doc A has objekt/kommun but no adress or date; doc B has a DIFFERENT
+    // objekt/kommun (proving doc A's still wins — class-priority order, not
+    // latest-wins) plus the adress and date doc A lacks (proving they now merge
+    // in rather than being dropped).
+    await seedTrustedSession(page);
+    await installCommanderMocks(page, {
+      extractResponse: {
+        documents: [
+          {
+            filename: 'datavardering_a.pdf',
+            fields: [
+              { key: 'source_class', value: 'datavardering', confidence: 'confident', source_page: 1 },
+              { key: 'property_shape', value: 'bostadsratt', confidence: 'confident', source_page: 1 },
+              { key: 'objekt', value: 'LGH 1001 Brf Exempel A (111111-1111)', confidence: 'confident', source_page: 1 },
+              { key: 'objekt_short', value: 'LGH 1001 Brf Exempel A', confidence: 'confident', source_page: 1 },
+              { key: 'kommun', value: 'Göteborg', confidence: 'confident', source_page: 1 },
+              { key: 'adress', value: null, confidence: 'not_found', source_page: null },
+              { key: 'document_date', value: null, confidence: 'not_found', source_page: null },
+              { key: 'marknadsvarde_kr', value: null, confidence: 'not_found', source_page: null },
+              { key: 'intervall_kr', value: null, confidence: 'not_found', source_page: null },
+            ],
+          },
+          {
+            filename: 'datavardering_b.pdf',
+            fields: [
+              { key: 'source_class', value: 'datavardering', confidence: 'confident', source_page: 1 },
+              { key: 'objekt', value: 'LGH 9999 Brf Annan B (222222-2222)', confidence: 'confident', source_page: 1 },
+              { key: 'objekt_short', value: 'LGH 9999 Brf Annan B', confidence: 'confident', source_page: 1 },
+              { key: 'kommun', value: 'Malmö', confidence: 'confident', source_page: 1 },
+              { key: 'adress', value: 'Andra vägen 42', confidence: 'confident', source_page: 2 },
+              { key: 'document_date', value: '2026-05-10', confidence: 'confident', source_page: 1 },
+              { key: 'marknadsvarde_kr', value: null, confidence: 'not_found', source_page: null },
+              { key: 'intervall_kr', value: null, confidence: 'not_found', source_page: null },
+            ],
+          },
+        ],
+        operator_defaults: OPERATOR_DEFAULTS,
+      },
+    });
+    await page.goto('/member/personal/valuation-statement');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('input[type="file"]').setInputFiles([
+      { name: 'datavardering_a.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF\n') },
+      { name: 'datavardering_b.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF\n') },
+    ]);
+    await page.getByRole('button', { name: /Extrahera värden/ }).click();
+    await expect(page.getByRole('heading', { name: new RegExp(REVIEW_LEGEND) })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Doc A had both objekt and kommun — class-priority order keeps the FIRST
+    // same-class document's value, not doc B's (this is a merge, not latest-wins).
+    const objektInput = page.locator('.field-row', { hasText: /^Objekt$/ }).locator('input');
+    await expect(objektInput).toHaveValue('LGH 1001 Brf Exempel A (111111-1111)');
+    const kommunInput = page.locator('.field-row', { hasText: /^Kommun/ }).locator('input');
+    await expect(kommunInput).toHaveValue('Göteborg');
+
+    // Doc A had no adress or date — doc B's values now surface instead of being
+    // silently dropped (the bug: today's `.find()` never looks past doc A).
+    const adressInput = page.locator('.field-row', { hasText: /^Adress/ }).locator('input');
+    await expect(adressInput).toHaveValue('Andra vägen 42');
+    const dvDateInput = page.locator('.field-row', { hasText: /^Datavärdering/ }).locator('input');
+    await expect(dvDateInput).toHaveValue('2026-05-10');
+  });
+
   test('#5912 a digital partial names the missed field as an extraction gap', async ({ page }) => {
     // Recognised document, read some values, missed an expected one, no OCR.
     // #5910 stopped calling it "unreadable" (it has values) and it is not OCR,
