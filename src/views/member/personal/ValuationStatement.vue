@@ -1414,9 +1414,14 @@ export default {
         for (const f of (d.fields || [])) byKey[f.key] = f;
         return { sourceClass: byKey.source_class?.value || null, byKey };
       });
-      const dv = indexed.find(x => x.sourceClass === 'datavardering') || null;
-      const lgh = indexed.find(x => x.sourceClass === 'lagenhetsforteckning') || null;
-      const fu = indexed.find(x => x.sourceClass === 'fastighetsutdrag') || null;
+      // A class can have more than one document (e.g. a prose BR
+      // värdeutlåtande and a UC-BR bostadsvärdering both classify as
+      // 'datavardering') — keep every document of a class, not just the
+      // first, or a second document's fields are as invisible to the merge
+      // as an unclassified document's were before #5947 (#7730).
+      const dvs = indexed.filter(x => x.sourceClass === 'datavardering');
+      const lghs = indexed.filter(x => x.sourceClass === 'lagenhetsforteckning');
+      const fus = indexed.filter(x => x.sourceClass === 'fastighetsutdrag');
 
       // Documents whose overall layout classified to none of the three
       // sources above (source_class null or an unrecognised value) match
@@ -1460,11 +1465,14 @@ export default {
       // Identifier slots — prefer the appraisal (datavardering), then the
       // lägenhetsförteckning (HSB carries an explicit förening identifier),
       // then the fastighetsutdrag, then any unclassified document last.
+      // Within a class, earlier documents (response order) win over later
+      // ones for the same field — same first-non-empty policy as across
+      // classes, just not stopping at the first document of a class (#7730).
       for (const key of ['objekt', 'objekt_short', 'adress', 'kommun']) {
         const w = pickWinner(
-          [dv, key],
-          [lgh, key],
-          [fu, key],
+          ...dvs.map(d => [d, key]),
+          ...lghs.map(d => [d, key]),
+          ...fus.map(d => [d, key]),
           ...unclassified.map(u => [u, key]),
         );
         review[key] = w.value || '';
@@ -1473,22 +1481,23 @@ export default {
 
       // Appraisal-only slots — only the datavardering chain produces these.
       for (const key of ['marknadsvarde_kr', 'intervall_kr']) {
-        const w = pickWinner([dv, key]);
+        const w = pickWinner(...dvs.map(d => [d, key]));
         review[key] = w.value || '';
         conf[key] = w.value ? w.confidence : 'not_found';
       }
 
       // Per-source dates — each row's value is the `document_date` of the
-      // doc whose `source_class` matches; absent sources leave the row
-      // empty and 'not_found' (saknas/red).
-      const pickDate = (doc) => pickWinner([doc, 'document_date']);
-      const dvDate = pickDate(dv);
+      // first document of that source_class with one; absent sources (or a
+      // same-class pair with no date on any of them) leave the row empty
+      // and 'not_found' (saknas/red).
+      const pickDate = (classDocs) => pickWinner(...classDocs.map(d => [d, 'document_date']));
+      const dvDate = pickDate(dvs);
       review.datavardering_date = dvDate.value || '';
       conf.datavardering_date = dvDate.value ? dvDate.confidence : 'not_found';
-      const lghDate = pickDate(lgh);
+      const lghDate = pickDate(lghs);
       review.lagenhetsforteckning_date = lghDate.value || '';
       conf.lagenhetsforteckning_date = lghDate.value ? lghDate.confidence : 'not_found';
-      const fuDate = pickDate(fu);
+      const fuDate = pickDate(fus);
       review.fastighetsutdrag_date = fuDate.value || '';
       conf.fastighetsutdrag_date = fuDate.value ? fuDate.confidence : 'not_found';
 
