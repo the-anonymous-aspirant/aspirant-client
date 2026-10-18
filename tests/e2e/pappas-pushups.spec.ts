@@ -101,3 +101,38 @@ test.describe('Pappas pushups graph — taller chart, 3000 ceiling, crown cadenc
     expect(box!.height).toBeLessThan(600);
   });
 });
+
+test.describe('Pappas pushups — save keeps the page responsive (#7996)', () => {
+  // The Chart.js instance used to live in reactive data(); the post-save
+  // chart.update() then stalled WebKit's main thread, so the mobile-safari
+  // project hung after every save. markRaw keeps it out of Vue's Proxy.
+  test('the total updates after a save', async ({ page }) => {
+    await seedTrustedSession(page);
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Stockholm',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    await mockPushups(page, [{ date: today, count: null }]);
+    let patchedUrl = '';
+    await page.route(/\/api\/pushups\/entries\/\d{4}-\d{2}-\d{2}$/, async (route: Route) => {
+      patchedUrl = route.request().url();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ entry: { date: today, count: 20 } }),
+      });
+    });
+    await page.goto('/member/personal/pappas-pushups');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('.chart-card').waitFor();
+    await openAllWeeks(page);
+
+    const input = page.locator('.count-cell input').first();
+    await input.fill('20');
+    await input.dispatchEvent('change');
+    await expect.poll(() => patchedUrl).toContain(today);
+    await expect(page.locator('.chart-meta')).toContainText('20 av 1000');
+  });
+});
