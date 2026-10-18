@@ -34,6 +34,7 @@ import Goals from '../views/member/shared/Goals.vue';
 import GoalTreeCanvas from '../views/member/shared/GoalTreeCanvas.vue';
 import ValuationStatement from '../views/member/personal/ValuationStatement.vue';
 import PappasPushups from '../views/member/personal/PappasPushups.vue';
+import PappasSitups from '../views/member/personal/PappasSitups.vue';
 import JobsView from '../views/member/personal/JobsView.vue';
 import Scratchpad from '../views/member/shared/Scratchpad.vue';
 import Constellations from '../views/member/shared/Constellations.vue';
@@ -150,6 +151,7 @@ const routes = [
   { path: '/member/personal/30-year-gift', component: ThirtyYearGiftView, meta: MEMBER_ROLES },
   { path: '/member/personal/valuation-statement', component: ValuationStatement, meta: MEMBER_ROLES },
   { path: '/member/personal/pappas-pushups', component: PappasPushups, meta: MEMBER_ROLES },
+  { path: '/member/personal/pappas-sit-ups', component: PappasSitups, meta: MEMBER_ROLES },
   { path: '/member/personal/jobs', component: JobsView, meta: MEMBER_ROLES },
 
   // Redirects for the old /trusted/* bookmarks (and remarkable-pdfs, which moved
@@ -165,6 +167,7 @@ const routes = [
   { path: '/trusted/goals/:id', redirect: (to) => `/member/shared/goals/${to.params.id}` },
   { path: '/trusted/valuation-statement', redirect: '/member/personal/valuation-statement' },
   { path: '/trusted/pappas-pushups', redirect: '/member/personal/pappas-pushups' },
+  { path: '/trusted/pappas-sit-ups', redirect: '/member/personal/pappas-sit-ups' },
   { path: '/trusted/jobs', redirect: '/member/personal/jobs' },
   { path: '/trusted/scratchpad', redirect: '/member/shared/scratchpad' },
   { path: '/applications/remarkable-pdfs', redirect: '/member/shared/remarkable-pdfs' },
