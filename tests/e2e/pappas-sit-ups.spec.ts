@@ -116,11 +116,10 @@ test.describe('Pappas sit-ups — three lines, crossings, crowns', () => {
     expect(patched()!.body).toEqual({ count: 60 });
   });
 
-  test('the total updates after a save', async ({ page, browserName }) => {
-    // Under WebKit the page stops responding once the save lands -- the
-    // unchanged pushups view does the same, chromium at phone width does not
-    // (system_3 #7996). Kept visible as a known failure, not skipped.
-    test.fixme(browserName === 'webkit', 'page hangs after save under WebKit (system_3 #7996)');
+  test('the total updates after a save, on every engine', async ({ page }) => {
+    // Under WebKit the page used to stop responding once the save landed: the
+    // Chart.js instance sat in reactive data() and chart.update() stalled
+    // through Vue's Proxy (system_3 #7996). markRaw fixed it; this pins it.
     await saveToday(page);
     await expect(page.locator('.chart-meta')).toContainText('60 av 3420 situps');
   });

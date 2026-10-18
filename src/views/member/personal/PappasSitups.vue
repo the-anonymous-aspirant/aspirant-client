@@ -107,6 +107,7 @@
 <script>
   import { AspInput } from '@aspirant/design-system';
   import axios from 'axios';
+  import { markRaw } from 'vue';
   import ReadState from '../../../components/ReadState.vue';
   import {
     Chart,
@@ -381,7 +382,11 @@
           return;
         }
 
-        this.chart = new Chart(canvas, {
+        // markRaw: Options-API data() would wrap the Chart.js instance in a deep
+        // reactive Proxy, and the post-save chart.update() then stalls WebKit's
+        // main thread -- the page stopped responding after every save under
+        // mobile-safari (system_3 #7996). Chart.js state must never be reactive.
+        this.chart = markRaw(new Chart(canvas, {
           type: 'line',
           data: {
             labels,
@@ -421,7 +426,7 @@
               tooltip: { mode: 'index', intersect: false },
             },
           },
-        });
+        }));
       },
     },
     mounted() {
