@@ -17,6 +17,7 @@ const REDIRECTS: Array<[string, RegExp]> = [
   ['/trusted/files', /\/member\/shared\/files$/],
   ['/trusted/message-board', /\/member\/shared\/message-board$/],
   ['/trusted/pappas-pushups', /\/member\/personal\/pappas-pushups$/],
+  ['/trusted/pappas-sit-ups', /\/member\/personal\/pappas-sit-ups$/],
   ['/trusted/jobs', /\/member\/personal\/jobs$/],
   ['/trusted/valuation-statement', /\/member\/personal\/valuation-statement$/],
   ['/trusted/30-year-gift', /\/member\/personal\/30-year-gift$/],

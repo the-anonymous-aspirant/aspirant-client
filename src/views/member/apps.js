@@ -20,11 +20,12 @@
 // is now a visibility boundary: `visiblePersonalApps()` below is what the index
 // renders.
 //
-// `owner` is not invented here — three of the five are executable facts in
+// `owner` is not invented here — four of the six are executable facts in
 // `aspirant-server` `server/routes.go`, where the owner gate is
 // `handlers.ValidateUserOrAdmin(<const>)`:
 //   jobsOwnerUsername    = "vinoly"  (routes.go:19, gate at :245-246)
 //   pushupsOwnerUsername = "robert"  (routes.go:25, gate at :235-237)
+//   situpsOwnerUsername  = "robert"  (#7993; same robert+Admin gate as pushups)
 //   luddeOwnerUsername   = "jenny"   (routes.go:33, gate at :198-201)
 // Värdeutlåtande has no username gate (per-user scoped inside the commander
 // service by `owner_user_id`) and Den Stökiga Väggen has no server surface at
@@ -49,6 +50,7 @@ export const PERSONAL_APPS = [
   { title: 'Den Stökiga Väggen', description: 'Om bara någon kunde bringa ordning i kaoset...', route: '30-year-gift', icon: '30year_gift_icon', person: 'sister Jenny', owner: 'jenny' },
   { title: 'Värdeutlåtande', description: 'Fyll i värdeutlåtanden från PDF-underlag', route: 'valuation-statement', icon: 'vardeutlatande_icon', person: 'sister (värdering)', owner: 'jenny' },
   { title: 'Pappas pushups', description: '60 dagars utmaning — 1000 armhävningar', route: 'pappas-pushups', icon: 'pushups_icon', person: 'father', owner: 'robert' },
+  { title: 'Pappas sit-ups', description: '57 dagar — 60 situps om dagen', route: 'pappas-sit-ups', icon: 'pushups_icon', person: 'father', owner: 'robert' },
   { title: 'Jobs', description: 'Berlin part-time English-job feed across scraped boards', route: 'jobs', icon: 'jobs_icon', person: 'Viktor', owner: 'vinoly' },
 ];
 
