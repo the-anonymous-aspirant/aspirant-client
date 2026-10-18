@@ -26,6 +26,7 @@ const ALL_PERSONAL = [
   'Den Stökiga Väggen',
   'Värdeutlåtande',
   'Pappas pushups',
+  'Pappas sit-ups',
   'Jobs',
 ];
 
@@ -49,12 +50,14 @@ async function personalCardTitles(page: Page): Promise<string[]> {
 }
 
 test.describe('#4331 /member personal apps are filtered to their owner', () => {
-  test('robert sees Pappas pushups and nothing else personal', async ({ page }) => {
+  test('robert sees his two Pappas apps and nothing else personal', async ({ page }) => {
     await seedTrustedSessionAs(page, 'robert');
     await openMember(page);
 
-    expect(await personalCardTitles(page)).toEqual(['Pappas pushups']);
-    for (const title of ALL_PERSONAL.filter((t) => t !== 'Pappas pushups')) {
+    // #7992: Pappas sit-ups is robert's second app (same robert+Admin gate).
+    const roberts = ['Pappas pushups', 'Pappas sit-ups'];
+    expect(await personalCardTitles(page)).toEqual(roberts);
+    for (const title of ALL_PERSONAL.filter((t) => !roberts.includes(t))) {
       await expect(page.locator('.application-card', { hasText: title })).toHaveCount(0);
     }
   });
@@ -67,6 +70,7 @@ test.describe('#4331 /member personal apps are filtered to their owner', () => {
       ['Den Stökiga Väggen', 'Ludde Meal Tracker', 'Värdeutlåtande'].sort(),
     );
     await expect(page.locator('.application-card', { hasText: 'Pappas pushups' })).toHaveCount(0);
+    await expect(page.locator('.application-card', { hasText: 'Pappas sit-ups' })).toHaveCount(0);
     await expect(page.locator('.application-card', { hasText: 'Jobs' })).toHaveCount(0);
   });
 

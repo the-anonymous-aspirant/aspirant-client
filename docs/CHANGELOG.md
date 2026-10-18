@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- **Pappas sit-ups** (system_3 #7992/#7994): robert's second personal app, at
+  `/member/personal/pappas-sit-ups` (and `/trusted/pappas-sit-ups`), built on
+  Pappas pushups. It runs 57 days, 2026-10-18 to 2026-12-13, against
+  aspirant-server's `GET/PATCH /api/situps/entries`, behind the same robert +
+  Admin gate. The cumulative graph carries three fixed-total lines at thirds of
+  60 a day × 57 days: 1140, 2280 and the 3420 goal. A day's message names the
+  highest line its total crossed. Past the goal a day shows 👑, plus one more
+  per 300; that is roughly the pushups crown cadence (one per 10% of the goal)
+  scaled to 3420. The y-axis uses a suggested rather than a hard maximum, so a
+  total past the goal stays on the chart. The pushups music widget stays on
+  pushups. Under WebKit the page stops responding after a save, as the
+  unchanged pushups page does; that is tracked as system_3 #7996.
+
+  Two layout defects inherited from the pushups template are fixed on the new
+  page only. Pushups still has both.
+  - The two cards now set their own ink. `--surface-card` is dark in both
+    themes, but the cards inherited the page's `--text-on-light`, so in the
+    light theme every muted label on them (headers, weekdays, dates, the
+    running-total line) rendered dark on dark.
+  - At phone width the day table now scrolls inside its week. Before, it ran
+    80px past the card and scrolled the whole page sideways at 390px.
+
 - Sign-up: the two links a sign-up email carries now land somewhere. `/verify-email`
   confirms a new address and `/reset-password` sets a new one, both public and both
   reading their single-use token from the query string. They exist as pages rather
