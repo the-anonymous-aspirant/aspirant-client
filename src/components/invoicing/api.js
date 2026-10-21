@@ -113,3 +113,28 @@ export function decimalFromMinor(value, places) {
 }
 
 export const STATUS_LABELS = { draft: 'Draft', issued: 'Issued', cancelled: 'Cancelled' };
+
+// ---- Review and exports (system_3 #8367-D2) ------------------------------
+
+export const getValidation = () => axios.get(`${base}/validation`).then((r) => r.data);
+export const listAuditEvents = (entityType, entityId) =>
+  axios
+    .get(`${base}/audit-events`, { params: { entity_type: entityType, entity_id: entityId } })
+    .then((r) => r.data.events || []);
+export const invoiceCsvUrl = (id) => `${base}/invoices/${id}/export.csv`;
+export const allInvoicesCsvUrl = () => `${base}/export/invoices.csv`;
+
+// Fetch a file and hand it to the browser as a download. Going through axios
+// (not a plain link) means a 409 from the export's own validation arrives as
+// an error the page can show, instead of being saved as a file.
+export async function downloadBlob(url, filename) {
+  const res = await axios.get(url, { responseType: 'blob' });
+  const href = URL.createObjectURL(res.data);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 1000);
+}
