@@ -69,7 +69,17 @@
       <AspSegmented v-model="tab" :options="tabs" as="tabs" aria-label="Invoices sections" class="tabs" />
 
       <ClientsPanel v-if="tab === 'clients'" :clients="clients" @changed="fetchAll" />
-      <PaymentsPanel v-else :payments="payments" :clients="clients" @changed="fetchAll" />
+      <InvoicesPanel v-else-if="tab === 'invoices'" :invoices="invoices" @open="openInvoice" />
+      <PaymentsPanel v-else :payments="payments" :clients="clients" @changed="fetchAll" @open-invoice="openInvoice" />
+
+      <InvoiceEditor
+        v-model:open="editorOpen"
+        :invoice-id="editorInvoiceId"
+        :clients="clients"
+        :kleinunternehmer="profile.is_kleinunternehmer !== false"
+        :next-number="nextNumberLabel"
+        @changed="fetchAll"
+      />
 
       <ProfileEditor v-model:open="profileOpen" :profile="profile" @saved="onProfileSaved" />
     </template>
@@ -81,8 +91,10 @@
   import ReadState from '../../../components/ReadState.vue';
   import ClientsPanel from '../../../components/invoicing/ClientsPanel.vue';
   import PaymentsPanel from '../../../components/invoicing/PaymentsPanel.vue';
+  import InvoicesPanel from '../../../components/invoicing/InvoicesPanel.vue';
+  import InvoiceEditor from '../../../components/invoicing/InvoiceEditor.vue';
   import ProfileEditor from '../../../components/invoicing/ProfileEditor.vue';
-  import { errorOf, getProfile, listClients, listPayments } from '../../../components/invoicing/api.js';
+  import { errorOf, getProfile, listClients, listInvoices, listPayments } from '../../../components/invoicing/api.js';
 
   // The Invoices app (system_3 #8367): Flower's retroactive invoicing for the
   // Jobcenter. The server gates every route to flowah + Admin
@@ -90,7 +102,19 @@
   // invoicing rule; this page shows its answers.
   export default {
     name: 'InvoicingView',
-    components: { AspBadge, AspButton, AspCard, AspEmptyState, AspSegmented, ReadState, ClientsPanel, PaymentsPanel, ProfileEditor },
+    components: {
+      AspBadge,
+      AspButton,
+      AspCard,
+      AspEmptyState,
+      AspSegmented,
+      ReadState,
+      ClientsPanel,
+      PaymentsPanel,
+      InvoicesPanel,
+      InvoiceEditor,
+      ProfileEditor,
+    },
     data() {
       return {
         loading: true,
@@ -100,10 +124,14 @@
         profileSaved: false,
         clients: [],
         payments: [],
+        invoices: [],
         profileOpen: false,
+        editorOpen: false,
+        editorInvoiceId: null,
         tab: 'payments',
         tabs: [
           { value: 'payments', label: 'Payments' },
+          { value: 'invoices', label: 'Invoices' },
           { value: 'clients', label: 'Clients' },
         ],
       };
@@ -121,17 +149,27 @@
       async fetchAll() {
         this.loadError = false;
         try {
-          const [p, clients, payments] = await Promise.all([getProfile(), listClients(), listPayments()]);
+          const [p, clients, payments, invoices] = await Promise.all([
+            getProfile(),
+            listClients(),
+            listPayments(),
+            listInvoices(),
+          ]);
           this.profile = p.profile || {};
           this.profileSaved = !!p.saved;
           this.clients = clients;
           this.payments = payments;
+          this.invoices = invoices;
         } catch (err) {
           if (errorOf(err).status === 403) this.forbidden = true;
           else this.loadError = true;
         } finally {
           this.loading = false;
         }
+      },
+      openInvoice(id) {
+        this.editorInvoiceId = id;
+        this.editorOpen = true;
       },
       onProfileSaved(profile) {
         this.profile = profile;

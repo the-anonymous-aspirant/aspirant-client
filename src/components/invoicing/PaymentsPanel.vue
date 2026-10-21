@@ -40,14 +40,25 @@
       </ul>
     </AspCard>
 
-    <div class="filter">
-      <AspSelect
-        v-model="categoryFilter"
-        :options="filterOptions"
-        aria-label="Show payments of category"
-        data-test="category-filter"
-      />
+    <div class="toolbar">
+      <div class="filter">
+        <AspSelect
+          v-model="categoryFilter"
+          :options="filterOptions"
+          aria-label="Show payments of category"
+          data-test="category-filter"
+        />
+      </div>
+      <AspButton
+        :disabled="selected.length === 0"
+        :loading="creating"
+        data-test="create-invoice"
+        @click="createInvoice"
+      >
+        Create invoice{{ selected.length ? ` from ${selected.length} payment${selected.length === 1 ? '' : 's'}` : '' }}
+      </AspButton>
     </div>
+    <p v-if="createError" class="error" role="alert" data-test="create-error">{{ createError }}</p>
 
     <AspEmptyState
       v-if="incoming.length === 0"
@@ -70,6 +81,13 @@
         :data-txn="row.transaction_id"
       >
         <div class="payment-card__top">
+          <AspCheckbox
+            v-if="row.category === 'paid_work'"
+            :model-value="selected.includes(row.id)"
+            :aria-label="`Select ${row.transaction_id} for an invoice`"
+            data-test="payment-select"
+            @update:model-value="toggle(row.id, $event)"
+          />
           <span class="nowrap">{{ formatDay(row.paid_on) }}</span>
           <strong class="nowrap">{{ formatMoney(row.gross_cents, row.currency) }}</strong>
         </div>
@@ -122,6 +140,15 @@
       caption="Incoming payments"
       :row-attrs="(row) => ({ 'data-test': 'payment-row', 'data-txn': row.transaction_id })"
     >
+      <template #cell-select="{ row }">
+        <AspCheckbox
+          v-if="row.category === 'paid_work'"
+          :model-value="selected.includes(row.id)"
+          :aria-label="`Select ${row.transaction_id} for an invoice`"
+          data-test="payment-select"
+          @update:model-value="toggle(row.id, $event)"
+        />
+      </template>
       <template #cell-paid_on="{ row }"><span class="nowrap">{{ formatDay(row.paid_on) }}</span></template>
       <template #cell-sender="{ row }">
         <span class="sender">{{ row.sender_name }}</span>
@@ -173,7 +200,7 @@
 </template>
 
 <script>
-  import { AspButton, AspCard, AspDataTable, AspEmptyState, AspSelect } from '@aspirant/design-system';
+  import { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect } from '@aspirant/design-system';
   import {
     CATEGORY_LABELS,
     SKIP_REASON_LABELS,
@@ -182,6 +209,7 @@
     formatMoney,
     importPayPalCSV,
     patchPayment,
+    createDraft,
   } from './api.js';
 
   // PayPal import and categorisation (spec §4.3–4.4). Every payment starts
@@ -190,12 +218,12 @@
   // payers, so they are only ever rendered as text interpolation.
   export default {
     name: 'PaymentsPanel',
-    components: { AspButton, AspCard, AspDataTable, AspEmptyState, AspSelect },
+    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect },
     props: {
       payments: { type: Array, required: true },
       clients: { type: Array, required: true },
     },
-    emits: ['changed'],
+    emits: ['changed', 'open-invoice'],
     data() {
       return {
         importing: false,
@@ -207,7 +235,11 @@
         saving: new Set(),
         rowError: '',
         narrow: false,
+        selected: [],
+        creating: false,
+        createError: '',
         columns: [
+          { key: 'select', label: '', sortable: false, width: '2.5rem' },
           { key: 'paid_on', label: 'Date' },
           { key: 'sender', label: 'From', sortable: false },
           { key: 'note', label: 'Note', sortable: false },
@@ -300,6 +332,25 @@
           if (this.$refs.fileInput) this.$refs.fileInput.value = '';
         }
       },
+      toggle(id, on) {
+        this.selected = on ? [...new Set([...this.selected, id])] : this.selected.filter((x) => x !== id);
+      },
+      // Only paid-work rows offer a checkbox; the server is still the rule
+      // (it refuses any other category, and a payment already invoiced).
+      async createInvoice() {
+        this.creating = true;
+        this.createError = '';
+        try {
+          const detail = await createDraft(this.selected);
+          this.selected = [];
+          this.$emit('open-invoice', detail.invoice.id);
+          this.$emit('changed');
+        } catch (err) {
+          this.createError = errorOf(err).message;
+        } finally {
+          this.creating = false;
+        }
+      },
       async patch(row, change) {
         this.rowError = '';
         this.saving = new Set([...this.saving, row.id]);
@@ -375,9 +426,18 @@
     padding-left: var(--space-lg);
   }
 
-  .filter {
-    max-width: 260px;
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
     margin-bottom: var(--space-sm);
+  }
+
+  .filter {
+    width: 260px;
+    max-width: 100%;
   }
 
   .sender {
@@ -422,6 +482,7 @@
 
   .payment-card__top {
     display: flex;
+    align-items: center;
     justify-content: space-between;
     gap: var(--space-sm);
   }
