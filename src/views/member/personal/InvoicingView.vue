@@ -51,7 +51,7 @@
             <dd data-test="profile-steuernummer">
               <template v-if="profile.steuernummer">{{ profile.steuernummer }}</template>
               <AspBadge v-else status="caution" data-test="steuernummer-missing">
-                Missing — invoices cannot be issued
+                Missing — issuing blocked
               </AspBadge>
             </dd>
           </div>
@@ -163,6 +163,17 @@
     margin-top: 0;
   }
 
+  /* AspCard's --surface-card is dark in both themes, so the card sets its own
+     ink (§3.18; same fix as PappasSitups .chart-card) instead of inheriting
+     the page's --text-on-light. */
+  .profile-card {
+    color: var(--text-on-dark);
+  }
+
+  .profile-card h2 {
+    color: var(--text-heading-card);
+  }
+
   .profile-card__head {
     display: flex;
     align-items: center;
@@ -183,7 +194,7 @@
 
   .profile-card__fields dt {
     font-size: var(--text-sm);
-    color: var(--text-muted);
+    opacity: 0.8;
   }
 
   .profile-card__fields dd {

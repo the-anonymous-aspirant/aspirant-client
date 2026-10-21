@@ -124,7 +124,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
 
     await expect(page.locator('[data-test="profile-name"]')).toHaveText('Flower Example');
     await expect(page.locator('[data-test="profile-next-number"]')).toHaveText('2026-001');
-    await expect(page.locator('[data-test="steuernummer-missing"]')).toContainText('invoices cannot be issued');
+    await expect(page.locator('[data-test="steuernummer-missing"]')).toContainText('issuing blocked');
   });
 
   test('editing the profile PUTs it; a server refusal stays in the dialog', async ({ page }) => {
