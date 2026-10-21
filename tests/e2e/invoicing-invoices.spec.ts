@@ -242,4 +242,14 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await expect(item.locator('img')).toHaveCount(0);
     expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
   });
+
+  // @security N7 (c51503 on #8372): an unknown currency code from an uploaded
+  // file must not break the payments table.
+  test('a payment with a non-ISO currency still renders', async ({ page }) => {
+    const fake = newFake();
+    fake.payments[2].currency = 'X1';
+    await open(page, fake);
+    await expect(page.locator('[data-test="payment-row"]')).toHaveCount(3);
+    await expect(page.locator('[data-test="payment-row"][data-txn="TX3"]')).toContainText('50.00 X1');
+  });
 });

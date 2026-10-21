@@ -38,7 +38,13 @@ export function errorOf(err) {
 // Money arrives as integer cents; it is shown, never computed, here.
 export function formatMoney(cents, currency = 'EUR') {
   const value = (cents || 0) / 100;
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(value);
+  try {
+    return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(value);
+  } catch {
+    // A currency code Intl does not know (it came from an uploaded file)
+    // must not take the whole table down (@security N7, c51503 on #8372).
+    return `${value.toFixed(2)} ${currency}`;
+  }
 }
 
 // Dates arrive as ISO timestamps at UTC midnight for a calendar day; show the
