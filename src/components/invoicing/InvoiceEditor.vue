@@ -29,7 +29,37 @@
           </tbody>
         </table>
         </div>
-        <a class="pdf-link" :href="pdfUrl" data-test="invoice-pdf" target="_blank" rel="noopener">Download PDF</a>
+        <div class="downloads">
+          <a class="pdf-link" :href="pdfUrl" data-test="invoice-pdf" target="_blank" rel="noopener">Download PDF</a>
+          <AspButton variant="secondary" size="sm" data-test="invoice-csv" @click="csvOpen = true">Download CSV</AspButton>
+        </div>
+        <iframe
+          v-if="!narrow && previewUrl"
+          class="pdf-preview"
+          :src="previewUrl"
+          :title="`PDF of invoice ${invoice.invoice_number}`"
+          data-test="invoice-pdf-preview"
+        ></iframe>
+
+        <section class="detail-block" data-test="invoice-payments">
+          <h3>Payments covered</h3>
+          <ul>
+            <li v-for="p in detail.payments" :key="p.id">
+              {{ formatDay(p.paid_on) }} · {{ p.transaction_id }} · {{ formatMoney(p.gross_cents, p.currency) }}
+            </li>
+          </ul>
+        </section>
+
+        <section class="detail-block" data-test="invoice-history">
+          <h3>History</h3>
+          <p v-if="historyError" class="error">{{ historyError }}</p>
+          <ol v-else class="history">
+            <li v-for="e in history" :key="e.id" data-test="history-event">
+              <strong>{{ actionLabel(e.action) }}</strong> · {{ formatTime(e.created_at) }}
+            </li>
+          </ol>
+        </section>
+        <ValidationScreen v-model:open="csvOpen" :url="csvUrl" :filename="`Rechnung-${invoice.invoice_number}.csv`" />
 
         <div v-if="cancelling" class="cancel-step" data-test="cancel-step">
           <AspTextarea v-model="cancelReason" label="Reason for the cancellation (Storno)" :rows="2" required />
@@ -101,7 +131,9 @@
 
 <script>
   import { AspBadge, AspButton, AspInput, AspModal, AspSelect, AspTextarea } from '@aspirant/design-system';
+  import axios from 'axios';
   import ReadState from '../ReadState.vue';
+  import ValidationScreen from './ValidationScreen.vue';
   import {
     STATUS_LABELS,
     cancelInvoice,
@@ -112,7 +144,9 @@
     formatDay,
     formatMoney,
     getInvoice,
+    invoiceCsvUrl,
     invoicePdfUrl,
+    listAuditEvents,
     issueInvoice,
     milliFromDecimal,
     updateDraft,
@@ -125,7 +159,7 @@
   // read-only record that can only be cancelled (Storno).
   export default {
     name: 'InvoiceEditor',
-    components: { AspBadge, AspButton, AspInput, AspModal, AspSelect, AspTextarea, ReadState },
+    components: { AspBadge, AspButton, AspInput, AspModal, AspSelect, AspTextarea, ReadState, ValidationScreen },
     props: {
       open: { type: Boolean, default: false },
       invoiceId: { type: Number, default: null },
@@ -144,7 +178,15 @@
         confirmingIssue: false,
         cancelling: false,
         cancelReason: '',
+        history: [],
+        historyError: '',
+        csvOpen: false,
+        previewUrl: '',
+        narrow: typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches,
       };
+    },
+    beforeUnmount() {
+      this.clearPreview();
     },
     computed: {
       invoice() {
@@ -175,6 +217,9 @@
       pdfUrl() {
         return invoicePdfUrl(this.invoice.id);
       },
+      csvUrl() {
+        return invoiceCsvUrl(this.invoice.id);
+      },
     },
     watch: {
       open: {
@@ -189,6 +234,7 @@
       formatMoney,
       decimalFromMinor,
       async load() {
+        this.clearPreview();
         this.detail = null;
         this.loadError = false;
         this.error = '';
@@ -204,6 +250,8 @@
       },
       setDetail(detail) {
         this.detail = detail;
+        this.loadHistory(detail.invoice.id);
+        if (detail.invoice.status !== 'draft') this.loadPreview(detail.invoice.id);
         const inv = detail.invoice;
         this.form = {
           client_id: inv.client_id || 0,
@@ -217,6 +265,38 @@
             price: decimalFromMinor(it.unit_price_cents, 2),
           })),
         };
+      },
+      // The stored PDF is served as an attachment (a download), so the
+      // preview fetches it and shows a blob: URL, which browsers render
+      // inline. Phones get only the download link.
+      async loadPreview(id) {
+        this.clearPreview();
+        if (this.narrow) return;
+        try {
+          const res = await axios.get(invoicePdfUrl(id), { responseType: 'blob' });
+          this.previewUrl = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+        } catch (err) {
+          this.previewUrl = '';
+        }
+      },
+      clearPreview() {
+        if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
+        this.previewUrl = '';
+      },
+      async loadHistory(id) {
+        this.historyError = '';
+        try {
+          this.history = await listAuditEvents('invoice', id);
+        } catch (err) {
+          this.historyError = 'The history could not be loaded.';
+        }
+      },
+      actionLabel(a) {
+        return { create: 'Draft created', update: 'Draft edited', issue: 'Issued', cancel: 'Cancelled (Storno)', delete: 'Draft deleted' }[a] || a;
+      },
+      formatTime(iso) {
+        if (!iso) return '';
+        return String(iso).replace('T', ' ').slice(0, 16) + ' UTC';
       },
       addLine() {
         this.form.lines.push({ key: ++lineKey, description: '', quantity: '1', price: '' });
@@ -425,6 +505,32 @@
 
   .items .text {
     white-space: pre-line;
+  }
+
+  .downloads {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-md);
+  }
+
+  .pdf-preview {
+    width: 100%;
+    height: 420px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md, 6px);
+    background: #fff;
+  }
+
+  .detail-block h3 {
+    margin: 0 0 var(--space-xs);
+    font-size: var(--text-md, 1rem);
+  }
+
+  .detail-block ul,
+  .history {
+    margin: 0;
+    padding-left: var(--space-lg);
   }
 
   .hint {

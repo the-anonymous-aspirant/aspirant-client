@@ -69,7 +69,7 @@
       <AspSegmented v-model="tab" :options="tabs" as="tabs" aria-label="Invoices sections" class="tabs" />
 
       <ClientsPanel v-if="tab === 'clients'" :clients="clients" @changed="fetchAll" />
-      <InvoicesPanel v-else-if="tab === 'invoices'" :invoices="invoices" @open="openInvoice" />
+      <InvoicesPanel v-else-if="tab === 'invoices'" :refresh-key="refreshKey" @open="openInvoice" />
       <PaymentsPanel v-else :payments="payments" :clients="clients" @changed="fetchAll" @open-invoice="openInvoice" />
 
       <InvoiceEditor
@@ -94,7 +94,7 @@
   import InvoicesPanel from '../../../components/invoicing/InvoicesPanel.vue';
   import InvoiceEditor from '../../../components/invoicing/InvoiceEditor.vue';
   import ProfileEditor from '../../../components/invoicing/ProfileEditor.vue';
-  import { errorOf, getProfile, listClients, listInvoices, listPayments } from '../../../components/invoicing/api.js';
+  import { errorOf, getProfile, listClients, listPayments } from '../../../components/invoicing/api.js';
 
   // The Invoices app (system_3 #8367): Flower's retroactive invoicing for the
   // Jobcenter. The server gates every route to flowah + Admin
@@ -124,7 +124,7 @@
         profileSaved: false,
         clients: [],
         payments: [],
-        invoices: [],
+        refreshKey: 0,
         profileOpen: false,
         editorOpen: false,
         editorInvoiceId: null,
@@ -149,17 +149,12 @@
       async fetchAll() {
         this.loadError = false;
         try {
-          const [p, clients, payments, invoices] = await Promise.all([
-            getProfile(),
-            listClients(),
-            listPayments(),
-            listInvoices(),
-          ]);
+          const [p, clients, payments] = await Promise.all([getProfile(), listClients(), listPayments()]);
           this.profile = p.profile || {};
           this.profileSaved = !!p.saved;
           this.clients = clients;
           this.payments = payments;
-          this.invoices = invoices;
+          this.refreshKey += 1;
         } catch (err) {
           if (errorOf(err).status === 403) this.forbidden = true;
           else this.loadError = true;
