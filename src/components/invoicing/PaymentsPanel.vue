@@ -2,6 +2,13 @@
   <section class="payments-panel" data-test="payments-panel">
     <div class="panel-head">
       <h2 class="visually-hidden">Payments</h2>
+      <!-- The two ways a payment gets in, equal (design_agent, #8409):
+           entered by hand, or imported from PayPal. Both stay secondary;
+           Create invoice holds the one primary slot. -->
+      <div class="ways-in">
+        <AspButton variant="secondary" class="block-on-phone" data-test="manual-new" @click="manualOpen = true">
+          New invoice
+        </AspButton>
       <div class="upload">
         <input
           ref="fileInput"
@@ -14,7 +21,7 @@
           @change="onFileChosen"
         />
         <AspButton
-          :variant="incoming.length ? 'secondary' : 'primary'"
+          variant="secondary"
           :loading="importing"
           class="block-on-phone"
           data-test="payments-import"
@@ -22,6 +29,7 @@
         >
           Import PayPal CSV
         </AspButton>
+      </div>
       </div>
     </div>
 
@@ -48,7 +56,8 @@
       </ul>
     </AspCard>
 
-    <div class="toolbar">
+    <!-- Nothing to filter or select before the first payment. -->
+    <div v-if="incoming.length" class="toolbar">
       <div class="filter full-select">
         <AspSelect
           v-model="categoryFilter"
@@ -80,7 +89,7 @@
     <AspEmptyState
       v-if="incoming.length === 0"
       heading="No payments yet"
-      message="Import a PayPal activity CSV to list the payments here."
+      message="Enter a payment by hand with New invoice, or import a PayPal activity CSV."
       data-test="payments-empty"
     />
     <AspEmptyState
@@ -111,8 +120,22 @@
           <strong class="nowrap amount">{{ formatMoney(row.gross_cents, row.currency) }}</strong>
         </div>
         <span class="sender">{{ row.sender_name }}</span>
-        <span class="muted">{{ row.sender_email }}</span>
+        <span v-if="row.sender_email" class="muted">{{ row.sender_email }}</span>
         <span v-if="row.note" class="note">{{ row.note }}</span>
+        <template v-if="row.entry === 'manual'">
+          <span class="muted manual-line" data-test="payment-manual">Entered by hand <span class="nowrap">· {{ methodLabel(row) }}</span><template v-if="row.reference">{{ ' ' }}<span class="nowrap">· {{ row.reference }}</span></template></span>
+          <AspButton
+            v-if="!row.on_invoice"
+            :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
+            size="sm"
+            class="manual-delete"
+            :loading="deleting === row.id"
+            data-test="payment-delete"
+            @click="removeManual(row)"
+          >
+            {{ confirmingDelete === row.id ? 'Delete this payment' : 'Delete' }}
+          </AspButton>
+        </template>
         <div class="payment-card__fields full-select">
           <div class="payment-card__field">
             <span class="payment-card__caption" aria-hidden="true">Category</span>
@@ -174,8 +197,24 @@
            at 1280 with the sidebar open (#8407). -->
       <template #cell-sender="{ row }">
         <span class="sender">{{ row.sender_name }}</span>
-        <span class="muted">{{ row.sender_email }}</span>
+        <span v-if="row.sender_email" class="muted">{{ row.sender_email }}</span>
         <span v-if="row.note" class="note note--cell">{{ row.note }}</span>
+        <!-- A hand-entered payment says so, and can be deleted while no
+             invoice covers it; no extra column (the table fills 968px). -->
+        <template v-if="row.entry === 'manual'">
+          <span class="muted manual-line" data-test="payment-manual">Entered by hand <span class="nowrap">· {{ methodLabel(row) }}</span><template v-if="row.reference">{{ ' ' }}<span class="nowrap">· {{ row.reference }}</span></template></span>
+          <AspButton
+            v-if="!row.on_invoice"
+            :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
+            size="sm"
+            class="manual-delete"
+            :loading="deleting === row.id"
+            data-test="payment-delete"
+            @click="removeManual(row)"
+          >
+            {{ confirmingDelete === row.id ? 'Delete this payment' : 'Delete' }}
+          </AspButton>
+        </template>
       </template>
       <template #cell-gross_cents="{ row }"><span class="nowrap">{{ formatMoney(row.gross_cents, row.currency) }}</span></template>
       <template #cell-category="{ row }">
@@ -226,13 +265,23 @@
         <template #cell-gross_cents="{ row }"><span class="nowrap">{{ formatMoney(row.gross_cents, row.currency) }}</span></template>
       </AspDataTable>
     </div>
+
+    <ManualPaymentDialog
+      v-model:open="manualOpen"
+      :clients="clients"
+      @changed="$emit('changed')"
+      @created="(id) => $emit('open-invoice', id)"
+    />
   </section>
 </template>
 
 <script>
   import { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect } from '@aspirant/design-system';
+  import ManualPaymentDialog from './ManualPaymentDialog.vue';
   import {
     CATEGORY_LABELS,
+    METHOD_LABELS,
+    deleteManualPayment,
     SKIP_REASON_LABELS,
     errorOf,
     formatDay,
@@ -248,7 +297,7 @@
   // payers, so they are only ever rendered as text interpolation.
   export default {
     name: 'PaymentsPanel',
-    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect },
+    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect, ManualPaymentDialog },
     props: {
       payments: { type: Array, required: true },
       clients: { type: Array, required: true },
@@ -268,6 +317,9 @@
         selected: [],
         creating: false,
         createError: '',
+        manualOpen: false,
+        confirmingDelete: null,
+        deleting: null,
         columns: [
           { key: 'select', label: '', sortable: false, width: '2.5rem' },
           { key: 'paid_on', label: 'Date' },
@@ -338,6 +390,29 @@
     methods: {
       formatDay,
       formatMoney,
+      methodLabel(row) {
+        return METHOD_LABELS[row.method] || row.method;
+      },
+      // Two steps: the first press turns the button into "Delete this
+      // payment"; the server still refuses one that an invoice covers.
+      async removeManual(row) {
+        if (this.confirmingDelete !== row.id) {
+          this.confirmingDelete = row.id;
+          return;
+        }
+        this.rowError = '';
+        this.deleting = row.id;
+        try {
+          await deleteManualPayment(row.id);
+          this.selected = this.selected.filter((x) => x !== row.id);
+        } catch (err) {
+          this.rowError = errorOf(err).message;
+        } finally {
+          this.deleting = null;
+          this.confirmingDelete = null;
+          this.$emit('changed');
+        }
+      },
       // The whole label, as a tooltip on a table-cell select whose value may
       // end in an ellipsis.
       optionLabel(options, value) {
@@ -431,6 +506,25 @@
     display: flex;
     justify-content: flex-end;
     margin-bottom: var(--space-md);
+  }
+
+  .ways-in {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+  }
+
+  .manual-line {
+    margin-top: var(--space-2xs);
+  }
+
+  /* The ghost button's own padding would indent its label; pull it back so
+     "Delete" lines up with the text above it. */
+  .manual-delete {
+    align-self: flex-start;
+    margin-top: var(--space-2xs);
+    margin-left: calc(-1 * var(--space-sm));
   }
 
   .upload__input {
@@ -620,7 +714,8 @@
 
   @media (max-width: 640px) {
     .panel-head,
-    .toolbar {
+    .toolbar,
+    .ways-in {
       flex-direction: column;
       align-items: stretch;
     }

@@ -23,6 +23,20 @@ export function importPayPalCSV(file, dateOrder) {
 
 export const listPayments = () => axios.get(`${base}/payments`).then((r) => r.data.payments || []);
 export const patchPayment = (id, patch) => axios.patch(`${base}/payments/${id}`, patch).then((r) => r.data.payment);
+// A payment entered by hand (#8409): always incoming paid work, audited.
+export const createManualPayment = (payment) =>
+  axios.post(`${base}/payments/manual`, payment).then((r) => r.data.payment);
+// Only a hand-entered payment that no invoice covers; the server refuses others.
+export const deleteManualPayment = (id) => axios.delete(`${base}/payments/${id}`);
+
+// How a hand-entered payment was received, in the invoice's German wording.
+export const METHOD_LABELS = {
+  bank_transfer: 'Banküberweisung',
+  paypal: 'PayPal',
+  stripe: 'Stripe',
+  cash: 'Bar',
+  other: 'Sonstige',
+};
 
 // The server's error envelope is { error: { code, message } }; fall back to
 // a generic line so a network failure still reads as a sentence.
