@@ -240,26 +240,41 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await seedTrustedSessionAs(page, 'flowah');
     await openInvoicing(page);
 
-    // Chosen by keyboard: with the row low in the window the panel flips up
-    // and AspDataTable's scroll box clips it, hiding the option from a mouse
-    // (#8402, which owns that geometry and its own test).
     const category = page.getByRole('combobox', { name: 'Category for TX1' });
-    const choose = async (from: string, to: string) => {
-      await category.focus();
-      await page.keyboard.press('Enter');
-      await expect(page.getByRole('option', { name: from })).toHaveAttribute('data-active', 'true');
-      await page.keyboard.press('ArrowDown');
-      await expect(page.getByRole('option', { name: to })).toHaveAttribute('data-active', 'true');
-      await page.keyboard.press('Enter');
-    };
-    await choose('Uncategorised', 'Paid work');
+    await category.click();
+    await page.getByRole('option', { name: 'Paid work' }).click();
     await expect(category).toContainText('Paid work');
     const patch = fake.requests.find((r) => r.method === 'PATCH' && r.path === '/invoicing/payments/10')!;
     expect(JSON.parse(patch.body)).toEqual({ category: 'paid_work' });
 
     fake.patchFailure = { status: 409, body: { error: { code: 'payment_on_issued_invoice', message: 'payment is on issued invoice 3; cancel that invoice before changing its category' } } };
-    await choose('Paid work', 'Gift');
+    await category.click();
+    await page.getByRole('option', { name: 'Gift' }).click();
     await expect(page.locator('[data-test="payment-error"]')).toContainText('cancel that invoice');
+    await expect(category).toContainText('Paid work');
+  });
+
+  // #8402: an AspSelect in the payments table opened into AspDataTable's
+  // scroll box, so with the row near the window bottom the panel flipped up
+  // and "Paid work" sat behind the table's edge, unreachable by mouse. The
+  // hit test is what a pointer would get.
+  test('near the window bottom the category options are on top and clickable', async ({ page }) => {
+    const fake = newFake();
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'flowah');
+    await openInvoicing(page);
+
+    const category = page.getByRole('combobox', { name: 'Category for TX1' });
+    await category.evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().bottom - (window.innerHeight - 60)));
+    await category.click();
+    const option = page.getByRole('option', { name: 'Paid work' });
+    const onTop = await option.evaluate((o) => {
+      const r = o.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return top === o || o.contains(top);
+    });
+    expect(onTop, '"Paid work" is the element under the pointer').toBe(true);
+    await option.click();
     await expect(category).toContainText('Paid work');
   });
 
