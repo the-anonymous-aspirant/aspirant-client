@@ -88,7 +88,10 @@
     color: var(--brand-primary);
     float: left;
     position: fixed;
-    z-index: 1000;
+    /* The shell is sticky page chrome: it sits on the DS sticky layer, below
+       --z-index-modal, so a modal's scrim covers all of it. As literals
+       (999/1000/1001) the toggle painted over every AspModal sheet (#8407). */
+    z-index: calc(var(--z-index-sticky) + 1);
     top: 0;
     left: 0;
     bottom: 0;
@@ -103,7 +106,7 @@
     position: fixed;
     top: var(--space-lg);
     left: var(--space-lg);
-    z-index: 1001;
+    z-index: calc(var(--z-index-sticky) + 2);
     cursor: pointer;
     display: none;
   }
@@ -132,7 +135,7 @@
     width: 100%;
     height: 100%;
     background-color: var(--surface-scrim);
-    z-index: 999;
+    z-index: var(--z-index-sticky);
     display: none;
   }
 

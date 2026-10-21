@@ -705,12 +705,13 @@ export async function seedTrustedSessionAs(page: Page, username: string): Promis
  *  hides on a *transition* into mobile (not on a fresh mobile mount), so
  *  the operator's normal first action is to tap the hamburger.
  *
- *  We click the hamburger rather than the overlay because .sidebar (z:1000)
- *  visually covers the left ~200px of the overlay (which is 100% wide), and
- *  Playwright's default click target is the element center — falling inside
- *  the sidebar. .mobile-menu-toggle has z-index 1001 and stays above the
- *  sidebar even when shown. A no-op on viewports where the toggle never
- *  renders (desktop). */
+ *  We click the hamburger rather than the overlay because .sidebar (one
+ *  layer above the overlay) visually covers the left ~200px of the overlay
+ *  (which is 100% wide), and Playwright's default click target is the
+ *  element center — falling inside the sidebar. .mobile-menu-toggle sits one
+ *  layer above the sidebar and stays clickable even when it is shown. All
+ *  three are on the DS sticky layer, below --z-index-modal (#8407). A no-op
+ *  on viewports where the toggle never renders (desktop). */
 export async function dismissMobileSidebarIfPresent(page: Page): Promise<void> {
   const toggle = page.locator('.mobile-menu-toggle');
   if (await toggle.isVisible().catch(() => false)) {
