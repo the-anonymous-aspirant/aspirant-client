@@ -1,10 +1,12 @@
 <template>
   <!-- Intended user: Flower (flowah), freelance invoices — system_3 #8367 -->
   <div class="invoicing-view">
-    <h1>Invoices</h1>
-    <p class="page-subtitle">
-      Import PayPal payments, mark which were paid work, and issue invoices for that work.
-    </p>
+    <header class="page-head">
+      <h1>Invoices</h1>
+      <p class="page-subtitle">
+        Import PayPal payments, mark which were paid work, and issue invoices for that work.
+      </p>
+    </header>
 
     <AspEmptyState
       v-if="forbidden"
@@ -34,36 +36,23 @@
             Edit profile
           </AspButton>
         </div>
-        <p v-if="!profileSaved" class="muted" data-test="profile-unsaved">
-          No profile saved yet. Every invoice is printed with this header.
+        <!-- A glance, not a read-out (§3.114 decision 5): who issues, and
+             whether issuing is possible. Every field stays one tap away in
+             the profile editor. -->
+        <p class="glance__line">
+          <span v-if="!profileSaved" class="muted" data-test="profile-unsaved">
+            No profile saved yet. Every invoice is printed with this header.
+          </span>
+          <span v-else data-test="profile-name">{{ profile.full_name || '—' }}</span>
         </p>
-        <dl class="profile-card__fields">
-          <div>
-            <dt>Name</dt>
-            <dd data-test="profile-name">{{ profile.full_name || '—' }}</dd>
-          </div>
-          <div>
-            <dt>Address</dt>
-            <dd class="multiline">{{ profile.address || '—' }}</dd>
-          </div>
-          <div>
-            <dt>Steuernummer</dt>
-            <dd data-test="profile-steuernummer">
-              <template v-if="profile.steuernummer">{{ profile.steuernummer }}</template>
-              <AspBadge v-else status="caution" data-test="steuernummer-missing">
-                Missing — issuing blocked
-              </AspBadge>
-            </dd>
-          </div>
-          <div>
-            <dt>VAT</dt>
-            <dd>{{ profile.is_kleinunternehmer ? 'Kleinunternehmerin (§ 19 UStG), no VAT' : 'VAT charged' }}</dd>
-          </div>
-          <div>
-            <dt>Next invoice number</dt>
-            <dd data-test="profile-next-number">{{ nextNumberLabel }}</dd>
-          </div>
-        </dl>
+        <p class="glance__line glance__line--state">
+          <span v-if="profile.steuernummer">
+            <span class="muted">Steuernummer</span> <span data-test="profile-steuernummer">{{ profile.steuernummer }}</span>
+          </span>
+          <AspBadge v-else status="caution" data-test="steuernummer-missing">Missing — issuing blocked</AspBadge>
+          <span class="muted" aria-hidden="true">·</span>
+          <span><span class="muted">next invoice</span> <span data-test="profile-next-number">{{ nextNumberLabel }}</span></span>
+        </p>
       </AspCard>
 
       <AspSegmented v-model="tab" :options="tabs" as="tabs" aria-label="Invoices sections" class="tabs" />
@@ -78,6 +67,7 @@
         :clients="clients"
         :kleinunternehmer="profile.is_kleinunternehmer !== false"
         :next-number="nextNumberLabel"
+        :steuernummer-missing="!profile.steuernummer"
         @changed="fetchAll"
       />
 
@@ -187,13 +177,20 @@
     min-height: 100vh;
   }
 
-  .invoicing-view h1 {
-    margin-bottom: 0;
+  /* Two left edges only (§3.114): the page edge (this padding) and each
+     card's own padding token. #app centres text app-wide, so the view
+     resets it rather than letting headings and inline controls drift. */
+  .invoicing-view {
+    text-align: left;
+  }
+
+  .page-head h1 {
+    margin: 0 0 var(--space-2xs);
   }
 
   .page-subtitle {
     color: var(--text-muted);
-    margin-top: 0;
+    margin: 0;
   }
 
   /* AspCard's --surface-card is dark in both themes, so the card sets its own
@@ -218,31 +215,31 @@
     margin: 0;
   }
 
-  .profile-card__fields {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: var(--space-sm) var(--space-lg);
-    margin: var(--space-sm) 0 0;
-  }
-
-  .profile-card__fields dt {
-    font-size: var(--text-sm);
-    opacity: 0.8;
-  }
-
-  .profile-card__fields dd {
+  .glance__line {
     margin: 0;
+    overflow-wrap: anywhere;
   }
 
-  .multiline {
-    white-space: pre-line;
+  .glance__line--state {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2xs) var(--space-xs);
+    font-size: var(--text-sm);
   }
 
   .muted {
     color: var(--text-muted);
   }
 
-  .tabs {
-    align-self: flex-start;
+  /* class="tabs" lands on AspSegmented's own root, so the root is styled
+     directly; three equal segments span the page edge to edge. */
+  .invoicing-view .tabs {
+    display: flex;
+    width: 100%;
+  }
+
+  .tabs :deep(.segmented__item) {
+    flex: 1;
   }
 </style>

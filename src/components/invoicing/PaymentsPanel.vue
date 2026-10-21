@@ -1,7 +1,7 @@
 <template>
   <section class="payments-panel" data-test="payments-panel">
     <div class="panel-head">
-      <h2>Payments</h2>
+      <h2 class="visually-hidden">Payments</h2>
       <div class="upload">
         <input
           ref="fileInput"
@@ -13,7 +13,13 @@
           :disabled="importing"
           @change="onFileChosen"
         />
-        <AspButton :loading="importing" data-test="payments-import" @click="$refs.fileInput.click()">
+        <AspButton
+          :variant="incoming.length ? 'secondary' : 'primary'"
+          :loading="importing"
+          class="block-on-phone"
+          data-test="payments-import"
+          @click="$refs.fileInput.click()"
+        >
           Import PayPal CSV
         </AspButton>
       </div>
@@ -23,8 +29,10 @@
       <p id="date-order-label">
         Every date in this file reads both ways (for example 07/08/2026). Which order does the file use?
       </p>
-      <AspButton variant="secondary" data-test="date-order-dmy" @click="reimport('dmy')">Day/month (07/08 = 7 August)</AspButton>
-      <AspButton variant="secondary" data-test="date-order-mdy" @click="reimport('mdy')">Month/day (07/08 = 8 July)</AspButton>
+      <div class="date-order__actions">
+        <AspButton variant="secondary" data-test="date-order-dmy" @click="reimport('dmy')">Day/month (07/08 = 7 August)</AspButton>
+        <AspButton variant="secondary" data-test="date-order-mdy" @click="reimport('mdy')">Month/day (07/08 = 8 July)</AspButton>
+      </div>
     </div>
 
     <p v-if="importError" class="error" role="alert" data-test="import-error">{{ importError }}</p>
@@ -41,7 +49,7 @@
     </AspCard>
 
     <div class="toolbar">
-      <div class="filter">
+      <div class="filter full-select">
         <AspSelect
           v-model="categoryFilter"
           :options="filterOptions"
@@ -49,14 +57,23 @@
           data-test="category-filter"
         />
       </div>
-      <AspButton
-        :disabled="selected.length === 0"
-        :loading="creating"
-        data-test="create-invoice"
-        @click="createInvoice"
-      >
-        Create invoice{{ selected.length ? ` from ${selected.length} payment${selected.length === 1 ? '' : 's'}` : '' }}
-      </AspButton>
+      <div class="create">
+        <AspButton
+          :disabled="selected.length === 0"
+          :loading="creating"
+          :aria-describedby="selected.length === 0 ? 'create-invoice-hint' : undefined"
+          class="block-on-phone"
+          data-test="create-invoice"
+          @click="createInvoice"
+        >
+          Create invoice{{ selected.length ? ` from ${selected.length} payment${selected.length === 1 ? '' : 's'}` : '' }}
+        </AspButton>
+        <!-- States the category gate in the user's terms; the server is
+             still the rule (only paid work can be invoiced). -->
+        <p v-if="selected.length === 0" id="create-invoice-hint" class="create__hint" data-test="create-invoice-hint">
+          Mark payments as Paid work, then select them to create an invoice.
+        </p>
+      </div>
     </div>
     <p v-if="createError" class="error" role="alert" data-test="create-error">{{ createError }}</p>
 
@@ -81,20 +98,22 @@
         :data-txn="row.transaction_id"
       >
         <div class="payment-card__top">
-          <AspCheckbox
-            v-if="row.category === 'paid_work'"
-            :model-value="selected.includes(row.id)"
-            :aria-label="`Select ${row.transaction_id} for an invoice`"
-            data-test="payment-select"
-            @update:model-value="toggle(row.id, $event)"
-          />
-          <span class="nowrap">{{ formatDay(row.paid_on) }}</span>
-          <strong class="nowrap">{{ formatMoney(row.gross_cents, row.currency) }}</strong>
+          <span class="payment-card__when">
+            <AspCheckbox
+              v-if="row.category === 'paid_work'"
+              :model-value="selected.includes(row.id)"
+              :aria-label="`Select ${row.transaction_id} for an invoice`"
+              data-test="payment-select"
+              @update:model-value="toggle(row.id, $event)"
+            />
+            <span class="nowrap">{{ formatDay(row.paid_on) }}</span>
+          </span>
+          <strong class="nowrap amount">{{ formatMoney(row.gross_cents, row.currency) }}</strong>
         </div>
         <span class="sender">{{ row.sender_name }}</span>
         <span class="muted">{{ row.sender_email }}</span>
         <span v-if="row.note" class="note">{{ row.note }}</span>
-        <div class="payment-card__fields">
+        <div class="payment-card__fields full-select">
           <div class="payment-card__field">
             <span class="payment-card__caption" aria-hidden="true">Category</span>
             <AspSelect
@@ -373,17 +392,23 @@
 </script>
 
 <style scoped>
-  .panel-head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-md);
-    margin-bottom: var(--space-md);
+  /* Layout per the #8399 spec (§3.114): on a phone the panel reads actions →
+     filters → list, every control full width at the page edge; wide, the
+     actions sit right and the filter left on one row. */
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
-  .panel-head h2 {
-    margin: 0;
+  .panel-head {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--space-md);
   }
 
   .upload__input {
@@ -400,15 +425,19 @@
 
   .date-order {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    flex-direction: column;
     gap: var(--space-sm);
     margin-bottom: var(--space-md);
   }
 
   .date-order p {
-    flex-basis: 100%;
     margin: 0;
+  }
+
+  .date-order__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
   }
 
   /* AspCard is dark in both themes; set the ink here (§3.18). */
@@ -428,16 +457,34 @@
 
   .toolbar {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: var(--space-sm);
     margin-bottom: var(--space-sm);
   }
 
   .filter {
-    width: 260px;
-    max-width: 100%;
+    width: 16rem;
+  }
+
+  /* AspSelect forwards a class to its trigger, not its root, so a wrapper
+     makes it fill the row. */
+  .full-select :deep(.select) {
+    display: flex;
+    width: 100%;
+  }
+
+  .create {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .create__hint {
+    margin: var(--space-2xs) 0 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+    text-align: right;
   }
 
   .sender {
@@ -456,6 +503,7 @@
 
   .error {
     color: var(--feedback-error);
+    margin: 0 0 var(--space-sm);
   }
 
   .deposits {
@@ -487,6 +535,16 @@
     gap: var(--space-sm);
   }
 
+  .payment-card__when {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+
+  .amount {
+    font-variant-numeric: tabular-nums;
+  }
+
   .payment-card__field {
     display: flex;
     flex-direction: column;
@@ -503,5 +561,35 @@
     flex-direction: column;
     gap: var(--space-sm);
     margin-top: var(--space-xs);
+  }
+
+  @media (max-width: 640px) {
+    .panel-head,
+    .toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .filter,
+    .create {
+      width: 100%;
+    }
+
+    .create {
+      align-items: stretch;
+    }
+
+    .create__hint {
+      text-align: left;
+    }
+
+    .block-on-phone,
+    .date-order__actions :deep(button) {
+      width: 100%;
+    }
+
+    .date-order__actions {
+      flex-direction: column;
+    }
   }
 </style>
