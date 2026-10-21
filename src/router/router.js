@@ -36,6 +36,7 @@ import ValuationStatement from '../views/member/personal/ValuationStatement.vue'
 import PappasPushups from '../views/member/personal/PappasPushups.vue';
 import PappasSitups from '../views/member/personal/PappasSitups.vue';
 import JobsView from '../views/member/personal/JobsView.vue';
+import InvoicingView from '../views/member/personal/InvoicingView.vue';
 import Scratchpad from '../views/member/shared/Scratchpad.vue';
 import Constellations from '../views/member/shared/Constellations.vue';
 import ConstellationsRoom from '../views/member/shared/ConstellationsRoom.vue';
@@ -153,6 +154,7 @@ const routes = [
   { path: '/member/personal/pappas-pushups', component: PappasPushups, meta: MEMBER_ROLES },
   { path: '/member/personal/pappas-sit-ups', component: PappasSitups, meta: MEMBER_ROLES },
   { path: '/member/personal/jobs', component: JobsView, meta: MEMBER_ROLES },
+  { path: '/member/personal/invoicing', component: InvoicingView, meta: MEMBER_ROLES },
 
   // Redirects for the old /trusted/* bookmarks (and remarkable-pdfs, which moved
   // out of /applications). One per moved route so existing links keep working;
