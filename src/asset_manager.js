@@ -43,6 +43,7 @@ const assetMap = {
   goal_trees_icon: { hash: '0f1d8b910f7694dfbe2dbfd4116f2b6d', type: AssetType.IMAGE },
   scratchpad_icon: { hash: '621aa988d8f497aeb841466d81f7e872', type: AssetType.IMAGE },
   pushups_icon: { hash: 'd7687996bb0b13bb83159afeb728ecbd', type: AssetType.IMAGE },
+  situps_icon: { hash: 'ce1e9e2fdfc45e19b2e4ffb823f6d897', type: AssetType.IMAGE },
   jobs_icon: { hash: '4e6c654dece53e93029bc5cee19b3dbb', type: AssetType.IMAGE },
   vardeutlatande_icon: { hash: 'f728540c8354400762afab002220fdde', type: AssetType.IMAGE },
   // Hand-drawn admin-tile icons (#4840): the three sketched glyphs that are not
