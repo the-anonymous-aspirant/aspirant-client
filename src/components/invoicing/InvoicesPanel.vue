@@ -2,8 +2,14 @@
   <section class="invoices-panel" data-test="invoices-panel">
     <div class="panel-head">
       <h2>Invoices</h2>
-      <AspButton variant="secondary" data-test="export-all-csv" @click="exportOpen = true">Download all (CSV)</AspButton>
+      <div class="exports">
+        <AspButton variant="secondary" data-test="export-all-csv" @click="startExport('csv')">Download all (CSV)</AspButton>
+        <AspButton variant="secondary" data-test="export-workbook" @click="startExport('xlsx')">Excel workbook</AspButton>
+        <AspButton variant="secondary" data-test="export-bundle" @click="startExport('bundle')">Jobcenter bundle (ZIP)</AspButton>
+      </div>
     </div>
+
+    <InvoicesChart :refresh-key="refreshKey" />
 
     <div class="filters" role="group" aria-label="Filter invoices">
       <AspSelect v-model="status" :options="statusOptions" aria-label="Status" data-test="filter-status" />
@@ -53,21 +59,38 @@
       <template #cell-total_cents="{ row }"><span class="nowrap">{{ formatMoney(row.total_cents, row.currency) }}</span></template>
     </AspDataTable>
 
-    <ValidationScreen v-model:open="exportOpen" :url="allCsvUrl" filename="Rechnungen.csv" />
+    <ValidationScreen v-model:open="exportOpen" :url="exportTarget.url" :filename="exportTarget.filename" />
   </section>
 </template>
 
 <script>
   import { AspBadge, AspButton, AspDataTable, AspEmptyState, AspInput, AspSelect } from '@aspirant/design-system';
   import ValidationScreen from './ValidationScreen.vue';
-  import { STATUS_LABELS, allInvoicesCsvUrl, errorOf, formatDay, formatMoney, listInvoices } from './api.js';
+  import InvoicesChart from './InvoicesChart.vue';
+  import {
+    STATUS_LABELS,
+    allInvoicesCsvUrl,
+    bundleUrl,
+    errorOf,
+    formatDay,
+    formatMoney,
+    listInvoices,
+    workbookUrl,
+  } from './api.js';
+
+  // Every export goes through the validation screen first (spec §5).
+  const EXPORTS = {
+    csv: { url: allInvoicesCsvUrl(), filename: 'Rechnungen.csv' },
+    xlsx: { url: workbookUrl(), filename: 'Rechnungen.xlsx' },
+    bundle: { url: bundleUrl(), filename: 'Jobcenter-Nachweise.zip' },
+  };
 
   // The review list (spec §4.7): every invoice with number, status, client,
   // service date, issue date and total; filtered by status and issue date and
   // searched by client on the server.
   export default {
     name: 'InvoicesPanel',
-    components: { AspBadge, AspButton, AspDataTable, AspEmptyState, AspInput, AspSelect, ValidationScreen },
+    components: { AspBadge, AspButton, AspDataTable, AspEmptyState, AspInput, AspSelect, InvoicesChart, ValidationScreen },
     props: {
       // Bumped by the page after any change, so the list reloads.
       refreshKey: { type: Number, default: 0 },
@@ -83,6 +106,7 @@
         search: '',
         searchTimer: null,
         exportOpen: false,
+        exportTarget: EXPORTS.csv,
         statusOptions: [
           { value: '', label: 'All statuses' },
           ...Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })),
@@ -100,9 +124,6 @@
     computed: {
       filtered() {
         return !!(this.status || this.issuedFrom || this.issuedTo || this.search.trim());
-      },
-      allCsvUrl() {
-        return allInvoicesCsvUrl();
       },
     },
     watch: {
@@ -137,6 +158,10 @@
           this.loadError = errorOf(err).message;
         }
       },
+      startExport(kind) {
+        this.exportTarget = EXPORTS[kind];
+        this.exportOpen = true;
+      },
       serviceLabel(row) {
         const from = formatDay(row.service_date_from);
         const to = formatDay(row.service_date_to);
@@ -164,6 +189,12 @@
 
   .panel-head h2 {
     margin: 0;
+  }
+
+  .exports {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
   }
 
   .filters {
