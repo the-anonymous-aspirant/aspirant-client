@@ -16,6 +16,7 @@
         <p v-if="invoice.status === 'cancelled'" class="cancelled" data-test="invoice-cancelled">
           Cancelled on {{ formatDay(invoice.cancelled_at) }}: {{ invoice.cancel_reason }}
         </p>
+        <div class="items-wrap">
         <table class="items">
           <thead><tr><th>Description</th><th class="num">Quantity</th><th class="num">Unit price</th><th class="num">Total</th></tr></thead>
           <tbody>
@@ -27,6 +28,7 @@
             </tr>
           </tbody>
         </table>
+        </div>
         <a class="pdf-link" :href="pdfUrl" data-test="invoice-pdf" target="_blank" rel="noopener">Download PDF</a>
 
         <div v-if="cancelling" class="cancel-step" data-test="cancel-step">
@@ -395,6 +397,12 @@
 
   .facts dd {
     margin: 0;
+  }
+
+  /* A table may be wider than a phone; it scrolls inside its own box. */
+  .items-wrap {
+    overflow-x: auto;
+    max-width: 100%;
   }
 
   .items {
