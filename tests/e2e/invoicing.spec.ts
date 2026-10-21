@@ -79,6 +79,8 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
       return json(route, 201, { client });
     }
     if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: fake.payments });
+    // #8375 (D1) loads the invoice list with the page; this spec has none.
+    if (path === '/invoicing/invoices' && method === 'GET') return json(route, 200, { invoices: [] });
     if (path === '/invoicing/payments/import' && method === 'POST') {
       const next = fake.importResponses.shift() || { status: 200, body: { summary: { rows_read: 0, imported: 0, duplicates: 0, skipped: 0, skipped_reasons: {}, withdrawals: 0 } } };
       return json(route, next.status, next.body);
