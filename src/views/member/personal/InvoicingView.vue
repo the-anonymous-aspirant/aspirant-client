@@ -50,8 +50,8 @@
             <span class="muted">Steuernummer</span> <span data-test="profile-steuernummer">{{ profile.steuernummer }}</span>
           </span>
           <AspBadge v-else status="caution" data-test="steuernummer-missing">Missing — issuing blocked</AspBadge>
-          <span class="muted" aria-hidden="true">·</span>
-          <span><span class="muted">next invoice</span> <span data-test="profile-next-number">{{ nextNumberLabel }}</span></span>
+          <!-- The separator wraps with the text after it, never alone at a line end. -->
+          <span class="nowrap"><span class="muted" aria-hidden="true">·</span> <span class="muted">next invoice</span> <span data-test="profile-next-number">{{ nextNumberLabel }}</span></span>
         </p>
       </AspCard>
 
@@ -230,6 +230,10 @@
 
   .muted {
     color: var(--text-muted);
+  }
+
+  .nowrap {
+    white-space: nowrap;
   }
 
   /* class="tabs" lands on AspSegmented's own root, so the root is styled

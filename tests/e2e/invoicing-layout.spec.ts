@@ -125,6 +125,52 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
     expect(await noSideScroll(page), 'detail: no horizontal scroll').toBe(true);
   });
 
+  // #8407: three defects from design_agent's conformance read of the
+  // served #8400 bundle.
+  for (const theme of ['light', 'dark'] as const) {
+    test(`nothing from the page shell paints over an open modal (${theme})`, async ({ page }) => {
+      await open(page, theme, { steuernummer: '' });
+      const toggle = page.locator('.mobile-menu-toggle');
+      test.skip(!(await toggle.isVisible()), 'the hamburger exists only below 768px');
+      await page.getByRole('tab', { name: 'Invoices' }).click();
+      await page.locator('[data-test="invoice-row"][data-status="draft"]').click();
+      await expect(page.locator('[data-test="draft-lines"]')).toBeVisible();
+      // What a tap at the hamburger's spot would hit: the sheet, not the shell.
+      const hit = await toggle.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return !!top && !!top.closest('[role="dialog"], .modal__scrim');
+      });
+      expect(hit, 'the hamburger is under the modal').toBe(true);
+    });
+  }
+
+  test('the payments table fits its column at desktop width with the sidebar open', async ({ page }) => {
+    await open(page, 'light');
+    // The first table is the incoming payments; a second lists bank deposits.
+    const box = page.locator('[data-test="payments-panel"] .data-table__scroll').first();
+    test.skip((await box.count()) === 0, 'phones show payment cards, not the table');
+    const [scrollWidth, clientWidth] = await box.evaluate((el) => [el.scrollWidth, el.clientWidth]);
+    expect(scrollWidth, 'no sideways scroll in the payments table').toBeLessThanOrEqual(clientWidth + 1);
+    // Fitting by truncation does not count: every select value shows whole.
+    const cut = await box.evaluate((el) =>
+      [...el.querySelectorAll('.select__value')].filter((v) => v.scrollWidth > v.clientWidth + 1).map((v) => v.textContent!.trim()));
+    expect(cut, 'select values cut off in the table').toEqual([]);
+  });
+
+  test('the "·" before "next invoice" never ends a line on its own', async ({ page }) => {
+    await open(page, 'light', { steuernummer: '' });
+    // Same line = vertical centres closer than half a line; separate flex
+    // items on one line can differ by a pixel, a wrap moves a whole line.
+    const { gap, lineHeight } = await page.locator('[data-test="profile-card"]').evaluate((card) => {
+      const centre = (el: Element) => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
+      const dotEl = [...card.querySelectorAll('span')].find((s) => s.textContent!.trim() === '·')!;
+      const nextEl = card.querySelector('[data-test="profile-next-number"]')!;
+      return { gap: Math.abs(centre(dotEl) - centre(nextEl)), lineHeight: nextEl.getBoundingClientRect().height };
+    });
+    expect(gap, 'the separator sits on the line of the text after it').toBeLessThan(lineHeight / 2);
+  });
+
   test('on a 390×844 phone the first payment card is on the first screen', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await open(page, 'light');

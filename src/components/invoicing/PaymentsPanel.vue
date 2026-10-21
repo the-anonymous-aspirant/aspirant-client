@@ -169,41 +169,52 @@
         />
       </template>
       <template #cell-paid_on="{ row }"><span class="nowrap">{{ formatDay(row.paid_on) }}</span></template>
+      <!-- The payer's note reads under the sender, as on the phone cards: a
+           column of its own left too little width for the three selects
+           at 1280 with the sidebar open (#8407). -->
       <template #cell-sender="{ row }">
         <span class="sender">{{ row.sender_name }}</span>
         <span class="muted">{{ row.sender_email }}</span>
+        <span v-if="row.note" class="note note--cell">{{ row.note }}</span>
       </template>
-      <template #cell-note="{ row }"><span class="note">{{ row.note }}</span></template>
       <template #cell-gross_cents="{ row }"><span class="nowrap">{{ formatMoney(row.gross_cents, row.currency) }}</span></template>
       <template #cell-category="{ row }">
-        <AspSelect
-          :model-value="row.category"
-          :options="categoryOptions"
-          :aria-label="`Category for ${row.transaction_id}`"
-          :disabled="saving.has(row.id)"
-          data-test="payment-category"
-          @update:model-value="patch(row, { category: $event })"
-        />
+        <div class="cell-select">
+          <AspSelect
+            :model-value="row.category"
+            :options="categoryOptions"
+            :aria-label="`Category for ${row.transaction_id}`"
+            :disabled="saving.has(row.id)"
+            data-test="payment-category"
+            @update:model-value="patch(row, { category: $event })"
+          />
+        </div>
       </template>
       <template #cell-client_id="{ row }">
-        <AspSelect
-          :model-value="row.client_id ?? 0"
-          :options="clientOptions"
-          :aria-label="`Client for ${row.transaction_id}`"
-          :disabled="saving.has(row.id)"
-          data-test="payment-client"
-          @update:model-value="patch(row, { client_id: $event || null })"
-        />
+        <div class="cell-select">
+          <AspSelect
+            :model-value="row.client_id ?? 0"
+            :options="clientOptions"
+            :aria-label="`Client for ${row.transaction_id}`"
+            :title="optionLabel(clientOptions, row.client_id ?? 0)"
+            :disabled="saving.has(row.id)"
+            data-test="payment-client"
+            @update:model-value="patch(row, { client_id: $event || null })"
+          />
+        </div>
       </template>
       <template #cell-bank_deposit_id="{ row }">
-        <AspSelect
-          :model-value="row.bank_deposit_id ?? 0"
-          :options="depositOptions"
-          :aria-label="`Bank deposit for ${row.transaction_id}`"
-          :disabled="saving.has(row.id) || depositOptions.length < 2"
-          data-test="payment-deposit"
-          @update:model-value="patch(row, { bank_deposit_id: $event || null })"
-        />
+        <div class="cell-select">
+          <AspSelect
+            :model-value="row.bank_deposit_id ?? 0"
+            :options="depositOptions"
+            :aria-label="`Bank deposit for ${row.transaction_id}`"
+            :title="optionLabel(depositOptions, row.bank_deposit_id ?? 0)"
+            :disabled="saving.has(row.id) || depositOptions.length < 2"
+            data-test="payment-deposit"
+            @update:model-value="patch(row, { bank_deposit_id: $event || null })"
+          />
+        </div>
       </template>
     </AspDataTable>
     <p v-if="rowError" class="error" role="alert" data-test="payment-error">{{ rowError }}</p>
@@ -261,10 +272,15 @@
           { key: 'select', label: '', sortable: false, width: '2.5rem' },
           { key: 'paid_on', label: 'Date' },
           { key: 'sender', label: 'From', sortable: false },
-          { key: 'note', label: 'Note', sortable: false },
           { key: 'gross_cents', label: 'Amount', align: 'right' },
-          { key: 'category', label: 'Category', sortable: false, width: '10rem' },
-          { key: 'client_id', label: 'Client', sortable: false, width: '10rem' },
+          // Widths measured at 1280 with the sidebar open, where the table has
+          // 968px (#8407): the cell pads 12px a side and a table-cell trigger
+          // ~32px, so 10.25rem shows "Uncategorised" (106px of text) whole,
+          // and 14rem a deposit with a four-digit amount ("2026-08-05
+          // €1,500.00", 164px). Longer values end in an ellipsis with the
+          // whole label as the trigger's title.
+          { key: 'category', label: 'Category', sortable: false, width: '10.25rem' },
+          { key: 'client_id', label: 'Client', sortable: false, width: '10.25rem' },
           { key: 'bank_deposit_id', label: 'Bank deposit', sortable: false, width: '14rem' },
         ],
         depositColumns: [
@@ -322,6 +338,12 @@
     methods: {
       formatDay,
       formatMoney,
+      // The whole label, as a tooltip on a table-cell select whose value may
+      // end in an ellipsis.
+      optionLabel(options, value) {
+        const option = options.find((o) => o.value === value);
+        return option ? option.label : '';
+      },
       onFileChosen(event) {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
@@ -474,6 +496,29 @@
     width: 100%;
   }
 
+  /* In a table cell the select fills the cell instead of its own 10rem
+     minimum, which with the cell padding overflowed every select column by
+     ~12px and pushed the last one out of the table's box (#8407). A value too
+     long for the cell ends in an ellipsis; its title and the open panel show
+     it whole. */
+  .cell-select :deep(.select) {
+    display: flex;
+    width: 100%;
+  }
+
+  .cell-select :deep(.select__trigger) {
+    min-width: 0;
+    padding: 0 var(--space-xs);
+    gap: var(--space-2xs);
+  }
+
+  .cell-select :deep(.select__value) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .create {
     display: flex;
     flex-direction: column;
@@ -487,18 +532,28 @@
     text-align: right;
   }
 
+  /* Payer-written text may break anywhere, so a long PayPal email narrows its
+     column instead of pushing the table past its box (#8407). */
   .sender {
     display: block;
+    overflow-wrap: anywhere;
   }
 
   .muted {
     display: block;
     color: var(--text-muted);
     font-size: var(--text-sm);
+    overflow-wrap: anywhere;
   }
 
   .note {
     white-space: pre-line;
+    overflow-wrap: anywhere;
+  }
+
+  .note--cell {
+    display: block;
+    margin-top: var(--space-2xs);
   }
 
   .error {
