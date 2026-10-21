@@ -129,6 +129,26 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await expect(page.locator('[data-test="steuernummer-missing"]')).toContainText('issuing blocked');
   });
 
+  // #8401: a global `.card` rule in style.css matched AspCard's root and
+  // added 32px on top of the padding prop. padding="md" must inset the body
+  // by the 2px border plus 16px, at this project's width, in both themes.
+  test('the profile card insets its body by the padding prop alone', async ({ page }) => {
+    const fake = newFake();
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'flowah');
+    for (const theme of ['light', 'dark'] as const) {
+      await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
+      await page.emulateMedia({ colorScheme: theme });
+      await openInvoicing(page);
+      const m = await page.locator('[data-test="profile-card"]').evaluate((card) => {
+        const body = card.querySelector('.card__body') as HTMLElement;
+        const inset = body.getBoundingClientRect().left + parseFloat(getComputedStyle(body).paddingLeft) - card.getBoundingClientRect().left;
+        return { inset, rootPadding: getComputedStyle(card).paddingLeft };
+      });
+      expect(m, theme).toEqual({ inset: 18, rootPadding: '0px' });
+    }
+  });
+
   test('editing the profile PUTs it; a server refusal stays in the dialog', async ({ page }) => {
     const fake = newFake();
     await mockInvoicing(page, fake);
@@ -220,17 +240,27 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await seedTrustedSessionAs(page, 'flowah');
     await openInvoicing(page);
 
-    await page.getByRole('combobox', { name: 'Category for TX1' }).click();
-    await page.getByRole('option', { name: 'Paid work' }).click();
-    await expect(page.getByRole('combobox', { name: 'Category for TX1' })).toContainText('Paid work');
+    // Chosen by keyboard: with the row low in the window the panel flips up
+    // and AspDataTable's scroll box clips it, hiding the option from a mouse
+    // (#8402, which owns that geometry and its own test).
+    const category = page.getByRole('combobox', { name: 'Category for TX1' });
+    const choose = async (from: string, to: string) => {
+      await category.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('option', { name: from })).toHaveAttribute('data-active', 'true');
+      await page.keyboard.press('ArrowDown');
+      await expect(page.getByRole('option', { name: to })).toHaveAttribute('data-active', 'true');
+      await page.keyboard.press('Enter');
+    };
+    await choose('Uncategorised', 'Paid work');
+    await expect(category).toContainText('Paid work');
     const patch = fake.requests.find((r) => r.method === 'PATCH' && r.path === '/invoicing/payments/10')!;
     expect(JSON.parse(patch.body)).toEqual({ category: 'paid_work' });
 
     fake.patchFailure = { status: 409, body: { error: { code: 'payment_on_issued_invoice', message: 'payment is on issued invoice 3; cancel that invoice before changing its category' } } };
-    await page.getByRole('combobox', { name: 'Category for TX1' }).click();
-    await page.getByRole('option', { name: 'Gift' }).click();
+    await choose('Paid work', 'Gift');
     await expect(page.locator('[data-test="payment-error"]')).toContainText('cancel that invoice');
-    await expect(page.getByRole('combobox', { name: 'Category for TX1' })).toContainText('Paid work');
+    await expect(category).toContainText('Paid work');
   });
 
   test('withdrawals are listed as bank deposits, not as payments to categorise', async ({ page }) => {
