@@ -75,9 +75,8 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
-.card {
-  padding: var(--space-xl);
-}
+/* No global .card rule: .card is AspCard's root class, so padding here stacked
+   on the inset the caller picks with AspCard's padding prop (#8401). */
 
 #app {
   padding: var(--space-xl);
