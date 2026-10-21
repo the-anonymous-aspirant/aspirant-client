@@ -16,6 +16,8 @@ interface Fake {
   listCalls: URLSearchParams[];
   requests: string[];
   audit: Json[];
+  /** The live client 1 has been renamed since invoice 100 was issued. */
+  clientRenamed?: boolean;
 }
 
 const json = (route: Route, status: number, body: Json) =>
@@ -28,7 +30,7 @@ async function mockAll(page: Page, fake: Fake): Promise<void> {
     const path = url.pathname.replace(/^\/api/, '');
     fake.requests.push(path + url.search);
     if (path === '/invoicing/profile') return json(route, 200, { saved: true, profile: { full_name: 'Flower Example', address: 'Weg 1', steuernummer: '1', is_kleinunternehmer: true, invoice_number_prefix: '2026', next_invoice_number: 3 } });
-    if (path === '/invoicing/clients') return json(route, 200, { clients: [{ id: 1, name: 'Galerie Nord', address: 'x' }, { id: 2, name: 'Anna Example', address: 'y' }] });
+    if (path === '/invoicing/clients') return json(route, 200, { clients: [{ id: 1, name: fake.clientRenamed ? 'Galerie Nord GmbH' : 'Galerie Nord', address: 'x' }, { id: 2, name: 'Anna Example', address: 'y' }] });
     if (path === '/invoicing/payments') return json(route, 200, { payments: [] });
     if (path === '/invoicing/invoices') {
       fake.listCalls.push(url.searchParams);
@@ -41,7 +43,7 @@ async function mockAll(page: Page, fake: Fake): Promise<void> {
       return json(route, 200, { invoices: rows });
     }
     if (path === '/invoicing/invoices/100') {
-      return json(route, 200, { invoice: issued, line_items: [{ id: 1, position: 1, description: 'Wandbild Juli', quantity_milli: 1000, unit_price_cents: 35000, line_total_cents: 35000 }], payments: [{ id: 10, transaction_id: '1AA11111AA1111111', paid_on: '2026-07-14T00:00:00Z', gross_cents: 35000, currency: 'EUR' }], warnings: [] });
+      return json(route, 200, { invoice: issued, client_name: 'Galerie Nord', line_items: [{ id: 1, position: 1, description: 'Wandbild Juli', quantity_milli: 1000, unit_price_cents: 35000, line_total_cents: 35000 }], payments: [{ id: 10, transaction_id: '1AA11111AA1111111', paid_on: '2026-07-14T00:00:00Z', gross_cents: 35000, currency: 'EUR' }], warnings: [] });
     }
     if (path === '/invoicing/invoices/100/pdf') return route.fulfill({ status: 200, contentType: 'application/pdf', body: '%PDF-1.4\n%%EOF' });
     if (path === '/invoicing/audit-events') return json(route, 200, { events: fake.audit });
@@ -151,6 +153,17 @@ test.describe('#8367 Invoices app — review list, detail, validated exports', (
       await expect(preview).toHaveAttribute('src', /^blob:/);
       expect(fake.requests).toContain('/invoicing/invoices/100/pdf');
     }
+  });
+
+  // #8396: the issued view shows the client frozen at issue (the server's
+  // client_name, what the PDF prints), not the live client after a rename.
+  test('an issued invoice keeps the client name it was issued to after the client is renamed', async ({ page }) => {
+    const fake = newFake();
+    fake.clientRenamed = true;
+    await openInvoicesTab(page, fake);
+    await page.locator('[data-test="invoice-row"][data-status="issued"]').click();
+    await expect(page.locator('[data-test="invoice-number"]')).toHaveText('2026-001');
+    await expect(page.locator('[data-test="invoice-client"]')).toHaveText('Galerie Nord');
   });
 
   test('a single invoice downloads as CSV after validation', async ({ page }) => {

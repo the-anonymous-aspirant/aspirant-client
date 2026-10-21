@@ -9,7 +9,7 @@
           <div><dt>Invoice number</dt><dd data-test="invoice-number">{{ invoice.invoice_number }}</dd></div>
           <div><dt>Issue date</dt><dd data-test="invoice-issue-date">{{ formatDay(invoice.issue_date) }}</dd></div>
           <div><dt>Status</dt><dd><AspBadge :status="invoice.status === 'cancelled' ? 'negative' : 'positive'" data-test="invoice-status">{{ statusLabel }}</AspBadge></dd></div>
-          <div><dt>Client</dt><dd>{{ clientName }}</dd></div>
+          <div><dt>Client</dt><dd data-test="invoice-client">{{ clientName }}</dd></div>
           <div><dt>Service</dt><dd>{{ serviceLabel }}</dd></div>
           <div><dt>Total</dt><dd>{{ formatMoney(invoice.total_cents, invoice.currency) }}</dd></div>
         </dl>
@@ -205,7 +205,11 @@
       clientOptions() {
         return [{ value: 0, label: 'Choose a client' }, ...this.clients.map((c) => ({ value: c.id, label: c.name }))];
       },
+      // The issued view shows the client as frozen at issue, which the server
+      // sends as client_name (what the PDF prints); a later rename of the
+      // client must not change it. The live list is only a fallback.
       clientName() {
+        if (this.detail && this.detail.client_name) return this.detail.client_name;
         const c = this.clients.find((x) => x.id === this.invoice.client_id);
         return c ? c.name : '—';
       },
