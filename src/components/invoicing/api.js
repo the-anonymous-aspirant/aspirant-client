@@ -38,7 +38,13 @@ export function errorOf(err) {
 // Money arrives as integer cents; it is shown, never computed, here.
 export function formatMoney(cents, currency = 'EUR') {
   const value = (cents || 0) / 100;
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(value);
+  try {
+    return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(value);
+  } catch {
+    // A currency code Intl does not know (it came from an uploaded file)
+    // must not take the whole table down (@security N7, c51503 on #8372).
+    return `${value.toFixed(2)} ${currency}`;
+  }
 }
 
 // Dates arrive as ISO timestamps at UTC midnight for a calendar day; show the
@@ -68,3 +74,42 @@ export const SKIP_REASON_LABELS = {
   memo: 'memo',
   missing_transaction_id: 'no transaction id',
 };
+
+// ---- Invoices (system_3 #8367-D1) ----------------------------------------
+// The number and the issue date are never sent: the server assigns both when
+// the invoice is issued (spec §4.6), and refuses a body that names them.
+
+export const listInvoices = (params = {}) =>
+  axios.get(`${base}/invoices`, { params }).then((r) => r.data.invoices || []);
+export const getInvoice = (id) => axios.get(`${base}/invoices/${id}`).then((r) => r.data);
+export const createDraft = (paymentIds) =>
+  axios.post(`${base}/invoices`, { payment_ids: paymentIds }).then((r) => r.data);
+export const updateDraft = (id, patch) => axios.put(`${base}/invoices/${id}`, patch).then((r) => r.data);
+export const deleteDraft = (id) => axios.delete(`${base}/invoices/${id}`);
+export const issueInvoice = (id) => axios.post(`${base}/invoices/${id}/issue`).then((r) => r.data);
+export const cancelInvoice = (id, reason) =>
+  axios.post(`${base}/invoices/${id}/cancel`, { reason }).then((r) => r.data);
+export const invoicePdfUrl = (id) => `${base}/invoices/${id}/pdf`;
+
+// Decimal input → integer minor units without floating-point error:
+// "19,99" / "19.99" → 1999 cents; "2,5" → 2500 thousandths. Returns null for
+// anything that is not a plain non-negative decimal.
+function parseDecimal(raw, places) {
+  const s = String(raw ?? '').trim().replace(',', '.');
+  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  const [whole, frac = ''] = s.split('.');
+  if (frac.length > places) return null;
+  return Number(whole) * 10 ** places + Number(frac.padEnd(places, '0') || 0);
+}
+export const centsFromEuros = (raw) => parseDecimal(raw, 2);
+export const milliFromDecimal = (raw) => parseDecimal(raw, 3);
+
+// Back to an editable string: 1999 → "19.99", 2500 → "2.5".
+export function decimalFromMinor(value, places) {
+  const n = Number(value || 0);
+  const whole = Math.floor(n / 10 ** places);
+  const frac = String(n % 10 ** places).padStart(places, '0').replace(/0+$/, '');
+  return frac ? `${whole}.${frac}` : String(whole);
+}
+
+export const STATUS_LABELS = { draft: 'Draft', issued: 'Issued', cancelled: 'Cancelled' };
