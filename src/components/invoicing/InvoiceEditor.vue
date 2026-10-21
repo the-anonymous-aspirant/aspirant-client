@@ -102,9 +102,17 @@
           <div v-for="(line, i) in form.lines" :key="line.key" class="line" data-test="draft-line">
             <!-- The first-line-only caption reads as a table header, which a
                  phone's stacked blocks are not: there every line is captioned. -->
-            <AspInput v-model="line.description" :label="captioned(i) ? 'Description' : ''" :aria-label="`Description, line ${i + 1}`" class="line__desc" />
-            <AspInput v-model="line.quantity" :label="captioned(i) ? 'Quantity' : ''" :aria-label="`Quantity, line ${i + 1}`" class="line__num" />
-            <AspInput v-model="line.price" :label="captioned(i) ? 'Unit price (€)' : ''" :aria-label="`Unit price, line ${i + 1}`" class="line__num" />
+            <!-- AspInput forwards class to its <input>, not its root, so each
+                 grid cell is a wrapper. -->
+            <div class="line__desc">
+              <AspInput v-model="line.description" :label="captioned(i) ? 'Description' : ''" :aria-label="`Description, line ${i + 1}`" />
+            </div>
+            <div class="line__num">
+              <AspInput v-model="line.quantity" :label="captioned(i) ? 'Quantity' : ''" :aria-label="`Quantity, line ${i + 1}`" />
+            </div>
+            <div class="line__num">
+              <AspInput v-model="line.price" :label="captioned(i) ? 'Unit price (€)' : ''" :aria-label="`Unit price, line ${i + 1}`" />
+            </div>
             <span class="line__total">{{ lineTotalLabel(line) }}</span>
             <AspButton variant="ghost" size="sm" class="line__remove" :aria-label="`Remove line ${i + 1}`" @click="form.lines.splice(i, 1)">Remove</AspButton>
           </div>
@@ -489,18 +497,30 @@
     align-items: flex-start;
   }
 
+  /* Each line is its own grid, so every column has a width that does not
+     depend on the line's content; the inputs then stack in straight columns. */
   .line {
     display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1.2fr) 7rem 5rem;
     gap: var(--space-sm);
     align-items: end;
     width: 100%;
+  }
+
+  .line__desc,
+  .line__num {
+    min-width: 0;
   }
 
   .line__total {
     padding-bottom: var(--space-xs);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .line__remove {
+    justify-self: end;
   }
 
   @media (max-width: 640px) {
@@ -530,6 +550,7 @@
     .line__total {
       padding-bottom: 0;
       align-self: center;
+      text-align: left;
       font-weight: var(--font-weight-bold);
     }
 

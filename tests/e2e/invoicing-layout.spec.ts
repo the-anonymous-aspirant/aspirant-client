@@ -53,8 +53,17 @@ async function open(page: Page, theme: 'light' | 'dark', opts?: { steuernummer?:
 const leftOf = (page: Page, selector: string) =>
   page.locator(selector).first().evaluate((el) => Math.round(el.getBoundingClientRect().left));
 
+// Neither the page nor an open dialog may scroll sideways. A modal scrolls its
+// own body, so the document alone misses it: every scroll box in a dialog is
+// checked too, except a table's own deliberate sideways scroller.
 const noSideScroll = (page: Page) =>
-  page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  page.evaluate(() => {
+    if (document.documentElement.scrollWidth > window.innerWidth) return false;
+    return [...document.querySelectorAll('[role="dialog"], [role="dialog"] *')]
+      .filter((el) => ['auto', 'scroll'].includes(getComputedStyle(el).overflowX))
+      .filter((el) => !el.matches('.items-wrap, .data-table__scroll'))
+      .every((el) => el.scrollWidth <= el.clientWidth + 1);
+  });
 
 // The element that starts each panel at the page edge: the first control on
 // Payments and Invoices; on Clients, wide puts Add client at the right, so
