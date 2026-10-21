@@ -138,3 +138,5 @@ export async function downloadBlob(url, filename) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(href), 1000);
 }
+export const workbookUrl = () => `${base}/export/workbook.xlsx`;
+export const bundleUrl = () => `${base}/export/jobcenter-bundle.zip`;
