@@ -54,6 +54,8 @@ async function mockAll(page: Page, fake: Fake): Promise<void> {
     }
     if (path === '/invoicing/clients') return json(route, 200, { clients: [{ id: 1, name: 'Galerie Nord', address: 'Nordweg 2', email: '', paypal_email: '' }] });
     if (path === '/invoicing/payments') return json(route, 200, { payments: fake.payments });
+    // #8376 (D2): the invoice detail loads its audit history.
+    if (path === '/invoicing/audit-events') return json(route, 200, { events: [] });
     if (path === '/invoicing/invoices' && method === 'GET') {
       return json(route, 200, { invoices: fake.invoices.map((i) => ({ ...i, client_name: i.client_id === 1 ? 'Galerie Nord' : '' })) });
     }
