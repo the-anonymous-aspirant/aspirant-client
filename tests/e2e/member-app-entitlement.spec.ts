@@ -18,7 +18,7 @@ import {
  *
  *  The owner map under test (src/views/member/apps.js): ludde-analytics,
  *  30-year-gift and valuation-statement → jenny; pappas-pushups → robert;
- *  jobs → vinoly.
+ *  jobs → vinoly; invoicing → flowah.
  */
 
 const ALL_PERSONAL = [
@@ -28,6 +28,7 @@ const ALL_PERSONAL = [
   'Pappas pushups',
   'Pappas sit-ups',
   'Jobs',
+  'Invoices',
 ];
 
 const SHARED_SAMPLE = ['Files', 'Message Board', 'Goal Trees', 'Scratchpad'];
@@ -72,6 +73,15 @@ test.describe('#4331 /member personal apps are filtered to their owner', () => {
     await expect(page.locator('.application-card', { hasText: 'Pappas pushups' })).toHaveCount(0);
     await expect(page.locator('.application-card', { hasText: 'Pappas sit-ups' })).toHaveCount(0);
     await expect(page.locator('.application-card', { hasText: 'Jobs' })).toHaveCount(0);
+  });
+
+  test('flowah sees Invoices only', async ({ page }) => {
+    // system_3 #8367: the invoicing app is flowah's (aspirant-server
+    // invoicesOwnerUsername, gated on the whole /invoicing group).
+    await seedTrustedSessionAs(page, 'flowah');
+    await openMember(page);
+
+    expect(await personalCardTitles(page)).toEqual(['Invoices']);
   });
 
   test('vinoly sees Jobs only', async ({ page }) => {
