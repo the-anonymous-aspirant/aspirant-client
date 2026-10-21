@@ -26,21 +26,24 @@
     </div>
 
     <template #footer>
-      <AspButton variant="secondary" @click="$emit('update:open', false)">Close</AspButton>
-      <AspButton
-        v-if="report && !report.violations.length && report.warnings.length"
-        :loading="downloading"
-        data-test="validation-download-anyway"
-        @click="download"
-      >
-        Download anyway
-      </AspButton>
+      <ModalActions>
+        <AspButton variant="secondary" @click="$emit('update:open', false)">Close</AspButton>
+        <AspButton
+          v-if="report && !report.violations.length && report.warnings.length"
+          :loading="downloading"
+          data-test="validation-download-anyway"
+          @click="download"
+        >
+          Download anyway
+        </AspButton>
+      </ModalActions>
     </template>
   </AspModal>
 </template>
 
 <script>
   import { AspButton, AspModal } from '@aspirant/design-system';
+  import ModalActions from './ModalActions.vue';
   import { downloadBlob, errorOf, getValidation } from './api.js';
 
   // Every export runs the §5 integrity check first (spec §5): violations
@@ -49,7 +52,7 @@
   // before anyone gets a 409.
   export default {
     name: 'ValidationScreen',
-    components: { AspButton, AspModal },
+    components: { AspButton, AspModal, ModalActions },
     props: {
       open: { type: Boolean, default: false },
       url: { type: String, required: true },

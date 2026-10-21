@@ -13,10 +13,24 @@
           <div><dt>Service</dt><dd>{{ serviceLabel }}</dd></div>
           <div><dt>Total</dt><dd>{{ formatMoney(invoice.total_cents, invoice.currency) }}</dd></div>
         </dl>
-        <p v-if="invoice.status === 'cancelled'" class="cancelled" data-test="invoice-cancelled">
+        <p v-if="invoice.status === 'cancelled'" class="statement" data-test="invoice-cancelled">
           Cancelled on {{ formatDay(invoice.cancelled_at) }}: {{ invoice.cancel_reason }}
         </p>
-        <div class="items-wrap">
+        <p v-else class="statement" data-test="invoice-readonly">
+          Issued invoices cannot be changed. To correct one, cancel it (Storno) and issue a new invoice.
+        </p>
+        <!-- Phone: one block per item instead of a table that scrolls
+             sideways (#8399 spec §6.3). -->
+        <ul v-if="narrow" class="item-blocks">
+          <li v-for="it in detail.line_items" :key="it.id" class="item-block" data-test="issued-item">
+            <span class="text">{{ it.description }}</span>
+            <span class="item-block__sum">
+              <span class="muted">{{ decimalFromMinor(it.quantity_milli, 3) }} × {{ formatMoney(it.unit_price_cents, invoice.currency) }}</span>
+              <span class="num">{{ formatMoney(it.line_total_cents, invoice.currency) }}</span>
+            </span>
+          </li>
+        </ul>
+        <div v-else class="items-wrap">
         <table class="items">
           <thead><tr><th>Description</th><th class="num">Quantity</th><th class="num">Unit price</th><th class="num">Total</th></tr></thead>
           <tbody>
@@ -30,7 +44,7 @@
         </table>
         </div>
         <div class="downloads">
-          <a class="pdf-link" :href="pdfUrl" data-test="invoice-pdf" target="_blank" rel="noopener">Download PDF</a>
+          <a class="link-button" :href="pdfUrl" data-test="invoice-pdf" target="_blank" rel="noopener">Download PDF</a>
           <AspButton variant="secondary" size="sm" data-test="invoice-csv" @click="csvOpen = true">Download CSV</AspButton>
         </div>
         <iframe
@@ -70,7 +84,9 @@
       <!-- Draft: editable. -->
       <template v-else>
         <div class="row">
-          <AspSelect v-model="form.client_id" :options="clientOptions" label="Client" data-test="draft-client" />
+          <div class="row__client full-select">
+            <AspSelect v-model="form.client_id" :options="clientOptions" label="Client" data-test="draft-client" />
+          </div>
           <label class="date-field">
             <span>Service date (from)</span>
             <input v-model="form.service_date_from" type="date" data-test="draft-from" />
@@ -79,18 +95,20 @@
             <span>Service until (optional)</span>
             <input v-model="form.service_date_to" type="date" data-test="draft-to" />
           </label>
-          <AspInput v-if="!kleinunternehmer" v-model="form.vat_percent" label="VAT rate (%)" data-test="draft-vat" />
+          <AspInput v-if="!kleinunternehmer" v-model="form.vat_percent" label="VAT rate (%)" class="row__vat" data-test="draft-vat" />
         </div>
 
         <div class="lines" data-test="draft-lines">
           <div v-for="(line, i) in form.lines" :key="line.key" class="line" data-test="draft-line">
-            <AspInput v-model="line.description" :label="i === 0 ? 'Description' : ''" :aria-label="`Description, line ${i + 1}`" class="line__desc" />
-            <AspInput v-model="line.quantity" :label="i === 0 ? 'Quantity' : ''" :aria-label="`Quantity, line ${i + 1}`" class="line__num" />
-            <AspInput v-model="line.price" :label="i === 0 ? 'Unit price (€)' : ''" :aria-label="`Unit price, line ${i + 1}`" class="line__num" />
+            <!-- The first-line-only caption reads as a table header, which a
+                 phone's stacked blocks are not: there every line is captioned. -->
+            <AspInput v-model="line.description" :label="captioned(i) ? 'Description' : ''" :aria-label="`Description, line ${i + 1}`" class="line__desc" />
+            <AspInput v-model="line.quantity" :label="captioned(i) ? 'Quantity' : ''" :aria-label="`Quantity, line ${i + 1}`" class="line__num" />
+            <AspInput v-model="line.price" :label="captioned(i) ? 'Unit price (€)' : ''" :aria-label="`Unit price, line ${i + 1}`" class="line__num" />
             <span class="line__total">{{ lineTotalLabel(line) }}</span>
-            <AspButton variant="ghost" size="sm" :aria-label="`Remove line ${i + 1}`" @click="form.lines.splice(i, 1)">Remove</AspButton>
+            <AspButton variant="ghost" size="sm" class="line__remove" :aria-label="`Remove line ${i + 1}`" @click="form.lines.splice(i, 1)">Remove</AspButton>
           </div>
-          <AspButton variant="secondary" size="sm" data-test="draft-add-line" @click="addLine()">Add line</AspButton>
+          <AspButton variant="secondary" size="sm" class="line__add" data-test="draft-add-line" @click="addLine()">Add line</AspButton>
         </div>
 
         <p class="covers">
@@ -101,11 +119,18 @@
           <li v-for="w in detail.warnings" :key="w">{{ warningText(w) }}</li>
         </ul>
 
-        <div v-if="confirmingIssue" class="confirm" role="alertdialog" aria-labelledby="issue-confirm-text" data-test="issue-confirm">
+        <div v-if="confirmingIssue" ref="confirm" class="confirm" role="alertdialog" aria-labelledby="issue-confirm-text" data-test="issue-confirm">
           <p id="issue-confirm-text">
             Issuing gives this invoice the next number ({{ nextNumber }}) and today's date. Both are set by the server.
             An issued invoice cannot be changed or deleted; a mistake is corrected by cancelling it and issuing a new one.
           </p>
+        </div>
+
+        <!-- The §10 Steuernummer guardrail made visible where issuing
+             happens. The button is not disabled: the server is the gate. -->
+        <div v-if="steuernummerMissing" class="issue-blocked" data-test="draft-issue-blocked">
+          <AspBadge status="caution">Missing — issuing blocked</AspBadge>
+          <span class="muted">Add a Steuernummer in the issuer profile to issue.</span>
         </div>
       </template>
 
@@ -113,18 +138,24 @@
     </div>
 
     <template #footer>
-      <template v-if="detail && isDraft">
-        <AspButton variant="destructive" :disabled="busy" data-test="draft-delete" @click="remove">Delete draft</AspButton>
+      <ModalActions v-if="detail && isDraft">
+        <template #destructive>
+          <AspButton variant="destructive" :disabled="busy" data-test="draft-delete" @click="remove">Delete draft</AspButton>
+        </template>
         <AspButton variant="secondary" :loading="busy && !confirmingIssue" data-test="draft-save" @click="save">Save draft</AspButton>
         <AspButton v-if="!confirmingIssue" :disabled="busy" data-test="draft-issue" @click="confirmingIssue = true">Issue invoice…</AspButton>
         <AspButton v-else :loading="busy" data-test="issue-confirm-button" @click="issue">Issue now</AspButton>
-      </template>
-      <template v-else-if="detail && invoice.status === 'issued'">
-        <AspButton v-if="!cancelling" variant="destructive" data-test="invoice-cancel" @click="cancelling = true">Cancel invoice (Storno)…</AspButton>
-        <AspButton v-else variant="destructive" :loading="busy" data-test="invoice-cancel-confirm" @click="cancel">Cancel this invoice</AspButton>
+      </ModalActions>
+      <ModalActions v-else-if="detail && invoice.status === 'issued'">
+        <template #destructive>
+          <AspButton v-if="!cancelling" variant="destructive" data-test="invoice-cancel" @click="cancelling = true">Cancel invoice (Storno)…</AspButton>
+          <AspButton v-else variant="destructive" :loading="busy" data-test="invoice-cancel-confirm" @click="cancel">Cancel this invoice</AspButton>
+        </template>
         <AspButton variant="secondary" @click="close(false)">Close</AspButton>
-      </template>
-      <AspButton v-else variant="secondary" @click="close(false)">Close</AspButton>
+      </ModalActions>
+      <ModalActions v-else>
+        <AspButton variant="secondary" @click="close(false)">Close</AspButton>
+      </ModalActions>
     </template>
   </AspModal>
 </template>
@@ -134,6 +165,7 @@
   import axios from 'axios';
   import ReadState from '../ReadState.vue';
   import ValidationScreen from './ValidationScreen.vue';
+  import ModalActions from './ModalActions.vue';
   import {
     STATUS_LABELS,
     cancelInvoice,
@@ -159,13 +191,16 @@
   // read-only record that can only be cancelled (Storno).
   export default {
     name: 'InvoiceEditor',
-    components: { AspBadge, AspButton, AspInput, AspModal, AspSelect, AspTextarea, ReadState, ValidationScreen },
+    components: { AspBadge, AspButton, AspInput, AspModal, AspSelect, AspTextarea, ModalActions, ReadState, ValidationScreen },
     props: {
       open: { type: Boolean, default: false },
       invoiceId: { type: Number, default: null },
       clients: { type: Array, default: () => [] },
       kleinunternehmer: { type: Boolean, default: true },
       nextNumber: { type: String, default: '' },
+      // The issuer profile has no Steuernummer, so the server will refuse to
+      // issue (§10); the editor says so before the attempt.
+      steuernummerMissing: { type: Boolean, default: false },
     },
     emits: ['update:open', 'changed'],
     data() {
@@ -185,8 +220,16 @@
         narrow: typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches,
       };
     },
+    mounted() {
+      this.narrowQuery = window.matchMedia('(max-width: 640px)');
+      this.onNarrowChange = (e) => {
+        this.narrow = e.matches;
+      };
+      this.narrowQuery.addEventListener('change', this.onNarrowChange);
+    },
     beforeUnmount() {
       this.clearPreview();
+      if (this.narrowQuery) this.narrowQuery.removeEventListener('change', this.onNarrowChange);
     },
     computed: {
       invoice() {
@@ -226,6 +269,11 @@
       },
     },
     watch: {
+      // On a phone the confirmation sits below the fold while the button that
+      // asked for it is in the footer.
+      confirmingIssue(on) {
+        if (on) this.$nextTick(() => this.$refs.confirm && this.$refs.confirm.scrollIntoView({ block: 'nearest' }));
+      },
       open: {
         immediate: true,
         handler(isOpen) {
@@ -301,6 +349,9 @@
       formatTime(iso) {
         if (!iso) return '';
         return String(iso).replace('T', ' ').slice(0, 16) + ' UTC';
+      },
+      captioned(i) {
+        return i === 0 || this.narrow;
       },
       addLine() {
         this.form.lines.push({ key: ++lineKey, description: '', quantity: '1', price: '' });
@@ -392,6 +443,8 @@
     gap: var(--space-md);
   }
 
+  /* Draft header (#8399 spec §5.1): wide, an auto-fit grid; phone, the client
+     and VAT rate full width with the two dates side by side. */
   .row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -399,21 +452,34 @@
     align-items: end;
   }
 
+  .full-select :deep(.select) {
+    display: flex;
+    width: 100%;
+  }
+
+  .full-select :deep(.select__trigger) {
+    min-width: 0;
+  }
+
   .date-field {
     display: flex;
     flex-direction: column;
-    gap: var(--space-xs);
+    gap: var(--space-2xs);
     font-size: var(--text-sm);
+    min-width: 0;
   }
 
   .date-field input {
     font: inherit;
-    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--text-base);
+    min-height: 34px;
+    padding: 0 var(--space-sm);
     border-radius: var(--radius-md, 6px);
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--border-control, var(--border-subtle));
     background: var(--surface-input, transparent);
     color: inherit;
     color-scheme: light dark;
+    min-width: 0;
   }
 
   .lines {
@@ -438,11 +504,45 @@
   }
 
   @media (max-width: 640px) {
-    .line {
+    .row {
       grid-template-columns: 1fr 1fr;
     }
+
+    .row__client,
+    .row__vat {
+      grid-column: 1 / -1;
+    }
+
+    /* Each line is a bordered block: description, then quantity | price,
+       then the total at the left and Remove at the right. */
+    .line {
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-xs) var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
+      border: 1px solid var(--border-subtle, currentColor);
+      border-radius: var(--radius-lg);
+    }
+
     .line__desc {
       grid-column: 1 / -1;
+    }
+
+    .line__total {
+      padding-bottom: 0;
+      align-self: center;
+      font-weight: var(--font-weight-bold);
+    }
+
+    .line__remove {
+      justify-self: end;
+    }
+
+    .lines {
+      align-items: stretch;
+    }
+
+    .line__add {
+      width: 100%;
     }
   }
 
@@ -467,23 +567,36 @@
     margin: 0;
   }
 
+  /* Issued facts: three symmetric rows of two on a phone, three columns
+     wide (#8399 spec §6.1). */
   .facts {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-sm) var(--space-lg);
     margin: 0;
   }
 
   .facts dt {
     font-size: var(--text-sm);
-    opacity: 0.8;
+    color: var(--text-muted);
   }
 
   .facts dd {
     margin: 0;
+    overflow-wrap: anywhere;
   }
 
-  /* A table may be wider than a phone; it scrolls inside its own box. */
+  .statement {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+  }
+
+  .muted {
+    color: var(--text-muted);
+  }
+
+  /* A table may be wider than its box; it scrolls inside its own box. */
   .items-wrap {
     overflow-x: auto;
     max-width: 100%;
@@ -507,15 +620,93 @@
     white-space: nowrap;
   }
 
-  .items .text {
+  .text {
     white-space: pre-line;
+    overflow-wrap: anywhere;
+  }
+
+  .item-blocks {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .item-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+    padding: var(--space-xs) 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .item-block__sum {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .num {
+    white-space: nowrap;
   }
 
   .downloads {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-md);
+    gap: var(--space-sm);
+  }
+
+  /* AspButton renders only a <button>; the PDF stays a real link (its href is
+     the download), styled as AspButton secondary sm. */
+  .link-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-2xs) var(--space-sm);
+    font-family: var(--font-family-base);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    line-height: 1;
+    text-decoration: none;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-elevated);
+    color: var(--text-body);
+    transition: border-color var(--transition-fast), color var(--transition-fast);
+  }
+
+  .link-button:hover {
+    border-color: var(--brand-primary);
+    color: var(--brand-primary-hover);
+  }
+
+  .link-button:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  .issue-blocked {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs) var(--space-sm);
+    font-size: var(--text-sm);
+  }
+
+  @media (max-width: 640px) {
+    .facts {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .downloads {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .downloads > * {
+      width: 100%;
+    }
   }
 
   .pdf-preview {
@@ -542,7 +733,4 @@
     margin: 0;
   }
 
-  .cancelled {
-    margin: 0;
-  }
 </style>

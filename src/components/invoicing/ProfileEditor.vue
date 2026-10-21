@@ -19,14 +19,17 @@
       <p v-if="error" class="profile-form__error" role="alert" data-test="profile-error">{{ error }}</p>
     </form>
     <template #footer>
-      <AspButton variant="secondary" @click="$emit('update:open', false)">Cancel</AspButton>
-      <AspButton :loading="saving" data-test="profile-save" @click="save">Save</AspButton>
+      <ModalActions>
+        <AspButton variant="secondary" @click="$emit('update:open', false)">Cancel</AspButton>
+        <AspButton :loading="saving" data-test="profile-save" @click="save">Save</AspButton>
+      </ModalActions>
     </template>
   </AspModal>
 </template>
 
 <script>
   import { AspButton, AspCheckbox, AspInput, AspModal, AspTextarea } from '@aspirant/design-system';
+  import ModalActions from './ModalActions.vue';
   import { errorOf, saveProfile } from './api.js';
 
   // Edits the issuer header printed on every invoice (spec §4.1). The admin
@@ -34,7 +37,7 @@
   // when they were issued, so nothing here changes an issued invoice.
   export default {
     name: 'ProfileEditor',
-    components: { AspButton, AspCheckbox, AspInput, AspModal, AspTextarea },
+    components: { AspButton, AspCheckbox, AspInput, AspModal, AspTextarea, ModalActions },
     props: {
       open: { type: Boolean, default: false },
       profile: { type: Object, required: true },
