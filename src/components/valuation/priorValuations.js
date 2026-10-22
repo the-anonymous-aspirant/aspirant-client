@@ -87,8 +87,27 @@ export function findPriorValuations(rows, current, excludeId = null) {
   return matches.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 }
 
-/** "3 050 000 kr ± 50 000 kr", or what of it exists. */
+/** "3 050 000 kr" that never breaks inside itself ("3 050 / 000 kr" on a
+ *  phone); empty for no value. */
+export function formatAmount(value) {
+  if (!value) return '';
+  return `${String(value).trim().replace(/\s+/g, '\u00a0')}\u00a0kr`;
+}
+
+/** "3 050 000 kr ± 50 000 kr", or what of it exists. The line may still break
+ *  between the value and its interval. */
 export function formatPriorValue(match) {
   if (!match.value) return 'inget marknadsvärde angivet';
-  return match.interval ? `${match.value} kr ± ${match.interval} kr` : `${match.value} kr`;
+  return match.interval
+    ? `${formatAmount(match.value)} ±\u00a0${formatAmount(match.interval)}`
+    : formatAmount(match.value);
+}
+
+/** The row's name when Jenny has renamed it; '' for the automatic
+ *  "<YYYY-MM-DD>_<objekt>" name, which would only repeat the date and the
+ *  property already on the line. (Live store, 2026-10-22: 179 of 179 rows
+ *  still carry the automatic name.) */
+export function renamedName(match) {
+  const name = (match.name || '').trim();
+  return /^\d{4}-\d{2}-\d{2}_/.test(name) ? '' : name;
 }

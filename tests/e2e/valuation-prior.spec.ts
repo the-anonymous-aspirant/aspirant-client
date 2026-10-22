@@ -74,6 +74,9 @@ async function walkToReview(page: Page): Promise<void> {
 const objektInput = (page: Page) =>
   page.locator('.field-row', { hasText: /^Objekt$/ }).locator('input');
 
+const valueRow = (page: Page) =>
+  page.locator('.field-row', { has: page.locator('label', { hasText: 'Marknadsvärde (kr)' }) });
+
 test.describe('#8419 Värderad tidigare', () => {
   test.beforeEach(async ({ page }) => {
     await seedTrustedSession(page);
@@ -93,15 +96,25 @@ test.describe('#8419 Värderad tidigare', () => {
     const banner = page.getByTestId('prior-valuation-warning');
     await expect(banner).toBeVisible();
     await expect(banner).toContainText('Värderad tidigare');
-    await expect(banner).toContainText('tidigare.');
+    // Named as on her form, not as the earlier row spelled it.
+    await expect(banner).toContainText('Du har värderat Testby Eklunda 1:76 tidigare.');
     // Newest first; the neighbouring 1:77 is a different property.
     const items = banner.getByTestId('prior-valuation-item');
     await expect(items).toHaveCount(2);
-    await expect(items.nth(0)).toContainText('2026-08-12 · Marknadsvärde 3 050 000 kr ± 50 000 kr');
-    await expect(items.nth(1)).toContainText('2026-03-02 · Marknadsvärde 2 900 000 kr ± 50 000 kr');
+    await expect(items.nth(0)).toHaveText('2026-08-12 · 3 050 000 kr ± 50 000 kr');
+    await expect(items.nth(1)).toHaveText('2026-03-02 · 2 900 000 kr ± 50 000 kr');
 
-    const hint = page.getByTestId('prior-valuation-hint');
+    // The hint under Marknadsvärde: newest value, at the input's left edge, and
+    // announced with the field.
+    const input = valueRow(page).locator('input');
+    const hint = valueRow(page).locator('.field__message--hint');
     await expect(hint).toHaveText('Senast: 3 050 000 kr ± 50 000 kr (2026-08-12)');
+    await expect(input).toHaveAccessibleDescription('Senast: 3 050 000 kr ± 50 000 kr (2026-08-12)');
+    // The input's visible box is AspInput's control (the confidence stripe is
+    // its left edge); the bare <input> sits inside it.
+    const box = valueRow(page).locator('.field__control');
+    const [hintBox, controlBox] = [await hint.boundingBox(), await box.boundingBox()];
+    expect(Math.abs(hintBox!.x - controlBox!.x)).toBeLessThanOrEqual(1);
 
     // It informs; generating is not held back.
     await expect(page.getByRole('button', { name: /Generera värdeutlåtande/ })).toBeEnabled();
@@ -113,7 +126,66 @@ test.describe('#8419 Värderad tidigare', () => {
     await walkToReview(page);
 
     await expect(page.getByTestId('prior-valuation-warning')).toHaveCount(0);
-    await expect(page.getByTestId('prior-valuation-hint')).toHaveCount(0);
+    await expect(valueRow(page).locator('.field__message--hint')).toHaveCount(0);
+    await expect(valueRow(page).locator('input')).toHaveAccessibleDescription('');
+  });
+
+  test('a renamed valuation shows its name; an automatic name is not repeated', async ({ page }) => {
+    await installCommanderMocks(page, { extractResponse: HOUSE_EXTRACT });
+    seedProcessedRows([
+      { ...valuation('renamed', 'Testby Eklunda 1:76'), name: 'Kunden återkom' },
+      valuation('auto', 'Testby Eklunda 1:76', {}, '2026-01-10T09:00:00Z'),
+    ]);
+    await walkToReview(page);
+    const items = page.getByTestId('prior-valuation-item');
+    await expect(items.nth(0)).toHaveText('2026-08-12 · 3 050 000 kr ± 50 000 kr · Kunden återkom');
+    await expect(items.nth(1)).toHaveText('2026-08-12 · 3 050 000 kr ± 50 000 kr');
+  });
+
+  test('the banner follows samintecknad and leads the extraction warnings', async ({ page }) => {
+    const doc = HOUSE_EXTRACT.documents[0];
+    await installCommanderMocks(page, {
+      extractResponse: {
+        ...HOUSE_EXTRACT,
+        documents: [{
+          ...doc,
+          samintecknad: true,
+          samintecknad_evidence: [{ section: 'inteckningar', row: '2', other_property: 'Testby EKLUNDA 1:11' }],
+          diagnostics: { ocr_used: true, outcome: 'extracted' },
+        }],
+      },
+    });
+    seedProcessedRows([valuation('older', 'Testby Eklunda 1:76')]);
+    await walkToReview(page);
+    await page.getByRole('dialog', { name: 'OBS! samintecknad' }).getByRole('button', { name: 'Jag förstår' }).click();
+
+    const order = await page.locator('.extract-warning').evaluateAll(els =>
+      els.map(e => e.getAttribute('data-testid')),
+    );
+    expect(order).toEqual(['samintecknad-warning', 'prior-valuation-warning', 'extract-ocr-warning']);
+  });
+
+  test('a long apartment Objekt wraps inside the banner', async ({ page }) => {
+    const long = 'LGH 1201 Bostadsrättsföreningen Testgårdens Kvarter Norra Upplagan (769600-0000)';
+    await installCommanderMocks(page, {
+      extractResponse: {
+        ...HOUSE_EXTRACT,
+        documents: [{
+          ...HOUSE_EXTRACT.documents[0],
+          fields: HOUSE_EXTRACT.documents[0].fields.map(f =>
+            f.key === 'objekt' || f.key === 'objekt_short' ? { ...f, value: long } : f),
+        }],
+      },
+    });
+    seedProcessedRows([valuation('lgh', long, { marknadsvarde_kr: '12 500 000', intervall_kr: '250 000' })]);
+    await walkToReview(page);
+    const banner = page.getByTestId('prior-valuation-warning');
+    await expect(banner).toBeVisible();
+    const inner = await banner.evaluate(el => {
+      const col = el.querySelector(':scope > div') as HTMLElement;
+      return { banner: el.scrollWidth - el.clientWidth, column: col.scrollWidth - col.clientWidth };
+    });
+    expect(inner).toEqual({ banner: 0, column: 0 });
   });
 
   test('an apartment written differently (case, org number format, förening spelling) still matches', async ({
