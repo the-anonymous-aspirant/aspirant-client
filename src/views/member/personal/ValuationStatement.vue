@@ -2810,19 +2810,31 @@ export default {
 }
 .row-menu-item--danger { color: var(--feedback-error, #c0392b); }
 /* Stays, with the native it paints — see the hold at the control. The
-   transparent rest state IS the affordance here, not an unfinished migration. */
+   transparent rest state IS the affordance here, not an unfinished migration.
+   What it reveals is exactly AspInput's box (#8503): the field's fill and
+   control border on hover, its two-tone focus pair on focus. The tokens it
+   borrowed before were for the inside of the dark card; the history sits on
+   the page, where they put the focused name at 3.84:1 in light. */
 .history-name-input {
   width: 100%;
   background: transparent;
   border: 1px solid transparent;
+  border-radius: var(--radius-md);
   padding: 2px 4px;
   font: inherit;
   color: inherit;
 }
-.history-name-input:focus,
 .history-name-input:hover {
-  border-color: var(--border-card);
-  background: var(--surface-card-inner);
+  background: var(--surface-elevated);
+  border-color: var(--border-control);
+}
+/* AspInput's .field__control:focus-within pair: the ring alone measures
+   2.32:1 on the light page, so the --text-body border carries the edge. */
+.history-name-input:focus {
+  outline: none;
+  background: var(--surface-elevated);
+  border-color: var(--text-body);
+  box-shadow: var(--shadow-focus);
 }
 
 /* #8465: the history as cards below 640px (§3.114 decision 6). */
@@ -2872,7 +2884,9 @@ export default {
    its surface needs >= ~61% to clear the 3:1 non-text floor (60% measured
    2.9:1; 75% gives ~4.2:1). */
 @media (hover: none) {
-  .history-card .history-name-input {
+  /* At rest only: focus takes AspInput's --text-body border (#8503), which
+     this later, equally specific rule would otherwise override. */
+  .history-card .history-name-input:not(:focus) {
     border-color: color-mix(in srgb, currentColor 75%, transparent);
   }
 }
