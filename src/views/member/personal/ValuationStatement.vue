@@ -531,16 +531,20 @@
         <summary>Visa rådata från extraheringen</summary>
         <div v-for="d in extractedDocs" :key="d.filename" class="provenance-doc">
           <h5>{{ d.filename }} <span class="muted">({{ provenanceSourceClass(d) || '—' }})</span></h5>
-          <table>
-            <tbody>
-              <tr v-for="f in d.fields" :key="f.key">
-                <td class="provenance-key">{{ f.key }}</td>
-                <td>{{ f.value || '—' }}</td>
-                <td><span class="chip" :class="f.confidence">{{ f.confidence }}</span></td>
-                <td class="muted small">s. {{ f.source_page ?? '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <!-- #8423: raw data may be wider than a phone; it scrolls in its own
+               island, never the page. -->
+          <div class="provenance-scroll">
+            <table>
+              <tbody>
+                <tr v-for="f in d.fields" :key="f.key">
+                  <td class="provenance-key">{{ f.key }}</td>
+                  <td>{{ f.value || '—' }}</td>
+                  <td><span class="chip" :class="f.confidence">{{ f.confidence }}</span></td>
+                  <td class="muted small">s. {{ f.source_page ?? '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </details>
 
@@ -2006,6 +2010,16 @@ export default {
 </script>
 
 <style scoped>
+/* #8423: the view centres its children, so each tab panel was sized to fit
+   its content, and as a flex item it could not shrink below it
+   (`min-width: auto`): a 384px provenance row made the review card 451px on a
+   390px phone. A definite width — the view's own, which is what every panel
+   measures at desktop already (852 = 852) — plus `min-width: 0` holds it there,
+   so wide content has to fit or scroll in its own island. (`min-width: 0`
+   alone is not enough in WebKit: the fit-content size still counts a scroll
+   island's table.) */
+.valuation-view > [role="tabpanel"] { width: 100%; min-width: 0; }
+
 .valuation-view {
   padding: var(--space-lg);
   display: flex;
@@ -2061,7 +2075,12 @@ export default {
    Without both of these the block widened the whole review step past a 390px
    viewport and pushed it off-centre — measured 460px of document against a
    390px window (#5362). */
-.extract-warning > div { min-width: 0; }
+/* #8423: the badge stacks above the text when the banner cannot give the text
+   14rem beside it — decided by the banner's own width, not the viewport, so
+   every banner behaves the same in a narrow card. Wrapped, the text starts at
+   the banner's padding edge, the badge's edge; `gap` spaces both ways. */
+.extract-warning { flex-wrap: wrap; }
+.extract-warning > div { flex: 1 1 14rem; min-width: 0; }
 
 .extract-warning__lead,
 .extract-warning__hint {
@@ -2559,6 +2578,13 @@ export default {
     grid-template-columns: 1fr;
     gap: var(--space-xs);
   }
+  /* #8423: the phone footer grammar (§3.114 decision 7): stacked, full width,
+     primary first. The DOM keeps Avbryt first for the desktop row. */
+  .action-row {
+    flex-direction: column-reverse;
+    gap: var(--space-xs);
+  }
+  .action-row > * { width: 100%; }
 }
 
 /* Provenance disclosure */
@@ -2566,6 +2592,7 @@ export default {
 .provenance summary { cursor: pointer; font-weight: 600; padding: var(--space-xs) 0; }
 .provenance-doc { margin-top: var(--space-md); }
 .provenance-doc h5 { margin: 0 0 var(--space-xs); font-size: var(--text-sm); }
+.provenance-scroll { overflow-x: auto; }
 .provenance table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
 .provenance td { padding: 4px 8px; border-bottom: 1px solid var(--border-card); }
 .provenance-key { color: var(--text-muted); font-family: monospace; }
