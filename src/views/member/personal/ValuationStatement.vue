@@ -2090,6 +2090,10 @@ export default {
   overflow-wrap: anywhere;
 }
 
+/* No bullets, so a gap keeps two valuations apart when a narrow column
+   wraps each one onto several lines. */
+.prior-list li + li { margin-top: var(--space-2xs); }
+
 .prior-seg { white-space: nowrap; }
 
 /* Figures in columns, so the lines compare at a glance. */
