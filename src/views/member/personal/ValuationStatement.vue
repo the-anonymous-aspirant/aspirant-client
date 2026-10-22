@@ -267,15 +267,15 @@
           </p>
           <ul class="prior-list">
             <!-- Each "· …" segment keeps its dot (no dangling "·" at 390). The
-                 value and its interval may part between them, never inside. -->
+                 value and its interval are one estimate, so one segment: the
+                 line breaks only at a "·". -->
             <li
               v-for="m in priorMatchesShown"
               :key="m.id"
               data-testid="prior-valuation-item"
             >
               <span class="prior-seg">{{ m.date }}</span>
-              {{ ' ' }}<span class="prior-seg">·&nbsp;<strong class="prior-amount">{{ formatAmount(m.value) || 'inget marknadsvärde' }}</strong></span>
-              <template v-if="m.value && m.interval">{{ ' ' }}<span class="prior-seg"><strong class="prior-amount">±&nbsp;{{ formatAmount(m.interval) }}</strong></span></template>
+              {{ ' ' }}<span class="prior-seg">·&nbsp;<strong class="prior-amount">{{ m.value ? formatPriorValue(m) : 'inget marknadsvärde' }}</strong></span>
               <template v-if="renamedName(m)">{{ ' ' }}·&nbsp;{{ renamedName(m) }}</template>
             </li>
           </ul>
@@ -773,7 +773,6 @@ import { overlayHistoryWatch } from '@/directives/overlayHistory.js';
 import ValuationStep from '@/components/ValuationStep.vue';
 import {
   findPriorValuations,
-  formatAmount,
   formatPriorValue,
   renamedName,
 } from '@/components/valuation/priorValuations.js';
@@ -1152,7 +1151,7 @@ export default {
       this.samintecknadModalOpen = false;
     },
 
-    formatAmount,
+    formatPriorValue,
     renamedName,
 
     /** Read the caller's whole history for the "valued before" warning

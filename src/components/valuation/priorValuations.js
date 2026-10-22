@@ -94,12 +94,12 @@ export function formatAmount(value) {
   return `${String(value).trim().replace(/\s+/g, '\u00a0')}\u00a0kr`;
 }
 
-/** "3 050 000 kr ± 50 000 kr", or what of it exists. The line may still break
- *  between the value and its interval. */
+/** "3 050 000 kr ± 50 000 kr", or what of it exists: one estimate, so it never
+ *  breaks inside, not even at the "±". */
 export function formatPriorValue(match) {
   if (!match.value) return 'inget marknadsvärde angivet';
   return match.interval
-    ? `${formatAmount(match.value)} ±\u00a0${formatAmount(match.interval)}`
+    ? `${formatAmount(match.value)}\u00a0±\u00a0${formatAmount(match.interval)}`
     : formatAmount(match.value);
 }
 

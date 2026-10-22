@@ -186,6 +186,9 @@ test.describe('#8419 Värderad tidigare', () => {
       return { banner: el.scrollWidth - el.clientWidth, column: col.scrollWidth - col.clientWidth };
     });
     expect(inner).toEqual({ banner: 0, column: 0 });
+    // "12 500 000 kr ± 250 000 kr" is one estimate: one line box, never split.
+    const lineBoxes = await banner.locator('.prior-amount').first().evaluate(el => el.getClientRects().length);
+    expect(lineBoxes).toBe(1);
   });
 
   test('an apartment written differently (case, org number format, förening spelling) still matches', async ({
