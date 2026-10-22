@@ -424,7 +424,7 @@
             @input="onAmountInput('intervall_kr', $event)"
           />
         </div>
-        <div class="field-row" :class="confClass('bilder_note')">
+        <div class="field-row field-row--top" :class="confClass('bilder_note')">
           <label>Anteckning om bilder/skick</label>
           <!-- One grid cell, so the box starts at the textarea's left edge in
                both the two-column row and the phone's single column. -->
@@ -440,6 +440,7 @@
                  takes only it out again), so the field shows what the document
                  will say and a saved valuation keeps it. -->
             <AspCheckbox
+              class="checkbox-row"
               :model-value="bilderFranKund"
               label="Bilder från kund har tagits i beaktning"
               data-testid="bilder-fran-kund"
@@ -2245,7 +2246,9 @@ export default {
 .field-row > * {
   min-width: 0;
 }
-.field-row label { font-size: var(--text-sm); color: var(--text-muted); }
+/* The row's caption only: `>` so a control whose root is a <label> (AspCheckbox
+   in the bilder row, #8420) is not restyled as a caption. */
+.field-row > label { font-size: var(--text-sm); color: var(--text-muted); }
 /* The controls that still CANNOT migrate — the native `date` pickers the #880
    specs pin — held to the box AspInput renders beside them, so the review form
    still reads as one form. Their old `--surface-card-inner` well is also the
@@ -2292,9 +2295,15 @@ export default {
 .field-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
   min-width: 0;
 }
+
+/* A two-control cell (textarea + checkbox): the caption stays with the
+   textarea's first line instead of floating to the middle of the pair. The
+   pad is the textarea's own top padding + its 1px border (AspTextarea pads
+   var(--space-xs)); measured: the centre lines then sit 0.68px apart. */
+.field-row--top { align-items: start; }
+.field-row--top > label { padding-top: calc(var(--space-xs) + 1px); }
 
 /* Confidence chips */
 .chip {
@@ -2583,6 +2592,7 @@ export default {
 @media (max-width: 768px) {
   .valuation-view { padding: var(--space-md); }
   .field-row { grid-template-columns: 1fr; gap: var(--space-2xs); }
-  .field-row label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em; }
+  .field-row > label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em; }
+  .field-row--top > label { padding-top: 0; }
 }
 </style>

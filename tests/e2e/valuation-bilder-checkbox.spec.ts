@@ -106,6 +106,32 @@ test.describe('#8420 Bilder från kund', () => {
     ];
     expect(Math.abs(boxRect!.x - noteRect!.x)).toBeLessThanOrEqual(1);
   });
+
+  test('the box reads as a sentence, not a row caption (the phone caption rule is uppercase)', async ({ page }) => {
+    await walkToReview(page);
+    const style = await page.getByTestId('bilder-fran-kund').evaluate(el => {
+      const cs = getComputedStyle(el);
+      return { transform: cs.textTransform, letterSpacing: cs.letterSpacing };
+    });
+    expect(style.transform).toBe('none');
+    expect(style.letterSpacing).toBe('normal');
+  });
+
+  test('desktop: the caption lines up with the note’s first line', async ({ page }) => {
+    test.skip((page.viewportSize()?.width ?? 0) <= 768, 'one-column row: the caption sits above the field');
+    await walkToReview(page);
+    const delta = await page.locator('.field-row', { has: page.locator('label', { hasText: 'Anteckning om bilder/skick' }) })
+      .evaluate(row => {
+        const lab = row.querySelector(':scope > label') as HTMLElement;
+        const ta = row.querySelector('textarea') as HTMLElement;
+        const lcs = getComputedStyle(lab), tcs = getComputedStyle(ta);
+        const lr = lab.getBoundingClientRect(), tr = ta.getBoundingClientRect();
+        const labCentre = lr.top + parseFloat(lcs.paddingTop) + parseFloat(lcs.lineHeight) / 2;
+        const taCentre = tr.top + parseFloat(tcs.borderTopWidth) + parseFloat(tcs.paddingTop) + parseFloat(tcs.lineHeight) / 2;
+        return Math.abs(taCentre - labCentre);
+      });
+    expect(delta).toBeLessThanOrEqual(2);
+  });
 });
 
 test.describe('#8420 note helpers', () => {
