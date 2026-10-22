@@ -689,7 +689,9 @@
             <span class="history-card__property">{{ rowPreview(row, 'fastighetsbeteckning') || rowPreview(row, 'objekt_short') || '—' }}</span>
             <span v-if="rowPreview(row, 'marknadsvarde_kr')" class="history-card__value">{{ rowPreview(row, 'marknadsvarde_kr') }} kr</span>
           </div>
-          <span class="history-card__meta">{{ formatRowDate(row.created_at) }}<span v-if="rowPreview(row, 'adress')" class="nowrap"> · {{ rowPreview(row, 'adress') }}</span></span>
+          <!-- Two unbreakable pieces, so a narrow line breaks only before the
+               "·", never inside the date-time or the address. -->
+          <span class="history-card__meta"><span class="nowrap history-card__when">{{ formatRowDate(row.created_at) }}</span><template v-if="rowPreview(row, 'adress')">{{ ' ' }}<span class="nowrap">· {{ rowPreview(row, 'adress') }}</span></template></span>
           <div class="history-card__actions">
             <!-- The table's held native (see the note on its cell). In the
                  card it shows its box at rest on a touch screen, which has

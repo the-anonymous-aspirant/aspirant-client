@@ -86,6 +86,7 @@ test.describe('#8465 Tidigare värderingar on a phone', () => {
           leftEdge: Math.abs(prop.left - (box.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft))),
           rightEdge: Math.abs(v.right - (box.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight))),
           valueLines: value.getClientRects().length,
+          whenLines: card.querySelector('.history-card__when')!.getClientRects().length,
           value: value.textContent?.trim(),
         };
       }),
@@ -95,6 +96,8 @@ test.describe('#8465 Tidigare värderingar on a phone', () => {
       expect(c.leftEdge, `${c.id} property edge`).toBeLessThanOrEqual(1);
       expect(c.rightEdge, `${c.id} value edge`).toBeLessThanOrEqual(1);
       expect(c.valueLines, `${c.id} value one line`).toBe(1);
+      // The date-time never splits; the meta line breaks before its "·".
+      expect(c.whenLines, `${c.id} date-time one line`).toBe(1);
     }
   });
 
