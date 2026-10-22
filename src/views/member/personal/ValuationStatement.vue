@@ -579,7 +579,7 @@
         Inga sparade värderingar än — slutförda iterationer dyker upp här automatiskt.
       </p>
 
-      <table v-else class="history-table" data-test="history-table">
+      <table v-else-if="!narrow" class="history-table" data-test="history-table">
         <thead>
           <tr>
             <th>Namn</th>
@@ -671,6 +671,62 @@
           </tr>
         </tbody>
       </table>
+
+      <!-- #8465: below 640px each valuation is a card (§3.114 decision 6) —
+           the six-column table scrolled a phone sideways by 309px, and a
+           scroll island would clip the menu's popover. What the valuation is
+           leads: the property, and its value flush right; then when it was
+           made and where. The name field and the menu — what Jenny can do —
+           close the card. Same controls, handlers and hooks as the table row. -->
+      <ul v-else class="history-cards" aria-label="Tidigare värderingar" data-test="history-cards">
+        <li
+          v-for="row in processedRows"
+          :key="row.id"
+          class="history-card"
+          :data-test-row-id="row.id"
+        >
+          <div class="history-card__top">
+            <span class="history-card__property">{{ rowPreview(row, 'fastighetsbeteckning') || rowPreview(row, 'objekt_short') || '—' }}</span>
+            <span v-if="rowPreview(row, 'marknadsvarde_kr')" class="history-card__value">{{ rowPreview(row, 'marknadsvarde_kr') }} kr</span>
+          </div>
+          <span class="history-card__meta">{{ formatRowDate(row.created_at) }}<span v-if="rowPreview(row, 'adress')" class="nowrap"> · {{ rowPreview(row, 'adress') }}</span></span>
+          <div class="history-card__actions">
+            <!-- The table's held native (see the note on its cell). In the
+                 card it shows its box at rest on a touch screen, which has
+                 no hover to reveal it. -->
+            <input
+              type="text"
+              class="history-name-input"
+              :value="row.name"
+              @change="renameProcessed(row, $event.target.value)"
+              :aria-label="'Namn för värdering ' + row.name"
+            />
+            <div class="row-menu">
+              <AspButton
+                variant="ghost"
+                size="icon"
+                class="row-menu-trigger"
+                :aria-haspopup="'menu'"
+                :aria-expanded="openMenuRowId === row.id"
+                :aria-label="'Åtgärder för ' + row.name"
+                @click.stop="toggleRowMenu(row.id)"
+              >⋮</AspButton>
+              <div
+                v-if="openMenuRowId === row.id"
+                class="row-menu-popover"
+                role="menu"
+                @click.stop
+              >
+                <!-- Held natives, as in the table row (#4513/#4515). -->
+                <button type="button" role="menuitem" class="row-menu-item" @click="runRowAction(row, 'edit')">Redigera</button>
+                <button type="button" role="menuitem" class="row-menu-item" @click="runRowAction(row, 'docx')">.docx</button>
+                <button type="button" role="menuitem" class="row-menu-item" @click="runRowAction(row, 'pdf')">.pdf</button>
+                <button type="button" role="menuitem" class="row-menu-item row-menu-item--danger" @click="runRowAction(row, 'delete')">Radera</button>
+              </div>
+            </div>
+          </div>
+        </li>
+      </ul>
     </div>
 
     <!-- 'Om verktyget' tab: human-readable render of the field-first
@@ -846,14 +902,23 @@ export default {
       // Tracks the row whose action menu is open in 'Tidigare värderingar'.
       // Null = no menu open. Outside-clicks close via _onDocClick.
       openMenuRowId: null,
+      // #8465: below 640px the history renders as cards, not the table.
+      narrow: false,
     };
   },
   mounted() {
     document.addEventListener('click', this._onDocClick);
+    this.narrowQuery = window.matchMedia('(max-width: 640px)');
+    this.narrow = this.narrowQuery.matches;
+    this.onNarrowChange = (e) => {
+      this.narrow = e.matches;
+    };
+    this.narrowQuery.addEventListener('change', this.onNarrowChange);
   },
   beforeUnmount() {
     this.stopStatusCycle();
     document.removeEventListener('click', this._onDocClick);
+    if (this.narrowQuery) this.narrowQuery.removeEventListener('change', this.onNarrowChange);
   },
   computed: {
     mode() {
@@ -2537,6 +2602,63 @@ export default {
 .history-name-input:hover {
   border-color: var(--border-card);
   background: var(--surface-card-inner);
+}
+
+/* #8465: the history as cards below 640px (§3.114 decision 6). */
+.history-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.history-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  /* The view centres its text; a card's edges are its left padding edge. */
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  overflow-wrap: anywhere;
+}
+.history-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+/* A long LGH + förening + org number wraps under itself, never under the value. */
+.history-card__property { flex: 1; min-width: 0; }
+.history-card__value {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.history-card__meta { color: var(--text-muted); font-size: var(--text-sm); }
+.history-card__meta .nowrap { white-space: nowrap; }
+.history-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-2xs);
+}
+.history-card__actions .history-name-input { flex: 1; min-width: 0; }
+/* No hover on a touch screen, so the rest-state box the table reveals on
+   hover would never show: draw its boundary at rest. currentColor-derived so
+   it follows the ink in both themes; 75% because the light theme's ink over
+   its surface needs >= ~61% to clear the 3:1 non-text floor (60% measured
+   2.9:1; 75% gives ~4.2:1). */
+@media (hover: none) {
+  .history-card .history-name-input {
+    border-color: color-mix(in srgb, currentColor 75%, transparent);
+  }
+}
+@media (max-width: 640px) {
+  /* Two equal halves do not fit at 390: stacked, full width, CSV first. */
+  .history-toolbar { flex-direction: column; }
+  .history-toolbar > * { width: 100%; }
 }
 
 /* Mobile */
