@@ -94,12 +94,14 @@ export function formatAmount(value) {
   return `${String(value).trim().replace(/\s+/g, '\u00a0')}\u00a0kr`;
 }
 
-/** "3 050 000 kr ± 50 000 kr", or what of it exists: one estimate, so it never
- *  breaks inside, not even at the "±". */
+/** "3 050 000 kr ± 50 000 kr", or what of it exists. Each amount is
+ *  unbreakable and "±" stays with its interval; the one break opportunity is
+ *  the space before "±", so a narrow column wraps the range onto its own line
+ *  led by "±" and a wide one keeps the estimate on one (design_agent c51968). */
 export function formatPriorValue(match) {
   if (!match.value) return 'inget marknadsvärde angivet';
   return match.interval
-    ? `${formatAmount(match.value)}\u00a0±\u00a0${formatAmount(match.interval)}`
+    ? `${formatAmount(match.value)} ±\u00a0${formatAmount(match.interval)}`
     : formatAmount(match.value);
 }
 

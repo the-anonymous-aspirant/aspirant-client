@@ -186,9 +186,14 @@ test.describe('#8419 Värderad tidigare', () => {
       return { banner: el.scrollWidth - el.clientWidth, column: col.scrollWidth - col.clientWidth };
     });
     expect(inner).toEqual({ banner: 0, column: 0 });
-    // "12 500 000 kr ± 250 000 kr" is one estimate: one line box, never split.
-    const lineBoxes = await banner.locator('.prior-amount').first().evaluate(el => el.getClientRects().length);
-    expect(lineBoxes).toBe(1);
+    // c51968: each amount is one line box; the estimate may wrap only before
+    // "±", so the range leads its own line; at desktop it is one line.
+    const pieces = await banner.getByTestId('prior-valuation-item').first().locator('.prior-amount').evaluateAll(els =>
+      els.map(el => ({ text: (el.textContent || '').replace(/\s+/g, ' ').trim(), boxes: el.getClientRects().length, top: Math.round(el.getBoundingClientRect().top) })),
+    );
+    expect(pieces.map(p => p.text)).toEqual(['12 500 000 kr', '± 250 000 kr']);
+    for (const p of pieces) expect(p.boxes, p.text).toBe(1);
+    if ((page.viewportSize()?.width ?? 0) > 640) expect(pieces[0].top).toBe(pieces[1].top);
   });
 
   test('an apartment written differently (case, org number format, förening spelling) still matches', async ({
