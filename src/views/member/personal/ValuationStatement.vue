@@ -465,15 +465,29 @@
             @input="onAmountInput('intervall_kr', $event)"
           />
         </div>
-        <div class="field-row" :class="confClass('bilder_note')">
+        <div class="field-row field-row--top" :class="confClass('bilder_note')">
           <label>Anteckning om bilder/skick</label>
-          <AspTextarea
-            v-model="reviewedFields.bilder_note"
-            :rows="2"
-            :max-rows="8"
-            placeholder="Lämna tom om inget ska läggas till"
-            @input="markManual('bilder_note')"
-          />
+          <!-- One grid cell, so the box starts at the textarea's left edge in
+               both the two-column row and the phone's single column. -->
+          <div class="field-stack">
+            <AspTextarea
+              v-model="reviewedFields.bilder_note"
+              :rows="2"
+              :max-rows="8"
+              placeholder="Lämna tom om inget ska läggas till"
+              @input="markManual('bilder_note')"
+            />
+            <!-- #8420: the tick writes the sentence into the note above (and
+                 takes only it out again), so the field shows what the document
+                 will say and a saved valuation keeps it. -->
+            <AspCheckbox
+              class="checkbox-row"
+              :model-value="bilderFranKund"
+              label="Bilder från kund har tagits i beaktning"
+              data-testid="bilder-fran-kund"
+              @update:model-value="setBilderFranKund"
+            />
+          </div>
         </div>
       </fieldset>
 
@@ -769,6 +783,11 @@ import { AspBadge, AspButton, AspCheckbox, AspInput, AspModal, AspSegmented, Asp
 import axios from 'axios';
 
 import { overlayHistoryWatch } from '@/directives/overlayHistory.js';
+import {
+  hasBilderFranKund,
+  withBilderFranKund,
+  withoutBilderFranKund,
+} from '@/components/valuation/bilderNote.js';
 
 import ValuationStep from '@/components/ValuationStep.vue';
 import {
@@ -909,6 +928,12 @@ export default {
   computed: {
     mode() {
       return this.reviewedFields.upplatelseform === 'Friköpt' ? 'frikopt' : 'bostadsratt';
+    },
+
+    /** Ticked ⇔ the note carries "Bilder från kund har tagits i beaktning."
+     *  (#8420) — derived, so a reopened valuation shows its own state. */
+    bilderFranKund() {
+      return hasBilderFranKund(this.reviewedFields.bilder_note);
     },
 
     // AspSelect takes `[{value,label}]` where the natives took <option> markup.
@@ -1635,6 +1660,15 @@ export default {
       }
     },
 
+    setBilderFranKund(checked) {
+      const note = this.reviewedFields.bilder_note;
+      this.reviewedFields = {
+        ...this.reviewedFields,
+        bilder_note: checked ? withBilderFranKund(note) : withoutBilderFranKund(note),
+      };
+      this.markManual('bilder_note');
+    },
+
     onAmountInput(key, event) {
       // Mark the field as operator-edited (drops the source-extraction
       // confidence tint, paints the input blue), then reformat the typed
@@ -2344,7 +2378,9 @@ export default {
 .field-row > * {
   min-width: 0;
 }
-.field-row label { font-size: var(--text-sm); color: var(--text-muted); }
+/* The row's caption only: `>` so a control whose root is a <label> (AspCheckbox
+   in the bilder row, #8420) is not restyled as a caption. */
+.field-row > label { font-size: var(--text-sm); color: var(--text-muted); }
 /* The controls that still CANNOT migrate — the native `date` pickers the #880
    specs pin — held to the box AspInput renders beside them, so the review form
    still reads as one form. Their old `--surface-card-inner` well is also the
@@ -2387,6 +2423,19 @@ export default {
   margin-top: var(--space-sm);
   color: var(--text-muted);
 }
+
+.field-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* A two-control cell (textarea + checkbox): the caption stays with the
+   textarea's first line instead of floating to the middle of the pair. The
+   pad is the textarea's own top padding + its 1px border (AspTextarea pads
+   var(--space-xs)); measured: the centre lines then sit 0.68px apart. */
+.field-row--top { align-items: start; }
+.field-row--top > label { padding-top: calc(var(--space-xs) + 1px); }
 
 /* Confidence chips */
 .chip {
@@ -2675,6 +2724,7 @@ export default {
 @media (max-width: 768px) {
   .valuation-view { padding: var(--space-md); }
   .field-row { grid-template-columns: 1fr; gap: var(--space-2xs); }
-  .field-row label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em; }
+  .field-row > label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em; }
+  .field-row--top > label { padding-top: 0; }
 }
 </style>
