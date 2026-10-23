@@ -53,9 +53,10 @@ test.describe('Tidigare värderingar tab — list + edit + delete', () => {
 
     await openHistory(page);
 
-    const table = page.locator('[data-test="history-table"]');
-    await expect(table).toBeVisible();
-    await expect(table.locator('tbody tr')).toHaveCount(2);
+    // A table on desktop, a card per valuation below 640px (#8465); the row
+    // hook is the same on both.
+    await expect(page.locator('[data-test="history-table"], [data-test="history-cards"]')).toBeVisible();
+    await expect(page.locator('[data-test-row-id]')).toHaveCount(2);
 
     const editedRow = page.locator('[data-test-row-id="row-b"]');
     await expect(editedRow).toContainText('LGH 2002 Brf Två');
@@ -128,7 +129,7 @@ test.describe('Tidigare värderingar tab — list + edit + delete', () => {
     ]);
 
     await openHistory(page);
-    await expect(page.locator('[data-test="history-table"] tbody tr')).toHaveCount(2);
+    await expect(page.locator('[data-test-row-id]')).toHaveCount(2);
 
     // Accept the window.confirm
     page.once('dialog', dialog => dialog.accept());
@@ -136,7 +137,7 @@ test.describe('Tidigare värderingar tab — list + edit + delete', () => {
     await page.locator('[data-test-row-id="row-del-2"] .row-menu-popover >> text=Radera').click();
 
     await expect(page.locator('[data-test-row-id="row-del-2"]')).toHaveCount(0);
-    await expect(page.locator('[data-test="history-table"] tbody tr')).toHaveCount(1);
+    await expect(page.locator('[data-test-row-id]')).toHaveCount(1);
     expect(processedSeed.rows.map(r => r.id)).toEqual(['row-del-1']);
   });
 
