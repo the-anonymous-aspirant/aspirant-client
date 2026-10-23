@@ -166,7 +166,14 @@ test.describe('#4305 goal-tree inline fields (AspInput)', () => {
     // control against unfocused siblings is a flake, not a finding.
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await expect(page.locator('[role="dialog"] .field__control')).not.toHaveClass(/focus/);
-    await page.waitForTimeout(400); // > --transition-fast, so the border has settled
+    // Wait for the border transition to END, not for a fixed time: a 400ms
+    // sleep (> --transition-fast) lost to a loaded box and read the name field
+    // mid-transition at 108,108,108 in PR #334's verify (#8477). A CSS
+    // transition is a running animation until it finishes, so none left means
+    // every control shows its settled colour.
+    await expect
+      .poll(() => page.locator('[role="dialog"]').evaluate((d) => d.getAnimations({ subtree: true }).length))
+      .toBe(0);
 
     // The dialog mixes three DS controls (AspInput name, AspSelect type and
     // parent — #4478) with two native date pickers, which cannot migrate
