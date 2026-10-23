@@ -845,6 +845,7 @@
 <script>
 import { AspBadge, AspButton, AspCheckbox, AspInput, AspModal, AspSegmented, AspSelect, AspTextarea } from '@aspirant/design-system';
 import axios from 'axios';
+import { statementFilename } from '@/components/valuation/statementFilename.js';
 
 import { overlayHistoryWatch } from '@/directives/overlayHistory.js';
 import {
@@ -865,11 +866,6 @@ import {
 // aspirant-commander's transparency.py — ships with the bundle so the
 // About disclosure renders without a runtime API call.
 import valuationAbout from '@/resources/valuationAbout.json';
-
-function filenameFromContentDisposition(header, fallback) {
-  const m = (header || '').match(/filename="([^"]+)"/);
-  return m ? m[1] : fallback;
-}
 
 const BLANK_REVIEW = () => ({
   objekt: '',
@@ -1820,17 +1816,12 @@ export default {
             }),
         ]);
 
-        this.docxFilename = filenameFromContentDisposition(
-          docxResp.headers['content-disposition'],
-          'vardeutlatande.docx',
-        );
+        // #8421: named after the property, not the server's timestamped name.
+        this.docxFilename = statementFilename(body, 'docx');
         this.docxUrl = URL.createObjectURL(docxResp.data);
 
         if (pdfResp) {
-          this.pdfFilename = filenameFromContentDisposition(
-            pdfResp.headers['content-disposition'],
-            'vardeutlatande.pdf',
-          );
+          this.pdfFilename = statementFilename(body, 'pdf');
           this.pdfUrl = URL.createObjectURL(pdfResp.data);
         }
 
@@ -2073,10 +2064,8 @@ export default {
           ? '/api/commander/valuation-statement/generate?format=pdf'
           : '/api/commander/valuation-statement/generate';
         const resp = await axios.post(url, body, { responseType: 'blob' });
-        const filename = filenameFromContentDisposition(
-          resp.headers['content-disposition'],
-          `${row.name}.${format}`,
-        );
+        // #8421: the same property name the create flow gave it.
+        const filename = statementFilename(row.final_values, format);
         const blobUrl = URL.createObjectURL(resp.data);
         const a = document.createElement('a');
         a.href = blobUrl;
