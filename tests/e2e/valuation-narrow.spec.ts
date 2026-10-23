@@ -3,6 +3,7 @@ import {
   installCommanderMocks,
   seedTrustedSession,
   dismissMobileSidebarIfPresent,
+  seedProcessedRows,
   PDF_UPLOAD_PAYLOAD,
 } from './helpers/mockBackend';
 
@@ -76,9 +77,17 @@ test.describe('#8423 the Värdeutlåtande fits a phone', () => {
 
   test('banners: badge above the text on a phone, one row on desktop', async ({ page }) => {
     await installCommanderMocks(page, { extractResponse: BANNERS });
+    // A saved valuation of the same property adds #8419's "Värderad tidigare"
+    // banner, with the longest estimate shape.
+    seedProcessedRows([{
+      id: 'prior',
+      name: '2026-08-12_x',
+      final_values: { objekt: LONG, marknadsvarde_kr: '12 500 000', intervall_kr: '250 000', datum: '2026-08-12' },
+    }]);
     await walkToReview(page);
     const banners = page.locator('.extract-warning');
-    expect(await banners.count()).toBeGreaterThanOrEqual(2);
+    await expect(page.getByTestId('prior-valuation-warning')).toBeVisible();
+    expect(await banners.count()).toBeGreaterThanOrEqual(3);
     const geometry = await banners.evaluateAll(els =>
       els.map(el => {
         const badge = (el.firstElementChild as HTMLElement).getBoundingClientRect();
@@ -111,6 +120,11 @@ test.describe('#8423 the Värdeutlåtande fits a phone', () => {
     const primary = row.getByRole('button', { name: /Generera värdeutlåtande/ });
     const cancel = row.getByRole('button', { name: 'Avbryt' });
     const [r, p, c] = [await row.boundingBox(), await primary.boundingBox(), await cancel.boundingBox()];
+    // Every label fits its button (a nowrap label wider than the card clips).
+    for (const b of [primary, cancel]) {
+      const fit = await b.evaluate(el => el.scrollWidth - el.clientWidth);
+      expect(fit, await b.innerText()).toBeLessThanOrEqual(0);
+    }
     if (isPhone(page)) {
       expect(p!.y).toBeLessThan(c!.y);
       expect(Math.abs(p!.width - r!.width)).toBeLessThanOrEqual(1);

@@ -266,16 +266,18 @@
             tidigare.
           </p>
           <ul class="prior-list">
-            <!-- Each "· …" segment keeps its dot (no dangling "·" at 390). The
-                 value and its interval are one estimate, so one segment: the
-                 line breaks only at a "·". -->
+            <!-- Each piece is unbreakable: "· <value>" keeps its dot (no
+                 dangling "·" at 390), "± <interval>" keeps its sign. A line
+                 breaks only at a "·" or before "±" — the range then leads its
+                 own line; at desktop the estimate stays on one (c51968). -->
             <li
               v-for="m in priorMatchesShown"
               :key="m.id"
               data-testid="prior-valuation-item"
             >
               <span class="prior-seg">{{ m.date }}</span>
-              {{ ' ' }}<span class="prior-seg">·&nbsp;<strong class="prior-amount">{{ m.value ? formatPriorValue(m) : 'inget marknadsvärde' }}</strong></span>
+              {{ ' ' }}<span class="prior-seg">·&nbsp;<strong class="prior-amount">{{ formatAmount(m.value) || 'inget marknadsvärde' }}</strong></span>
+              <template v-if="m.value && m.interval">{{ ' ' }}<span class="prior-seg"><strong class="prior-amount">±&nbsp;{{ formatAmount(m.interval) }}</strong></span></template>
               <template v-if="renamedName(m)">{{ ' ' }}·&nbsp;{{ renamedName(m) }}</template>
             </li>
           </ul>
@@ -777,6 +779,7 @@ import { overlayHistoryWatch } from '@/directives/overlayHistory.js';
 import ValuationStep from '@/components/ValuationStep.vue';
 import {
   findPriorValuations,
+  formatAmount,
   formatPriorValue,
   renamedName,
 } from '@/components/valuation/priorValuations.js';
@@ -1155,6 +1158,7 @@ export default {
       this.samintecknadModalOpen = false;
     },
 
+    formatAmount,
     formatPriorValue,
     renamedName,
 
@@ -2584,7 +2588,14 @@ export default {
     flex-direction: column-reverse;
     gap: var(--space-xs);
   }
+  /* Full width, and a label wider than the card wraps rather than clipping
+     at both ends: "Generera värdeutlåtande →" needs 232px of a 224px button
+     at 390. AspButton is padding-driven, so the box grows with the lines. */
   .action-row > * { width: 100%; }
+  /* `.btn` here outranks AspButton's own `.btn { white-space: nowrap }`; the
+     label span (a flex item) may then shrink to its longest word and wrap. */
+  .action-row > .btn { white-space: normal; line-height: 1.25; text-align: center; }
+  .action-row :deep(.btn__label) { min-width: 0; }
 }
 
 /* Provenance disclosure */
