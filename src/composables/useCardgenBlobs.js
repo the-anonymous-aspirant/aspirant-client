@@ -12,11 +12,18 @@ export function useCardgenBlobs() {
   const urls = new Map();
   const fonts = new Map();
 
-  /** Object URL for an asset's bytes, or null with the error in prose. */
-  async function urlFor(id) {
+  /** Object URL for an asset's bytes, or null with the error in prose.
+   *  `accept` lists the media-type prefixes the caller will render (for
+   *  example `['image/']` for an <img>, `['application/pdf']` for the PDF
+   *  frame); bytes of any other type get no URL, so a changed server mapping
+   *  can never turn the frame into a script-capable document (#8709). */
+  async function urlFor(id, accept = null) {
     if (urls.has(id)) return { url: urls.get(id), error: null };
     const { blob, error } = await fetchAssetBlob(id);
     if (!blob) return { url: null, error: error || 'Could not fetch the asset' };
+    if (accept && !accept.some((prefix) => blob.type.startsWith(prefix))) {
+      return { url: null, error: `The stored bytes are ${blob.type || 'of an unknown type'}, not ${accept.join(' or ')}` };
+    }
     const url = URL.createObjectURL(blob);
     urls.set(id, url);
     return { url, error: null };

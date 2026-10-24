@@ -21,7 +21,7 @@
           </template>
           <template v-else-if="asset.kind === 'pdf'">
             <iframe v-if="blobUrl" :src="blobUrl" class="pdf-frame" :title="asset.original_filename" data-test="viewer-pdf"></iframe>
-            <p v-else-if="blobError" class="load-error">{{ blobError }}</p>
+            <p v-else-if="blobError" class="load-error" data-test="viewer-blob-error">{{ blobError }}</p>
           </template>
           <template v-else-if="asset.kind === 'font'">
             <p class="font-sample" :style="{ fontFamily: fontFamily ? `'${fontFamily}', serif` : undefined }" data-test="viewer-font-sample">
@@ -146,7 +146,7 @@ export default {
         this.fontFamily = family;
         this.fontError = ferr;
       } else {
-        const { url, error: berr } = await this.blobs.urlFor(asset.id);
+        const { url, error: berr } = await this.blobs.urlFor(asset.id, asset.kind === 'pdf' ? ['application/pdf'] : ['image/']);
         this.blobUrl = url;
         this.blobError = berr;
       }
