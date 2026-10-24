@@ -17,7 +17,7 @@
     </div>
 
     <section v-if="activeTab === 'assets'" id="cardgen-panel-assets" role="tabpanel" data-test="cardgen-panel-assets">
-      <AspEmptyState heading="Assets" message="Backgrounds, icons, artwork and fonts for the templates. The uploader and viewer land in the next change." />
+      <AssetsPanel />
     </section>
     <section v-else-if="activeTab === 'templates'" id="cardgen-panel-templates" role="tabpanel" data-test="cardgen-panel-templates">
       <AspEmptyState heading="Templates" message="Card layouts with inheritance and version history. The editor lands in a later change." />
@@ -40,6 +40,7 @@
 // C3 export). The active tab is the optional :tab route param, so a section
 // has a URL.
 import { AspEmptyState, AspSegmented } from '@aspirant/design-system';
+import AssetsPanel from './AssetsPanel.vue';
 
 export const CARDGEN_TABS = [
   { value: 'assets', label: 'Assets', controls: 'cardgen-panel-assets', attrs: { 'data-test': 'cardgen-tab-assets' } },
@@ -52,7 +53,7 @@ const TAB_VALUES = new Set(CARDGEN_TABS.map((t) => t.value));
 
 export default {
   name: 'CardgenApp',
-  components: { AspEmptyState, AspSegmented },
+  components: { AspEmptyState, AspSegmented, AssetsPanel },
   data() {
     return { tabOptions: CARDGEN_TABS };
   },

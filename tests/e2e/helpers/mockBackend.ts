@@ -1071,12 +1071,29 @@ export type CardgenTemplateSeed = { id: number; slug: string; name: string; pare
 export type CardgenAssetSeed = { id: number; sha256: string; original_filename: string; media_type: string; kind: 'image' | 'svg' | 'pdf' | 'font'; byte_size: number; pixel_width: number; pixel_height: number; uploaded_by_user_id: number; content_url: string; created_at: string };
 export type CardgenExportProfileSeed = { id: number; name: string; spec: Record<string, unknown> };
 
+export type CardgenUsageSeed = { templates: { id: number; slug: string; name: string; version_no: number; elements: string[] }[]; cards: { id: number; slug: string; name: string; version_no: number; elements: string[] }[] };
+
 export const cardgenSeed: {
   types: CardgenTypeSeed[];
   templates: CardgenTemplateSeed[];
   assets: CardgenAssetSeed[];
   profiles: CardgenExportProfileSeed[];
-} = { types: [], templates: [], assets: [], profiles: [] };
+  usage: Record<number, CardgenUsageSeed>;
+  refuseNames: string[];
+} = { types: [], templates: [], assets: [], profiles: [], usage: {}, refuseNames: [] };
+
+export function seedCardgenUsage(map: Record<number, CardgenUsageSeed> = {}): void { cardgenSeed.usage = { ...map }; }
+export function seedCardgenRefusals(names: string[] = []): void { cardgenSeed.refuseNames = names.slice(); }
+
+// Minimal bytes per kind for the content route: a 2x2 PNG, a one-rect SVG, a
+// one-page PDF and a TTF header (enough for an <img>/<iframe> to load; the font
+// sample names the family whether or not the browser accepts the bytes).
+const CARDGEN_CONTENT: Record<CardgenAssetSeed['kind'], Buffer> = {
+  image: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVQImWP4z8DwHwyBNAMDA4gGAgAwLQX6uXk0PAAAAABJRU5ErkJggg==', 'base64'),
+  svg: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#48a"/></svg>'),
+  pdf: Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 100]>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \n0000000101 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n160\n%%EOF\n'),
+  font: Buffer.from([0, 1, 0, 0, 0, 0, 0, 0]),
+};
 
 export function seedCardgenTypes(rows: CardgenTypeSeed[] = []): void { cardgenSeed.types = rows.slice(); }
 export function seedCardgenTemplates(rows: CardgenTemplateSeed[] = []): void { cardgenSeed.templates = rows.slice(); }
@@ -1105,9 +1122,91 @@ export async function installCardgenMocks(page: Page): Promise<void> {
     }
     await json(route, { template: t });
   }));
-  await page.route(/\/api\/cardgen\/assets(\?.*)?$/, getOnly(async (route, url) => {
-    const kind = url.searchParams.get('kind');
-    await json(route, { assets: cardgenSeed.assets.filter((a) => !kind || a.kind === kind) });
+  // Assets (#8648): list and upload on one path; get, usage, content and
+  // delete on the id paths. Uploads are parsed only as far as the filename.
+  await page.route(/\/api\/cardgen\/assets(\?.*)?$/, async (route) => {
+    const req = route.request();
+    if (req.method() === 'GET') {
+      const url = new URL(req.url());
+      const kind = url.searchParams.get('kind');
+      await json(route, { assets: cardgenSeed.assets.filter((a) => !kind || a.kind === kind) });
+      return;
+    }
+    if (req.method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    const body = req.postDataBuffer()?.toString('latin1') || '';
+    const m = body.match(/filename="([^"]+)"/);
+    const name = m ? m[1] : 'upload.bin';
+    if (cardgenSeed.refuseNames.includes(name)) {
+      await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: { code: 'bad_request', message: `Unsupported file type: ${name}` } }) });
+      return;
+    }
+    const existing = cardgenSeed.assets.find((a) => a.original_filename === name);
+    if (existing) {
+      await json(route, { asset: existing, deduplicated: true });
+      return;
+    }
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    const kind: CardgenAssetSeed['kind'] = ext === 'svg' ? 'svg' : ext === 'pdf' ? 'pdf' : ['ttf', 'otf', 'woff', 'woff2'].includes(ext) ? 'font' : 'image';
+    const id = cardgenSeed.assets.reduce((m2, a) => Math.max(m2, a.id), 0) + 1;
+    const asset: CardgenAssetSeed = {
+      id,
+      sha256: `sha-${id}`.padEnd(64, '0'),
+      original_filename: name,
+      media_type: kind === 'image' ? 'image/png' : kind === 'svg' ? 'image/svg+xml' : kind === 'pdf' ? 'application/pdf' : 'font/ttf',
+      kind,
+      byte_size: body.length,
+      pixel_width: kind === 'image' ? 2 : 0,
+      pixel_height: kind === 'image' ? 2 : 0,
+      uploaded_by_user_id: 1,
+      content_url: `/api/cardgen/assets/${id}/content`,
+      created_at: '2026-10-24T18:00:00Z',
+    };
+    cardgenSeed.assets.push(asset);
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ asset, deduplicated: false }) });
+  });
+  await page.route(/\/api\/cardgen\/assets\/\d+$/, async (route) => {
+    const id = Number(new URL(route.request().url()).pathname.split('/').pop());
+    const idx = cardgenSeed.assets.findIndex((a) => a.id === id);
+    if (idx < 0) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":{"code":"not_found","message":"Asset not found"}}' });
+      return;
+    }
+    if (route.request().method() === 'GET') {
+      await json(route, { asset: cardgenSeed.assets[idx] });
+      return;
+    }
+    if (route.request().method() === 'DELETE') {
+      const usage = cardgenSeed.usage[id];
+      if (usage && (usage.templates.length || usage.cards.length)) {
+        await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: { code: 'conflict', message: 'Asset is used by a template or card; remove the reference first' }, usage }) });
+        return;
+      }
+      cardgenSeed.assets.splice(idx, 1);
+      await json(route, { status: 'success', data: { id } });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route(/\/api\/cardgen\/assets\/\d+\/usage$/, getOnly(async (route, url) => {
+    const id = Number(url.pathname.split('/')[4]);
+    await json(route, { usage: cardgenSeed.usage[id] || { templates: [], cards: [] } });
+  }));
+  await page.route(/\/api\/cardgen\/assets\/\d+\/content$/, getOnly(async (route, url) => {
+    const id = Number(url.pathname.split('/')[4]);
+    const a = cardgenSeed.assets.find((x) => x.id === id);
+    if (!a) {
+      await route.fulfill({ status: 404, body: '' });
+      return;
+    }
+    const bytes = CARDGEN_CONTENT[a.kind];
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': a.media_type, 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': a.kind === 'image' ? 'inline' : 'attachment' },
+      body: bytes,
+    });
   }));
   await page.route(/\/api\/cardgen\/export-profiles(\?.*)?$/, getOnly((route) => json(route, { profiles: cardgenSeed.profiles })));
 }
