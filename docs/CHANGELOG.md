@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Card Editor: the Assets section (system_3 #8634 / #8648). Drop or pick files to
+  upload them into the server's card asset store one at a time with a progress bar
+  (the server sniffs the type and keeps one copy per content); browse them as a grid
+  with thumbnails, filter by kind, and open any asset in a viewer: images at fit or
+  real size with their pixel size and print size at 300 DPI, SVG as an image, PDF in
+  the browser's viewer, fonts as a sample line; the metadata, the templates and cards
+  that use the asset, and delete (refused while anything uses it).
 - Card Editor (system_3 #8634 / #8645): a new admin-only app at `/admin/cardgen` for
   the Constellations game's templated cards, reached from a "Card Editor" tile on the
   admin page. This change is the shell: four sections (Assets, Templates, Cards,
