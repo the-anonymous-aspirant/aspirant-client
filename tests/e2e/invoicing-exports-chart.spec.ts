@@ -33,7 +33,7 @@ async function open(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/export/jobcenter-bundle.zip') return route.fulfill({ status: 200, contentType: 'application/zip', body: 'PK' });
     return json(route, 404, { error: { code: 'not_found', message: `unmocked ${path}` } });
   });
-  await seedTrustedSessionAs(page, 'flowah');
+  await seedTrustedSessionAs(page, 'vinoly');
   await page.goto('/member/personal/invoicing');
   await dismissMobileSidebarIfPresent(page);
   await page.getByRole('tab', { name: 'Invoices' }).click();

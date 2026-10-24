@@ -1,5 +1,5 @@
 <template>
-  <!-- Intended user: Flower (flowah), freelance invoices — system_3 #8367 -->
+  <!-- Intended user: Flower (login vinoly), freelance invoices — system_3 #8367, #8633 -->
   <div class="invoicing-view">
     <header class="page-head">
       <h1>Invoices</h1>
@@ -87,7 +87,7 @@
   import { errorOf, getProfile, listClients, listPayments } from '../../../components/invoicing/api.js';
 
   // The Invoices app (system_3 #8367): Flower's retroactive invoicing for the
-  // Jobcenter. The server gates every route to flowah + Admin
+  // Jobcenter. The server gates every route to the owner + Admin
   // (aspirant-server routes.go, invoicesOwnerUsername) and enforces every
   // invoicing rule; this page shows its answers.
   export default {

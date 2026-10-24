@@ -71,7 +71,7 @@ async function mock(page: Page, fake: Fake): Promise<void> {
 
 async function open(page: Page, fake: Fake): Promise<void> {
   await mock(page, fake);
-  await seedTrustedSessionAs(page, 'flowah');
+  await seedTrustedSessionAs(page, 'vinoly');
   await page.goto('/member/personal/invoicing');
   await dismissMobileSidebarIfPresent(page);
   await expect(page.locator('[data-test="payments-panel"]')).toBeVisible();
