@@ -45,6 +45,7 @@ import BrowserFlows from '../views/admin/BrowserFlows.vue';
 import FlowDetail from '../views/admin/browser-flows/FlowDetail.vue';
 import RunForensic from '../views/admin/browser-flows/RunForensic.vue';
 import KvittoMaker from '../views/admin/tools/KvittoMaker.vue';
+import CardgenApp from '../views/admin/cardgen/CardgenApp.vue';
 import LoginView from '../views/LoginView.vue';
 import VerifyEmailView from '../views/VerifyEmailView.vue';
 import ResetPasswordView from '../views/ResetPasswordView.vue';
@@ -94,6 +95,9 @@ const routes = [
   { path: '/admin/browser-flows/:id', component: FlowDetail, meta: ADMIN },
   { path: '/admin/browser-flows/:id/runs/:run_id', component: RunForensic, meta: ADMIN },
   { path: '/admin/tools/kvitto', component: KvittoMaker, meta: ADMIN },
+  // The admin-only card editor (system_3 #8634 / #8645, operator decision 1).
+  // :tab is one of the shell's sections; the server gates every /cardgen/* route.
+  { path: '/admin/cardgen/:tab?', component: CardgenApp, meta: ADMIN },
 
   { path: '/about', component: AboutView },
 
