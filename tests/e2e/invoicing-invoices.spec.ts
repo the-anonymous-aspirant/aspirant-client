@@ -102,7 +102,7 @@ async function mockAll(page: Page, fake: Fake): Promise<void> {
 
 async function open(page: Page, fake: Fake): Promise<void> {
   await mockAll(page, fake);
-  await seedTrustedSessionAs(page, 'flowah');
+  await seedTrustedSessionAs(page, 'vinoly');
   await page.goto('/member/personal/invoicing');
   await dismissMobileSidebarIfPresent(page);
   await expect(page.getByRole('heading', { name: 'Invoices', level: 1 })).toBeVisible();

@@ -5,7 +5,7 @@ import {
   dismissMobileSidebarIfPresent,
 } from './helpers/mockBackend';
 
-/** Invoices app for flowah (system_3 #8367-B3): issuer profile, clients,
+/** Invoices app for its owner vinoly (system_3 #8367-B3, #8633): issuer profile, clients,
  *  PayPal import and categorisation, over aspirant-server's /api/invoicing/*
  *  (#8369, #8370). Every call is answered by an in-memory fake, and a
  *  catch-all /api/ → 404 is registered FIRST: `vite preview` proxies any
@@ -105,10 +105,10 @@ async function openInvoicing(page: Page): Promise<void> {
 const csvFile = { name: 'activity.csv', mimeType: 'text/csv', buffer: Buffer.from('Date,Name\n') };
 
 test.describe('#8367 Invoices app — profile, clients, import, categorisation', () => {
-  test('the Invoices card is listed for flowah and opens the app', async ({ page }) => {
+  test('the Invoices card is listed for vinoly and opens the app', async ({ page }) => {
     const fake = newFake();
     await mockInvoicing(page, fake);
-    await seedTrustedSessionAs(page, 'flowah');
+    await seedTrustedSessionAs(page, 'vinoly');
     await page.goto('/member');
     await dismissMobileSidebarIfPresent(page);
     const card = page.locator('[data-test="member-personal-section"] .application-card', { hasText: 'Invoices' });
@@ -121,7 +121,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     const fake = newFake();
     fake.profile.steuernummer = '';
     await mockInvoicing(page, fake);
-    await seedTrustedSessionAs(page, 'flowah');
+    await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
 
     await expect(page.locator('[data-test="profile-name"]')).toHaveText('Flower Example');
@@ -135,7 +135,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
   test('the profile card insets its body by the padding prop alone', async ({ page }) => {
     const fake = newFake();
     await mockInvoicing(page, fake);
-    await seedTrustedSessionAs(page, 'flowah');
+    await seedTrustedSessionAs(page, 'vinoly');
     for (const theme of ['light', 'dark'] as const) {
       await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
       await page.emulateMedia({ colorScheme: theme });
@@ -152,7 +152,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
   test('editing the profile PUTs it; a server refusal stays in the dialog', async ({ page }) => {
     const fake = newFake();
     await mockInvoicing(page, fake);
-    await seedTrustedSessionAs(page, 'flowah');
+    await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
 
     await page.locator('[data-test="profile-edit"]').click();
@@ -174,7 +174,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
   test('adding a client POSTs it; name and address are required first', async ({ page }) => {
     const fake = newFake();
     await mockInvoicing(page, fake);
-    await seedTrustedSessionAs(page, 'flowah');
+    await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
     await page.getByRole('tab', { name: 'Clients' }).click();
 
@@ -198,7 +198,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
       importResponses: [{ status: 200, body: { summary: { rows_read: 9, imported: 3, duplicates: 0, skipped: 6, withdrawals: 1, skipped_reasons: { fee: 1, currency_conversion: 2, bank_topup: 1, not_completed: 1, outgoing: 1 } } } }],
     });
     await mockInvoicing(page, fake);
-    await seedTrustedSessionAs(page, 'flowah');
+    await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
 
     await page.locator('[data-test="payments-file"]').setInputFiles(csvFile);
@@ -220,7 +220,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
       ],
     });
     await mockInvoicing(page, fake);
-    await seedTrustedSessionAs(page, 'flowah');
+    await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
 
     await page.locator('[data-test="payments-file"]').setInputFiles(csvFile);
@@ -237,7 +237,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
   test('choosing a category PATCHes it; a server refusal is shown', async ({ page }) => {
     const fake = newFake();
     await mockInvoicing(page, fake);
-    await seedTrustedSessionAs(page, 'flowah');
+    await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
 
     const category = page.getByRole('combobox', { name: 'Category for TX1' });
@@ -261,7 +261,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
   test('near the window bottom the category options are on top and clickable', async ({ page }) => {
     const fake = newFake();
     await mockInvoicing(page, fake);
-    await seedTrustedSessionAs(page, 'flowah');
+    await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
 
     const category = page.getByRole('combobox', { name: 'Category for TX1' });
@@ -281,7 +281,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
   test('withdrawals are listed as bank deposits, not as payments to categorise', async ({ page }) => {
     const fake = newFake();
     await mockInvoicing(page, fake);
-    await seedTrustedSessionAs(page, 'flowah');
+    await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
 
     await expect(page.locator('[data-test="payment-row"]')).toHaveCount(2);
@@ -292,7 +292,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
   test('empty states: no payments, no clients', async ({ page }) => {
     const fake = newFake({ payments: [], clients: [] });
     await mockInvoicing(page, fake);
-    await seedTrustedSessionAs(page, 'flowah');
+    await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
 
     await expect(page.locator('[data-test="payments-empty"]')).toBeVisible();
@@ -305,7 +305,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     fake.payments[0].note = '<img src=x onerror="window.__xss=1">';
     fake.payments[0].sender_name = '<b>bold?</b>';
     await mockInvoicing(page, fake);
-    await seedTrustedSessionAs(page, 'flowah');
+    await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
 
     const row = page.locator('[data-test="payment-row"][data-txn="TX1"]');

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Invoices card owner: `flowah` → `vinoly`** (system_3 #8633). The user's
+  existing login is `vinoly`, which also owns Jobs, and the operator confirmed
+  it is hers (c53249). The Invoices card in `src/views/member/apps.js` moves to
+  `vinoly` with aspirant-server's `invoicesOwnerUsername`, so `vinoly` now sees
+  Jobs and Invoices on `/member`. The Jobs card, including its `person` note,
+  is unchanged. The invoicing specs now seed `vinoly`, and the entitlement spec
+  pins `vinoly`'s two cards.
+
 - **Pappas sit-ups** (system_3 #7992/#7994): robert's second personal app, at
   `/member/personal/pappas-sit-ups` (and `/trusted/pappas-sit-ups`), built on
   Pappas pushups. It runs 57 days, 2026-10-18 to 2026-12-13, against

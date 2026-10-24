@@ -42,7 +42,7 @@ async function mock(page: Page, { steuernummer = '12/345/67890' } = {}): Promise
 
 async function open(page: Page, theme: 'light' | 'dark', opts?: { steuernummer?: string }): Promise<void> {
   await mock(page, opts);
-  await seedTrustedSessionAs(page, 'flowah');
+  await seedTrustedSessionAs(page, 'vinoly');
   await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
   await page.emulateMedia({ colorScheme: theme });
   await page.goto('/member/personal/invoicing');

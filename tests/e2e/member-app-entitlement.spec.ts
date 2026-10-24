@@ -18,7 +18,7 @@ import {
  *
  *  The owner map under test (src/views/member/apps.js): ludde-analytics,
  *  30-year-gift and valuation-statement → jenny; pappas-pushups → robert;
- *  jobs → vinoly; invoicing → flowah.
+ *  jobs and invoicing → vinoly (system_3 #8633).
  */
 
 const ALL_PERSONAL = [
@@ -75,20 +75,18 @@ test.describe('#4331 /member personal apps are filtered to their owner', () => {
     await expect(page.locator('.application-card', { hasText: 'Jobs' })).toHaveCount(0);
   });
 
-  test('flowah sees Invoices only', async ({ page }) => {
-    // system_3 #8367: the invoicing app is flowah's (aspirant-server
-    // invoicesOwnerUsername, gated on the whole /invoicing group).
-    await seedTrustedSessionAs(page, 'flowah');
-    await openMember(page);
-
-    expect(await personalCardTitles(page)).toEqual(['Invoices']);
-  });
-
-  test('vinoly sees Jobs only', async ({ page }) => {
+  test('vinoly sees Jobs and Invoices and nothing else personal', async ({ page }) => {
+    // system_3 #8633: the operator confirmed vinoly is the invoicing app's
+    // owner (aspirant-server invoicesOwnerUsername, gated on the whole
+    // /invoicing group), so vinoly's two apps are Jobs and Invoices.
     await seedTrustedSessionAs(page, 'vinoly');
     await openMember(page);
 
-    expect(await personalCardTitles(page)).toEqual(['Jobs']);
+    const vinolys = ['Jobs', 'Invoices'];
+    expect(await personalCardTitles(page)).toEqual(vinolys);
+    for (const title of ALL_PERSONAL.filter((t) => !vinolys.includes(t))) {
+      await expect(page.locator('.application-card', { hasText: title })).toHaveCount(0);
+    }
   });
 
   test('a Trusted member who owns nothing gets no Personal section at all', async ({ page }) => {

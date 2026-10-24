@@ -1,5 +1,5 @@
 // API calls for the Invoices app (system_3 #8367). The server is the
-// authority for every rule — who may see the data (flowah + Admin), which
+// authority for every rule — who may see the data (its owner + Admin), which
 // payments may be invoiced, the invoice number and the issue date — so these
 // wrappers only move data; they never decide.
 
