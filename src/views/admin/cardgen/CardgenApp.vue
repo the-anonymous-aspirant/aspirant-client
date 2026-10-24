@@ -20,7 +20,7 @@
       <AssetsPanel />
     </section>
     <section v-else-if="activeTab === 'templates'" id="cardgen-panel-templates" role="tabpanel" data-test="cardgen-panel-templates">
-      <AspEmptyState heading="Templates" message="Card layouts with inheritance and version history. The editor lands in a later change." />
+      <TemplatesPanel />
     </section>
     <section v-else-if="activeTab === 'cards'" id="cardgen-panel-cards" role="tabpanel" data-test="cardgen-panel-cards">
       <ReviewPanel />
@@ -42,6 +42,7 @@
 import { AspEmptyState, AspSegmented } from '@aspirant/design-system';
 import AssetsPanel from './AssetsPanel.vue';
 import ReviewPanel from './ReviewPanel.vue';
+import TemplatesPanel from './TemplatesPanel.vue';
 
 export const CARDGEN_TABS = [
   { value: 'assets', label: 'Assets', controls: 'cardgen-panel-assets', attrs: { 'data-test': 'cardgen-tab-assets' } },
@@ -54,7 +55,7 @@ const TAB_VALUES = new Set(CARDGEN_TABS.map((t) => t.value));
 
 export default {
   name: 'CardgenApp',
-  components: { AspEmptyState, AspSegmented, AssetsPanel, ReviewPanel },
+  components: { AspEmptyState, AspSegmented, AssetsPanel, ReviewPanel, TemplatesPanel },
   data() {
     return { tabOptions: CARDGEN_TABS };
   },
