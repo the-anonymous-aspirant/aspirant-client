@@ -17,16 +17,16 @@
     </div>
 
     <section v-if="activeTab === 'assets'" id="cardgen-panel-assets" role="tabpanel" data-test="cardgen-panel-assets">
-      <AspEmptyState title="Assets" description="Backgrounds, icons, artwork and fonts for the templates. The uploader and viewer land in the next change." />
+      <AspEmptyState heading="Assets" message="Backgrounds, icons, artwork and fonts for the templates. The uploader and viewer land in the next change." />
     </section>
     <section v-else-if="activeTab === 'templates'" id="cardgen-panel-templates" role="tabpanel" data-test="cardgen-panel-templates">
-      <AspEmptyState title="Templates" description="Card layouts with inheritance and version history. The editor lands in a later change." />
+      <AspEmptyState heading="Templates" message="Card layouts with inheritance and version history. The editor lands in a later change." />
     </section>
     <section v-else-if="activeTab === 'cards'" id="cardgen-panel-cards" role="tabpanel" data-test="cardgen-panel-cards">
-      <AspEmptyState title="Cards" description="The deck: relationship, action, life and connection cards, each with its own history. The editor and the review page land in later changes." />
+      <AspEmptyState heading="Cards" message="The deck: relationship, action, life and connection cards, each with its own history. The editor and the review page land in later changes." />
     </section>
     <section v-else id="cardgen-panel-export" role="tabpanel" data-test="cardgen-panel-export">
-      <AspEmptyState title="Export" description="Print sheets with bleed, crop marks and a grid, from a saved export profile. The PDF export lands in a later change." />
+      <AspEmptyState heading="Export" message="Print sheets with bleed, crop marks and a grid, from a saved export profile. The PDF export lands in a later change." />
     </section>
   </div>
 </template>
