@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Card Editor (system_3 #8634 / #8645): a new admin-only app at `/admin/cardgen` for
+  the Constellations game's templated cards, reached from a "Card Editor" tile on the
+  admin page. This change is the shell: four sections (Assets, Templates, Cards,
+  Export) as tabs with their own URLs, and the API module `useCardgen.js` for the
+  server's `/api/cardgen/*` routes. The sections are filled by the next changes.
+  Admin-only by operator decision; the server gates every `/cardgen/*` route.
 - **Invoices card owner: `flowah` → `vinoly`** (system_3 #8633). The user's
   existing login is `vinoly`, which also owns Jobs, and the operator confirmed
   it is hers (c53249). The Invoices card in `src/views/member/apps.js` moves to
