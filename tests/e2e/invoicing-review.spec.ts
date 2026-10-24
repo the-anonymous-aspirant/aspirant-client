@@ -68,7 +68,7 @@ function newFake(): Fake {
 
 async function openInvoicesTab(page: Page, fake: Fake): Promise<void> {
   await mockAll(page, fake);
-  await seedTrustedSessionAs(page, 'flowah');
+  await seedTrustedSessionAs(page, 'vinoly');
   await page.goto('/member/personal/invoicing');
   await dismissMobileSidebarIfPresent(page);
   await page.getByRole('tab', { name: 'Invoices' }).click();

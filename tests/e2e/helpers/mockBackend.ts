@@ -690,9 +690,10 @@ export async function seedViewerSession(page: Page): Promise<void> {
 /** A Trusted session under a NAMED username. `seedTrustedSession` seeds the
  *  generic `e2e-tester`, which owns no personal app; since #4331 the /member
  *  index filters personal cards by owner, so a test that needs a personal card
- *  on the index has to be that app's owner (`vinoly` for Jobs, `robert` for
- *  Pappas pushups and Pappas sit-ups, `jenny` for the other three — the map is in
- *  src/views/member/apps.js, derived from routes.go's owner constants). */
+ *  on the index has to be that app's owner (`vinoly` for Jobs and Invoices,
+ *  `robert` for Pappas pushups and Pappas sit-ups, `jenny` for the other three —
+ *  the map is in src/views/member/apps.js, derived from routes.go's owner
+ *  constants). */
 export async function seedTrustedSessionAs(page: Page, username: string): Promise<void> {
   await page.addInitScript((name) => {
     localStorage.setItem('user_role', 'Trusted');
