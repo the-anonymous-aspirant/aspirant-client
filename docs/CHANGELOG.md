@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Card Editor: the Export section builds the print PDF in the browser
+  (system_3 #8634 / #8652). Pick a saved export profile and a card selection;
+  the sheets carry the cards at trim size with the artwork extended into the
+  bleed, crop marks, the sheet grid, text as vectors in the store's fonts, and
+  back pages mirrored for duplex; raster artwork under the profile's DPI is
+  listed as a warning before download.
 - Card Editor: the Cards section creates and edits cards with version history
   (system_3 #8634 / #8651). New card by type, name and slug; the editor shows each
   element's value with the template default it overrides and a reset per prop,

@@ -26,7 +26,7 @@
       <CardsPanel />
     </section>
     <section v-else id="cardgen-panel-export" role="tabpanel" data-test="cardgen-panel-export">
-      <AspEmptyState heading="Export" message="Print sheets with bleed, crop marks and a grid, from a saved export profile. The PDF export lands in a later change." />
+      <ExportPanel />
     </section>
   </div>
 </template>
@@ -39,9 +39,10 @@
 // filled by its own subtask (B3 assets, C1 templates, C2 cards and B4 review,
 // C3 export). The active tab is the optional :tab route param, so a section
 // has a URL.
-import { AspEmptyState, AspSegmented } from '@aspirant/design-system';
+import { AspSegmented } from '@aspirant/design-system';
 import AssetsPanel from './AssetsPanel.vue';
 import CardsPanel from './CardsPanel.vue';
+import ExportPanel from './ExportPanel.vue';
 import TemplatesPanel from './TemplatesPanel.vue';
 
 export const CARDGEN_TABS = [
@@ -55,7 +56,7 @@ const TAB_VALUES = new Set(CARDGEN_TABS.map((t) => t.value));
 
 export default {
   name: 'CardgenApp',
-  components: { AspEmptyState, AspSegmented, AssetsPanel, CardsPanel, TemplatesPanel },
+  components: { AspSegmented, AssetsPanel, CardsPanel, TemplatesPanel, ExportPanel },
   data() {
     return { tabOptions: CARDGEN_TABS };
   },
