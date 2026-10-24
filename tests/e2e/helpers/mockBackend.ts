@@ -1073,7 +1073,8 @@ export type CardgenExportProfileSeed = { id: number; name: string; spec: Record<
 
 export type CardgenUsageSeed = { templates: { id: number; slug: string; name: string; version_no: number; elements: string[] }[]; cards: { id: number; slug: string; name: string; version_no: number; elements: string[] }[] };
 
-export type CardgenCardSeed = { id: number; slug: string; name: string; card_type_id: number; template_id: number | null; goal_card_id: number | null; relationship_type_id: number | null; display_order: number; current_version_no: number };
+export type CardgenCardSeed = { id: number; slug: string; name: string; card_type_id: number; template_id: number | null; goal_card_id: number | null; relationship_type_id: number | null; display_order: number; current_version_no: number; data?: unknown };
+export type CardgenCardVersionSeed = { version_no: number; note: string; created_by_user_id: number; created_at: string; data: unknown };
 export type CardgenResolvedElement = { name: string; props: Record<string, unknown>; provenance: Record<string, string> };
 export type CardgenResolvedFace = { chain: string[]; size: { w_mm: number; h_mm: number; radius_mm: number }; size_provenance: Record<string, string>; elements: CardgenResolvedElement[] };
 export type CardgenResolvedSeed = { front: CardgenResolvedFace; back: CardgenResolvedFace | null };
@@ -1088,7 +1089,8 @@ export const cardgenSeed: {
   cards: CardgenCardSeed[];
   resolved: Record<number, CardgenResolvedSeed>;
   templateVersions: Record<number, CardgenTemplateVersionSeed[]>;
-} = { types: [], templates: [], assets: [], profiles: [], usage: {}, refuseNames: [], cards: [], resolved: {}, templateVersions: {} };
+  cardVersions: Record<number, CardgenCardVersionSeed[]>;
+} = { types: [], templates: [], assets: [], profiles: [], usage: {}, refuseNames: [], cards: [], resolved: {}, templateVersions: {}, cardVersions: {} };
 
 export function seedCardgenCards(rows: CardgenCardSeed[] = []): void { cardgenSeed.cards = rows.slice(); }
 export type CardgenTemplateVersionSeed = { version_no: number; note: string; created_by_user_id: number; created_at: string; spec: unknown };
@@ -1121,6 +1123,28 @@ export function resolveSeedTemplate(id: number): CardgenResolvedFace {
   return { chain: chain.map((t) => t.slug), size, size_provenance: sizeProvenance, elements: list };
 }
 export function seedCardgenResolved(map: Record<number, CardgenResolvedSeed> = {}): void { cardgenSeed.resolved = { ...map }; }
+export function seedCardgenCardVersions(map: Record<number, CardgenCardVersionSeed[]> = {}): void { cardgenSeed.cardVersions = { ...map }; }
+
+/** ResolveCard in test code: the front chain (the card's override or the
+ *  type's front) with the current values overlaid as "card"; the type's back
+ *  without the overlay. Null when there is no front template. */
+export function resolveSeedCard(card: CardgenCardSeed): CardgenResolvedSeed | null {
+  const type = cardgenSeed.types.find((t) => t.id === card.card_type_id);
+  const frontId = card.template_id || type?.front_template_id || null;
+  if (!frontId) return null;
+  const front = resolveSeedTemplate(frontId);
+  const values = ((card.data as { values?: Record<string, Record<string, unknown>> } | undefined)?.values) || {};
+  const byName = new Map(front.elements.map((e) => [e.name, { name: e.name, props: { ...e.props }, provenance: { ...e.provenance } }]));
+  for (const [name, props] of Object.entries(values)) {
+    const el = byName.get(name) || { name, props: {}, provenance: {} };
+    for (const [k, v] of Object.entries(props || {})) { el.props[k] = v; el.provenance[k] = 'card'; }
+    byName.set(name, el);
+  }
+  front.elements = [...byName.values()].sort((a, b) => (Number(a.props.z) || 0) - (Number(b.props.z) || 0) || a.name.localeCompare(b.name));
+  front.chain = [...front.chain, 'card'];
+  const back = type?.back_template_id ? resolveSeedTemplate(type.back_template_id) : null;
+  return { front, back };
+}
 
 export function seedCardgenUsage(map: Record<number, CardgenUsageSeed> = {}): void { cardgenSeed.usage = { ...map }; }
 export function seedCardgenRefusals(names: string[] = []): void { cardgenSeed.refuseNames = names.slice(); }
@@ -1342,19 +1366,119 @@ export async function installCardgenMocks(page: Page): Promise<void> {
     });
   }));
   await page.route(/\/api\/cardgen\/export-profiles(\?.*)?$/, getOnly((route) => json(route, { profiles: cardgenSeed.profiles })));
-  // Cards (#8649): the list and the resolved faces from the seeds.
-  await page.route(/\/api\/cardgen\/cards(\?.*)?$/, getOnly(async (route, url) => {
-    const typeId = Number(url.searchParams.get('type_id') || 0);
-    await json(route, { cards: cardgenSeed.cards.filter((c) => !typeId || c.card_type_id === typeId) });
-  }));
-  await page.route(/\/api\/cardgen\/cards\/\d+\/resolved$/, getOnly(async (route, url) => {
-    const id = Number(url.pathname.split('/')[4]);
-    const card = cardgenSeed.cards.find((c) => c.id === id);
-    const resolved = cardgenSeed.resolved[id];
-    if (!card || !resolved) {
+  // Cards (#8649, #8651): list and create; get, update, delete; versions, save, restore; resolved.
+  const cardResponse = (c: CardgenCardSeed, withData: boolean) => {
+    const { data, ...rest } = c;
+    return { ...rest, ...(withData ? { data: data || { values: {} } } : {}) };
+  };
+  await page.route(/\/api\/cardgen\/cards(\?.*)?$/, async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    if (req.method() === 'GET') {
+      const typeId = Number(url.searchParams.get('type_id') || 0);
+      await json(route, { cards: cardgenSeed.cards.filter((c) => !typeId || c.card_type_id === typeId).map((c) => cardResponse(c, false)) });
+      return;
+    }
+    if (req.method() === 'POST') {
+      const body = req.postDataJSON() as { slug: string; name: string; card_type_id: number; template_id?: number; data: unknown; note?: string };
+      if (cardgenSeed.cards.some((c) => c.slug === body.slug)) {
+        await route.fulfill({ status: 409, contentType: 'application/json', body: '{"error":{"code":"conflict","message":"slug already exists"}}' });
+        return;
+      }
+      const id = Math.max(0, ...cardgenSeed.cards.map((c) => c.id)) + 1;
+      const c: CardgenCardSeed = { id, slug: body.slug, name: body.name, card_type_id: body.card_type_id, template_id: body.template_id ?? null, goal_card_id: null, relationship_type_id: null, display_order: id, current_version_no: 1, data: body.data };
+      cardgenSeed.cards.push(c);
+      cardgenSeed.cardVersions[id] = [{ version_no: 1, note: body.note || '', created_by_user_id: 1, created_at: '2026-10-24T20:00:00Z', data: body.data }];
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ card: cardResponse(c, true) }) });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route(/\/api\/cardgen\/cards\/\d+$/, async (route) => {
+    const req = route.request();
+    const id = Number(new URL(req.url()).pathname.split('/').pop());
+    const c = cardgenSeed.cards.find((x) => x.id === id);
+    if (!c) {
       await route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":{"code":"not_found","message":"Card not found"}}' });
       return;
     }
-    await json(route, { card, resolved });
+    if (req.method() === 'GET') {
+      await json(route, { card: cardResponse(c, true) });
+      return;
+    }
+    if (req.method() === 'PUT') {
+      const body = req.postDataJSON() as { name?: string; template_id?: number; clear_template?: boolean; card_type_id?: number; data?: unknown };
+      if (body.data) {
+        await route.fulfill({ status: 400, contentType: 'application/json', body: '{"error":{"code":"bad_request","message":"data changes go through POST /cardgen/cards/:id/versions"}}' });
+        return;
+      }
+      if (body.name) c.name = body.name;
+      if (body.card_type_id) c.card_type_id = body.card_type_id;
+      if (body.clear_template) c.template_id = null;
+      else if (body.template_id) c.template_id = body.template_id;
+      await json(route, { card: cardResponse(c, true) });
+      return;
+    }
+    if (req.method() === 'DELETE') {
+      cardgenSeed.cards = cardgenSeed.cards.filter((x) => x.id !== id);
+      await json(route, { success: true, data: { id }, message: 'Card deleted' });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route(/\/api\/cardgen\/cards\/\d+\/versions$/, async (route) => {
+    const req = route.request();
+    const id = Number(new URL(req.url()).pathname.split('/')[4]);
+    const c = cardgenSeed.cards.find((x) => x.id === id);
+    if (!c) {
+      await route.fulfill({ status: 404, body: '' });
+      return;
+    }
+    const versions = cardgenSeed.cardVersions[id] || (cardgenSeed.cardVersions[id] = [{ version_no: c.current_version_no, note: 'seed', created_by_user_id: 0, created_at: '2026-10-24T17:00:00Z', data: c.data || { values: {} } }]);
+    if (req.method() === 'GET') {
+      await json(route, { versions, current_version_no: c.current_version_no });
+      return;
+    }
+    if (req.method() === 'POST') {
+      const body = req.postDataJSON() as { data: unknown; note?: string };
+      const v = { version_no: Math.max(...versions.map((x) => x.version_no)) + 1, note: body.note || '', created_by_user_id: 1, created_at: '2026-10-24T20:00:00Z', data: body.data };
+      versions.push(v);
+      c.data = body.data;
+      c.current_version_no = v.version_no;
+      await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ version: v }) });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route(/\/api\/cardgen\/cards\/\d+\/versions\/\d+\/restore$/, async (route) => {
+    const parts = new URL(route.request().url()).pathname.split('/');
+    const id = Number(parts[4]);
+    const n = Number(parts[6]);
+    const c = cardgenSeed.cards.find((x) => x.id === id);
+    const versions = cardgenSeed.cardVersions[id] || [];
+    const src = versions.find((v) => v.version_no === n);
+    if (!c || !src) {
+      await route.fulfill({ status: 404, body: '' });
+      return;
+    }
+    const v = { version_no: Math.max(...versions.map((x) => x.version_no)) + 1, note: `restored from v${n}`, created_by_user_id: 1, created_at: '2026-10-24T20:01:00Z', data: src.data };
+    versions.push(v);
+    c.data = src.data;
+    c.current_version_no = v.version_no;
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ version: v }) });
+  });
+  await page.route(/\/api\/cardgen\/cards\/\d+\/resolved$/, getOnly(async (route, url) => {
+    const id = Number(url.pathname.split('/')[4]);
+    const card = cardgenSeed.cards.find((c) => c.id === id);
+    if (!card) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":{"code":"not_found","message":"Card not found"}}' });
+      return;
+    }
+    const resolved = cardgenSeed.resolved[id] || resolveSeedCard(card);
+    if (!resolved) {
+      await route.fulfill({ status: 409, contentType: 'application/json', body: '{"error":{"code":"conflict","message":"Card has no front template"}}' });
+      return;
+    }
+    await json(route, { card: cardResponse(card, false), resolved });
   }));
 }
