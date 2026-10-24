@@ -85,6 +85,14 @@
       icon: 'default',
     },
     {
+      // The Constellations card editor (system_3 #8634 / #8645): admin-only by
+      // operator decision 1; the server gates every /cardgen/* route too.
+      title: 'Card Editor',
+      description: 'Templated Constellations cards: layouts with inheritance, version history, print sheets',
+      route: '/admin/cardgen',
+      icon: 'default',
+    },
+    {
       title: 'Penpot Design',
       description:
         'Self-hosted design tool — mockups, tokens, component libraries. Opens in a new tab (full canvas, not an iframe embed)',

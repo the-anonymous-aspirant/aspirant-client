@@ -1060,3 +1060,54 @@ export const PDF_UPLOAD_PAYLOAD = [
     buffer: GOLDEN_PDF,
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Card editor (system_3 #8634 / #8645). In-process mocks for /api/cardgen/*
+// so the editor's specs run without aspirant-server. Seed the stores, then
+// install; the GET routes answer from the stores and every other method
+// falls through to whatever catch-all the spec registered before.
+export type CardgenTypeSeed = { id: number; slug: string; name: string; description?: string; front_template_id: number | null; back_template_id: number | null; display_order: number };
+export type CardgenTemplateSeed = { id: number; slug: string; name: string; parent_template_id: number | null; parent_slug: string; current_version_no: number; spec?: unknown };
+export type CardgenAssetSeed = { id: number; sha256: string; original_filename: string; media_type: string; kind: 'image' | 'svg' | 'pdf' | 'font'; byte_size: number; pixel_width: number; pixel_height: number; uploaded_by_user_id: number; content_url: string; created_at: string };
+export type CardgenExportProfileSeed = { id: number; name: string; spec: Record<string, unknown> };
+
+export const cardgenSeed: {
+  types: CardgenTypeSeed[];
+  templates: CardgenTemplateSeed[];
+  assets: CardgenAssetSeed[];
+  profiles: CardgenExportProfileSeed[];
+} = { types: [], templates: [], assets: [], profiles: [] };
+
+export function seedCardgenTypes(rows: CardgenTypeSeed[] = []): void { cardgenSeed.types = rows.slice(); }
+export function seedCardgenTemplates(rows: CardgenTemplateSeed[] = []): void { cardgenSeed.templates = rows.slice(); }
+export function seedCardgenAssets(rows: CardgenAssetSeed[] = []): void { cardgenSeed.assets = rows.slice(); }
+export function seedCardgenExportProfiles(rows: CardgenExportProfileSeed[] = []): void { cardgenSeed.profiles = rows.slice(); }
+
+export async function installCardgenMocks(page: Page): Promise<void> {
+  const json = async (route: Route, body: unknown) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  };
+  const getOnly = (handler: (route: Route, url: URL) => Promise<void>) => async (route: Route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await handler(route, new URL(route.request().url()));
+  };
+  await page.route(/\/api\/cardgen\/types(\?.*)?$/, getOnly((route) => json(route, { types: cardgenSeed.types })));
+  await page.route(/\/api\/cardgen\/templates(\?.*)?$/, getOnly((route) => json(route, { templates: cardgenSeed.templates.map(({ spec, ...t }) => t) })));
+  await page.route(/\/api\/cardgen\/templates\/\d+$/, getOnly(async (route, url) => {
+    const id = Number(url.pathname.split('/').pop());
+    const t = cardgenSeed.templates.find((x) => x.id === id);
+    if (!t) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":{"code":"not_found","message":"Template not found"}}' });
+      return;
+    }
+    await json(route, { template: t });
+  }));
+  await page.route(/\/api\/cardgen\/assets(\?.*)?$/, getOnly(async (route, url) => {
+    const kind = url.searchParams.get('kind');
+    await json(route, { assets: cardgenSeed.assets.filter((a) => !kind || a.kind === kind) });
+  }));
+  await page.route(/\/api\/cardgen\/export-profiles(\?.*)?$/, getOnly((route) => json(route, { profiles: cardgenSeed.profiles })));
+}
