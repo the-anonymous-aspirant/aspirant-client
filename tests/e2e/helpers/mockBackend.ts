@@ -1069,13 +1069,13 @@ export const PDF_UPLOAD_PAYLOAD = [
 // falls through to whatever catch-all the spec registered before.
 export type CardgenTypeSeed = { id: number; slug: string; name: string; description?: string; front_template_id: number | null; back_template_id: number | null; display_order: number };
 export type CardgenTemplateSeed = { id: number; slug: string; name: string; parent_template_id: number | null; parent_slug: string; current_version_no: number; spec?: unknown };
-export type CardgenAssetSeed = { id: number; sha256: string; original_filename: string; media_type: string; kind: 'image' | 'svg' | 'pdf' | 'font'; byte_size: number; pixel_width: number; pixel_height: number; uploaded_by_user_id: number; content_url: string; created_at: string };
+export type CardgenAssetSeed = { id: number; sha256: string; original_filename: string; media_type: string; kind: 'image' | 'svg' | 'pdf' | 'font'; byte_size: number; pixel_width: number; pixel_height: number; uploaded_by_user_id: number; uploaded_by_name?: string; content_url: string; created_at: string };
 export type CardgenExportProfileSeed = { id: number; name: string; spec: Record<string, unknown> };
 
 export type CardgenUsageSeed = { templates: { id: number; slug: string; name: string; version_no: number; elements: string[] }[]; cards: { id: number; slug: string; name: string; version_no: number; elements: string[] }[] };
 
 export type CardgenCardSeed = { id: number; slug: string; name: string; card_type_id: number; template_id: number | null; goal_card_id: number | null; relationship_type_id: number | null; display_order: number; current_version_no: number; data?: unknown };
-export type CardgenCardVersionSeed = { version_no: number; note: string; created_by_user_id: number; created_at: string; data: unknown };
+export type CardgenCardVersionSeed = { version_no: number; note: string; created_by_user_id: number; created_by_name?: string; created_at: string; data: unknown };
 export type CardgenResolvedElement = { name: string; props: Record<string, unknown>; provenance: Record<string, string> };
 export type CardgenResolvedFace = { chain: string[]; size: { w_mm: number; h_mm: number; radius_mm: number }; size_provenance: Record<string, string>; elements: CardgenResolvedElement[] };
 export type CardgenResolvedSeed = { front: CardgenResolvedFace; back: CardgenResolvedFace | null };
@@ -1094,7 +1094,7 @@ export const cardgenSeed: {
 } = { types: [], templates: [], assets: [], profiles: [], usage: {}, refuseNames: [], cards: [], resolved: {}, templateVersions: {}, cardVersions: {} };
 
 export function seedCardgenCards(rows: CardgenCardSeed[] = []): void { cardgenSeed.cards = rows.slice(); }
-export type CardgenTemplateVersionSeed = { version_no: number; note: string; created_by_user_id: number; created_at: string; spec: unknown };
+export type CardgenTemplateVersionSeed = { version_no: number; note: string; created_by_user_id: number; created_by_name?: string; created_at: string; spec: unknown };
 export function seedCardgenTemplateVersions(map: Record<number, CardgenTemplateVersionSeed[]> = {}): void { cardgenSeed.templateVersions = { ...map }; }
 
 /** The server's chain merge over the seeded specs, in test code: root to leaf,
@@ -1200,7 +1200,7 @@ export async function installCardgenMocks(page: Page): Promise<void> {
       const id = Math.max(0, ...cardgenSeed.templates.map((t) => t.id)) + 1;
       const t: CardgenTemplateSeed = { id, slug: body.slug, name: body.name, parent_template_id: body.parent_template_id ?? null, parent_slug: '', current_version_no: 1, spec: body.spec };
       cardgenSeed.templates.push(t);
-      cardgenSeed.templateVersions[id] = [{ version_no: 1, note: body.note || '', created_by_user_id: 1, created_at: '2026-10-24T20:00:00Z', spec: body.spec }];
+      cardgenSeed.templateVersions[id] = [{ version_no: 1, note: body.note || '', created_by_user_id: 1, created_by_name: 'e2e-admin', created_at: '2026-10-24T20:00:00Z', spec: body.spec }];
       await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ template: templateResponse(t, true) }) });
       return;
     }
@@ -1240,14 +1240,14 @@ export async function installCardgenMocks(page: Page): Promise<void> {
       await route.fulfill({ status: 404, body: '' });
       return;
     }
-    const versions = cardgenSeed.templateVersions[id] || (cardgenSeed.templateVersions[id] = [{ version_no: t.current_version_no, note: 'seed', created_by_user_id: 0, created_at: '2026-10-24T17:00:00Z', spec: t.spec }]);
+    const versions = cardgenSeed.templateVersions[id] || (cardgenSeed.templateVersions[id] = [{ version_no: t.current_version_no, note: 'seed', created_by_user_id: 0, created_by_name: 'system', created_at: '2026-10-24T17:00:00Z', spec: t.spec }]);
     if (req.method() === 'GET') {
       await json(route, { versions, current_version_no: t.current_version_no });
       return;
     }
     if (req.method() === 'POST') {
       const body = req.postDataJSON() as { spec: unknown; note?: string };
-      const v = { version_no: Math.max(...versions.map((x) => x.version_no)) + 1, note: body.note || '', created_by_user_id: 1, created_at: '2026-10-24T20:00:00Z', spec: body.spec };
+      const v = { version_no: Math.max(...versions.map((x) => x.version_no)) + 1, note: body.note || '', created_by_user_id: 1, created_by_name: 'e2e-admin', created_at: '2026-10-24T20:00:00Z', spec: body.spec };
       versions.push(v);
       t.spec = body.spec;
       t.current_version_no = v.version_no;
@@ -1267,7 +1267,7 @@ export async function installCardgenMocks(page: Page): Promise<void> {
       await route.fulfill({ status: 404, body: '' });
       return;
     }
-    const v = { version_no: Math.max(...versions.map((x) => x.version_no)) + 1, note: `restored from v${n}`, created_by_user_id: 1, created_at: '2026-10-24T20:01:00Z', spec: src.spec };
+    const v = { version_no: Math.max(...versions.map((x) => x.version_no)) + 1, note: `restored from v${n}`, created_by_user_id: 1, created_by_name: 'e2e-admin', created_at: '2026-10-24T20:01:00Z', spec: src.spec };
     versions.push(v);
     t.spec = src.spec;
     t.current_version_no = v.version_no;
@@ -1321,6 +1321,7 @@ export async function installCardgenMocks(page: Page): Promise<void> {
       pixel_width: kind === 'image' ? 2 : 0,
       pixel_height: kind === 'image' ? 2 : 0,
       uploaded_by_user_id: 1,
+      uploaded_by_name: 'e2e-admin',
       content_url: `/api/cardgen/assets/${id}/content`,
       created_at: '2026-10-24T18:00:00Z',
     };
@@ -1391,7 +1392,7 @@ export async function installCardgenMocks(page: Page): Promise<void> {
       const id = Math.max(0, ...cardgenSeed.cards.map((c) => c.id)) + 1;
       const c: CardgenCardSeed = { id, slug: body.slug, name: body.name, card_type_id: body.card_type_id, template_id: body.template_id ?? null, goal_card_id: null, relationship_type_id: null, display_order: id, current_version_no: 1, data: body.data };
       cardgenSeed.cards.push(c);
-      cardgenSeed.cardVersions[id] = [{ version_no: 1, note: body.note || '', created_by_user_id: 1, created_at: '2026-10-24T20:00:00Z', data: body.data }];
+      cardgenSeed.cardVersions[id] = [{ version_no: 1, note: body.note || '', created_by_user_id: 1, created_by_name: 'e2e-admin', created_at: '2026-10-24T20:00:00Z', data: body.data }];
       await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ card: cardResponse(c, true) }) });
       return;
     }
@@ -1437,14 +1438,14 @@ export async function installCardgenMocks(page: Page): Promise<void> {
       await route.fulfill({ status: 404, body: '' });
       return;
     }
-    const versions = cardgenSeed.cardVersions[id] || (cardgenSeed.cardVersions[id] = [{ version_no: c.current_version_no, note: 'seed', created_by_user_id: 0, created_at: '2026-10-24T17:00:00Z', data: c.data || { values: {} } }]);
+    const versions = cardgenSeed.cardVersions[id] || (cardgenSeed.cardVersions[id] = [{ version_no: c.current_version_no, note: 'seed', created_by_user_id: 0, created_by_name: 'system', created_at: '2026-10-24T17:00:00Z', data: c.data || { values: {} } }]);
     if (req.method() === 'GET') {
       await json(route, { versions, current_version_no: c.current_version_no });
       return;
     }
     if (req.method() === 'POST') {
       const body = req.postDataJSON() as { data: unknown; note?: string };
-      const v = { version_no: Math.max(...versions.map((x) => x.version_no)) + 1, note: body.note || '', created_by_user_id: 1, created_at: '2026-10-24T20:00:00Z', data: body.data };
+      const v = { version_no: Math.max(...versions.map((x) => x.version_no)) + 1, note: body.note || '', created_by_user_id: 1, created_by_name: 'e2e-admin', created_at: '2026-10-24T20:00:00Z', data: body.data };
       versions.push(v);
       c.data = body.data;
       c.current_version_no = v.version_no;
@@ -1464,7 +1465,7 @@ export async function installCardgenMocks(page: Page): Promise<void> {
       await route.fulfill({ status: 404, body: '' });
       return;
     }
-    const v = { version_no: Math.max(...versions.map((x) => x.version_no)) + 1, note: `restored from v${n}`, created_by_user_id: 1, created_at: '2026-10-24T20:01:00Z', data: src.data };
+    const v = { version_no: Math.max(...versions.map((x) => x.version_no)) + 1, note: `restored from v${n}`, created_by_user_id: 1, created_by_name: 'e2e-admin', created_at: '2026-10-24T20:01:00Z', data: src.data };
     versions.push(v);
     c.data = src.data;
     c.current_version_no = v.version_no;

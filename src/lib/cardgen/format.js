@@ -46,10 +46,13 @@ export function sessionUserId() {
   }
 }
 
-/** "you", "system" (0) or "user N" until the DTOs carry a name (#8753 req 7, first step). */
-export function actorLabel(userId, me = sessionUserId()) {
+/** "you" for the session user, else the DTO's display name (`created_by_name` /
+ *  `uploaded_by_name`, #8758), else "system" (0) or "user N" for a row from a
+ *  server that predates the name or a user that no longer exists. */
+export function actorLabel(userId, me = sessionUserId(), name = '') {
+  if (me != null && userId != null && userId !== '' && Number(userId) === me) return 'you';
+  if (typeof name === 'string' && name.trim() !== '') return name.trim();
   if (userId === 0 || userId === '0') return 'system';
-  if (me != null && Number(userId) === me) return 'you';
   if (userId == null || userId === '') return 'unknown';
   return `user ${userId}`;
 }
