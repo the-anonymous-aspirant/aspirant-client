@@ -159,7 +159,7 @@ export default {
       return from ? `inherited:${from}` : 'unset';
     },
     badgeText(name) {
-      if (this.isOwn(name)) return 'this template';
+      if (this.isOwn(name)) return this.slug === 'card' ? 'this card' : 'this template';
       const from = this.effective?.provenance?.[name];
       return from ? `from ${from}` : 'unset';
     },

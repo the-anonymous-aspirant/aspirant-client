@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Card Editor: the Cards section creates and edits cards with version history
+  (system_3 #8634 / #8651). New card by type, name and slug; the editor shows each
+  element's value with the template default it overrides and a reset per prop,
+  previews the unsaved values on the card, saves every change as a new version,
+  restores any earlier version as another, and deletes behind a confirm.
 - Card Editor: the Templates section edits templates with version history
   (system_3 #8634 / #8650). The list shows each template's parent and version;
   the editor shows every element with where each prop comes from, lets an
