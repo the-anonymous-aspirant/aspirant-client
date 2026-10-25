@@ -60,6 +60,7 @@ async function openCards(page: Page): Promise<void> {
 async function openEditor(page: Page, id: number): Promise<void> {
   await openCards(page);
   await page.locator(`[data-test="review-edit-${id}"]`).click();
+  await expect(page).toHaveURL(new RegExp(`/admin/cardgen/cards/${id}$`));
   await expect(page.locator('[data-test="card-editor"]')).toBeVisible();
   await expect(page.locator('[data-test="card-element-list"] button')).not.toHaveCount(0);
 }
@@ -84,7 +85,7 @@ test.describe('/admin/cardgen/cards — card editor with version history', () =>
   test('a new action card appears in the review and opens in the editor at v1', async ({ page }) => {
     await openCards(page);
     await page.locator('[data-test="new-card"]').click();
-    await page.getByRole('combobox', { name: 'Type' }).click();
+    await page.getByRole('combobox', { name: 'Type', exact: true }).click();
     await page.getByRole('option', { name: 'Action' }).click();
     await page.locator('[data-test="create-card-name"]').fill('Act B');
     await page.locator('[data-test="create-card-slug"]').fill('act_b');
@@ -96,16 +97,18 @@ test.describe('/admin/cardgen/cards — card editor with version history', () =>
     await expect(page.locator('[data-test="review-card-14"]')).toContainText('Act B');
   });
 
-  test('a value shows its template default; Override sets the card text, Save creates v2', async ({ page }) => {
+  test('a value shows its template default; typing sets the card text, Save creates v2', async ({ page }) => {
     await openEditor(page, 13);
     await page.locator('[data-test="card-element-body"]').click();
     const text = page.locator('[data-test="prop-text"]');
     await expect(text).toHaveAttribute('data-provenance', 'inherited:base');
     await expect(text.locator('textarea')).toHaveValue('Default body');
     await expect(page.locator('[data-test="card-editor-preview"] [data-el="body"]')).toHaveText('Default body');
-    await page.locator('[data-test="prop-text-override"]').click();
-    await expect(text).toHaveAttribute('data-provenance', 'own');
+    // #8753 req 4: the control is live; typing writes the card's own layer.
+    await expect(page.locator('[data-test="prop-text-override"]')).toHaveCount(0);
+    await expect(text.locator('textarea')).toBeEnabled();
     await text.locator('textarea').fill('Play this card <i>now</i>');
+    await expect(text).toHaveAttribute('data-provenance', 'own');
     await expect(page.locator('[data-test="card-editor-preview"] [data-el="body"]')).toHaveText('Play this card <i>now</i>');
     await expect(page.locator('[data-test="card-editor-preview"] i')).toHaveCount(0);
     await expect(page.locator('[data-test="card-dirty-badge"]')).toBeVisible();

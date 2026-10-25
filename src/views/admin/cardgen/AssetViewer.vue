@@ -34,8 +34,8 @@
         <dl class="meta" data-test="viewer-meta">
           <dt>Kind</dt><dd>{{ asset.kind }} ({{ asset.media_type }})</dd>
           <dt>Size</dt><dd>{{ formatBytes(asset.byte_size) }}</dd>
-          <dt>SHA-256</dt><dd class="mono">{{ asset.sha256 }}</dd>
-          <dt>Uploaded</dt><dd>{{ asset.created_at }} by user {{ asset.uploaded_by_user_id }}</dd>
+          <dt>SHA-256</dt><dd class="mono" :title="asset.sha256" data-test="viewer-sha">{{ shortSha(asset.sha256) }}…</dd>
+          <dt>Uploaded</dt><dd><time :datetime="asset.created_at" :title="asset.created_at" data-test="viewer-uploaded">{{ relativeTime(asset.created_at) }}</time> by {{ actorLabel(asset.uploaded_by_user_id) }}</dd>
         </dl>
 
         <section class="usage" data-test="viewer-usage">
@@ -45,10 +45,10 @@
           <p v-else-if="!inUse" class="muted" data-test="usage-none">Nothing references this asset yet.</p>
           <ul v-else class="usage-list">
             <li v-for="t in usage.templates" :key="`t-${t.id}`" data-test="usage-template">
-              Template <router-link :to="`/admin/cardgen/templates`">{{ t.name }}</router-link> (v{{ t.version_no }}): {{ t.elements.join(', ') }}
+              Template <router-link :to="`/admin/cardgen/templates/${t.id}`">{{ t.name }}</router-link> (v{{ t.version_no }}): {{ t.elements.join(', ') }}
             </li>
             <li v-for="c in usage.cards" :key="`c-${c.id}`" data-test="usage-card">
-              Card <router-link :to="`/admin/cardgen/cards`">{{ c.name }}</router-link> (v{{ c.version_no }}): {{ c.elements.join(', ') }}
+              Card <router-link :to="`/admin/cardgen/cards/${c.id}`">{{ c.name }}</router-link> (v{{ c.version_no }}): {{ c.elements.join(', ') }}
             </li>
           </ul>
         </section>
@@ -81,6 +81,7 @@
 import { AspButton, AspModal, AspSegmented, AspTooltip } from '@aspirant/design-system';
 import { useCardgen } from '@/composables/useCardgen.js';
 import { useCardgenBlobs, formatBytes, mmAtDpi } from '@/composables/useCardgenBlobs.js';
+import { actorLabel, relativeTime, shortSha } from '@/lib/cardgen/format.js';
 
 export default {
   name: 'AssetViewer',
@@ -126,6 +127,9 @@ export default {
   methods: {
     formatBytes,
     mmAtDpi,
+    actorLabel,
+    relativeTime,
+    shortSha,
     async load() {
       this.asset = null;
       this.loadError = null;

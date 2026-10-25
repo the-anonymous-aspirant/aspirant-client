@@ -25,7 +25,7 @@
         :data-el="el.name"
       >
         <img v-if="imageUrl(el)" :src="imageUrl(el)" alt="" :style="{ objectFit: fitOf(el) }" />
-        <span v-else class="el-placeholder">{{ el.props.asset_id ? 'asset ' + el.props.asset_id : 'no image' }}</span>
+        <span v-else class="el-placeholder">{{ placeholderText(el) }}</span>
       </div>
       <div
         v-else
@@ -122,6 +122,13 @@ export default {
       style.background = p.fill || 'transparent';
       if (p.stroke) style.border = `${(p.stroke_mm || 0.3) * this.k}px solid ${p.stroke}`;
       return style;
+    },
+    /** Under 12 mm on either side the dashed box says nothing (#8753 req 8):
+     *  "no image" clipped to "no" told the editor less than the box alone. */
+    placeholderText(el) {
+      const p = el.props || {};
+      if ((p.w_mm || 0) < 12 || (p.h_mm || 0) < 12) return '';
+      return p.asset_id ? `asset ${p.asset_id}` : 'no image';
     },
     imageUrl(el) {
       const id = el.props?.asset_id;

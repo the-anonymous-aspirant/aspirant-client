@@ -1,7 +1,10 @@
 <template>
   <div class="review-panel" data-test="review-panel">
     <div class="review-head">
-      <AspSegmented :options="typeOptions" :model-value="typeFilter" aria-label="Show cards of type" @update:model-value="setType" />
+      <!-- Below 640 px the five-option type strip (469 px) collapses to a select
+           (#8753 req 1, §3.114); the two short strips wrap in the row. -->
+      <AspSelect v-if="narrow" :options="typeOptions" :model-value="typeFilter" aria-label="Show cards of type" data-test="review-type-select" @update:model-value="setType" />
+      <AspSegmented v-else :options="typeOptions" :model-value="typeFilter" aria-label="Show cards of type" @update:model-value="setType" />
       <AspSegmented :options="sideOptions" :model-value="side" aria-label="Card side" @update:model-value="side = $event" />
       <AspSegmented :options="zoomOptions" :model-value="zoom" aria-label="Zoom" @update:model-value="zoom = $event" />
       <span class="count" data-test="review-count">{{ cards.length }} {{ cards.length === 1 ? 'card' : 'cards' }}</span>
@@ -33,19 +36,23 @@
 // system_3 #8634 / #8649: the print-scale card review (c53319). Every card of
 // the deck (or of one type) drawn front or back at 100 %, 50 % or 25 % of its
 // physical size, from the server's resolved faces.
-import { AspButton, AspEmptyState, AspSegmented } from '@aspirant/design-system';
+import { AspButton, AspEmptyState, AspSegmented, AspSelect } from '@aspirant/design-system';
+import { useViewport } from '@/composables/useViewport.js';
 import CardFace from '@/components/cardgen/CardFace.vue';
 import { useCardgen } from '@/composables/useCardgen.js';
 import { useCardFaceAssets } from '@/composables/useCardFaceAssets.js';
 
 export default {
   name: 'ReviewPanel',
-  components: { AspButton, AspEmptyState, AspSegmented, CardFace },
+  components: { AspButton, AspEmptyState, AspSegmented, AspSelect, CardFace },
   emits: ['edit'],
   setup() {
     const api = useCardgen();
     const assets = useCardFaceAssets();
-    return { api, assets };
+    // Top-level refs, so the template reads booleans (a ref inside a returned
+    // object is not unwrapped and would be truthy at every width).
+    const { narrow } = useViewport();
+    return { api, assets, narrow };
   },
   data() {
     return {
@@ -54,7 +61,8 @@ export default {
       resolved: {},
       typeFilter: 0,
       side: 'front',
-      zoom: 1,
+      // 50 % below md (#8753 req 1): a 105 mm card at 100 % is wider than a phone.
+      zoom: typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 767px)').matches ? 0.5 : 1,
       sideOptions: [
         { value: 'front', label: 'Front' },
         { value: 'back', label: 'Back' },
@@ -146,6 +154,10 @@ export default {
   flex-wrap: wrap;
   gap: var(--space-5, 20px);
   align-items: flex-start;
+  /* A card wider than the viewport (100 % on a phone) scrolls inside the grid
+     rather than widening the page (#8753 req 1). */
+  max-width: 100%;
+  overflow-x: auto;
 }
 .review-item {
   display: grid;
