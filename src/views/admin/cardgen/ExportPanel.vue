@@ -20,12 +20,24 @@
         <strong data-test="export-pages">{{ result.pages }} {{ result.pages === 1 ? 'page' : 'pages' }}</strong>
         for {{ result.cards }} {{ result.cards === 1 ? 'card' : 'cards' }}, {{ result.perPage }} per sheet<span v-if="result.bytes">, {{ formatBytes(result.bytes) }}</span>.
       </p>
+      <AspButton variant="primary" type="button" data-test="export-download" @click="download">Download PDF</AspButton>
       <p v-if="!result.warnings.length" class="muted" data-test="export-no-warnings">No warnings.</p>
       <ul v-else class="warnings" data-test="export-warnings">
-        <li v-for="(w, i) in result.warnings" :key="i" :data-test="`export-warning-${w.kind}`">{{ w.message }}</li>
+        <!-- One line per undersized asset (#8754 R3); the per-face list is behind a disclosure. -->
+        <li v-for="g in result.dpiGroups" :key="`dpi-${g.assetId}`" data-test="export-dpi-group">
+          <AspButton variant="link" type="button" :data-test="`export-dpi-asset-${g.assetId}`" @click="viewerId = g.assetId">{{ g.name }}</AspButton>
+          {{ g.message }}
+          <details class="faces">
+            <summary>{{ g.faces }} {{ g.faces === 1 ? 'face' : 'faces' }}</summary>
+            <ul>
+              <li v-for="(w, i) in g.entries" :key="i" data-test="export-warning-low-dpi">{{ w.message }}</li>
+            </ul>
+          </details>
+        </li>
+        <li v-for="(w, i) in otherWarnings" :key="`w-${i}`" :data-test="`export-warning-${w.kind}`">{{ w.message }}</li>
       </ul>
-      <AspButton variant="primary" type="button" data-test="export-download" @click="download">Download PDF</AspButton>
     </section>
+    <AssetViewer v-if="viewerId" :asset-id="viewerId" :open="!!viewerId" @update:open="$event || (viewerId = null)" @deleted="viewerId = null" />
   </div>
 </template>
 
@@ -41,6 +53,7 @@ import { useCardgen } from '@/composables/useCardgen.js';
 import { useViewport } from '@/composables/useViewport.js';
 import { formatBytes } from '@/composables/useCardgenBlobs.js';
 import { buildExportDocument } from '@/lib/cardgen/pdfExport.js';
+import AssetViewer from './AssetViewer.vue';
 
 pdfMake.addVirtualFileSystem(pdfFonts);
 
@@ -135,7 +148,7 @@ function loadImage(blob) {
 
 export default {
   name: 'ExportPanel',
-  components: { AspButton, AspSegmented, AspSelect },
+  components: { AspButton, AspSegmented, AspSelect, AssetViewer },
   setup() {
     const { narrow } = useViewport();
     return { api: useCardgen(), narrow };
@@ -149,10 +162,14 @@ export default {
       building: false,
       error: null,
       result: null,
+      viewerId: null,
       pdf: null,
     };
   },
   computed: {
+    otherWarnings() {
+      return (this.result?.warnings || []).filter((w) => w.kind !== 'low-dpi');
+    },
     profile() {
       return this.profiles.find((p) => p.id === this.profileId) || null;
     },
@@ -205,7 +222,7 @@ export default {
         const failed = new Promise((_, reject) => stream.on('error', () => reject(new ExportFailure('The PDF could not be built: a font or an image could not be read by the PDF writer'))));
         const buffer = await Promise.race([pdf.getBuffer(), failed]);
         this.pdf = pdf;
-        this.result = { pages: built.pages, perPage: built.perPage, cards: items.length, warnings: built.warnings, bytes: buffer.length };
+        this.result = { pages: built.pages, perPage: built.perPage, cards: items.length, warnings: built.warnings, dpiGroups: built.dpiGroups, bytes: buffer.length };
       } catch (e) {
         this.error = e instanceof ExportFailure ? e.text : 'The PDF could not be built';
       } finally {
@@ -225,12 +242,15 @@ export default {
         }
       }
       const assets = new Map();
+      // Names for the grouped DPI line (#8754 R3); one list read, server ids only.
+      const { assets: rows } = await this.api.listAssets();
+      const names = new Map((rows || []).map((r) => [r.id, r.original_filename]));
       const targetPx = Math.min(4000, Math.round((Math.max(spec.card_w_mm, spec.card_h_mm) / 25.4) * (spec.dpi || 300)));
       await Promise.all([...imageIds].map(async (id) => {
         const { blob } = await this.api.fetchAssetBlob(id);
         if (!blob || !blob.type.startsWith('image/')) return;
         try {
-          assets.set(id, await imageForPdf(blob, blob.type, targetPx));
+          assets.set(id, { ...(await imageForPdf(blob, blob.type, targetPx)), name: names.get(id) || `asset ${id}` });
         } catch {
           // left out: pdfExport reports the missing asset
         }
@@ -293,6 +313,10 @@ export default {
   display: grid;
   gap: var(--space-2, 8px);
   justify-items: start;
+}
+.faces summary {
+  cursor: pointer;
+  color: var(--text-muted);
 }
 .warnings {
   margin: 0;

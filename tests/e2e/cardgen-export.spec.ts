@@ -151,8 +151,18 @@ test.describe('/admin/cardgen/export — print PDF', () => {
     const warnings = page.locator('[data-test="export-warning-low-dpi"]');
     await expect(warnings.first()).toContainText('Rel 1: art is 4×4 px');
     await expect(warnings.first()).toContainText('against the profile\'s 300');
-    // 8 fronts + 8 backs each carry the 2x2 art.
+    // 8 fronts + 8 backs each carry the art: one grouped line for the one
+    // asset (#8754 R3), the 16 per-face entries behind its disclosure.
     await expect(warnings).toHaveCount(16);
+    const groups = page.locator('[data-test="export-dpi-group"]');
+    await expect(groups).toHaveCount(1);
+    await expect(groups.first()).toContainText('moon.png');
+    await expect(groups.first()).toContainText('(4×4 px) prints at');
+    await expect(groups.first()).toContainText('on 16 faces; 300 DPI needs 1276×913 px');
+    // The asset name opens it in the viewer.
+    await page.locator('[data-test="export-dpi-asset-1"]').click();
+    await expect(page.locator('[data-test="asset-viewer"]')).toBeVisible();
+    await page.locator('[data-test="viewer-close"]').click();
 
     await chooseCards(page, 'Action');
     await build(page);
