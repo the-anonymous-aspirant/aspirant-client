@@ -8,7 +8,7 @@
         <span class="version-no">v{{ v.version_no }}</span>
         <AspBadge v-if="v.version_no === currentVersionNo" status="positive" size="sm" data-test="version-current">current</AspBadge>
         <span class="version-note">{{ v.note || 'no note' }}</span>
-        <span class="muted">{{ v.created_at }} · user {{ v.created_by_user_id }}</span>
+        <span class="muted"><time :datetime="v.created_at" :title="v.created_at">{{ relativeTime(v.created_at) }}</time> · {{ actorLabel(v.created_by_user_id) }}</span>
         <AspButton
           v-if="v.version_no !== currentVersionNo"
           variant="secondary"
@@ -31,6 +31,7 @@
 // with Restore on every non-current row. The owner supplies the two calls, so
 // the component knows nothing about which table it lists.
 import { AspBadge, AspButton } from '@aspirant/design-system';
+import { actorLabel, relativeTime } from '@/lib/cardgen/format.js';
 
 export default {
   name: 'VersionHistory',
@@ -55,6 +56,8 @@ export default {
     this.refresh();
   },
   methods: {
+    actorLabel,
+    relativeTime,
     async refresh() {
       const { versions, error } = await this.load();
       this.error = error;

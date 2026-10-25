@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Card Editor: the D2 design review's findings (system_3 #8753). On a phone the
+  toolbars wrap or collapse to a select and the review and editors start at 50 %,
+  so no page scrolls sideways; only the card scrolls in the editors, so Save stays
+  in reach; the element list no longer paints over the inspector; inherited props
+  are live controls (editing writes this template's or card's own layer, Reset
+  restores the parent's), the Override step is gone and an unset prop is a neutral
+  chip; the editor shares one left gutter; history and asset metadata read as
+  relative times, "you"/"system" and a short SHA; tiny hidden boxes draw no label;
+  the card's Delete sits at the end; templates and cards have their own URLs.
 - Card Editor: the Export section builds the print PDF in the browser
   (system_3 #8634 / #8652). Pick a saved export profile and a card selection;
   the sheets carry the cards at trim size with the artwork extended into the

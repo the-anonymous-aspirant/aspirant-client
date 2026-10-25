@@ -71,6 +71,17 @@ async function openExport(page: Page): Promise<void> {
   await expect(page.locator('[data-test="export-profile-facts"]')).toBeVisible();
 }
 
+/** Below 640 px the card selection is a select (#8753 req 1); above, a radio strip. */
+async function chooseCards(page: Page, name: string): Promise<void> {
+  const select = page.locator('[data-test="export-type-select"]');
+  if (await select.count()) {
+    await page.getByRole('combobox', { name: 'Cards to export' }).click();
+    await page.getByRole('option', { name }).click();
+  } else {
+    await page.getByRole('radio', { name }).click();
+  }
+}
+
 async function chooseProfile(page: Page, name: string): Promise<void> {
   await page.getByRole('combobox', { name: 'Export profile' }).click();
   await page.getByRole('option', { name }).click();
@@ -105,7 +116,7 @@ test.describe('/admin/cardgen/export — print PDF', () => {
 
   test('eight relationship cards on the A4 2x4 preset with mirrored backs make 2 pages, and the download has 2 page objects', async ({ page }) => {
     await openExport(page);
-    await page.getByRole('radio', { name: 'Relationship' }).click();
+    await chooseCards(page, 'Relationship');
     await build(page);
     await expect(page.locator('[data-test="export-pages"]')).toHaveText('2 pages');
     const downloadPromise = page.waitForEvent('download');
@@ -120,7 +131,7 @@ test.describe('/admin/cardgen/export — print PDF', () => {
   test('the same selection with backs off makes 1 page', async ({ page }) => {
     await openExport(page);
     await chooseProfile(page, 'A4 2x4 fronts only');
-    await page.getByRole('radio', { name: 'Relationship' }).click();
+    await chooseCards(page, 'Relationship');
     await build(page);
     await expect(page.locator('[data-test="export-pages"]')).toHaveText('1 page');
   });
@@ -128,14 +139,14 @@ test.describe('/admin/cardgen/export — print PDF', () => {
   test('a 2x2 sheet over the eight cards makes 4 pages: front, back, front, back', async ({ page }) => {
     await openExport(page);
     await chooseProfile(page, 'A4 2x2');
-    await page.getByRole('radio', { name: 'Relationship' }).click();
+    await chooseCards(page, 'Relationship');
     await build(page);
     await expect(page.locator('[data-test="export-pages"]')).toHaveText('4 pages');
   });
 
   test('a raster under the profile DPI is listed as a warning naming the card; a card without raster adds none', async ({ page }) => {
     await openExport(page);
-    await page.getByRole('radio', { name: 'Relationship' }).click();
+    await chooseCards(page, 'Relationship');
     await build(page);
     const warnings = page.locator('[data-test="export-warning-low-dpi"]');
     await expect(warnings.first()).toContainText('Rel 1: art is 4×4 px');
@@ -143,7 +154,7 @@ test.describe('/admin/cardgen/export — print PDF', () => {
     // 8 fronts + 8 backs each carry the 2x2 art.
     await expect(warnings).toHaveCount(16);
 
-    await page.getByRole('radio', { name: 'Action' }).click();
+    await chooseCards(page, 'Action');
     await build(page);
     await expect(page.locator('[data-test="export-pages"]')).toHaveText('1 page');
     await expect(page.locator('[data-test="export-warning-low-dpi"]')).toHaveCount(0);
@@ -151,7 +162,7 @@ test.describe('/admin/cardgen/export — print PDF', () => {
 
   test('a card using a store font exports without a fallback warning', async ({ page }) => {
     await openExport(page);
-    await page.getByRole('radio', { name: 'Action' }).click();
+    await chooseCards(page, 'Action');
     await build(page);
     await expect(page.locator('[data-test="export-result"]')).toBeVisible();
     await expect(page.locator('[data-test="export-warning-font-fallback"]')).toHaveCount(0);

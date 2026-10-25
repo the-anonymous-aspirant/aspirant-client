@@ -33,20 +33,21 @@
               step="0.25"
               :label="k"
               :model-value="sizeValue(k)"
-              :disabled="!sizeOwn(k)"
               @update:model-value="setSize(k, $event)"
             />
-            <AspBadge :status="sizeOwn(k) ? 'positive' : preview.size_provenance[k] ? 'neutral' : 'caution'" size="sm">{{ sizeOwn(k) ? 'this template' : preview.size_provenance[k] ? `from ${preview.size_provenance[k]}` : 'unset' }}</AspBadge>
+            <AspBadge v-if="!sizeOwn(k) && !preview.size_provenance[k]" variant="chip" size="sm">unset</AspBadge>
+            <AspBadge v-else :status="sizeOwn(k) ? 'positive' : 'neutral'" size="sm">{{ sizeOwn(k) ? 'this template' : `from ${preview.size_provenance[k]}` }}</AspBadge>
             <AspButton v-if="sizeOwn(k)" variant="link" size="sm" type="button" :data-test="`size-${k}-reset`" @click="unsetSize(k)">Reset</AspButton>
-            <AspButton v-else variant="link" size="sm" type="button" :data-test="`size-${k}-override`" @click="setSize(k, preview.size[k])">Override</AspButton>
           </div>
 
           <h3>Elements</h3>
           <ul class="element-list" data-test="element-list">
             <li v-for="el in preview.elements" :key="el.name">
               <button type="button" class="element" :class="{ 'element--selected': el.name === selected, 'element--hidden': el.props.hidden }" :data-test="`element-${el.name}`" @click="selected = el.name">
-                <span class="element-name">{{ el.name }}</span>
-                <span class="muted">{{ el.props.kind }}{{ el.props.hidden ? ' · hidden' : '' }}</span>
+                <span class="element-text">
+                  <span class="element-name">{{ el.name }}</span>
+                  <span class="muted element-kind">{{ el.props.kind }}{{ el.props.hidden ? ' · hidden' : '' }}</span>
+                </span>
                 <AspBadge :status="isOwnElement(el.name) ? 'positive' : 'neutral'" size="sm">{{ isOwnElement(el.name) ? 'own' : 'inherited' }}</AspBadge>
               </button>
             </li>
@@ -73,7 +74,9 @@
             <AspSegmented :options="zoomOptions" :model-value="zoom" aria-label="Preview zoom" @update:model-value="zoom = $event" />
             <AspBadge v-if="dirty" status="caution" size="sm" data-test="dirty-badge">unsaved</AspBadge>
           </div>
-          <CardFace :face="preview" :zoom="zoom" :asset-urls="assets.assetUrls" :font-families="assets.fontFamilies" show-hidden data-test="editor-preview" />
+          <div class="card-scroll">
+            <CardFace :face="preview" :zoom="zoom" :asset-urls="assets.assetUrls" :font-families="assets.fontFamilies" show-hidden data-test="editor-preview" />
+          </div>
           <div class="save-row">
             <AspInput :model-value="note" label="Note" placeholder="What changed" data-test="save-note" @update:model-value="note = $event" />
             <AspButton variant="primary" type="button" :disabled="!dirty" :loading="saving" data-test="save-version" @click="save">Save as v{{ template.current_version_no + 1 }}</AspButton>
@@ -153,7 +156,9 @@ export default {
       saving: false,
       saveError: null,
       historyKey: 0,
-      zoom: 1,
+      // 50 % below md (#8753 req 2): a 105 mm card at 100 % is 397 px, wider
+      // than a phone; 100 % stays selectable.
+      zoom: typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 767px)').matches ? 0.5 : 1,
       zoomOptions: [
         { value: 1, label: '100 %' },
         { value: 0.5, label: '50 %' },
@@ -360,7 +365,9 @@ export default {
 }
 .editor-body {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(260px, 1.2fr) minmax(300px, 2fr);
+  /* minmax(0, …) so no column can be pushed wider than its track by content
+     (#8753 req 3: the element rows painted over the inspector at 1280). */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 2fr);
   gap: var(--space-5, 20px);
   align-items: start;
 }
@@ -389,7 +396,8 @@ export default {
 }
 .element {
   width: 100%;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-2, 8px);
   align-items: center;
   padding: var(--space-2, 8px);
@@ -407,9 +415,20 @@ export default {
 .element--hidden .element-name {
   text-decoration: line-through;
 }
+.element-text {
+  display: grid;
+  min-width: 0;
+}
 .element-name {
   font-family: var(--font-family-mono, monospace);
-  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.element-kind {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .element-actions {
   display: flex;
@@ -420,7 +439,13 @@ export default {
 .preview-pane {
   display: grid;
   gap: var(--space-3, 12px);
+  min-width: 0;
+}
+/* Only the card scrolls (#8753 req 2); the save row and the history stay at
+   the gutter. */
+.card-scroll {
   overflow-x: auto;
+  max-width: 100%;
 }
 .preview-controls {
   display: flex;

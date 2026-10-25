@@ -66,6 +66,17 @@ const ASSETS = [
   { id: 4, sha256: 'b'.repeat(64), original_filename: 'display.ttf', media_type: 'font/ttf', kind: 'font' as const, byte_size: 100, pixel_width: 0, pixel_height: 0, uploaded_by_user_id: 1, content_url: '/api/cardgen/assets/4/content', created_at: '2026-10-24T17:00:00Z' },
 ];
 
+/** Below 640 px the type filter is a select (#8753 req 1); above, a radio strip. */
+async function chooseType(page: Page, name: string): Promise<void> {
+  const select = page.locator('[data-test="review-type-select"]');
+  if (await select.count()) {
+    await page.getByRole('combobox', { name: 'Show cards of type' }).click();
+    await page.getByRole('option', { name }).click();
+  } else {
+    await page.getByRole('radio', { name }).click();
+  }
+}
+
 async function openReview(page: Page): Promise<void> {
   await page.goto('/admin/cardgen/cards');
   await dismissMobileSidebarIfPresent(page);
@@ -92,6 +103,8 @@ test.describe('/admin/cardgen/cards — print-scale review', () => {
     await openReview(page);
     await expect(page.locator('[data-test="review-grid"] > li')).toHaveCount(3);
     await expect(page.locator('[data-test="review-count"]')).toHaveText('3 cards');
+    // Below md the review starts at 50 % (#8753 req 1); the size assertions are at 100 %.
+    await page.getByRole('radio', { name: '100 %' }).click();
     const faceV = page.locator('[data-test="card-face-11"]');
     const box = await faceV.boundingBox();
     expect(box).not.toBeNull();
@@ -118,6 +131,7 @@ test.describe('/admin/cardgen/cards — print-scale review', () => {
 
   test('zoom scales the faces, the back side draws the back face', async ({ page }) => {
     await openReview(page);
+    await page.getByRole('radio', { name: '100 %' }).click();
     await page.getByRole('radio', { name: '50 %' }).click();
     const box = await page.locator('[data-test="card-face-11"]').boundingBox();
     expect(Math.abs(box!.width - 52.5 * PX_PER_MM)).toBeLessThan(1);
@@ -131,11 +145,11 @@ test.describe('/admin/cardgen/cards — print-scale review', () => {
 
   test('filters by card type and shows the empty state for a type with no cards', async ({ page }) => {
     await openReview(page);
-    await page.getByRole('radio', { name: 'Action' }).click();
+    await chooseType(page, 'Action');
     await expect(page.locator('[data-test="review-grid"] > li')).toHaveCount(1);
     await expect(page.locator('[data-test="review-card-13"]')).toBeVisible();
     seedCardgenCards([]);
-    await page.getByRole('radio', { name: 'Relationship' }).click();
+    await chooseType(page, 'Relationship');
     await expect(page.locator('[data-test="review-grid"]')).toHaveCount(0);
     await expect(page.getByText('No cards')).toBeVisible();
   });

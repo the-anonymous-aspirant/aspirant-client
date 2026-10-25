@@ -97,7 +97,9 @@ const routes = [
   { path: '/admin/tools/kvitto', component: KvittoMaker, meta: ADMIN },
   // The admin-only card editor (system_3 #8634 / #8645, operator decision 1).
   // :tab is one of the shell's sections; the server gates every /cardgen/* route.
-  { path: '/admin/cardgen/:tab?', component: CardgenApp, meta: ADMIN },
+  // :id (#8753, §3.52) addresses one template or card inside the templates /
+  // cards sections, so an editor survives a reload and a link can land on it.
+  { path: '/admin/cardgen/:tab?/:id?', component: CardgenApp, meta: ADMIN },
 
   { path: '/about', component: AboutView },
 

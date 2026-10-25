@@ -1,10 +1,12 @@
 <template>
   <div class="cardgen-app" data-test="cardgen-app">
-    <h1>Card Editor</h1>
-    <p class="meta">
-      Templated cards for the Constellations game: assets, templates with inheritance,
-      cards with version history, and print export.
-    </p>
+    <header class="cardgen-head">
+      <h1>Card Editor</h1>
+      <p class="meta">
+        Templated cards for the Constellations game: assets, templates with inheritance,
+        cards with version history, and print export.
+      </p>
+    </header>
 
     <div class="tabs-row">
       <AspSegmented
@@ -20,10 +22,10 @@
       <AssetsPanel />
     </section>
     <section v-else-if="activeTab === 'templates'" id="cardgen-panel-templates" role="tabpanel" data-test="cardgen-panel-templates">
-      <TemplatesPanel />
+      <TemplatesPanel :item-id="itemId" />
     </section>
     <section v-else-if="activeTab === 'cards'" id="cardgen-panel-cards" role="tabpanel" data-test="cardgen-panel-cards">
-      <CardsPanel />
+      <CardsPanel :item-id="itemId" />
     </section>
     <section v-else id="cardgen-panel-export" role="tabpanel" data-test="cardgen-panel-export">
       <ExportPanel />
@@ -65,6 +67,12 @@ export default {
       const tab = this.$route.params.tab;
       return TAB_VALUES.has(tab) ? tab : 'assets';
     },
+    /** The addressed template or card (#8753 req 10): a positive integer or null. */
+    itemId() {
+      const raw = this.$route.params.id;
+      const n = Number(raw);
+      return raw != null && raw !== '' && Number.isInteger(n) && n > 0 ? n : null;
+    },
   },
   methods: {
     selectTab(value) {
@@ -80,6 +88,9 @@ export default {
   max-width: 1200px;
   margin: 0 auto;
   padding: var(--space-6, 24px) var(--space-4, 16px);
+  /* One gutter (#8753 req 6, §3.114): the global #app centring stops here; every
+     block of the editor, header included, sits at the content gutter. */
+  text-align: left;
 }
 .meta {
   color: var(--text-muted);
@@ -87,5 +98,18 @@ export default {
 }
 .tabs-row {
   margin: var(--space-4, 16px) 0;
+}
+.cardgen-head h1 {
+  margin: 0 0 var(--space-2, 8px);
+}
+.cardgen-head .meta {
+  margin: 0 0 var(--space-4, 16px);
+  max-width: 70ch;
+}
+.tabs-row {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: var(--space-4, 16px);
+  overflow-x: auto;
 }
 </style>

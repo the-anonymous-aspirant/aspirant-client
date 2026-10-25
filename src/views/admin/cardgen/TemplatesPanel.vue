@@ -1,6 +1,6 @@
 <template>
   <div class="templates-panel" data-test="templates-panel">
-    <TemplateEditor v-if="editingId" :template-id="editingId" :templates="templates" @back="editingId = null" @changed="load" />
+    <TemplateEditor v-if="editingId" :template-id="editingId" :templates="templates" @back="closeEditor" @changed="load" />
     <template v-else>
       <div class="list-head">
         <span class="muted" data-test="template-count">{{ templates.length }} {{ templates.length === 1 ? 'template' : 'templates' }}</span>
@@ -11,7 +11,7 @@
       <AspEmptyState v-else-if="!templates.length" heading="No templates" message="Create one to start laying out a card." />
       <ul v-else class="template-list" data-test="template-list">
         <li v-for="t in templates" :key="t.id">
-          <button type="button" class="template-row" :data-test="`template-${t.id}`" @click="editingId = t.id">
+          <button type="button" class="template-row" :data-test="`template-${t.id}`" @click="openEditor(t.id)">
             <span class="template-name">{{ t.name }}</span>
             <span class="muted mono">{{ t.slug }}</span>
             <span class="muted">extends {{ t.parent_slug || 'none' }}</span>
@@ -45,6 +45,10 @@ import { ELEMENT_NAME_PATTERN } from '@/lib/cardgen/specProps.js';
 export default {
   name: 'TemplatesPanel',
   components: { AspButton, AspEmptyState, AspInput, AspModal, AspSelect, TemplateEditor },
+  props: {
+    /** The template addressed by the route (#8753 req 10, §3.52); null = the list. */
+    itemId: { type: Number, default: null },
+  },
   setup() {
     return { api: useCardgen() };
   },
@@ -53,7 +57,6 @@ export default {
       templates: [],
       loading: true,
       loadError: null,
-      editingId: null,
       createOpen: false,
       creating: false,
       createError: null,
@@ -61,6 +64,9 @@ export default {
     };
   },
   computed: {
+    editingId() {
+      return this.itemId;
+    },
     parentOptions() {
       return [{ value: 0, label: 'none' }, ...this.templates.map((t) => ({ value: t.id, label: `${t.name} (${t.slug})` }))];
     },
@@ -104,7 +110,13 @@ export default {
       }
       this.createOpen = false;
       await this.load();
-      this.editingId = template.id;
+      this.openEditor(template.id);
+    },
+    openEditor(id) {
+      this.$router.push(`/admin/cardgen/templates/${id}`);
+    },
+    closeEditor() {
+      this.$router.push('/admin/cardgen/templates');
     },
   },
 };

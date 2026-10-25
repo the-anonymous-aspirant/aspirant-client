@@ -5,7 +5,7 @@
       <div class="panel-head">
         <AspButton variant="primary" size="sm" type="button" data-test="new-card" @click="openCreate">New card</AspButton>
       </div>
-      <ReviewPanel :key="reviewKey" @edit="editingId = $event" />
+      <ReviewPanel :key="reviewKey" @edit="openEditor" />
     </template>
 
     <AspModal :open="createOpen" size="sm" title="New card" @update:open="createOpen = $event">
@@ -34,6 +34,10 @@ import { ELEMENT_NAME_PATTERN } from '@/lib/cardgen/specProps.js';
 export default {
   name: 'CardsPanel',
   components: { AspButton, AspInput, AspModal, AspSelect, CardEditor, ReviewPanel },
+  props: {
+    /** The card addressed by the route (#8753 req 10, §3.52); null = the review. */
+    itemId: { type: Number, default: null },
+  },
   setup() {
     return { api: useCardgen() };
   },
@@ -41,7 +45,6 @@ export default {
     return {
       types: [],
       templates: [],
-      editingId: null,
       reviewKey: 0,
       createOpen: false,
       creating: false,
@@ -50,6 +53,9 @@ export default {
     };
   },
   computed: {
+    editingId() {
+      return this.itemId;
+    },
     typeOptions() {
       return this.types.map((t) => ({ value: t.id, label: t.name }));
     },
@@ -97,11 +103,14 @@ export default {
         return;
       }
       this.createOpen = false;
-      this.editingId = card.id;
+      this.openEditor(card.id);
+    },
+    openEditor(id) {
+      this.$router.push(`/admin/cardgen/cards/${id}`);
     },
     closeEditor() {
-      this.editingId = null;
       this.reviewKey += 1;
+      this.$router.push('/admin/cardgen/cards');
     },
   },
 };

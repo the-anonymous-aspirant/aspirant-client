@@ -58,6 +58,7 @@ async function openTemplates(page: Page): Promise<void> {
 async function openEditor(page: Page, id: number): Promise<void> {
   await openTemplates(page);
   await page.locator(`[data-test="template-${id}"]`).click();
+  await expect(page).toHaveURL(new RegExp(`/admin/cardgen/templates/${id}$`));
   await expect(page.locator('[data-test="template-editor"]')).toBeVisible();
   await expect(page.locator('[data-test="element-list"] button')).not.toHaveCount(0);
 }
@@ -86,7 +87,7 @@ test.describe('/admin/cardgen/templates — editor with version history', () => 
     await expect(page.locator('[data-test="template-2"]')).toContainText('v1');
   });
 
-  test('shows provenance per prop; Override makes a value own, Reset lets the parent show through', async ({ page }) => {
+  test('shows provenance per prop; editing an inherited value makes it own, Reset lets the parent show through', async ({ page }) => {
     await openEditor(page, 2);
     await page.locator('[data-test="element-title"]').click();
     const colour = page.locator('[data-test="prop-color"]');
@@ -97,16 +98,26 @@ test.describe('/admin/cardgen/templates — editor with version history', () => 
     await expect(x.locator('[data-test="prop-x_mm-badge"]')).toHaveText('from base');
     await expect(page.locator('[data-test="dirty-badge"]')).toHaveCount(0);
 
-    await page.locator('[data-test="prop-x_mm-override"]').click();
+    // #8753 req 4: the inherited control is live; typing into it writes this
+    // template's own layer and the badge flips. No Override step.
+    await expect(page.locator('[data-test="prop-x_mm-override"]')).toHaveCount(0);
+    const xInput = x.locator('input');
+    await expect(xInput).toBeEnabled();
+    await expect(xInput).toHaveValue('6');
+    await xInput.fill('7');
     await expect(x).toHaveAttribute('data-provenance', 'own');
+    await expect(x.locator('[data-test="prop-x_mm-badge"]')).toHaveText('this template');
     await expect(page.locator('[data-test="dirty-badge"]')).toBeVisible();
     await page.locator('[data-test="prop-x_mm-reset"]').click();
     await expect(x).toHaveAttribute('data-provenance', 'inherited:base');
+    await expect(xInput).toHaveValue('6');
     await expect(page.locator('[data-test="dirty-badge"]')).toHaveCount(0);
   });
 
   test('saving creates v2, history lists v1 and v2, restoring v1 creates v3 with the v1 value', async ({ page }) => {
     await openEditor(page, 2);
+    // Below md the editor starts at 50 % (#8753); the px assertion is at 100 %.
+    await page.getByRole('radio', { name: '100 %' }).click();
     await page.locator('[data-test="element-title"]').click();
     const sizeInput = page.locator('[data-test="prop-size_pt"] input');
     await expect(sizeInput).toHaveValue('18');
@@ -147,7 +158,7 @@ test.describe('/admin/cardgen/templates — editor with version history', () => 
   test('the asset picker sets a font by its server id and the preview uses it', async ({ page }) => {
     await openEditor(page, 2);
     await page.locator('[data-test="element-title"]').click();
-    await page.locator('[data-test="prop-font_asset_id-override"]').click();
+    await page.locator('[data-test="prop-font_asset_id-pick"]').click();
     await expect(page.locator('[data-test="asset-picker"]')).toBeVisible();
     await expect(page.locator('[data-test="pick-asset-1"]')).toHaveCount(0);
     await page.locator('[data-test="pick-asset-4"]').click();
