@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Card Editor: the review is the print-scale preview (system_3 #8754). The card
+  renderer falls back to the export's own Roboto, so a line breaks at the same
+  word on screen and in the PDF; `*word*` inside a text prints bold and underlined
+  in both (`\*` for a literal asterisk), for the deck's may/must; the export's DPI
+  warnings are one line per undersized asset, with the per-face list behind a
+  disclosure and the asset name opening it in the viewer.
 - Card Editor: the D2 design review's findings (system_3 #8753). On a phone the
   toolbars wrap or collapse to a select and the review and editors start at 50 %,
   so no page scrolls sideways; only the card scrolls in the editors, so Save stays

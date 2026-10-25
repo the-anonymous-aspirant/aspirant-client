@@ -13,6 +13,7 @@
 // profile says `mirror` and a card has a back, follow each front page with the
 // columns reversed so a long-edge duplex lines up.
 
+import { parseEmphasis, plainText } from './emphasis.js';
 import { dpiOf, mmToPt } from './units.js';
 
 export const PAGE_SIZES_MM = { A4: [210, 297], A3: [297, 420], Letter: [215.9, 279.4] };
@@ -133,21 +134,37 @@ function drawFace(face, slot, ext, profile, assets, fonts, warnings, cardName, c
       nodes.push(node);
       const dpi = Math.min(dpiOf(a.pixelWidth, bleedBox.w), dpiOf(a.pixelHeight, bleedBox.h));
       if (dpi && profile.dpi && dpi < profile.dpi) {
-        warnings.push({ card: cardName, element: el.name, kind: 'low-dpi', dpi: Math.round(dpi), message: `${cardName}: ${el.name} is ${a.pixelWidth}×${a.pixelHeight} px over ${round(bleedBox.w)}×${round(bleedBox.h)} mm, ${Math.round(dpi)} DPI against the profile's ${profile.dpi}` });
+        warnings.push({
+          card: cardName,
+          element: el.name,
+          kind: 'low-dpi',
+          assetId: p.asset_id,
+          boxW: bleedBox.w,
+          boxH: bleedBox.h,
+          dpi: Math.round(dpi),
+          message: `${cardName}: ${el.name} is ${a.pixelWidth}×${a.pixelHeight} px over ${round(bleedBox.w)}×${round(bleedBox.h)} mm, ${Math.round(dpi)} DPI against the profile's ${profile.dpi}`,
+        });
       }
     } else {
       // text: inside the trim, never into the bleed
       const { font, fallback } = fontFor(el, fonts);
       if (fallback) warnings.push({ card: cardName, element: el.name, kind: 'font-fallback', message: `${cardName}: ${el.name} asks for font asset ${p.font_asset_id}, which is not loaded; ${FALLBACK_FONT} is used` });
-      let text = p.text || '';
-      if (p.transform === 'uppercase') text = text.toUpperCase();
+      const upper = p.transform === 'uppercase';
+      // `*word*` emphasis (#8754 R2): an emphasised run is bold and underlined,
+      // the same two properties CardFace's .el-em draws.
+      const runs = parseEmphasis(p.text || '').map((r) => {
+        const t = upper ? r.text.toUpperCase() : r.text;
+        return r.em ? { text: t, bold: true, decoration: 'underline' } : { text: t };
+      });
+      const text = runs.length === 1 && !runs[0].bold ? runs[0].text : runs.length ? runs : '';
+      const flat = plainText(p.text || '');
       const size = p.size_pt || 10;
       const lineHeight = p.line_height || 1.2;
       // No clipping in pdfmake: the box width wraps the text, the box height
       // only positions it for middle and bottom alignment (an estimate).
       const widthPt = mmToPt(box.w);
       const avgChar = size * 0.5;
-      const lines = Math.max(1, Math.ceil((text.length * avgChar) / Math.max(widthPt, 1)) + (text.match(/\n/g) || []).length);
+      const lines = Math.max(1, Math.ceil((flat.length * avgChar) / Math.max(widthPt, 1)) + (flat.match(/\n/g) || []).length);
       const textH = lines * size * lineHeight;
       let y = mmToPt(slot.y + box.y);
       if (p.valign === 'middle') y += Math.max(0, (mmToPt(box.h) - textH) / 2);
@@ -195,6 +212,46 @@ function cropMarks(slot, ext, canvasOps) {
       canvasOps.push({ type: 'line', x1: mmToPt(x), y1: mmToPt(y + dy * inset), x2: mmToPt(x), y2: mmToPt(y + dy * Math.min(roomY, inset + CROP_MARK_LEN_MM)), lineWidth: 0.25, lineColor: '#000000' });
     }
   }
+}
+
+/**
+ * One line per undersized asset, not per face (#8754 R3, §1.6): the asset, its
+ * pixels, the DPI range it prints at, how many faces, and the pixels the
+ * profile's DPI needs at the largest box it is placed in. The per-face
+ * entries stay on the group for a disclosure.
+ */
+export function groupDpiWarnings(warnings, profile, assets = new Map()) {
+  const byAsset = new Map();
+  for (const w of warnings) {
+    if (w.kind !== 'low-dpi') continue;
+    const g = byAsset.get(w.assetId) || { assetId: w.assetId, entries: [], minDpi: Infinity, maxDpi: 0, maxW: 0, maxH: 0 };
+    g.entries.push(w);
+    g.minDpi = Math.min(g.minDpi, w.dpi);
+    g.maxDpi = Math.max(g.maxDpi, w.dpi);
+    g.maxW = Math.max(g.maxW, w.boxW);
+    g.maxH = Math.max(g.maxH, w.boxH);
+    byAsset.set(w.assetId, g);
+  }
+  const dpi = profile.dpi || 300;
+  return [...byAsset.values()].map((g) => {
+    const a = assets.get(g.assetId) || {};
+    const name = a.name || `asset ${g.assetId}`;
+    const needW = Math.ceil((g.maxW / 25.4) * dpi);
+    const needH = Math.ceil((g.maxH / 25.4) * dpi);
+    const range = g.minDpi === g.maxDpi ? `${g.minDpi}` : `${g.minDpi}-${g.maxDpi}`;
+    const faces = g.entries.length;
+    return {
+      assetId: g.assetId,
+      name,
+      pixelWidth: a.pixelWidth,
+      pixelHeight: a.pixelHeight,
+      faces,
+      entries: g.entries,
+      needWidth: needW,
+      needHeight: needH,
+      message: `(${a.pixelWidth}×${a.pixelHeight} px) prints at ${range} DPI on ${faces} ${faces === 1 ? 'face' : 'faces'}; ${dpi} DPI needs ${needW}×${needH} px`,
+    };
+  });
 }
 
 /**
@@ -251,5 +308,5 @@ export function buildExportDocument(cards, profile, assets = new Map(), fonts = 
     defaultStyle: { font: FALLBACK_FONT },
     info: { title: 'Constellations cards' },
   };
-  return { doc, pages: pages.length, perPage: layout.perPage, layout, warnings };
+  return { doc, pages: pages.length, perPage: layout.perPage, layout, warnings, dpiGroups: groupDpiWarnings(warnings, profile, assets) };
 }

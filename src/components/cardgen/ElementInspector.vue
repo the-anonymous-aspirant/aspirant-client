@@ -50,6 +50,7 @@
           </template>
           <template v-else-if="prop.control === 'text'">
             <AspTextarea
+              :hint="emphasisHint"
               :model-value="displayValue(prop) ?? ''"
               :aria-label="prop.name"
               :rows="2"
@@ -97,6 +98,7 @@
 import { AspBadge, AspButton, AspCheckbox, AspInput, AspSelect, AspTextarea } from '@aspirant/design-system';
 import AssetPicker from './AssetPicker.vue';
 import { HEX_COLOUR_PATTERN, propsForKind } from '@/lib/cardgen/specProps.js';
+import { EMPHASIS_HINT } from '@/lib/cardgen/emphasis.js';
 
 export default {
   name: 'ElementInspector',
@@ -112,7 +114,7 @@ export default {
   },
   emits: ['set', 'unset'],
   data() {
-    return { picker: null };
+    return { picker: null, emphasisHint: EMPHASIS_HINT };
   },
   computed: {
     kind() {

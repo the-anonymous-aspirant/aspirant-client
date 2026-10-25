@@ -15,7 +15,7 @@
         :style="textStyle(el)"
         :data-el="el.name"
       >
-        <span class="el-text">{{ el.props.text || '' }}</span>
+        <span class="el-text"><template v-for="(run, i) in runsOf(el)" :key="i"><span v-if="run.em" class="el-em">{{ run.text }}</span><template v-else>{{ run.text }}</template></template></span>
       </div>
       <div
         v-else-if="el.props.kind === 'image'"
@@ -48,6 +48,9 @@
 // from server-issued ids, fonts are the FontFace families the caller loaded.
 // 1 mm = 96 / 25.4 CSS px at zoom 1, so a 105 x 74.25 mm card is
 // 396.85 x 280.63 px on screen at 100 %.
+import { parseEmphasis } from '@/lib/cardgen/emphasis.js';
+import { FALLBACK_FAMILY, ensureFallbackFont } from '@/lib/cardgen/fallbackFont.js';
+
 export const PX_PER_MM = 96 / 25.4;
 export const PX_PER_PT = 96 / 72;
 
@@ -85,7 +88,14 @@ export default {
       return this.showHidden ? els : els.filter((el) => !el.props?.hidden);
     },
   },
+  mounted() {
+    ensureFallbackFont();
+  },
   methods: {
+    /** `*word*` emphasis runs (#8754 R2); every run is text, never HTML. */
+    runsOf(el) {
+      return parseEmphasis(el.props?.text || '');
+    },
     boxStyle(el) {
       const p = el.props || {};
       const style = {
@@ -113,7 +123,9 @@ export default {
       style.color = p.color || '#111111';
       if (p.letter_spacing) style.letterSpacing = `${p.letter_spacing * PX_PER_PT * this.zoom}px`;
       const family = p.font_asset_id ? this.fontFamilies[p.font_asset_id] : null;
-      style.fontFamily = family ? `'${family}', sans-serif` : 'sans-serif';
+      // The fallback is the export's own Roboto (#8754 R1), so a line breaks
+      // at the same word on screen and in the PDF.
+      style.fontFamily = family ? `'${family}', '${FALLBACK_FAMILY}', sans-serif` : `'${FALLBACK_FAMILY}', sans-serif`;
       return style;
     },
     rectStyle(el) {
@@ -162,6 +174,15 @@ export default {
   display: flex;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  /* The PDF never synthesises a bold or an italic: a store font is one file
+     for every style. Match it, so the preview is the print (#8754 R1). */
+  font-synthesis: none;
+}
+.el-em {
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 0.06em;
+  text-underline-offset: 0.12em;
 }
 .el--image img {
   width: 100%;
