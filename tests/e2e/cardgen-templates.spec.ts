@@ -132,6 +132,10 @@ test.describe('/admin/cardgen/templates — editor with version history', () => 
     await expect(page.locator('[data-test="version-2"]')).toContainText('bigger title');
     await expect(page.locator('[data-test="version-2"] [data-test="version-current"]')).toBeVisible();
     await expect(page.locator('[data-test="version-1"]')).toBeVisible();
+    // #8758: the rows name their author from the DTO (`created_by_name`): the
+    // seed row is the system actor, the saved row the session user by name.
+    await expect(page.locator('[data-test="version-1"]')).toContainText('system');
+    await expect(page.locator('[data-test="version-2"]')).toContainText('e2e-admin');
 
     await page.locator('[data-test="restore-1"]').click();
     await expect(page.locator('[data-test="template-version"]')).toContainText('v3');
