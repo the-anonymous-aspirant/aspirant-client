@@ -1,3 +1,4 @@
+import pdfVfs from 'pdfmake/build/vfs_fonts.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -1153,10 +1154,12 @@ export function seedCardgenRefusals(names: string[] = []): void { cardgenSeed.re
 // one-page PDF and a TTF header (enough for an <img>/<iframe> to load; the font
 // sample names the family whether or not the browser accepts the bytes).
 const CARDGEN_CONTENT: Record<CardgenAssetSeed['kind'], Buffer> = {
-  image: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVQImWP4z8DwHwyBNAMDA4gGAgAwLQX6uXk0PAAAAABJRU5ErkJggg==', 'base64'),
+  // A valid 4x4 RGB PNG (four colour quadrants; the previous bytes had a bad IDAT checksum that the browser tolerated and pdfkit refused, #8652).
+  image: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAIElEQVR42mO4o6EBRBpbbICIAYWjEXAHiD6c0AAiFA4ABYIV4YY8mWwAAAAASUVORK5CYII=', 'base64'),
   svg: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#48a"/></svg>'),
   pdf: Buffer.from('%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 100]>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000052 00000 n \n0000000101 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n160\n%%EOF\n'),
-  font: Buffer.from([0, 1, 0, 0, 0, 0, 0, 0]),
+  // A real TTF (pdfmake's bundled Roboto), so FontFace and pdfmake can both parse it (#8652).
+  font: Buffer.from((pdfVfs as Record<string, string>)['Roboto-Regular.ttf'], 'base64'),
 };
 
 export function seedCardgenTypes(rows: CardgenTypeSeed[] = []): void { cardgenSeed.types = rows.slice(); }
