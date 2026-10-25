@@ -35,7 +35,7 @@
           <dt>Kind</dt><dd>{{ asset.kind }} ({{ asset.media_type }})</dd>
           <dt>Size</dt><dd>{{ formatBytes(asset.byte_size) }}</dd>
           <dt>SHA-256</dt><dd class="mono" :title="asset.sha256" data-test="viewer-sha">{{ shortSha(asset.sha256) }}…</dd>
-          <dt>Uploaded</dt><dd><time :datetime="asset.created_at" :title="asset.created_at" data-test="viewer-uploaded">{{ relativeTime(asset.created_at) }}</time> by {{ actorLabel(asset.uploaded_by_user_id) }}</dd>
+          <dt>Uploaded</dt><dd><time :datetime="asset.created_at" :title="asset.created_at" data-test="viewer-uploaded">{{ relativeTime(asset.created_at) }}</time> by {{ actorLabel(asset.uploaded_by_user_id, undefined, asset.uploaded_by_name) }}</dd>
         </dl>
 
         <section class="usage" data-test="viewer-usage">

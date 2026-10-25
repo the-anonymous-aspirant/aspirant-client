@@ -40,7 +40,9 @@ function asset(id: number, kind: CardgenAssetSeed['kind'], name: string): Cardge
   };
 }
 
-const ASSETS = [asset(1, 'image', 'moon.png'), asset(2, 'svg', 'mark.svg'), asset(3, 'pdf', 'cards.pdf'), asset(4, 'font', 'display.ttf')];
+// Asset 1 carries the uploader's display name (#8758); the others come as an
+// older server would send them, id only.
+const ASSETS = [{ ...asset(1, 'image', 'moon.png'), uploaded_by_name: 'Anna' }, asset(2, 'svg', 'mark.svg'), asset(3, 'pdf', 'cards.pdf'), asset(4, 'font', 'display.ttf')];
 
 async function openAssets(page: Page): Promise<void> {
   await page.goto('/admin/cardgen/assets');
@@ -90,6 +92,13 @@ test.describe('/admin/cardgen/assets — uploader and viewer', () => {
     await expect(page.locator('[data-test="asset-count"]')).toHaveText('5 assets');
   });
 
+  test('the viewer names the uploader, or falls back to the id for a row without a name (#8758)', async ({ page }) => {
+    await openAssets(page);
+    await page.locator('[data-test="asset-card-2"]').click();
+    await expect(page.locator('[data-test="asset-viewer"]')).toBeVisible();
+    await expect(page.locator('[data-test="viewer-uploaded"]').locator('..')).toContainText('by user 1');
+  });
+
   test('the viewer shows an image at fit and real size with its print size', async ({ page }) => {
     await openAssets(page);
     await page.locator('[data-test="asset-card-1"]').click();
@@ -100,6 +109,7 @@ test.describe('/admin/cardgen/assets — uploader and viewer', () => {
     await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     await expect(page.locator('[data-test="viewer-pixels"]')).toContainText('600×300 px, 50.8×25.4 mm at 300 DPI');
     await expect(page.locator('[data-test="viewer-meta"]')).toContainText('image (image/png)');
+    await expect(page.locator('[data-test="viewer-uploaded"]').locator('..')).toContainText('by Anna');
     await expect(page.locator('[data-test="usage-none"]')).toBeVisible();
     await page.getByRole('radio', { name: 'Real size' }).click();
     await expect(img).toHaveClass(/real/);

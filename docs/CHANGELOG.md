@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Card Editor: history rows and the asset viewer name the author (system_3
+  #8758). The version and asset DTOs carry `created_by_name` / `uploaded_by_name`
+  (the user's display name, `system` for the seeds), so a row reads `3 h ago · Anna`
+  instead of `user 7`; `you` still wins for the session user, and a row from an
+  older server or a deleted user keeps the `user N` fallback.
 - Card Editor: the review is the print-scale preview (system_3 #8754). The card
   renderer falls back to the export's own Roboto, so a line breaks at the same
   word on screen and in the PDF; `*word*` inside a text prints bold and underlined
