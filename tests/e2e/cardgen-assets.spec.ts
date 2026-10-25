@@ -148,4 +148,15 @@ test.describe('/admin/cardgen/assets — uploader and viewer', () => {
     await expect(page.locator('[data-test="asset-grid"] > li')).toHaveCount(3);
     await expect(page.locator('[data-test="asset-card-2"]')).toHaveCount(0);
   });
+
+  test('a PDF whose stored bytes are not a PDF gets no frame (#8709)', async ({ page }) => {
+    // The list says pdf, the content route serves image/png: the viewer must
+    // not hand those bytes to the <iframe> as a blob: document.
+    seedCardgenAssets([...ASSETS.map((a) => ({ ...a })), { ...asset(5, 'pdf', 'odd.pdf'), media_type: 'image/png' }]);
+    await openAssets(page);
+    await page.locator('[data-test="asset-card-5"]').click();
+    await expect(page.locator('[data-test="viewer-blob-error"]')).toContainText('not application/pdf');
+    await expect(page.locator('[data-test="viewer-pdf"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="asset-viewer"] iframe')).toHaveCount(0);
+  });
 });

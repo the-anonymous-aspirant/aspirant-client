@@ -1073,6 +1073,11 @@ export type CardgenExportProfileSeed = { id: number; name: string; spec: Record<
 
 export type CardgenUsageSeed = { templates: { id: number; slug: string; name: string; version_no: number; elements: string[] }[]; cards: { id: number; slug: string; name: string; version_no: number; elements: string[] }[] };
 
+export type CardgenCardSeed = { id: number; slug: string; name: string; card_type_id: number; template_id: number | null; goal_card_id: number | null; relationship_type_id: number | null; display_order: number; current_version_no: number };
+export type CardgenResolvedElement = { name: string; props: Record<string, unknown>; provenance: Record<string, string> };
+export type CardgenResolvedFace = { chain: string[]; size: { w_mm: number; h_mm: number; radius_mm: number }; size_provenance: Record<string, string>; elements: CardgenResolvedElement[] };
+export type CardgenResolvedSeed = { front: CardgenResolvedFace; back: CardgenResolvedFace | null };
+
 export const cardgenSeed: {
   types: CardgenTypeSeed[];
   templates: CardgenTemplateSeed[];
@@ -1080,7 +1085,12 @@ export const cardgenSeed: {
   profiles: CardgenExportProfileSeed[];
   usage: Record<number, CardgenUsageSeed>;
   refuseNames: string[];
-} = { types: [], templates: [], assets: [], profiles: [], usage: {}, refuseNames: [] };
+  cards: CardgenCardSeed[];
+  resolved: Record<number, CardgenResolvedSeed>;
+} = { types: [], templates: [], assets: [], profiles: [], usage: {}, refuseNames: [], cards: [], resolved: {} };
+
+export function seedCardgenCards(rows: CardgenCardSeed[] = []): void { cardgenSeed.cards = rows.slice(); }
+export function seedCardgenResolved(map: Record<number, CardgenResolvedSeed> = {}): void { cardgenSeed.resolved = { ...map }; }
 
 export function seedCardgenUsage(map: Record<number, CardgenUsageSeed> = {}): void { cardgenSeed.usage = { ...map }; }
 export function seedCardgenRefusals(names: string[] = []): void { cardgenSeed.refuseNames = names.slice(); }
@@ -1209,4 +1219,19 @@ export async function installCardgenMocks(page: Page): Promise<void> {
     });
   }));
   await page.route(/\/api\/cardgen\/export-profiles(\?.*)?$/, getOnly((route) => json(route, { profiles: cardgenSeed.profiles })));
+  // Cards (#8649): the list and the resolved faces from the seeds.
+  await page.route(/\/api\/cardgen\/cards(\?.*)?$/, getOnly(async (route, url) => {
+    const typeId = Number(url.searchParams.get('type_id') || 0);
+    await json(route, { cards: cardgenSeed.cards.filter((c) => !typeId || c.card_type_id === typeId) });
+  }));
+  await page.route(/\/api\/cardgen\/cards\/\d+\/resolved$/, getOnly(async (route, url) => {
+    const id = Number(url.pathname.split('/')[4]);
+    const card = cardgenSeed.cards.find((c) => c.id === id);
+    const resolved = cardgenSeed.resolved[id];
+    if (!card || !resolved) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":{"code":"not_found","message":"Card not found"}}' });
+      return;
+    }
+    await json(route, { card, resolved });
+  }));
 }
