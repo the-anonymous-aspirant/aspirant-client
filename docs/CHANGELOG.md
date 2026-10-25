@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Card Editor: the Cards section shows the deck at print scale (system_3 #8634 /
+  #8649). Every card is drawn from the server's resolved faces at its real size
+  (1 mm = 96/25.4 px at 100 %), front or back, at 100, 50 or 25 %, filtered by type,
+  with template fonts and artwork from the asset store; text is rendered as text.
 - Card Editor: the Assets section (system_3 #8634 / #8648). Drop or pick files to
   upload them into the server's card asset store one at a time with a progress bar
   (the server sniffs the type and keeps one copy per content); browse them as a grid
