@@ -2,7 +2,8 @@
   <div class="export-panel" data-test="export-panel">
     <div class="export-form">
       <AspSelect :options="profileOptions" :model-value="profileId" label="Export profile" data-test="export-profile" @update:model-value="profileId = $event" />
-      <AspSegmented :options="typeOptions" :model-value="typeFilter" aria-label="Cards to export" @update:model-value="typeFilter = $event" />
+      <AspSelect v-if="narrow" :options="typeOptions" :model-value="typeFilter" aria-label="Cards to export" data-test="export-type-select" @update:model-value="typeFilter = $event" />
+      <AspSegmented v-else :options="typeOptions" :model-value="typeFilter" aria-label="Cards to export" @update:model-value="typeFilter = $event" />
       <AspButton variant="primary" type="button" :disabled="!profile" :loading="building" data-test="export-build" @click="build">Build PDF</AspButton>
     </div>
     <dl v-if="profile" class="profile-facts" data-test="export-profile-facts">
@@ -37,6 +38,7 @@ import { AspButton, AspSegmented, AspSelect } from '@aspirant/design-system';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCardgen } from '@/composables/useCardgen.js';
+import { useViewport } from '@/composables/useViewport.js';
 import { formatBytes } from '@/composables/useCardgenBlobs.js';
 import { buildExportDocument } from '@/lib/cardgen/pdfExport.js';
 
@@ -135,7 +137,8 @@ export default {
   name: 'ExportPanel',
   components: { AspButton, AspSegmented, AspSelect },
   setup() {
-    return { api: useCardgen() };
+    const { narrow } = useViewport();
+    return { api: useCardgen(), narrow };
   },
   data() {
     return {
@@ -267,6 +270,12 @@ export default {
   flex-wrap: wrap;
   gap: var(--space-3, 12px);
   align-items: flex-end;
+  min-width: 0;
+}
+.profile-facts dd,
+.result,
+.warnings {
+  text-align: left;
 }
 .profile-facts {
   display: grid;

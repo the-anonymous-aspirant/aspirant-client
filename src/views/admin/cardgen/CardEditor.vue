@@ -13,7 +13,6 @@
           <AspSelect :options="templateOptions" :model-value="card.template_id || 0" label="Template" data-test="card-template" @update:model-value="setTemplate" />
         </div>
         <span class="muted" data-test="card-version">{{ typeName }} · {{ card.slug }} · v{{ card.current_version_no }}</span>
-        <AspButton variant="destructive" size="sm" type="button" data-test="card-delete" @click="deleteOpen = true">Delete</AspButton>
         <p v-if="metaError" class="load-error" data-test="card-meta-error">{{ metaError }}</p>
       </header>
 
@@ -23,8 +22,10 @@
           <ul class="element-list" data-test="card-element-list">
             <li v-for="el in front.elements" :key="el.name">
               <button type="button" class="element" :class="{ 'element--selected': el.name === selected, 'element--hidden': el.props.hidden }" :data-test="`card-element-${el.name}`" @click="selected = el.name">
-                <span class="element-name">{{ el.name }}</span>
-                <span class="muted">{{ el.props.kind }}{{ el.props.hidden ? ' · hidden' : '' }}</span>
+                <span class="element-text">
+                  <span class="element-name">{{ el.name }}</span>
+                  <span class="muted element-kind">{{ el.props.kind }}{{ el.props.hidden ? ' · hidden' : '' }}</span>
+                </span>
                 <AspBadge :status="draft.values[el.name] ? 'positive' : 'neutral'" size="sm">{{ draft.values[el.name] ? 'overridden' : 'template' }}</AspBadge>
               </button>
             </li>
@@ -47,9 +48,11 @@
             <AspSegmented :options="zoomOptions" :model-value="zoom" aria-label="Preview zoom" @update:model-value="zoom = $event" />
             <AspBadge v-if="dirty" status="caution" size="sm" data-test="card-dirty-badge">unsaved</AspBadge>
           </div>
-          <div class="faces">
-            <CardFace :face="front" :zoom="zoom" :asset-urls="assets.assetUrls" :font-families="assets.fontFamilies" data-test="card-editor-preview" />
-            <CardFace v-if="back" :face="back" :zoom="zoom * 0.5" :asset-urls="assets.assetUrls" :font-families="assets.fontFamilies" data-test="card-editor-back" />
+          <div class="card-scroll">
+            <div class="faces">
+              <CardFace :face="front" :zoom="zoom" :asset-urls="assets.assetUrls" :font-families="assets.fontFamilies" data-test="card-editor-preview" />
+              <CardFace v-if="back" :face="back" :zoom="zoom * 0.5" :asset-urls="assets.assetUrls" :font-families="assets.fontFamilies" data-test="card-editor-back" />
+            </div>
           </div>
           <div class="save-row">
             <AspInput :model-value="note" label="Note" placeholder="What changed" data-test="card-save-note" @update:model-value="note = $event" />
@@ -65,6 +68,11 @@
           />
         </section>
       </div>
+
+      <!-- Destructive action last and apart (#8753 req 9, §3.114 footer rule). -->
+      <footer class="editor-foot">
+        <AspButton variant="destructive" size="sm" type="button" data-test="card-delete" @click="deleteOpen = true">Delete this card</AspButton>
+      </footer>
     </template>
 
     <AspModal :open="deleteOpen" size="sm" title="Delete this card?" @update:open="deleteOpen = $event">
@@ -147,7 +155,7 @@ export default {
       saving: false,
       saveError: null,
       historyKey: 0,
-      zoom: 1,
+      zoom: typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 767px)').matches ? 0.5 : 1,
       zoomOptions: [
         { value: 1, label: '100 %' },
         { value: 0.5, label: '50 %' },
@@ -213,7 +221,17 @@ export default {
       this.card = card;
       this.nameDraft = card.name;
       this.draft = cloneValues(card.data);
-      const frontId = card.template_id || this.types.find((t) => t.id === card.card_type_id)?.front_template_id || null;
+      // The front template comes from the card's own type, read here rather
+      // than from the panel's `types` prop: opened from its URL (#8753 req
+      // 10) the editor mounts before the panel's list has loaded, and a
+      // missing front would leave the draft preview without the template's
+      // boxes.
+      let type = this.types.find((t) => t.id === card.card_type_id);
+      if (!type) {
+        const { types } = await this.api.listTypes();
+        type = (types || []).find((t) => t.id === card.card_type_id) || null;
+      }
+      const frontId = card.template_id || type?.front_template_id || null;
       const [{ resolved, error: rerr }, tmpl] = await Promise.all([
         this.api.resolveCard(card.id),
         frontId ? this.api.resolveTemplate(frontId) : Promise.resolve({ resolved: null, error: null }),
@@ -316,7 +334,7 @@ export default {
 }
 .editor-body {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(260px, 1.2fr) minmax(300px, 2fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 2fr);
   gap: var(--space-5, 20px);
   align-items: start;
 }
@@ -338,7 +356,8 @@ export default {
 }
 .element {
   width: 100%;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-2, 8px);
   align-items: center;
   padding: var(--space-2, 8px);
@@ -356,14 +375,34 @@ export default {
 .element--hidden .element-name {
   text-decoration: line-through;
 }
+.element-text {
+  display: grid;
+  min-width: 0;
+}
 .element-name {
   font-family: var(--font-family-mono, monospace);
-  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.element-kind {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .preview-pane {
   display: grid;
   gap: var(--space-3, 12px);
+  min-width: 0;
+}
+.card-scroll {
   overflow-x: auto;
+  max-width: 100%;
+}
+.editor-foot {
+  margin-top: var(--space-6, 24px);
+  padding-top: var(--space-4, 16px);
+  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
 }
 .preview-controls {
   display: flex;

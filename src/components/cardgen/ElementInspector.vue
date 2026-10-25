@@ -6,7 +6,8 @@
       <div v-for="prop in group.props" :key="prop.name" class="prop-row" :data-test="`prop-${prop.name}`" :data-provenance="provenanceOf(prop.name)">
         <div class="prop-head">
           <span class="prop-name">{{ prop.name }}</span>
-          <AspBadge :status="badgeStatus(prop.name)" size="sm" :data-test="`prop-${prop.name}-badge`">{{ badgeText(prop.name) }}</AspBadge>
+          <AspBadge v-if="isUnset(prop.name)" variant="chip" size="sm" :data-test="`prop-${prop.name}-badge`">unset</AspBadge>
+          <AspBadge v-else :status="isOwn(prop.name) ? 'positive' : 'neutral'" size="sm" :data-test="`prop-${prop.name}-badge`">{{ badgeText(prop.name) }}</AspBadge>
           <AspButton
             v-if="isOwn(prop.name)"
             variant="link"
@@ -17,16 +18,6 @@
           >
             Reset
           </AspButton>
-          <AspButton
-            v-else
-            variant="link"
-            size="sm"
-            type="button"
-            :data-test="`prop-${prop.name}-override`"
-            @click="override(prop)"
-          >
-            Override
-          </AspButton>
         </div>
         <div class="prop-control">
           <template v-if="prop.control === 'number'">
@@ -36,7 +27,6 @@
               :max="String(prop.max)"
               :step="String(prop.step)"
               :model-value="displayValue(prop)"
-              :disabled="!isOwn(prop.name)"
               :aria-label="prop.name"
               @update:model-value="setNumber(prop, $event)"
             />
@@ -45,7 +35,6 @@
             <AspSelect
               :options="prop.options.map((o) => ({ value: o, label: o }))"
               :model-value="displayValue(prop)"
-              :disabled="!isOwn(prop.name)"
               :aria-label="prop.name"
               placeholder="unset"
               @update:model-value="set(prop.name, $event)"
@@ -54,7 +43,6 @@
           <template v-else-if="prop.control === 'bool'">
             <AspCheckbox
               :model-value="displayValue(prop) === true"
-              :disabled="!isOwn(prop.name)"
               :aria-label="prop.name"
               :label="displayValue(prop) === true ? 'yes' : 'no'"
               @update:model-value="set(prop.name, $event)"
@@ -63,7 +51,6 @@
           <template v-else-if="prop.control === 'text'">
             <AspTextarea
               :model-value="displayValue(prop) ?? ''"
-              :disabled="!isOwn(prop.name)"
               :aria-label="prop.name"
               :rows="2"
               @update:model-value="set(prop.name, $event)"
@@ -73,16 +60,15 @@
             <span class="swatch" :style="{ background: colourOk(displayValue(prop)) ? displayValue(prop) : 'transparent' }"></span>
             <AspInput
               :model-value="displayValue(prop) ?? ''"
-              :disabled="!isOwn(prop.name)"
               :aria-label="prop.name"
               placeholder="#rrggbb"
-              :error="isOwn(prop.name) && displayValue(prop) && !colourOk(displayValue(prop)) ? 'Use #rrggbb' : ''"
+              :error="displayValue(prop) && !colourOk(displayValue(prop)) ? 'Use #rrggbb' : ''"
               @update:model-value="set(prop.name, $event)"
             />
           </template>
           <template v-else-if="prop.control === 'asset'">
             <span class="asset-value" :data-test="`prop-${prop.name}-value`">{{ displayValue(prop) ? `asset ${displayValue(prop)}` : 'none' }}</span>
-            <AspButton variant="secondary" size="sm" type="button" :disabled="!isOwn(prop.name)" :data-test="`prop-${prop.name}-pick`" @click="openPicker(prop)">Choose…</AspButton>
+            <AspButton variant="secondary" size="sm" type="button" :data-test="`prop-${prop.name}-pick`" @click="openPicker(prop)">Choose…</AspButton>
           </template>
         </div>
       </div>
@@ -102,9 +88,10 @@
 
 <script>
 // system_3 #8634 / #8650: one element's props, each with its effective value,
-// where it comes from, and the matching affordance: Override copies an
-// inherited value into this template's layer, Reset removes an own value so
-// the parent's shows through. The control set is the client's mirror of the
+// where it comes from, and the matching affordance
+// (#8753 req 4, §3.116): every control is live and shows the effective value;
+// editing it writes this template's (or card's) own layer and the badge flips,
+// Reset removes an own value so the parent's shows through. The control set is the client's mirror of the
 // server's closed prop table (src/lib/cardgen/specProps.js); the server
 // validates on save.
 import { AspBadge, AspButton, AspCheckbox, AspInput, AspSelect, AspTextarea } from '@aspirant/design-system';
@@ -158,14 +145,13 @@ export default {
       const from = this.effective?.provenance?.[name];
       return from ? `inherited:${from}` : 'unset';
     },
+    isUnset(name) {
+      return !this.isOwn(name) && !this.effective?.provenance?.[name];
+    },
     badgeText(name) {
       if (this.isOwn(name)) return this.slug === 'card' ? 'this card' : 'this template';
       const from = this.effective?.provenance?.[name];
       return from ? `from ${from}` : 'unset';
-    },
-    badgeStatus(name) {
-      if (this.isOwn(name)) return 'positive';
-      return this.effective?.provenance?.[name] ? 'neutral' : 'caution';
     },
     colourOk(v) {
       return typeof v === 'string' && HEX_COLOUR_PATTERN.test(v);
@@ -186,18 +172,6 @@ export default {
     },
     reset(name) {
       this.$emit('unset', { element: this.elementName, prop: name });
-    },
-    override(prop) {
-      const current = this.effective?.props?.[prop.name];
-      let value = current;
-      if (value === undefined || value === null) {
-        value = { number: prop.min > 0 ? prop.min : 0, enum: prop.options?.[0], bool: false, text: '', colour: '#111111', asset: null }[prop.control];
-      }
-      if (value === null) {
-        this.openPicker(prop, true);
-        return;
-      }
-      this.set(prop.name, value);
     },
     openPicker(prop) {
       this.picker = prop;
