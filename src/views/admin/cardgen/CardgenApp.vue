@@ -23,7 +23,7 @@
       <TemplatesPanel />
     </section>
     <section v-else-if="activeTab === 'cards'" id="cardgen-panel-cards" role="tabpanel" data-test="cardgen-panel-cards">
-      <ReviewPanel />
+      <CardsPanel />
     </section>
     <section v-else id="cardgen-panel-export" role="tabpanel" data-test="cardgen-panel-export">
       <AspEmptyState heading="Export" message="Print sheets with bleed, crop marks and a grid, from a saved export profile. The PDF export lands in a later change." />
@@ -41,7 +41,7 @@
 // has a URL.
 import { AspEmptyState, AspSegmented } from '@aspirant/design-system';
 import AssetsPanel from './AssetsPanel.vue';
-import ReviewPanel from './ReviewPanel.vue';
+import CardsPanel from './CardsPanel.vue';
 import TemplatesPanel from './TemplatesPanel.vue';
 
 export const CARDGEN_TABS = [
@@ -55,7 +55,7 @@ const TAB_VALUES = new Set(CARDGEN_TABS.map((t) => t.value));
 
 export default {
   name: 'CardgenApp',
-  components: { AspEmptyState, AspSegmented, AssetsPanel, ReviewPanel, TemplatesPanel },
+  components: { AspEmptyState, AspSegmented, AssetsPanel, CardsPanel, TemplatesPanel },
   data() {
     return { tabOptions: CARDGEN_TABS };
   },

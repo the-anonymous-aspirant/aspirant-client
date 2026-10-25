@@ -22,7 +22,7 @@
         <div class="review-caption">
           <span class="review-name">{{ c.name }}</span>
           <span class="muted">{{ typeName(c.card_type_id) }} · v{{ c.current_version_no }}</span>
-          <router-link :to="`/admin/cardgen/cards`" class="review-edit" :data-test="`review-edit-${c.id}`">Edit</router-link>
+          <AspButton variant="link" size="sm" type="button" :data-test="`review-edit-${c.id}`" @click="$emit('edit', c.id)">Edit</AspButton>
         </div>
       </li>
     </ul>
@@ -33,14 +33,15 @@
 // system_3 #8634 / #8649: the print-scale card review (c53319). Every card of
 // the deck (or of one type) drawn front or back at 100 %, 50 % or 25 % of its
 // physical size, from the server's resolved faces.
-import { AspEmptyState, AspSegmented } from '@aspirant/design-system';
+import { AspButton, AspEmptyState, AspSegmented } from '@aspirant/design-system';
 import CardFace from '@/components/cardgen/CardFace.vue';
 import { useCardgen } from '@/composables/useCardgen.js';
 import { useCardFaceAssets } from '@/composables/useCardFaceAssets.js';
 
 export default {
   name: 'ReviewPanel',
-  components: { AspEmptyState, AspSegmented, CardFace },
+  components: { AspButton, AspEmptyState, AspSegmented, CardFace },
+  emits: ['edit'],
   setup() {
     const api = useCardgen();
     const assets = useCardFaceAssets();
