@@ -18,14 +18,18 @@ export function useCardgenBlobs() {
    *  frame); bytes of any other type get no URL, so a changed server mapping
    *  can never turn the frame into a script-capable document (#8709). */
   async function urlFor(id, accept = null) {
-    if (urls.has(id)) return { url: urls.get(id), error: null };
+    // The cache is keyed by id AND the accepted prefixes: a second caller with
+    // a different `accept` must not inherit a URL minted under another check
+    // (security note, #8726).
+    const key = `${id}:${accept ? accept.join('|') : ''}`;
+    if (urls.has(key)) return { url: urls.get(key), error: null };
     const { blob, error } = await fetchAssetBlob(id);
     if (!blob) return { url: null, error: error || 'Could not fetch the asset' };
     if (accept && !accept.some((prefix) => blob.type.startsWith(prefix))) {
       return { url: null, error: `The stored bytes are ${blob.type || 'of an unknown type'}, not ${accept.join(' or ')}` };
     }
     const url = URL.createObjectURL(blob);
-    urls.set(id, url);
+    urls.set(key, url);
     return { url, error: null };
   }
 

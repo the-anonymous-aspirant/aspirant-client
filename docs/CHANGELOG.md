@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Card Editor: the Templates section edits templates with version history
+  (system_3 #8634 / #8650). The list shows each template's parent and version;
+  the editor shows every element with where each prop comes from, lets an
+  inherited value be overridden or an own value reset, picks artwork and fonts
+  from the asset store, previews the unsaved draft on the card, saves every
+  change as a new version, and restores any earlier version as another.
 - Card Editor: the Cards section shows the deck at print scale (system_3 #8634 /
   #8649). Every card is drawn from the server's resolved faces at its real size
   (1 mm = 96/25.4 px at 100 %), front or back, at 100, 50 or 25 %, filtered by type,
