@@ -31,6 +31,7 @@
           </template>
         </section>
 
+        <div class="facts">
         <dl class="meta" data-test="viewer-meta">
           <dt>Kind</dt><dd>{{ asset.kind }} ({{ asset.media_type }})</dd>
           <dt>Size</dt><dd>{{ formatBytes(asset.byte_size) }}</dd>
@@ -52,6 +53,7 @@
             </li>
           </ul>
         </section>
+        </div>
       </template>
     </div>
     <template #footer>
@@ -78,6 +80,9 @@
 // system_3 #8634 / #8648: one asset, previewed by kind (raster and SVG through
 // <img>, PDF through the browser's viewer in an <iframe>, fonts through a
 // FontFace sample), its metadata, what references it (#8647), and delete.
+// From the md breakpoint the facts (metadata, "Used by") sit in a column
+// beside the preview, so the usage an admin opens the viewer for before a
+// delete is in view without a scroll (#8818, #8804 O4).
 import { AspButton, AspModal, AspSegmented, AspTooltip } from '@aspirant/design-system';
 import { useCardgen } from '@/composables/useCardgen.js';
 import { useCardgenBlobs, formatBytes, mmAtDpi } from '@/composables/useCardgenBlobs.js';
@@ -178,6 +183,27 @@ export default {
 .viewer {
   display: grid;
   gap: var(--space-4, 16px);
+}
+/* The modal's sized panel starts at 768 px (AspModal); below it the sheet
+   keeps the single column. */
+@media (min-width: 768px) {
+  .viewer {
+    grid-template-columns: minmax(0, 1fr) minmax(14rem, 18rem);
+    align-items: start;
+  }
+  .viewer > .load-error,
+  .viewer > .loading {
+    grid-column: 1 / -1;
+  }
+}
+.facts {
+  display: grid;
+  gap: var(--space-4, 16px);
+  align-content: start;
+  min-width: 0;
+}
+.preview {
+  min-width: 0;
 }
 .preview-controls {
   display: flex;
