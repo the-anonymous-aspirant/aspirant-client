@@ -161,6 +161,9 @@ export default {
         { value: 0.5, label: '50 %' },
       ],
       deleteOpen: false,
+      // Set once the card is deleted; a reload in flight stops at its next await.
+      gone: false,
+      reloadGen: 0,
       deleting: false,
       deleteError: null,
       leaveOpen: false,
@@ -213,14 +216,18 @@ export default {
       await this.reload();
     },
     async reload() {
+      // A reload that is overtaken (another reload, a card change) or whose
+      // card was deleted meanwhile stops at the next await: it neither fetches
+      // the resolved faces of a card that is gone (#8804 O6) nor writes stale
+      // state over a newer read.
+      const gen = (this.reloadGen = (this.reloadGen || 0) + 1);
+      const stale = () => gen !== this.reloadGen || this.gone;
       const { card, error } = await this.api.getCard(this.cardId);
+      if (stale()) return;
       if (error || !card) {
         this.loadError = error || 'Card not found';
         return;
       }
-      this.card = card;
-      this.nameDraft = card.name;
-      this.draft = cloneValues(card.data);
       // The front template comes from the card's own type, read here rather
       // than from the panel's `types` prop: opened from its URL (#8753 req
       // 10) the editor mounts before the panel's list has loaded, and a
@@ -229,6 +236,7 @@ export default {
       let type = this.types.find((t) => t.id === card.card_type_id);
       if (!type) {
         const { types } = await this.api.listTypes();
+        if (stale()) return;
         type = (types || []).find((t) => t.id === card.card_type_id) || null;
       }
       const frontId = card.template_id || type?.front_template_id || null;
@@ -236,7 +244,15 @@ export default {
         this.api.resolveCard(card.id),
         frontId ? this.api.resolveTemplate(frontId) : Promise.resolve({ resolved: null, error: null }),
       ]);
+      if (stale()) return;
+      // Everything the editor shows lands together: the version label, the
+      // drafts and the resolved faces come from one consistent read, so a
+      // restore never shows the new version number over the old face and
+      // inspector (#8804 O1).
       if (rerr) this.loadError = rerr;
+      this.card = card;
+      this.nameDraft = card.name;
+      this.draft = cloneValues(card.data);
       this.resolved = resolved;
       this.templateResolved = tmpl.resolved;
       if (!this.selected && this.front?.elements.length) this.selected = this.front.elements[0].name;
@@ -305,6 +321,7 @@ export default {
         return;
       }
       this.deleteOpen = false;
+      this.gone = true;
       this.$emit('deleted', this.card.id);
     },
     requestBack() {
