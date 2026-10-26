@@ -57,6 +57,12 @@ const ASSETS = [
   { id: 4, sha256: 'b'.repeat(64), original_filename: 'display.ttf', media_type: 'font/ttf', kind: 'font' as const, byte_size: 100, pixel_width: 0, pixel_height: 0, uploaded_by_user_id: 1, content_url: '/api/cardgen/assets/4/content', created_at: '2026-10-24T17:00:00Z' },
 ];
 
+// A real 248x171 JPEG (a gradient, written by PyMuPDF with correct markers;
+// pdfkit refuses hand-made bytes). Its aspect, 1.450, matches the middle rows'
+// 108x74.25 mm box (1.455, no crop) and not the edge rows' 108x77.25 mm box
+// (1.398, a crop), so one export places it both ways (#8819).
+const JPEG_248x171 = Buffer.from('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GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGIiIiIiIiIiIiIiIiIiIiL/8QAFhEBAQEAAAAAAAAAAAAAAAAAEQBQ/9oACAECAQE/AWZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZwP//EABQQAQAAAAAAAAAAAAAAAAAAAJD/2gAIAQEABj8CKr//xAAVEAEBAAAAAAAAAAAAAAAAAAAAAf/aAAgBAQABPyGEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhCEIQhC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', 'base64');
+
 const A4_2x4 = { card_w_mm: 105, card_h_mm: 74.25, radius_mm: 5, bleed_mm: 3, dpi: 300, crop_marks: true, backs: 'mirror', sheet: { page: 'A4', cols: 2, rows: 4, gap_mm: 0, margin_mm: 0, orientation: 'portrait' } };
 const PROFILES = [
   { id: 1, name: 'Prototype A4 2x4', spec: A4_2x4 },
@@ -168,6 +174,33 @@ test.describe('/admin/cardgen/export — print PDF', () => {
     await build(page);
     await expect(page.locator('[data-test="export-pages"]')).toHaveText('1 page');
     await expect(page.locator('[data-test="export-warning-low-dpi"]')).toHaveCount(0);
+  });
+
+  test('a placed JPEG lands in the file as JPEG, once, whether or not its box crops it (#8804 O2)', async ({ page }) => {
+    seedCardgenAssets([{ ...ASSETS[0], original_filename: 'bg.jpg', media_type: 'image/jpeg', pixel_width: 248, pixel_height: 171 }, ASSETS[1]]);
+    await page.route(/\/api\/cardgen\/assets\/1\/content$/, async (route: Route) => {
+      await route.fulfill({ status: 200, headers: { 'Content-Type': 'image/jpeg', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': 'inline' }, body: JPEG_248x171 });
+    });
+    await openExport(page);
+    await chooseProfile(page, 'A4 2x4 fronts only');
+    await chooseCards(page, 'Relationship');
+    await build(page);
+    await expect(page.locator('[data-test="export-pages"]')).toHaveText('1 page');
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('[data-test="export-download"]').click();
+    const path = await (await downloadPromise).path();
+    const bytes = readFileSync(path!);
+    const text = bytes.toString('latin1');
+    // One image object for the eight placements, DCT-encoded at the source's
+    // own pixel size, no alpha mask: the canvas crop used to write one RGBA
+    // PNG per asset per box aspect.
+    expect(text.match(/\/Subtype\s*\/Image/g) || []).toHaveLength(1);
+    expect(text.match(/\/Filter\s*\/DCTDecode/g) || []).toHaveLength(1);
+    expect(text).toMatch(/\/Width 248\b/);
+    expect(text).toMatch(/\/Height 171\b/);
+    expect(text).not.toMatch(/\/SMask/);
+    // The stored bytes themselves, unchanged.
+    expect(bytes.indexOf(JPEG_248x171)).toBeGreaterThan(-1);
   });
 
   test('a card using a store font exports without a fallback warning', async ({ page }) => {

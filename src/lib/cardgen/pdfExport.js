@@ -12,6 +12,14 @@
 // gap between neighbours), text stays inside the trim. Back pages, when the
 // profile says `mirror` and a card has a back, follow each front page with the
 // columns reversed so a long-edge duplex lines up.
+//
+// A `fit: cover` image is placed with pdfmake's `cover`, which clips to the box
+// and scales the asset's own bytes (#8819): a stored JPEG lands in the file as
+// JPEG, however many boxes of whatever aspect it fills. The earlier canvas crop
+// re-encoded every placement as a full-size RGBA PNG (#8804 O2). Assets go in
+// through the document's `images` dictionary under one key per asset, because
+// pdfmake labels every inline data URL afresh and would embed one image object
+// per placement; a keyed image is embedded once and referenced from each box.
 
 import { parseEmphasis, plainText } from './emphasis.js';
 import { dpiOf, mmToPt } from './units.js';
@@ -61,6 +69,10 @@ export function sheetLayout(profile) {
   return { pageW, pageH, cols, rows, gap, bleed, marks, slots, extend, perPage: cols * rows };
 }
 
+function imageKey(assetId) {
+  return `cardgen-asset-${assetId}`;
+}
+
 function fontFor(el, fonts) {
   const id = el.props.font_asset_id;
   if (id && fonts && fonts.has(id)) return { font: `cardgen-font-${id}`, fallback: false };
@@ -71,7 +83,7 @@ function fontFor(el, fonts) {
  * Builds one card's drawing primitives at slot (sx, sy) in mm.
  * `face` is a resolved face; `assets` maps asset id -> { dataUrl, pixelWidth, pixelHeight }.
  */
-function drawFace(face, slot, ext, profile, assets, fonts, warnings, cardName, canvasOps, nodes, crop) {
+function drawFace(face, slot, ext, profile, assets, fonts, warnings, cardName, canvasOps, nodes) {
   const sx = profile.card_w_mm / (face.size?.w_mm || profile.card_w_mm);
   const sy = profile.card_h_mm / (face.size?.h_mm || profile.card_h_mm);
   // The card's own paper: white, extended into the bleed.
@@ -112,14 +124,12 @@ function drawFace(face, slot, ext, profile, assets, fonts, warnings, cardName, c
       }
       const w = mmToPt(bleedBox.w);
       const h = mmToPt(bleedBox.h);
-      const node = { image: a.dataUrl, absolutePosition: { x: mmToPt(absX), y: mmToPt(absY) }, opacity };
+      const node = { image: imageKey(p.asset_id), absolutePosition: { x: mmToPt(absX), y: mmToPt(absY) }, opacity };
       const fit = p.fit || 'cover';
       if (fit === 'cover') {
-        // pdfmake cannot clip, so cover = the caller crops the raster to the
-        // box's aspect (a canvas in the panel) and it is placed at box size.
-        node.image = crop ? crop(p.asset_id, bleedBox.w / bleedBox.h) : a.dataUrl;
-        node.width = w;
-        node.height = h;
+        // pdfmake clips the box and scales the image to cover it, centred: the
+        // same centre crop a canvas would make, without re-encoding the bytes.
+        node.cover = { width: w, height: h, align: 'center', valign: 'center' };
       } else if (fit === 'contain') {
         const s = Math.min(w / a.pixelWidth, h / a.pixelHeight);
         const dw = a.pixelWidth * s;
@@ -259,9 +269,8 @@ export function groupDpiWarnings(warnings, profile, assets = new Map()) {
  * @param {object} profile the export profile spec
  * @param {Map<number, {dataUrl: string, pixelWidth: number, pixelHeight: number}>} assets
  * @param {Set<number>} fonts font asset ids registered with pdfmake
- * @param {(assetId: number, aspect: number) => string} [crop] returns a data URL of the asset cropped to `aspect` (w/h), for `fit: cover`
  */
-export function buildExportDocument(cards, profile, assets = new Map(), fonts = new Set(), crop = null) {
+export function buildExportDocument(cards, profile, assets = new Map(), fonts = new Set()) {
   const layout = sheetLayout(profile);
   const warnings = [];
   const mirror = profile.backs === 'mirror';
@@ -271,7 +280,7 @@ export function buildExportDocument(cards, profile, assets = new Map(), fonts = 
     const front = { canvasOps: [], nodes: [], marks: [] };
     batch.forEach((c, j) => {
       const slot = layout.slots[j];
-      drawFace(c.resolved.front, slot, layout.extend(slot), profile, assets, fonts, warnings, c.name, front.canvasOps, front.nodes, crop);
+      drawFace(c.resolved.front, slot, layout.extend(slot), profile, assets, fonts, warnings, c.name, front.canvasOps, front.nodes);
     });
     if (layout.marks) batch.forEach((c, j) => cropMarks(layout.slots[j], layout.extend(layout.slots[j]), front.marks));
     pages.push(front);
@@ -281,7 +290,7 @@ export function buildExportDocument(cards, profile, assets = new Map(), fonts = 
         if (!c.resolved.back) return;
         const s = layout.slots[j];
         const slot = layout.slots.find((x) => x.row === s.row && x.col === layout.cols - 1 - s.col);
-        drawFace(c.resolved.back, slot, layout.extend(slot), profile, assets, fonts, warnings, `${c.name} (back)`, back.canvasOps, back.nodes, crop);
+        drawFace(c.resolved.back, slot, layout.extend(slot), profile, assets, fonts, warnings, `${c.name} (back)`, back.canvasOps, back.nodes);
       });
       if (layout.marks) batch.forEach((c, j) => {
         if (!c.resolved.back) return;
@@ -301,10 +310,13 @@ export function buildExportDocument(cards, profile, assets = new Map(), fonts = 
     if (pg.marks.length) content.push({ canvas: pg.marks, absolutePosition: { x: 0, y: 0 } });
   });
   if (!content.length) content.push({ text: '' });
+  const images = {};
+  for (const [id, a] of assets) images[imageKey(id)] = a.dataUrl;
   const doc = {
     pageSize: { width: mmToPt(layout.pageW), height: mmToPt(layout.pageH) },
     pageMargins: [0, 0, 0, 0],
     content,
+    images,
     defaultStyle: { font: FALLBACK_FONT },
     info: { title: 'Constellations cards' },
   };
