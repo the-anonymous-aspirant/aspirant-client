@@ -172,8 +172,11 @@ export default {
   /* width is set inline per card (itemStyle) -- min-width: 0 lets this grid
      item, and the flex children below, shrink below their content's
      min-content size instead of the caption forcing the item wider than the
-     card (#8804 O5). */
+     card (#8804 O5). flex: none keeps the item at that width when the row is
+     narrower than one card (a phone at 100 %), where the face itself does not
+     shrink either; the row scrolls sideways as it did before. */
   min-width: 0;
+  flex: none;
 }
 .review-caption {
   display: flex;
