@@ -14,7 +14,7 @@
     <p v-else-if="loading" class="loading" data-test="review-loading">Loading cards…</p>
     <AspEmptyState v-else-if="!cards.length" heading="No cards" message="Create a card in the Cards editor, or pick another type." />
     <ul v-else class="review-grid" data-test="review-grid">
-      <li v-for="c in cards" :key="c.id" class="review-item" :data-test="`review-card-${c.id}`">
+      <li v-for="c in cards" :key="c.id" class="review-item" :style="itemStyle(c)" :data-test="`review-card-${c.id}`">
         <CardFace
           :face="faceOf(c)"
           :zoom="zoom"
@@ -38,7 +38,7 @@
 // physical size, from the server's resolved faces.
 import { AspButton, AspEmptyState, AspSegmented, AspSelect } from '@aspirant/design-system';
 import { useViewport } from '@/composables/useViewport.js';
-import CardFace from '@/components/cardgen/CardFace.vue';
+import CardFace, { PX_PER_MM } from '@/components/cardgen/CardFace.vue';
 import { useCardgen } from '@/composables/useCardgen.js';
 import { useCardFaceAssets } from '@/composables/useCardFaceAssets.js';
 
@@ -89,6 +89,13 @@ export default {
       const r = this.resolved[card.id];
       if (!r) return null;
       return this.side === 'back' ? r.back : r.front;
+    },
+    // O5 (#8804 report 622): fix the grid cell to the card's own width, same
+    // formula as CardFace's faceStyle, so a long caption wraps under the card
+    // instead of widening the cell and breaking the row's wrap count.
+    itemStyle(card) {
+      const wMm = this.faceOf(card)?.size?.w_mm ?? 105;
+      return { width: `${wMm * PX_PER_MM * this.zoom}px` };
     },
     setType(value) {
       this.typeFilter = value;
@@ -162,15 +169,26 @@ export default {
 .review-item {
   display: grid;
   gap: var(--space-2, 8px);
+  /* width is set inline per card (itemStyle) -- min-width: 0 lets this grid
+     item, and the flex children below, shrink below their content's
+     min-content size instead of the caption forcing the item wider than the
+     card (#8804 O5). flex: none keeps the item at that width when the row is
+     narrower than one card (a phone at 100 %), where the face itself does not
+     shrink either; the row scrolls sideways as it did before. */
+  min-width: 0;
+  flex: none;
 }
 .review-caption {
   display: flex;
   gap: var(--space-3, 12px);
   align-items: baseline;
   flex-wrap: wrap;
+  min-width: 0;
 }
 .review-name {
   font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .load-error {
   color: var(--status-negative, currentColor);

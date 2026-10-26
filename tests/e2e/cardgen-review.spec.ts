@@ -39,6 +39,8 @@ const CARDS = [
   { id: 11, slug: 'rel_v', name: 'V', card_type_id: 1, template_id: 5, goal_card_id: null, relationship_type_id: 3, display_order: 1, current_version_no: 2 },
   { id: 12, slug: 'rel_w', name: 'W', card_type_id: 1, template_id: 5, goal_card_id: null, relationship_type_id: 4, display_order: 2, current_version_no: 1 },
   { id: 13, slug: 'act_a', name: 'Act A', card_type_id: 2, template_id: 6, goal_card_id: 7, relationship_type_id: null, display_order: 1, current_version_no: 1 },
+  // #8804 O5: a caption this long used to widen the grid cell past the card.
+  { id: 14, slug: 'rel_ktp', name: 'KITCHEN TABLE POLYAMORY', card_type_id: 1, template_id: 5, goal_card_id: null, relationship_type_id: 5, display_order: 3, current_version_no: 1 },
 ];
 
 const RESOLVED = {
@@ -57,6 +59,10 @@ const RESOLVED = {
   },
   13: {
     front: face([{ name: 'title', props: { kind: 'text', x_mm: 5, y_mm: 5, w_mm: 53, h_mm: 10, text: 'Act A', size_pt: 14 }, provenance: {} }], { w_mm: 63, h_mm: 88, radius_mm: 3 }),
+    back: null,
+  },
+  14: {
+    front: face([{ name: 'title', props: { kind: 'text', x_mm: 5, y_mm: 5, w_mm: 95, h_mm: 10, text: 'KITCHEN TABLE POLYAMORY', size_pt: 14 }, provenance: {} }]),
     back: null,
   },
 };
@@ -101,8 +107,8 @@ test.describe('/admin/cardgen/cards — print-scale review', () => {
 
   test('draws every card at its physical size, hides hidden elements, renders text as text', async ({ page }) => {
     await openReview(page);
-    await expect(page.locator('[data-test="review-grid"] > li')).toHaveCount(3);
-    await expect(page.locator('[data-test="review-count"]')).toHaveText('3 cards');
+    await expect(page.locator('[data-test="review-grid"] > li')).toHaveCount(4);
+    await expect(page.locator('[data-test="review-count"]')).toHaveText('4 cards');
     // Below md the review starts at 50 % (#8753 req 1); the size assertions are at 100 %.
     await page.getByRole('radio', { name: '100 %' }).click();
     const faceV = page.locator('[data-test="card-face-11"]');
@@ -118,6 +124,23 @@ test.describe('/admin/cardgen/cards — print-scale review', () => {
     await expect(faceV.locator('b')).toHaveCount(0);
     await expect(faceV.locator('[data-el="secret"]')).toHaveCount(0);
     await expect(faceV.locator('[data-el="bg"]')).toHaveCSS('background-color', 'rgb(34, 51, 85)');
+  });
+
+  test('a long caption wraps under the card instead of widening its grid cell (#8804 O5)', async ({ page }) => {
+    await openReview(page);
+    await page.getByRole('radio', { name: '100 %' }).click();
+    const item = page.locator('[data-test="review-card-14"]');
+    const face = page.locator('[data-test="card-face-14"]');
+    const [itemBox, faceBox] = await Promise.all([item.boundingBox(), face.boundingBox()]);
+    expect(itemBox).not.toBeNull();
+    expect(faceBox).not.toBeNull();
+    // The grid cell is exactly the card's width -- not wider to fit the caption.
+    expect(Math.abs(itemBox!.width - faceBox!.width)).toBeLessThan(1);
+    expect(Math.abs(faceBox!.width - 105 * PX_PER_MM)).toBeLessThan(1);
+    // The name is still fully present, just wrapped -- nothing was truncated away.
+    await expect(item.locator('.review-name')).toHaveText('KITCHEN TABLE POLYAMORY');
+    const fits = await item.evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
+    expect(fits, 'the caption overflowed the grid cell instead of wrapping').toBe(true);
   });
 
   test('resolves artwork and fonts from the asset store by server id', async ({ page }) => {
