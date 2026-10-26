@@ -80,23 +80,19 @@ function blobToBase64(blob) {
   return blobToDataUrl(blob).then((u) => String(u).split(',')[1]);
 }
 
-/** JPEG passes through (pdfkit reads it natively); every other image the
- *  browser can decode (PNG, SVG, WebP, GIF) is re-encoded as PNG through a
- *  canvas, capped at `targetPx` on its longer side, so pdfkit only ever sees a
- *  clean PNG. The SVG goes through an <img>, the same no-document-context path
- *  the viewer uses. */
+/** JPEG passes through untouched (pdfkit embeds the bytes as they are, so the
+ *  file carries the stored JPEG, #8819); every other image the browser can
+ *  decode (PNG, SVG, WebP, GIF) is re-encoded as PNG through a canvas, capped
+ *  at `targetPx` on its longer side, so pdfkit only ever sees a clean PNG. The
+ *  SVG goes through an <img>, the same no-document-context path the viewer
+ *  uses. A `fit: cover` box is clipped by pdfmake at draw time, so no crop is
+ *  made here. */
 async function imageForPdf(blob, mediaType, targetPx) {
   const img = await loadImage(blob);
   const nw = img.naturalWidth || targetPx;
   const nh = img.naturalHeight || targetPx;
-  // The decoded pixels are kept on a canvas: an <img> may drop its decode and
-  // re-fetch from a URL that is gone by the time a crop is drawn.
   if (mediaType === 'image/jpeg') {
-    const source = document.createElement('canvas');
-    source.width = nw;
-    source.height = nh;
-    source.getContext('2d').drawImage(img, 0, 0);
-    return { dataUrl: await blobToDataUrl(blob), pixelWidth: nw, pixelHeight: nh, source, crops: new Map() };
+    return { dataUrl: await blobToDataUrl(blob), pixelWidth: nw, pixelHeight: nh };
   }
   let w = nw;
   let h = nh;
@@ -109,31 +105,7 @@ async function imageForPdf(blob, mediaType, targetPx) {
   canvas.width = w;
   canvas.height = h;
   canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-  return { dataUrl: canvas.toDataURL('image/png'), pixelWidth: nw, pixelHeight: nh, source: canvas, crops: new Map() };
-}
-
-/** The centre crop of a decoded asset at aspect w/h, as a PNG data URL,
- *  cached per asset and aspect (fit: cover, which pdfmake cannot clip). */
-function cropToAspect(asset, aspect) {
-  if (!asset || !asset.source || !Number.isFinite(aspect) || aspect <= 0) return asset ? asset.dataUrl : null;
-  const key = Math.round(aspect * 1000);
-  if (asset.crops.has(key)) return asset.crops.get(key);
-  const img = asset.source;
-  const pw = img.width;
-  const ph = img.height;
-  let sw = pw;
-  let sh = ph;
-  if (pw / ph > aspect) sw = Math.max(1, Math.round(ph * aspect));
-  else sh = Math.max(1, Math.round(pw / aspect));
-  const sx = Math.round((pw - sw) / 2);
-  const sy = Math.round((ph - sh) / 2);
-  const canvas = document.createElement('canvas');
-  canvas.width = sw;
-  canvas.height = sh;
-  canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-  const url = canvas.toDataURL('image/png');
-  asset.crops.set(key, url);
-  return url;
+  return { dataUrl: canvas.toDataURL('image/png'), pixelWidth: nw, pixelHeight: nh };
 }
 
 function loadImage(blob) {
@@ -214,7 +186,7 @@ export default {
         });
         const spec = this.profile.spec;
         const { assets, fonts } = await this.collectAssets(items, spec);
-        const built = buildExportDocument(items, spec, assets, fonts, (id, aspect) => cropToAspect(assets.get(id), aspect));
+        const built = buildExportDocument(items, spec, assets, fonts);
         const pdf = pdfMake.createPdf(built.doc);
         // pdfmake's getBuffer never settles when the underlying stream errors
         // (a font or image pdfkit cannot read); race it against the error.
