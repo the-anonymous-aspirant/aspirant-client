@@ -142,7 +142,19 @@ test.describe('/admin/cardgen/cards — card editor with version history', () =>
     await expect(page.locator('[data-test="card-version"]')).toContainText('v2');
     await expect(page.locator('[data-test="version-1"]')).toBeVisible();
     await expect(page.locator('[data-test="version-2"] [data-test="version-current"]')).toBeVisible();
+    // #8804 O1: the version label and the inspector change together. Hold the
+    // resolved read that follows the restore: until it lands the editor still
+    // shows v2 with the v2 text, not v3 over the old face.
+    let release: () => void = () => {};
+    const held = new Promise<void>((r) => { release = r; });
+    let holds = 0;
+    await page.route(/\/api\/cardgen\/cards\/13\/resolved$/, async (route: Route) => { holds += 1; await held; await route.fallback(); });
     await page.locator('[data-test="restore-1"]').click();
+    await expect.poll(() => holds).toBe(1);
+    await page.waitForTimeout(200);
+    await expect(page.locator('[data-test="card-version"]')).toContainText('v2');
+    await expect(page.locator('[data-test="prop-text"] textarea')).toHaveValue('ACT A, SECOND');
+    release();
     await expect(page.locator('[data-test="card-version"]')).toContainText('v3');
     await expect(page.locator('[data-test="version-3"]')).toContainText('restored from v1');
     await expect(page.locator('[data-test="prop-text"] textarea')).toHaveValue('ACT A');
@@ -157,5 +169,40 @@ test.describe('/admin/cardgen/cards — card editor with version history', () =>
     await expect(page.locator('[data-test="card-editor"]')).toHaveCount(0);
     await expect(page.locator('[data-test="review-grid"] > li')).toHaveCount(1);
     await expect(page.locator('[data-test="review-card-11"]')).toHaveCount(0);
+  });
+
+  test('a delete while a save\'s reload is in flight does not fetch the deleted card\'s faces (#8804 O6)', async ({ page }) => {
+    // The walk saw GET /cards/110/resolved 404 right after the DELETE: a reload
+    // whose getCard had returned before the delete fired its resolveCard after
+    // it. Stage that by holding the getCard a save issues, deleting meanwhile.
+    let release: () => void = () => {};
+    const held = new Promise<void>((r) => { release = r; });
+    let holds = 0;
+    const after: string[] = [];
+    let deleted = false;
+    page.on('response', (r) => { if (r.request().method() === 'DELETE') deleted = true; });
+    page.on('request', (r) => { if (deleted && /\/api\/cardgen\/cards\/13\/resolved$/.test(r.url())) after.push(`${r.method()} ${new URL(r.url()).pathname}`); });
+    await openEditor(page, 13);
+    await page.locator('[data-test="card-element-title"]').click();
+    await page.locator('[data-test="prop-text"] textarea').fill('ACT A, GOING');
+    await page.route(/\/api\/cardgen\/cards\/13$/, async (route: Route) => {
+      if (route.request().method() !== 'GET') { await route.fallback(); return; }
+      // The card as the server knew it before the delete, delivered after it.
+      const c = cardgenSeed.cards.find((x) => x.id === 13)!;
+      const body = JSON.stringify({ card: { ...c, data: c.data || { values: {} } } });
+      holds += 1;
+      await held;
+      await route.fulfill({ status: 200, contentType: 'application/json', body });
+    });
+    await page.locator('[data-test="card-save-version"]').click();
+    await expect.poll(() => holds).toBe(1);
+    await page.locator('[data-test="card-delete"]').click();
+    await page.locator('[data-test="card-delete-confirm"]').click();
+    await expect(page.locator('[data-test="card-editor"]')).toHaveCount(0);
+    expect(deleted).toBe(true);
+    release();
+    await expect(page.locator('[data-test="review-grid"] > li')).toHaveCount(1);
+    await page.waitForTimeout(300);
+    expect(after).toEqual([]);
   });
 });
