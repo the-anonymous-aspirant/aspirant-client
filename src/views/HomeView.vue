@@ -23,24 +23,20 @@
       console.error('Error loading aspiring hand image:', error);
     }
 
+    // No localhost fallback (system_3 #9132): on the deployed site it asked
+    // every visitor's browser for http://localhost:8081, which a content
+    // policy must then either allow or report. Local development reaches the
+    // server through the dev proxy at the same /api/health path.
     try {
       const response = await axios.get('/api/health');
       status.value = response.data.status;
       version.value = response.data.commit;
       source.value = 'Production';
     } catch (error) {
-      console.error('Error with server, trying localhost', error);
-      try {
-        const response = await axios.get('http://localhost:8081/health');
-        status.value = response.data.status;
-        version.value = response.data.commit.substring(0, 7);
-        source.value = 'Development';
-      } catch (localhostError) {
-        console.error('Error with localhost', localhostError);
-        status.value = 'Error';
-        version.value = 'Error';
-        source.value = 'None';
-      }
+      console.error('Error with server', error);
+      status.value = 'Error';
+      version.value = 'Error';
+      source.value = 'None';
     }
   });
 

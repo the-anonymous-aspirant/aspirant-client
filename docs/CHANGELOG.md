@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Edge: the report-only CSP follows the location that serves a request, not
+  the spelling of its URI (system_3 #9132). It was keyed on the raw
+  `$request_uri`, but nginx decodes `%2f` and resolves `..` and `//` before
+  choosing a location: `/admin/penpot/..%2f..%2flogin` reached the SPA with no
+  policy, and `//admin/penpot/` reached Penpot with the SPA's. Now only the SPA's
+  `location /` and the invitation page set `$csp_surface spa`; everything else
+  gets no report-only header. `scripts/csp-scope-probe.sh` (`npm run
+  guard:csp-scope`, needs Docker) checks the canonical, `..%2f` and `//`
+  spellings against a served build or a live site.
+- Edge: `style-src` drops `'unsafe-inline'` (#9132). The About page's colour
+  swatches are classes, and the rulebook and birthday invitation pages link their
+  CSS from a file beside them. The pages render pixel-identically. A scan of the
+  built bundle finds no other parser-inserted style.
+- Home: no `http://localhost:8081/health` fallback (#9132). A failed
+  `/api/health` shows `Error`; local development reaches the server through
+  the dev proxy at the same path.
+
 - Edge: a report-only `Content-Security-Policy-Report-Only` header on the SPA
   and the static pages nginx serves (system_3 #9106, operator-approved on #7285).
   The browser blocks nothing under it and logs to the console what an enforcing

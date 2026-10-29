@@ -48,10 +48,12 @@ for (const page of pages) {
 }
 
 const conf = readFileSync(confPath, 'utf8')
-const block = conf.match(/map \$request_uri \$csp_report_only \{([\s\S]*?)\n\}/)
-if (!block) fail(`ERROR: no \`map $request_uri $csp_report_only\` block in ${confPath}`)
-const policy = block[1].match(/^\s*default\s+"([^"]*)";/m)
-if (!policy) fail(`ERROR: the $csp_report_only map in ${confPath} has no default policy`)
+// The map keys on the serving location's $csp_surface since #9132; the SPA's
+// policy is its `spa` entry.
+const block = conf.match(/map \$csp_surface \$csp_report_only \{([\s\S]*?)\n\}/)
+if (!block) fail(`ERROR: no \`map $csp_surface $csp_report_only\` block in ${confPath}`)
+const policy = block[1].match(/^\s*spa\s+"([^"]*)";/m)
+if (!policy) fail(`ERROR: the $csp_report_only map in ${confPath} has no \`spa\` policy`)
 const have = new Set([...policy[1].matchAll(/'(sha256-[A-Za-z0-9+/=]+)'/g)].map((m) => m[1]))
 
 const errors = [

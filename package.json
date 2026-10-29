@@ -10,7 +10,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "guard:node-modules": "bash scripts/check-no-tracked-node-modules.sh",
-    "guard:csp-hashes": "node scripts/check-csp-hashes.mjs"
+    "guard:csp-hashes": "node scripts/check-csp-hashes.mjs",
+    "guard:csp-scope": "sh scripts/csp-scope-probe.sh --docker"
   },
   "dependencies": {
     "@aspirant/design-system": "file:../aspirant-design-system",
