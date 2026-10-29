@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Edge: a report-only `Content-Security-Policy-Report-Only` header on the SPA
+  and the static pages nginx serves (system_3 #9106, operator-approved on #7285).
+  The browser blocks nothing under it and logs to the console what an enforcing
+  policy would refuse; the enforcing header (framing, base-uri, object-src) is
+  unchanged. The allowlist was built from the deployed bundle and the served
+  pages: `api.qrserver.com` for the QR images, `raw.githubusercontent.com` for
+  RemarkablePdfs' generator, `blob:` for assets, PDF previews and sounds read
+  through `/api/fetch-object`, two inline scripts by hash and inline styles. It
+  sends no reports anywhere. The proxied admin apps (Penpot, Histoire, the
+  explorer, system_3, browser-flows) get no report-only header, since each needs
+  its own allowlist. `scripts/check-csp-hashes.mjs` fails the image build when a
+  served page's inline script no longer matches its hash.
 - Card Editor: history rows and the asset viewer name the author (system_3
   #8758). The version and asset DTOs carry `created_by_name` / `uploaded_by_name`
   (the user's display name, `system` for the seeds), so a row reads `3 h ago · Anna`

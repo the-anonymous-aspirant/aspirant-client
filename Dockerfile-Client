@@ -88,6 +88,9 @@ RUN npm ci
 
 COPY . .
 RUN npm run build
+# The report-only CSP in default.conf allows the served pages' inline scripts
+# by hash; fail the image build if the two have drifted (system_3 #9106).
+RUN node scripts/check-csp-hashes.mjs dist default.conf
 
 
 # --- runtime ----------------------------------------------------------------
