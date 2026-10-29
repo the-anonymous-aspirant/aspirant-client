@@ -1,0 +1,85 @@
+/* Moved out of the page's inline <style> so the site's CSP can drop
+   style-src 'unsafe-inline' (system_3 #9132). Content unchanged. */
+/* Standalone page — no app chrome, no shared stylesheet. Everything the
+   page needs is in the page and this file beside it, so it renders
+   identically whether or not the SPA assets are reachable. */
+:root { color-scheme: dark; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+/* Full-viewport black stage. Uses 100dvh so mobile browser chrome
+   (address bar) does not leave a white/letterbox strip at the bottom. */
+.stage {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+}
+
+/* contain = whole frame visible on any aspect ratio, letterboxed on black.
+   The video itself is portrait (648x1152); contain keeps it fully visible
+   on landscape desktop and fills the height on portrait phones. */
+.stage video {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  background: #000;
+  display: block;
+}
+
+/* Subtle "tap for sound" affordance. Hidden by default; revealed only
+   when the video is muted AND an audio track is detected (see script).
+   Sits bottom-centre, low-contrast, non-intrusive. */
+.sound-hint {
+  position: fixed;
+  left: 50%;
+  bottom: max(1.5rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.55em 1.1em;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.82);
+  font: 500 0.85rem/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: 0.02em;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.4s ease;
+}
+.sound-hint.show { display: inline-flex; }
+.sound-hint svg { width: 1.05em; height: 1.05em; display: block; }
+
+/* Tap-to-play fallback, shown only if the browser blocks muted autoplay
+   (rare, but some locked-down mobile configs do). Full-screen invisible
+   catcher with a centred play glyph. */
+.play-fallback {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  cursor: pointer;
+  z-index: 2;
+}
+.play-fallback.show { display: flex; }
+.play-fallback svg { width: 84px; height: 84px; opacity: 0.85; }

@@ -4,73 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Constellations — Rulebook</title>
-  <style>
-    :root {
-      --bg: #0b1020;
-      --panel: #131a33;
-      --ink: #f8fafc;
-      --muted: #94a3b8;
-      --line: #283252;
-      --accent: #9aa6ff;
-      --p: #f2a4c8;   /* Partner  */
-      --d: #f6c86b;   /* Date     */
-      --fp: #7ee0c0;  /* F+       */
-      --f: #79b8f2;   /* Friend   */
-      --a: #c79cf0;   /* Affair   */
-      --r: #f08a8a;   /* Rejection*/
-    }
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      margin: 0;
-      background: radial-gradient(circle at 50% -10%, #131a33 0%, #0b1020 60%);
-      color: var(--ink);
-      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
-    }
-    .wrap { max-width: 46rem; margin: 0 auto; padding: 3.5rem 1.5rem 5rem; }
-    header { text-align: center; border-bottom: 1px solid var(--line); padding-bottom: 2rem; margin-bottom: 2.5rem; }
-    .title {
-      font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      letter-spacing: 0.22em; text-transform: uppercase;
-      font-size: clamp(1.5rem, 5vw, 2.2rem); font-weight: 700; margin: 0;
-    }
-    .title sup { font-size: 0.5em; vertical-align: super; color: var(--muted); }
-    .tagline { color: var(--muted); font-style: italic; margin: 0.75rem auto 0; max-width: 34rem; }
-    h2 {
-      font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      font-size: 0.82rem; letter-spacing: 0.14em; text-transform: uppercase;
-      color: var(--accent); font-weight: 600;
-      margin: 2.75rem 0 0.75rem; padding-top: 1rem; border-top: 1px solid var(--line);
-    }
-    h2:first-of-type { border-top: 0; padding-top: 0; }
-    p { margin: 0 0 1rem; }
-    ul, ol { margin: 0 0 1rem; padding-left: 1.4rem; }
-    li { margin: 0.3rem 0; }
-    ol ol, ul ul { margin: 0.3rem 0; }
-    strong { color: var(--ink); }
-    .mode { color: var(--accent); font-weight: 600; }
-    .types { list-style: none; padding: 0; display: grid; gap: 0.5rem; }
-    .types li { display: flex; align-items: baseline; gap: 0.75rem; }
-    .types .key {
-      font-family: ui-monospace, monospace; font-weight: 700;
-      min-width: 2.6rem; text-align: center;
-      padding: 0.15rem 0.4rem; border-radius: 6px;
-      background: rgba(255,255,255,0.04); border: 1px solid var(--line);
-    }
-    .k-p { color: var(--p); } .k-d { color: var(--d); } .k-fp { color: var(--fp); }
-    .k-f { color: var(--f); } .k-a { color: var(--a); } .k-r { color: var(--r); }
-    .note { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent);
-      border-radius: 8px; padding: 0.85rem 1.1rem; margin: 1.25rem 0; color: var(--muted); }
-    .note strong { color: var(--ink); }
-    .creators { color: var(--muted); }
-    .creators a { color: var(--accent); }
-    footer { margin-top: 3.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line);
-      text-align: center; color: var(--muted); font-size: 0.85rem;
-      font-family: ui-monospace, monospace; }
-    a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
-  </style>
+  <link rel="stylesheet" href="constellations-rulebook.css">
 </head>
 <body>
   <div class="wrap">
@@ -109,7 +43,7 @@
       <li><span class="key k-r">R</span><span><strong>Rejection</strong></span></li>
     </ul>
 
-    <h3 style="font-size:0.95rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-top:1.5rem;">Creating connections</h3>
+    <h3 class="subhead">Creating connections</h3>
     <p>Take the Connection card of your choice and offer it to another player. That player responds by offering a Connection card of their own. Connection cards can be exchanged either:</p>
     <ul>
       <li><strong>Face-up:</strong> player 1 offers their Connection card openly, so player 2, and every other player, sees it before offering a card in return.</li>
