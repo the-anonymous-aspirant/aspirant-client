@@ -330,9 +330,11 @@
 </script>
 
 <style scoped>
+  /* The page keeps the page's ink; each --surface-card block below declares
+     its own (#9175). On-dark ink at the root put the crumbs and empty states
+     at ~1.2:1 on the light page. */
   .run-forensic-view {
     padding: 1.5rem;
-    color: var(--text-on-dark, #e0e0e0);
   }
   .crumb {
     color: var(--text-muted, #9e9e9e);
@@ -346,9 +348,9 @@
   .crumb a:hover {
     text-decoration: underline;
   }
+  /* Inherits .crumb's muted ink; re-applying --text-muted here mixed it twice. */
   .crumb-sep {
     margin: 0 0.4rem;
-    color: var(--text-muted, #9e9e9e);
   }
   h1 {
     color: var(--brand-primary, #ffb300);
@@ -386,6 +388,7 @@
   }
   .meta-cell {
     background: var(--surface-card, #424242);
+    color: var(--text-on-dark);
     border: 1px solid rgba(255, 179, 0, 0.25);
     padding: 0.5rem 0.75rem;
     border-radius: 4px;
@@ -427,6 +430,7 @@
 
   .output-block {
     background: var(--surface-card, #424242);
+    color: var(--text-on-dark);
     border: 1px solid rgba(255, 179, 0, 0.25);
     border-radius: 4px;
     padding: 0.6rem 0.9rem;
@@ -442,6 +446,7 @@
 
   .step {
     background: var(--surface-card, #424242);
+    color: var(--text-on-dark);
     border: 1px solid rgba(255, 179, 0, 0.25);
     border-radius: 4px;
     padding: 0.75rem 0.9rem;
