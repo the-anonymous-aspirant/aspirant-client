@@ -267,6 +267,8 @@
   }
   .matrix-card {
     background: var(--surface-card);
+    /* The card is dark in both themes, so it declares its ink (#9175). */
+    color: var(--text-on-dark);
     border: 1px solid var(--brand-primary);
     border-radius: 8px;
     padding: 1rem 1.25rem;
@@ -286,7 +288,6 @@
   }
   th {
     font-weight: 600;
-    color: #424242;
   }
   th.flow-col {
     min-width: 14rem;
