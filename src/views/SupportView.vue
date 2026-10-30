@@ -293,7 +293,7 @@ onMounted(async () => {
   font-style: italic;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .support {
     padding: var(--space-md) var(--space-sm);
   }

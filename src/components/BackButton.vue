@@ -108,7 +108,7 @@ export default {
 }
 
 /* Ensure it doesn't interfere with mobile menu */
-@media (max-width: 768px) {
+@media (max-width: 767.98px) {
   .back-button-container {
     z-index: 1000;
   }

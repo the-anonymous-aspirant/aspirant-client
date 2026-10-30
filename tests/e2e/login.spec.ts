@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page, type Route } from '@playwright/test';
-import { seedAdminSession, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import { seedAdminSession, dismissMobileSidebarIfPresent, openMobileSidebarIfPresent } from './helpers/mockBackend';
 
 /** Covers system_3 #3342: a dedicated /login page for visitors bounced off a
  *  gated surface (nginx @browser_flows_login / @penpot_login), landing on a
@@ -220,12 +220,12 @@ test.describe('Dedicated /login page', () => {
         // by the app's own rules, and measures a page that never exists.
         await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
         await page.goto(path);
-        // The sidebar mount is only on screen while the sidebar is: on mobile
-        // the strip starts as an overlay that dismissMobileSidebarIfPresent
-        // closes, which would leave this measuring a form nobody can see. The
-        // /login mount is a page and needs the dismissal, because there the
-        // overlay covers the form instead.
-        if (container !== '.login-card') await dismissMobileSidebarIfPresent(page);
+        // The sidebar mount is only on screen while the sidebar is: on a phone
+        // the drawer starts closed (#9190), so the strip is opened the way a
+        // user opens it. The /login mount is a page, and the drawer must stay
+        // out of its way.
+        if (container === '.login-card') await openMobileSidebarIfPresent(page);
+        else await dismissMobileSidebarIfPresent(page);
         await expect
           .poll(() => page.evaluate(() => document.documentElement.getAttribute('data-theme')))
           .toBe(theme);
