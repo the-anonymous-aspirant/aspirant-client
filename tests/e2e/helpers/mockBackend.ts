@@ -714,11 +714,14 @@ export async function seedTrustedSessionAs(page: Page, username: string): Promis
  *  layer above the sidebar and stays clickable even when it is shown. All
  *  three are on the DS sticky layer, below --z-index-modal (#8407). A no-op
  *  on viewports where the toggle never renders (desktop). */
+// Closes the mobile nav drawer if it is open. Since #9190 the drawer starts
+// closed on a phone, so this is normally a no-op; it acts on the overlay, not
+// the toggle, because clicking the toggle on a closed drawer would OPEN it.
 export async function dismissMobileSidebarIfPresent(page: Page): Promise<void> {
-  const toggle = page.locator('.mobile-menu-toggle');
-  if (await toggle.isVisible().catch(() => false)) {
-    await toggle.click();
-    await page.locator('.mobile-overlay').waitFor({ state: 'hidden', timeout: 5_000 });
+  const overlay = page.locator('.mobile-overlay');
+  if (await overlay.isVisible().catch(() => false)) {
+    await page.locator('.mobile-menu-toggle').click();
+    await overlay.waitFor({ state: 'hidden', timeout: 5_000 });
   }
 }
 

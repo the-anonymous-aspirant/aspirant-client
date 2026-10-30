@@ -23,9 +23,16 @@ export const toggleDebugMode = () => (debugMode.value = !debugMode.value);
 export const authVersion = ref(0);
 export const bumpAuthVersion = () => authVersion.value++;
 
+// The shell's one breakpoint (§3.119, #9190): a phone is under 768px, a
+// desktop 768px and up. CSS reads the same bound as max-width: 767.98px.
+export const SHELL_DESKTOP_MIN = 768;
+const isMobileWidth = (width) => width < SHELL_DESKTOP_MIN;
+
 export const collapsed = ref(false);
-export const isMobile = ref(false);
-export const sidebarHidden = ref(false);
+// Both start from the width at load, so a phone opens with the drawer closed
+// from the first frame (#9105 B1-1: it opened over a scrim on every route).
+export const isMobile = ref(isMobileWidth(window.innerWidth));
+export const sidebarHidden = ref(isMobile.value);
 
 // Track last known width to distinguish keyboard resize (height-only) from real resize
 let lastKnownWidth = window.innerWidth;
@@ -37,7 +44,7 @@ export const checkMobile = () => {
   lastKnownWidth = currentWidth;
 
   const wasMobile = isMobile.value;
-  isMobile.value = currentWidth <= 768;
+  isMobile.value = isMobileWidth(currentWidth);
 
   // Only hide sidebar when transitioning to mobile via a real width change,
   // not when the keyboard opens (height-only resize)
