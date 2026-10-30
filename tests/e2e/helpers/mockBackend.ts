@@ -725,6 +725,18 @@ export async function dismissMobileSidebarIfPresent(page: Page): Promise<void> {
   }
 }
 
+// Opens the mobile nav drawer if it is closed, the way a user does: one tap on
+// the menu toggle. A test of something IN the sidebar (the login strip, Logout)
+// needs this on a phone, where the drawer starts closed (#9190).
+export async function openMobileSidebarIfPresent(page: Page): Promise<void> {
+  const toggle = page.locator('.mobile-menu-toggle');
+  const overlay = page.locator('.mobile-overlay');
+  if ((await toggle.isVisible().catch(() => false)) && !(await overlay.isVisible().catch(() => false))) {
+    await toggle.click();
+    await overlay.waitFor({ state: 'visible', timeout: 5_000 });
+  }
+}
+
 // ---------- /api/browser-flows read+trigger mocks (#1445 — /admin/browser-flows) ----------
 
 export interface BrowserFlowSeed {

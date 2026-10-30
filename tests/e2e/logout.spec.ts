@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
-import { seedAdminSession } from './helpers/mockBackend';
+import { openMobileSidebarIfPresent, seedAdminSession } from './helpers/mockBackend';
 
 /** Covers system_3 #2589 / #2591: logging out has to reach the server.
  *
@@ -45,6 +45,8 @@ async function captureLogout(page: Page, opts: { fail?: boolean } = {}): Promise
 
 async function clickLogout(page: Page): Promise<void> {
   await page.goto('/');
+  // Logout lives in the sidebar; on a phone the drawer starts closed (#9190).
+  await openMobileSidebarIfPresent(page);
   const logout = page.getByRole('button', { name: 'Logout' });
   await logout.waitFor({ state: 'visible' });
   await logout.click();
