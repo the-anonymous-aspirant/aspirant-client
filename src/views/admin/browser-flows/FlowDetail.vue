@@ -391,8 +391,12 @@
     gap: 1rem;
     margin-bottom: 1rem;
   }
+  /* Every --surface-card block below declares its ink (#9175, the #4483
+     family): the card is dark in both themes, so the page's ink, and
+     --text-muted derived from it, would sit at 1.00:1 on it in the light theme. */
   .kpi-card {
     background: var(--surface-card, #ffffff);
+    color: var(--text-on-dark);
     border: 1px solid var(--brand-primary, #ffb300);
     border-radius: 8px;
     padding: 0.75rem 1rem;
@@ -407,7 +411,6 @@
   .kpi-value {
     font-size: 1.8rem;
     font-weight: 700;
-    color: #ffffff;
     margin: 0.25rem 0;
   }
   .kpi-value-small {
@@ -432,6 +435,7 @@
 
   .sparkline-section {
     background: var(--surface-card, #ffffff);
+    color: var(--text-on-dark);
     border: 1px solid var(--brand-primary, #ffb300);
     border-radius: 8px;
     padding: 1rem;
@@ -447,6 +451,7 @@
   }
   .schema-block {
     background: var(--surface-card, #ffffff);
+    color: var(--text-on-dark);
     border: 1px solid var(--brand-primary, #ffb300);
     border-radius: 8px;
     padding: 0.75rem 1rem;
@@ -455,7 +460,6 @@
   .schema-json {
     margin: 0;
     font-size: 0.8rem;
-    color: #ffffff;
     white-space: pre;
     font-family: ui-monospace, SFMono-Regular, monospace;
   }
@@ -463,6 +467,7 @@
   .runs-section {
     margin-top: 1rem;
     background: var(--surface-card, #ffffff);
+    color: var(--text-on-dark);
     border: 1px solid var(--brand-primary, #ffb300);
     border-radius: 8px;
     padding: 1rem;
