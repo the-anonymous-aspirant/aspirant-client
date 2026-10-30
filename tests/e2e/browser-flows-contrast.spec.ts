@@ -121,12 +121,15 @@ for (const theme of ['light', 'dark'] as const) {
     test('flow detail: KPI, schema and run-history text clear AA on their cards', async ({ page }) => {
       await open(page, `/admin/browser-flows/${FLOW.id}`);
       const runs = page.locator('[data-test="runs-table"]');
+      // AspDataTable renders cards at narrow widths on DS main: <thead> hidden,
+      // each value labelled by .data-table__card-label. Measure whichever shows.
+      const runsHeader = runs.locator('th:visible, .data-table__card-label:visible', { hasText: 'Rows' });
       await expectAA([
         ['KPI label', page.locator('[data-test="kpi-total-runs"] .kpi-label')],
         ['KPI value', page.locator('[data-test="kpi-total-runs"] .kpi-value')],
         ['KPI note', page.locator('[data-test="kpi-total-runs"] .kpi-note')],
         ['input schema', page.locator('[data-test="input-schema"]')],
-        ['run-history header', runs.locator('th', { hasText: 'Started' })],
+        ['run-history header', runsHeader],
         ['run-history rows cell', runs.locator('td', { hasText: '12' })],
       ], theme);
     });
