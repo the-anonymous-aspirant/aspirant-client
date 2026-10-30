@@ -10,15 +10,13 @@
           </div>
         </div>
         
-        <!-- Mobile overlay. Deliberately NOT wired to v-overlay-history (#4172):
-             the nav drawer is app chrome that is OPEN BY DEFAULT on a fresh
-             mobile load (checkMobile only auto-hides on a width transition, not
-             a fresh mount), so a mount-time history push would fire on every
-             page load, and there is no clean way to make a tap-opened drawer and
-             a load-open drawer behave the same under Back. Back-gesture handling
-             here targets user-opened content overlays (dialogs, modals, side
-             panels, popups); the nav-drawer's back ergonomics are a separate
-             design question (see task #4172 notes). -->
+        <!-- Mobile overlay. Not wired to v-overlay-history (#4172). The nav
+             drawer starts CLOSED on a phone and opens only from the toggle
+             (#9190), so the load-open case that made a mount-time history push
+             unworkable is gone; the nav-drawer's back ergonomics remain a
+             separate design question (see task #4172 notes). Back-gesture
+             handling here targets user-opened content overlays (dialogs,
+             modals, side panels, popups). -->
         <div
           v-if="isMobile && !sidebarHidden"
           class="mobile-overlay"
@@ -147,7 +145,7 @@
   }
 
   /* Mobile styles */
-  @media (max-width: 768px) {
+  @media (max-width: 767.98px) {
     .mobile-menu-toggle {
       display: block;
     }

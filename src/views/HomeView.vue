@@ -137,7 +137,7 @@
     filter: invert(1);
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 767.98px) {
     .home {
       padding: var(--space-lg) var(--space-md);
       padding-top: 70px;

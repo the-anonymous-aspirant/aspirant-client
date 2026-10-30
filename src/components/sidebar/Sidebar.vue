@@ -404,7 +404,7 @@
   }
 
   /* Mobile styles */
-  @media (max-width: 768px) {
+  @media (max-width: 767.98px) {
     .sidebar {
       transform: translateX(-100%);
       transition: transform var(--transition-moderate);
