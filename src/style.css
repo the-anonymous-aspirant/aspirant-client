@@ -20,13 +20,24 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* A link takes its surface's ink (§3.121, §3.18, §3.72; #9191). On the page:
+   the calm accent-into-text mix AspContent uses, underlined so it never reads
+   as plain text. On a dark setter (an AspCard, or prose inside the sidebar):
+   the light accent. Hover keeps the ink and thickens the underline; amber is
+   action and active (§1.3), never a link hover. Nav items are router-links
+   with no <p> ancestor and style themselves (SidebarLink). */
 a {
   font-weight: 500;
-  color: var(--brand-accent);
-  text-decoration: inherit;
+  color: color-mix(in srgb, var(--brand-accent-800) 30%, currentColor);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+.card a,
+.sidebar p a {
+  color: var(--brand-accent-300);
 }
 a:hover {
-  color: var(--brand-primary);
+  text-decoration-thickness: 2px;
 }
 
 body {

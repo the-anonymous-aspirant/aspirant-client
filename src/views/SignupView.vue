@@ -262,9 +262,11 @@
     color: var(--feedback-success-text);
   }
 
+  /* Link ink from the global rule (#9191); a 24px standalone target (§3.99). */
   .next {
     display: inline-block;
     margin-top: var(--space-sm);
-    color: var(--text-body);
+    min-height: 24px;
+    line-height: 24px;
   }
 </style>
