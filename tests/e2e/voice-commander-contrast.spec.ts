@@ -93,7 +93,12 @@ for (const theme of ['light', 'dark'] as const) {
       // 1.00:1 in light (#424242 on #424242). Named individually so a failure
       // says which card regressed.
       const targets: Array<[string, Locator]> = [
-        ['messages header (Transcription)', page.getByRole('columnheader', { name: 'Transcription' })],
+        // DS main draws AspDataTable as cards below 640px: no <th>, each value
+        // labelled by .data-table__card-label. Measure whichever shows.
+        [
+          'messages header (Transcription)',
+          page.locator('th:visible, .data-table__card-label:visible', { hasText: 'Transcription' }),
+        ],
         ['tasks header (Title)', page.locator('.tasks-table th', { hasText: 'Title' })],
         ['note date', page.locator('.note-date')],
       ];

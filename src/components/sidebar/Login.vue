@@ -29,6 +29,7 @@
             name="username"
             autocomplete="username"
             required
+            :surface="fieldSurface"
           />
         </div>
         <div class="form-group">
@@ -39,6 +40,7 @@
             name="password"
             autocomplete="current-password"
             required
+            :surface="fieldSurface"
           />
         </div>
         <AspButton type="submit" class="login-button">Login</AspButton>
@@ -84,6 +86,13 @@
       loggedIn: {
         type: Boolean,
         required: true,
+      },
+      // The setter the fields resolve against (DS AspInput `surface`, §3.121).
+      // The sidebar is a hand-rolled dark surface the DS cannot see, so its
+      // mounts pass 'card'; /login leaves it 'auto' (#9191).
+      fieldSurface: {
+        type: String,
+        default: 'auto',
       },
     },
     data() {
@@ -193,9 +202,14 @@
     text-align: center;
   }
 
+  /* No link ink of its own: the global link rule resolves it per setter (the
+     /login page, or the dark sidebar), which a pinned page ink got wrong on
+     the sidebar at 1:1 (#9191). Standalone links get a 24px target (§3.99). */
   .signup-prompt a,
   .forgot-prompt a {
-    color: var(--text-body);
+    display: inline-block;
+    min-height: 24px;
+    line-height: 24px;
   }
 
   .forgot-prompt {
