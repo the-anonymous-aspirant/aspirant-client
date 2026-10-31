@@ -89,9 +89,18 @@ button:focus-visible {
 /* No global .card rule: .card is AspCard's root class, so padding here stacked
    on the inset the caller picks with AspCard's padding prop (#8401). */
 
-#app {
-  padding: var(--space-xl);
-  text-align: center;
+/* No padding and no centring on #app (#9192, §3.121, §3.114). Its padding
+   stacked on every view's own, and it sat outside #myVapp's 100vh, so every
+   short page scrolled 64 px past nothing. The page gutter lives once, on the
+   shell's content column (App.vue `.app-main`). */
+
+/* A public page's root (#9192). The gutter is the shell's; a page adds none
+   of its own and centres nothing, so its first heading starts at the inset:
+   the one title y on every route. A reading-width cap belongs on the content
+   block, never as a centring margin on the page. */
+.page > h1:first-child,
+.page > :first-child > h1:first-child {
+  margin-top: 0;
 }
 
 @keyframes fadeIn {

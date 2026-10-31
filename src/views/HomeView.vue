@@ -63,7 +63,7 @@
 </script>
 
 <template>
-  <div class="home">
+  <div class="home page">
     <h1>The Aspirant</h1>
     <h2 class="page-subtitle">Just my little slice of the internet - feel free to look around :) </h2>
     <img
@@ -86,14 +86,12 @@
 </template>
 
 <style scoped>
+  /* Left-aligned at the shell's gutter (#9192, §3.114): no inset, no
+     vertical centring, so the title starts at the one title y. */
   .home {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    min-height: 100dvh;
-    padding: var(--space-xl);
+    align-items: flex-start;
     color: var(--text-on-light);
   }
 
@@ -138,11 +136,6 @@
   }
 
   @media (max-width: 767.98px) {
-    .home {
-      padding: var(--space-lg) var(--space-md);
-      padding-top: 70px;
-    }
-
     .home h1 {
       font-size: var(--text-2xl);
     }

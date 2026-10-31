@@ -1,5 +1,5 @@
 <template>
-  <div class="not-found">
+  <div class="not-found page">
     <div class="not-found-content">
       <h1 class="not-found-title">404</h1>
       <p class="not-found-message">Sidan kunde inte hittas.</p>
@@ -22,16 +22,10 @@
 </script>
 
 <style scoped>
-  .not-found {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 60vh;
-    padding: var(--space-lg) var(--space-md);
-  }
-
+  /* At the shell's gutter, left-aligned (#9192, §3.114). The 60vh box that
+     centred the message vertically is gone, so its title starts at the one
+     title y; 480px is the content block's reading cap. */
   .not-found-content {
-    text-align: center;
     max-width: 480px;
   }
 
