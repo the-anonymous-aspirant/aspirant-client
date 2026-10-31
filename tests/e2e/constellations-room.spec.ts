@@ -27,10 +27,6 @@ async function installMock(page: Page, initial: RoomState) {
   const putProfileBodies: Record<string, unknown>[] = [];
 
   // Stub the external QR image so the shell's <img> never hits the network.
-  await page.route(/qrserver\.com/, async (route: Route) => {
-    await route.fulfill({ status: 200, contentType: 'image/png', body: '' });
-  });
-
   // Bare /api catch-all first so unrelated background calls resolve quietly;
   // the specific handler below wins at match time (later route wins).
   await page.route(/\/api\//, async (route: Route) => {
