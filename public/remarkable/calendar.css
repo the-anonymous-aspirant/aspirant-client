@@ -1,0 +1,257 @@
+/* reMarkable planner, self-hosted (system_3 #9132, operator c57326).
+   Copied from the-anonymous-aspirant/remarkable-pdf-journal at 4886037
+   (current_calendar_year.html). The page's own <style> is below unchanged.
+   The generator wrote ~130 style="" attributes into innerHTML, which the
+   site's style-src 'self' refuses; each became a class at the end of this
+   file. Their declarations carry !important because they were inline: that
+   keeps them ahead of every normal rule here, as inline styles were, while
+   the one author !important rule (.nav-links a in print) still wins on
+   specificity, as it did over the inline colour. */
+/* Crimson Pro (SIL OFL 1.1, fonts/OFL.txt), self-hosted from the Google Fonts
+   v28 subsets the original page linked. One variable file per subset covers
+   the 400-600 weights the page uses. */
+@font-face { font-family: 'Crimson Pro'; font-style: normal; font-weight: 400 600; font-display: swap; src: url(fonts/CrimsonPro-latin-ext.woff2) format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Crimson Pro'; font-style: normal; font-weight: 400 600; font-display: swap; src: url(fonts/CrimsonPro-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+/* --- the original page's stylesheet --- */
+        @page {
+            size: A4;
+            margin: 0;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Crimson Pro', Georgia, serif;
+            line-height: 1.6;
+        }
+        
+        .page {
+            width: 210mm;
+            height: 297mm;
+            padding: 10mm 15mm;
+            page-break-after: always;
+            position: relative;
+            background: white;
+            border: 1px solid #e0e0e0;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .page:last-child {
+            page-break-after: auto;
+        }
+        
+        @media screen {
+            body {
+                background: #95a5a6;
+                padding: 20px;
+            }
+        }
+        
+        h1 {
+            font-family: 'Crimson Pro', Georgia, serif;
+            font-size: 28pt;
+            font-weight: 500;
+            margin-bottom: 6mm;
+            color: #1a1a1a;
+            letter-spacing: 0;
+        }
+        
+        h2 {
+            font-family: 'Crimson Pro', Georgia, serif;
+            font-size: 24pt;
+            font-weight: 500;
+            margin-bottom: 0;
+            color: #1a1a1a;
+            letter-spacing: 0;
+        }
+        
+        h3 {
+            font-family: 'Crimson Pro', Georgia, serif;
+            font-weight: 400;
+        }
+        
+        .subtitle {
+            font-family: 'Crimson Pro', Georgia, serif;
+            font-size: 14pt;
+            color: #666;
+            margin-bottom: 8mm;
+            font-weight: 400;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 15mm;
+            font-size: 10pt;
+        }
+        
+        .nav-links a {
+            color: #0066cc;
+            text-decoration: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+        }
+        
+        .nav-links a:hover {
+            background-color: #ecf0f1;
+        }
+        
+        .index-section {
+            margin-bottom: 12px;
+        }
+        
+        .index-section h3 {
+            font-size: 13pt;
+            font-weight: bold;
+            margin-bottom: 7px;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 3px;
+        }
+        
+        .month-block {
+            margin-bottom: 2px;
+            padding: 3px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .month-block h4 {
+            font-size: 9pt;
+            margin-bottom: 2px;
+            color: #2c3e50;
+        }
+        
+        .month-block a {
+            font-weight: bold;
+            color: #0066cc;
+            text-decoration: none;
+        }
+        
+        .week-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 5px;
+        }
+        
+        .week-links a {
+            color: #0066cc;
+            text-decoration: none;
+            font-size: 7.5pt;
+            padding: 2px 4px;
+            background: white;
+            border-radius: 2px;
+            border: 1px solid #bdc3c7;
+            white-space: nowrap;
+        }
+        
+        .week-links a:hover {
+            background: #3498db;
+            color: white;
+        }
+        
+        .day-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 10mm;
+        }
+        
+        .day-grid a {
+            color: #1a5490;
+            text-decoration: none;
+            font-size: 9pt;
+            padding: 5px;
+            background: #f8f9fa;
+            border-radius: 3px;
+            text-align: center;
+        }
+        
+        .day-grid a:hover {
+            background: #1a5490;
+            color: white;
+        }
+        
+        .blank-links {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        .blank-links a {
+            color: #1a5490;
+            text-decoration: none;
+            font-size: 10pt;
+            padding: 5px;
+            background: #f8f9fa;
+            border-radius: 3px;
+            display: inline-block;
+        }
+        
+        .blank-links a:hover {
+            background: #3498db;
+            color: white;
+        }
+        
+        @media print {
+            body {
+                margin: 0;
+            }
+            
+            .nav-links a {
+                color: #0066cc !important;
+            }
+        }
+
+/* --- formerly inline styles --- */
+.rp-s1 { display: flex !important; gap: 8px !important; align-items: center !important; }
+.rp-s2 { color: #1a5490 !important; text-decoration: none !important; font-size: 14pt !important; }
+.rp-s3 { color: #ccc !important; }
+.rp-s4 { color: #1a5490 !important; text-decoration: none !important; font-size: 18pt !important; }
+.rp-s5 { display: flex !important; justify-content: space-between !important; align-items: center !important; margin-top: 0 !important; }
+.rp-s6 { border: none !important; border-top: 1px solid #e0e0e0 !important; margin: 3mm 0 !important; }
+.rp-s7 { display: flex !important; align-items: center !important; justify-content: center !important; padding: 0 !important; }
+.rp-s8 { display: flex !important; gap: 3px !important; flex-wrap: wrap !important; margin-bottom: 0 !important; }
+.rp-s9 { color: #0066cc !important; text-decoration: none !important; font-size: 7.5pt !important; padding: 2px 3px !important; background: #f8f9fa !important; border-radius: 2px !important; min-width: 24px !important; text-align: center !important; }
+.rp-s10 { display: flex !important; flex-direction: column !important; gap: 12px !important; margin-top: 20px !important; }
+.rp-s11 { display: flex !important; align-items: center !important; gap: 10px !important; }
+.rp-s12 { color: #1a5490 !important; text-decoration: none !important; font-size: 16pt !important; font-weight: 500 !important; min-width: 40px !important; }
+.rp-s13 { flex: 1 !important; border: none !important; border-top: 1px solid #ccc !important; margin: 0 !important; }
+.rp-s14 { display: flex !important; flex-direction: column !important; justify-content: space-evenly !important; height: calc(100% - 40mm) !important; }
+.rp-s15 { margin-bottom: 0 !important; }
+.rp-s16 { font-size: 11pt !important; margin-bottom: 5px !important; }
+.rp-s17 { color: #3498db !important; text-decoration: none !important; }
+.rp-s18 { display: flex !important; gap: 6px !important; flex-wrap: wrap !important; justify-content: space-between !important; }
+.rp-s19 { color: #999 !important; }
+.rp-s20 { color: #ccc !important; font-size: 9pt !important; padding: 4px 6px !important; white-space: nowrap !important; flex: 1 !important; text-align: center !important; }
+.rp-s21 { font-size: 10pt !important; display: flex !important; align-items: baseline !important; gap: 6px !important; flex-wrap: wrap !important; padding: 4px !important; background: #f8f9fa !important; border-radius: 3px !important; margin-bottom: 4px !important; }
+.rp-s22 { display: inline !important; font-weight: 600 !important; }
+.rp-s23 { color: #1a5490 !important; text-decoration: none !important; }
+.rp-s24 { color: #1a5490 !important; text-decoration: none !important; font-weight: 400 !important; }
+.rp-s25 { font-size: 20pt !important; display: flex !important; align-items: baseline !important; gap: 8px !important; flex-wrap: wrap !important; }
+.rp-s26 { display: inline !important; }
+.rp-s27 { color: #1a1a1a !important; font-weight: 400 !important; }
+.rp-s28 { display: flex !important; flex-direction: column !important; justify-content: flex-end !important; align-items: center !important; padding-bottom: 20mm !important; }
+.rp-s29 { text-align: center !important; color: #666 !important; font-size: 10pt !important; }
+.rp-s30 { margin-bottom: 5px !important; }
+.rp-s31 { color: #1a5490 !important; text-decoration: none !important; font-weight: 500 !important; }
+
+/* The three styles the original computed in script (#9132). */
+.rp-datebox { text-decoration: none !important; font-size: 9pt !important; padding: 5px !important; border-radius: 3px !important; min-width: 60px !important; text-align: left !important; display: block !important; }
+.rp-datebox--on { color: #1a5490 !important; background: #f8f9fa !important; }
+.rp-datebox--off { color: #666 !important; background: #fafafa !important; }
+.rp-daychip { font-size: 9pt !important; padding: 4px 6px !important; border-radius: 3px !important; white-space: nowrap !important; flex: 1 !important; text-align: center !important; font-weight: 600 !important; }
+.rp-tone--current { background: #f8f9fa !important; }
+.rp-tone--other { background: #fafafa !important; }
+.rp-daychip-link { text-decoration: none !important; }
+.rp-tone--current .rp-daychip-link { color: #1a5490 !important; }
+.rp-tone--other .rp-daychip-link { color: #999 !important; }

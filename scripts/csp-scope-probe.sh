@@ -61,6 +61,7 @@ check / present
 check /login present
 check /admin present
 check /constellations-rulebook.html present
+check /remarkable/calendar.html present
 check /others/vinoly/2026_bday_invitation present
 # Spellings nginx normalises INTO the SPA: the policy must still apply.
 check '/admin/penpot/..%2f..%2flogin' present
