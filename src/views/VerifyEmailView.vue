@@ -1,8 +1,7 @@
 <template>
   <div class="token-view page">
+    <h1>Confirm your address</h1>
     <AspCard class="token-view-card" padding="md">
-      <h1>Confirm your address</h1>
-
       <p v-if="!token" class="message message--error">
         This link is missing its confirmation code. Open the link from your email again, or
         request a new one.
@@ -110,17 +109,12 @@
 <style scoped>
   /* The form sits on the signature dark card (§1.2, §1.5; #9195). AspCard
      owns the surface, border, radius, inset and ink (--text-on-dark), so the
-     fields resolve their card arm and links take `.card a`. */
+     fields resolve their card arm and links take `.card a`. The h1 stays the
+     page's route title above it: --text-xl at the one title y every public
+     route shares (#9193, #9192). */
   .token-view-card {
     width: 100%;
     max-width: 24rem;
-  }
-
-  /* The card heading step comes from the global `.card` rule (#9193); a card
-     heading is amber (§1.2). */
-  .token-view-card h1 {
-    margin: 0 0 var(--space-sm);
-    color: var(--text-heading-card);
   }
 
   .lede {

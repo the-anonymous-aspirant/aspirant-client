@@ -1,7 +1,7 @@
 <template>
   <div class="login-view page">
+    <h1>Login</h1>
     <AspCard class="login-view-card" padding="md">
-      <h1>Login</h1>
       <p v-if="sessionExpired" class="session-expired-notice" role="status">
         Din session har gått ut. Logga in igen för att fortsätta.
       </p>
@@ -119,17 +119,12 @@
 <style scoped>
   /* The form sits on the signature dark card (§1.2, §1.5; #9195). AspCard
      owns the surface, border, radius, inset and ink (--text-on-dark), so the
-     fields resolve their card arm and links take `.card a`. */
+     fields resolve their card arm and links take `.card a`. The h1 stays the
+     page's route title above it: --text-xl at the one title y every public
+     route shares (#9193, #9192). */
   .login-view-card {
     width: 100%;
     max-width: 24rem;
-  }
-
-  /* The card heading step comes from the global `.card` rule (#9193); a card
-     heading is amber (§1.2). */
-  .login-view-card h1 {
-    margin: 0 0 var(--space-sm);
-    color: var(--text-heading-card);
   }
 
   /* A warning tint under the card's own ink. It used to read

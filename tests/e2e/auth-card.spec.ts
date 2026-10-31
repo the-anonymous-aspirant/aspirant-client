@@ -1,9 +1,9 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 
 /** Covers #9195 (§1.2, §1.5, §3.121): the five auth routes put their form on
- *  the signature dark AspCard (#424242 light, #2a2a2a dark), and every text
- *  inside the card, in each state the route can show, clears 4.5:1 against
- *  what is actually behind it. The ratio is measured, not read off a token:
+ *  the signature dark AspCard (#424242 light, #2a2a2a dark) under the route
+ *  title, and every text inside the card, in each state the route can show,
+ *  clears 4.5:1 against what is actually behind it. The ratio is measured, not read off a token:
  *  each text element's ink is composited over the first painted backgrounds
  *  up its ancestor chain, so a tint (the session notice) or a fill (the
  *  submit button) is what it is measured on. */
@@ -90,7 +90,7 @@ const SCENARIOS: Scenario[] = [
 /** Every visible element with its own text inside the card, with the measured
  *  ratio of its ink to what is painted behind it. */
 function measure(page: Page) {
-  return page.locator('.card').first().evaluate((card) => {
+  return page.locator('.page .card').first().evaluate((card) => {
     const parse = (c: string): number[] | null => {
       let m = c.match(/^rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)$/);
       if (m) return [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]];
@@ -152,14 +152,16 @@ for (const theme of ['light', 'dark'] as const) {
         await page.mouse.move(0, 0);
         await page.waitForTimeout(300);
 
-        const card = page.locator('.card').filter({ has: page.locator('h1') });
+        const card = page.locator('.page .card');
         await expect(card).toHaveCount(1);
         await expect(card).toHaveCSS('background-color', CARD[theme]);
-        await expect(card.locator('h1')).toHaveCSS('color', 'rgb(255, 179, 0)');
+        // The route title stays the page's h1 above the card (#9193, #9192).
+        await expect(card.locator('h1')).toHaveCount(0);
+        await expect(page.locator('.page > h1')).toHaveCount(1);
         await expect(card.locator(s.ready).first()).toBeVisible();
 
         const texts = await measure(page);
-        expect(texts.length).toBeGreaterThan(1);
+        expect(texts.length).toBeGreaterThan(0);
         const low = texts.filter((t) => t.ratio < 4.5).map((t) => `${t.text} ${t.ratio.toFixed(2)}`);
         expect(low, texts.map((t) => `${t.text} ${t.ratio.toFixed(2)}`).join(' | ')).toEqual([]);
       });
