@@ -834,7 +834,6 @@ h1 {
   font-family: var(--font-family-base);
   color: var(--text-on-light);
   margin-bottom: var(--space-md);
-  font-size: var(--text-3xl);
 }
 
 /* Mode Selector */

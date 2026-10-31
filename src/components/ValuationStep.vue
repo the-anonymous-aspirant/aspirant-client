@@ -42,7 +42,7 @@ export default {
 
 .valuation-step__title {
   color: var(--text-heading-card);
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   margin: 0 0 var(--space-md) 0;
 }
 </style>

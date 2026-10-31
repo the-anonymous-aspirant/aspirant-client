@@ -244,7 +244,6 @@
   h1 {
     margin: 0 0 0.25rem;
     color: var(--brand-primary);
-    font-size: 1.8rem;
     font-weight: 600;
   }
   .meta {
