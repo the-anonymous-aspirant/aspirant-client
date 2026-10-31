@@ -1,5 +1,5 @@
 <template>
-  <div class="token-view">
+  <div class="token-view page">
     <div class="token-view-card">
       <h1>Reset your password</h1>
 
@@ -105,12 +105,6 @@
      (`--feedback-*-text`), not the `--text-danger` / `--text-success` that two
      of those siblings reach for and that do not exist in the design system
      (#5340). */
-  .token-view {
-    display: flex;
-    justify-content: center;
-    padding: var(--space-2xl) var(--space-sm);
-  }
-
   .token-view-card {
     width: 100%;
     max-width: 24rem;
@@ -118,7 +112,6 @@
   }
 
   .token-view-card h1 {
-    text-align: center;
     margin-bottom: var(--space-sm);
     font-size: var(--text-lg);
   }

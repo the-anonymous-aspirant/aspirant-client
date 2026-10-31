@@ -1,5 +1,5 @@
 <template>
-  <div class="support">
+  <div class="support page">
     <div class="support-header">
       <h1>Support</h1>
     </div>
@@ -103,20 +103,17 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* At the shell's gutter, left-aligned, no full-height box (#9192): the
+   reading cap is the donation grid's own max-width. */
 .support {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: var(--space-lg);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  min-height: 100vh;
+  align-items: flex-start;
 }
 
 .support-header {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: var(--space-sm);
   margin-bottom: var(--space-md);
 }
@@ -286,7 +283,6 @@ onMounted(async () => {
 }
 
 .support-footer {
-  text-align: center;
   color: var(--text-on-light);
   opacity: 0.7;
   font-size: var(--text-base);
@@ -294,10 +290,6 @@ onMounted(async () => {
 }
 
 @media (max-width: 767.98px) {
-  .support {
-    padding: var(--space-md) var(--space-sm);
-  }
-
   .donation-grid {
     grid-template-columns: 1fr;
   }

@@ -24,7 +24,7 @@
         ></div>
         
         <Sidebar></Sidebar>
-        <div :style="{ 'margin-left': isMobile ? '0px' : sidebarWidth, flex: '1', 'min-width': '0' }">
+        <div class="app-main" :style="{ 'margin-left': isMobile ? '0px' : sidebarWidth }">
           <router-view :key="$route.path + '-' + authVersion" class="fade-in"> </router-view>
         </div>
         
@@ -140,14 +140,31 @@
   #myVapp {
     background-color: var(--surface-page);
     /* v-app used to provide the full-viewport min-height that let the page
-       background fill the screen; it is retired (#4294), so set it here. */
+       background fill the screen; it is retired (#4294), so set it here. No
+       padding sits outside it (#9192), so a page that fits does not scroll. */
     min-height: 100vh;
+  }
+
+  /* The one page gutter (#9192, §3.121): every route's content starts here,
+     and no view adds an inset of its own. */
+  .app-main {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: var(--space-xl);
   }
 
   /* Mobile styles */
   @media (max-width: 767.98px) {
     .mobile-menu-toggle {
       display: block;
+    }
+
+    /* The top inset clears the fixed drawer toggle: its --space-lg offset,
+       its 30px box, then --space-md. Without it a title at the side inset
+       sits under the toggle (/support's did, at y 48 against its 54). */
+    .app-main {
+      padding: calc(var(--space-lg) + 30px + var(--space-md)) var(--space-md) var(--space-md);
     }
 
     .mobile-overlay {
