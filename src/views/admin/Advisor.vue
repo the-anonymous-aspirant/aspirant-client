@@ -480,7 +480,7 @@ export default {
 
 .sources-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   margin: 0 0 var(--space-sm) 0;
 }
 
@@ -602,7 +602,7 @@ export default {
 
 .chat-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   margin: 0 0 var(--space-md) 0;
 }
 
@@ -769,7 +769,7 @@ export default {
 
 .documents-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   margin: 0 0 var(--space-md) 0;
 }
 
