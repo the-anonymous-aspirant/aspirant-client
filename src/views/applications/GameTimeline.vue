@@ -834,7 +834,6 @@ h1 {
   font-family: var(--font-family-base);
   color: var(--text-on-light);
   margin-bottom: var(--space-md);
-  font-size: var(--text-3xl);
 }
 
 /* Mode Selector */
@@ -1744,10 +1743,6 @@ h1 {
 @media (max-width: 768px) {
   .timeline-game {
     padding: var(--space-sm);
-  }
-
-  h1 {
-    font-size: var(--text-2xl);
   }
 
   .mode-buttons {

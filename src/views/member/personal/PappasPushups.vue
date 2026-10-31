@@ -530,7 +530,7 @@
 .chart-card h3,
 .entries-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   margin: 0 0 var(--space-md) 0;
 }
 
