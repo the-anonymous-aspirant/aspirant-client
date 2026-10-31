@@ -37,10 +37,9 @@ const PREVIEW_URL = `http://127.0.0.1:${PREVIEW_PORT}`;
  * the mobile project runs the same spec under iPhone 13 (Mobile Safari) so
  * the mobile CSS branches in ValuationStatement.vue (≤768px) are exercised.
  *
- * Backend calls (/api/commander/*) are mocked per-test via page.route(); no
- * commander or Go server is required to run the suite. A real-commander
- * golden-fixture variant lives in tests/e2e/vardeutlatande.golden.spec.ts
- * and is skipped unless COMMANDER_E2E=1 is set.
+ * Backend calls (/api/*) are mocked per-test via page.route(); no commander
+ * or Go server is required to run the suite, and an unmocked one is refused
+ * (#9234, webServer.env below).
  */
 export default defineConfig({
   testDir: './tests/e2e',
@@ -71,6 +70,11 @@ export default defineConfig({
   webServer: {
     command: `npm run build && npm run preview -- --host 127.0.0.1 --port ${PREVIEW_PORT} --strictPort`,
     url: PREVIEW_URL,
+    // #9234: the preview refuses, with a local 503, any /api call no
+    // page.route stub answered (vite.config.js `e2eUnstubbedGate`), instead of
+    // proxying it to the production backend on :8081. Set
+    // ASPIRANT_E2E_REFUSED_LOG=<path> to tally what was refused.
+    env: { ASPIRANT_E2E: '1' },
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     stdout: 'ignore',
