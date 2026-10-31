@@ -78,10 +78,12 @@ const btcAddress = 'bc1qj433rpvgrv8kzdrqa2uuxpgknzug3lqwzpzypj';
 const copied = ref(false);
 const coffemugUrl = ref(null);
 // Drawn in the browser (#9132), light on the card's dark, as the qrserver
-// images were (bgcolor=424242, color=ffffff).
+// images were (bgcolor=424242, color=ffffff). Margin 1, not the spec's 4: the
+// qrserver codes filled their frame, and the dark card around the frame is the
+// quiet zone, so a 4-module border only shrank the code (#9132 evidence walk).
 const bmacQrUrl = ref('');
 const btcQrUrl = ref('');
-const qrOpts = { size: 200, dark: '#ffffff', light: '#424242' };
+const qrOpts = { size: 200, dark: '#ffffff', light: '#424242', margin: 1 };
 const bmacQr = createQrImage((url) => { bmacQrUrl.value = url; });
 const btcQr = createQrImage((url) => { btcQrUrl.value = url; });
 onBeforeUnmount(() => { bmacQr.clear(); btcQr.clear(); });
