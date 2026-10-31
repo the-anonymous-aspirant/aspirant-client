@@ -54,14 +54,16 @@
            people without a user"; putting the link only on /login would hide
            it from the surface those people actually see. It sits inside the
            `!loggedIn` branch, so it never appears to a signed-in viewer. -->
-      <p class="signup-prompt">
+      <!-- Neither link belongs on the admin sign-in (system_3 #9270): an admin
+           account is not self-served, and recovery runs through /login. -->
+      <p v-if="!admin" class="signup-prompt">
         <RouterLink to="/signup" data-testid="signup-link">Create an account</RouterLink>
       </p>
       <!-- Beside the sign-up link and in the same shared component, for the
            same reason (#5339): Sidebar.vue renders this for every signed-out
            visitor on every page, and someone who cannot remember their
            password is by definition someone who cannot get past this form. -->
-      <p class="forgot-prompt">
+      <p v-if="!admin" class="forgot-prompt">
         <RouterLink to="/forgot-password" data-testid="forgot-link"
           >Forgot your password?</RouterLink
         >
@@ -93,6 +95,15 @@
       fieldSurface: {
         type: String,
         default: 'auto',
+      },
+      // The admin sign-in (system_3 #8798, #9270). It posts to /admin/sign-in,
+      // which sits inside the /admin Cloudflare Access application, so the
+      // request carries the Access assertion aspirant-server needs before it
+      // issues the Admin tier. /api/login gives an admin account Member only
+      // while that gate is on.
+      admin: {
+        type: Boolean,
+        default: false,
       },
     },
     data() {
@@ -135,7 +146,7 @@
       },
       async login() {
         try {
-          const response = await fetch('/api/login', {
+          const response = await fetch(this.admin ? '/admin/sign-in' : '/api/login', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

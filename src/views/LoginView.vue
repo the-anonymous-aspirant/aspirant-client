@@ -1,11 +1,11 @@
 <template>
   <div class="login-view page">
-    <h1>Login</h1>
+    <h1>{{ admin ? 'Admin sign-in' : 'Login' }}</h1>
     <AspCard class="login-view-card" padding="md">
       <p v-if="sessionExpired" class="session-expired-notice" role="status">
         Din session har gått ut. Logga in igen för att fortsätta.
       </p>
-      <Login :loggedIn="false" @login="onLogin" />
+      <Login :loggedIn="false" :admin="admin" @login="onLogin" />
     </AspCard>
   </div>
 </template>
@@ -22,6 +22,14 @@
   export default {
     name: 'LoginView',
     components: { AspCard, Login },
+    props: {
+      // /admin/login (system_3 #9270): the same view and the same redirect
+      // hardening, posting to the admin sign-in instead of /api/login.
+      admin: {
+        type: Boolean,
+        default: false,
+      },
+    },
     computed: {
       // Where to land after login. Only same-origin paths are honoured, or a
       // crafted /login?redirect=<x> could hand a fresh credential holder's next
@@ -96,7 +104,12 @@
       // frequently a proxied admin surface this SPA has no client route for,
       // and a full GET re-runs nginx's auth_request instead of falling through
       // to the SPA NotFound. This matches onLogin()'s precedent.
-      if (localStorage.getItem('user_name') && !this.$route.query.redirect) {
+      //
+      // On the admin sign-in, only a cached Admin role moves along: while the
+      // Cloudflare Access gate is on, /login gives an admin account Member, and
+      // that session is exactly the one that needs this page (#9270).
+      const cachedAdmin = localStorage.getItem('user_role') === 'Admin';
+      if (localStorage.getItem('user_name') && !this.$route.query.redirect && (!this.admin || cachedAdmin)) {
         window.location.assign(this.redirectTarget);
       }
     },
