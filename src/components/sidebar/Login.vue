@@ -196,10 +196,11 @@
 </script>
 
 <style scoped>
+  /* Left, under a full-width button, on both mounts (§3.114; #9192): the
+     form's fields and labels are left-aligned, so its links are too. */
   .signup-prompt {
     margin: var(--space-sm) 0 0;
     font-size: var(--text-sm);
-    text-align: center;
   }
 
   /* No link ink of its own: the global link rule resolves it per setter (the
@@ -215,7 +216,6 @@
   .forgot-prompt {
     margin: var(--space-2xs) 0 0;
     font-size: var(--text-sm);
-    text-align: center;
   }
 
   .login-card {
@@ -224,7 +224,6 @@
     box-shadow: var(--shadow-sm);
     max-width: 100%;
     width: 100%;
-    text-align: center;
     margin: 0;
     transition: all var(--transition-moderate);
   }

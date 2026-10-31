@@ -29,8 +29,10 @@ test.describe('Värdeutlåtande BR-flow — mobile (iPhone 13)', () => {
       el => getComputedStyle(el as HTMLElement).gridTemplateColumns,
     );
     // The desktop rule pins to "220px 1fr"; the mobile block collapses to
-    // a single column so the input grows to the viewport width.
-    expect(cols).not.toContain('220px');
+    // a single column so the input grows to the viewport width. Count the
+    // resolved tracks: the one 1fr track resolves to a px width, and that
+    // width can itself be 220px (#9192 widened the phone column to it).
+    expect(cols.trim().split(/\s+/)).toHaveLength(1);
   });
 });
 

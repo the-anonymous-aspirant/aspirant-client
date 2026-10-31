@@ -1,5 +1,5 @@
 <template>
-  <div class="login-view">
+  <div class="login-view page">
     <div class="login-view-card">
       <h1>Login</h1>
       <p v-if="sessionExpired" class="session-expired-notice" role="status">
@@ -116,12 +116,6 @@
 </script>
 
 <style scoped>
-  .login-view {
-    display: flex;
-    justify-content: center;
-    padding: var(--space-2xl) var(--space-sm);
-  }
-
   .login-view-card {
     width: 100%;
     max-width: 24rem;
@@ -139,7 +133,6 @@
   }
 
   .login-view-card h1 {
-    text-align: center;
     margin-bottom: var(--space-sm);
     font-size: var(--text-lg);
   }
@@ -151,6 +144,5 @@
     background: var(--surface-caution, var(--surface-2));
     color: var(--text-body);
     font-size: var(--text-sm);
-    text-align: center;
   }
 </style>

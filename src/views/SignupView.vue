@@ -1,5 +1,5 @@
 <template>
-  <div class="token-view">
+  <div class="token-view page">
     <div class="token-view-card">
       <h1>Create an account</h1>
 
@@ -212,12 +212,6 @@
      and `--feedback-success-text` (light #8b0f10/#005d26, dark #ff7a7c/#4de292),
      used below. The siblings' dead tokens are filed separately rather than
      copied for the sake of looking consistent. */
-  .token-view {
-    display: flex;
-    justify-content: center;
-    padding: var(--space-2xl) var(--space-sm);
-  }
-
   .token-view-card {
     width: 100%;
     max-width: 24rem;
@@ -226,7 +220,6 @@
   }
 
   .token-view-card h1 {
-    text-align: center;
     margin-bottom: var(--space-sm);
     font-size: var(--text-lg);
   }

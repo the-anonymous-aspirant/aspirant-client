@@ -1,5 +1,5 @@
 <template>
-  <div class="token-view">
+  <div class="token-view page">
     <div class="token-view-card">
       <h1>Confirm your address</h1>
 
@@ -108,12 +108,6 @@
 </script>
 
 <style scoped>
-  .token-view {
-    display: flex;
-    justify-content: center;
-    padding: var(--space-2xl) var(--space-sm);
-  }
-
   .token-view-card {
     width: 100%;
     max-width: 24rem;
@@ -124,7 +118,6 @@
   }
 
   .token-view-card h1 {
-    text-align: center;
     margin-bottom: var(--space-sm);
     font-size: var(--text-lg);
   }

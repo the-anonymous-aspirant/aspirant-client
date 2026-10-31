@@ -1,5 +1,5 @@
 <template>
-  <div class="about">
+  <div class="about page">
     <h1>This is an About page</h1>
     <div class="swatches">
       <!-- --brand-primary is amber in BOTH themes, so its ink must not flip:
@@ -26,7 +26,6 @@
 
 <style scoped>
   .about {
-    padding: var(--space-xl);
     color: var(--text-on-light);
   }
 
@@ -45,14 +44,4 @@
   .swatch--feedback-error { background-color: var(--feedback-error); color: var(--text-on-dark); }
   .swatch--feedback-success { background-color: var(--feedback-success); color: var(--text-on-dark); }
   .swatch--feedback-info { background-color: var(--feedback-info); color: var(--text-on-dark); }
-
-  @media (min-width: 1024px) {
-    .about {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-  }
 </style>
