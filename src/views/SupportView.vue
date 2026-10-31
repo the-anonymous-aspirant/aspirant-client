@@ -18,20 +18,20 @@
         <p class="qr-label">Scan to open in your browser</p>
       </div>
 
-      <a
-        href="https://buymeacoffee.com/theaspirant"
+      <!-- The primary action of record, rendered as the link it is (#9196,
+           §1.3, §1.5): AspButton's own fill, radius and height. -->
+      <AspButton
+        variant="primary"
+        :href="bmacUrl"
         target="_blank"
         rel="noopener noreferrer"
         class="bmac-button"
       >
-        <img
-          v-if="coffemugUrl"
-          :src="coffemugUrl"
-          alt=""
-          class="bmac-button-icon"
-        />
+        <template v-if="coffemugUrl" #iconLeft>
+          <img :src="coffemugUrl" alt="" class="bmac-button-icon" />
+        </template>
         Buy me a coffee
-      </a>
+      </AspButton>
     </div>
 
     <div class="donation-card btc-card">
@@ -67,6 +67,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { AspButton } from '@aspirant/design-system';
 import assetManager from '../asset_manager';
 
 const bmacUrl = 'https://buymeacoffee.com/theaspirant';
@@ -176,28 +177,12 @@ onMounted(async () => {
   margin: 0 0 var(--space-lg) 0;
 }
 
-.bmac-button {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  background-color: var(--brand-primary);
-  color: var(--text-on-fixed-light);
-  font-size: var(--text-lg);
-  font-weight: 600;
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-lg);
-  text-decoration: none;
-  transition: all var(--transition-base);
-}
-
-.bmac-button:hover {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
+/* AspButton owns the fill, ink, radius, height and hover; the mug rides its
+   icon slot at the label's size, so it cannot make this button taller than
+   every other primary action (§3.121 B3-5: three button shapes were one). */
 .bmac-button-icon {
-  width: 28px;
-  height: 28px;
+  width: 1em;
+  height: 1em;
   border-radius: var(--radius-sm);
 }
 
