@@ -98,6 +98,13 @@
 </template>
 
 <style>
+  /* Nav items keep their own treatment: the global link underline (#9191) is
+     for prose links; these are styled by the nav spec. */
+  .active,
+  .inactive {
+    text-decoration: none;
+  }
+
   .active {
     color: var(--text-on-dark);
     font-size: 1.4rem;

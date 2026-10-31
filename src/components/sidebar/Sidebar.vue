@@ -234,7 +234,7 @@
     <transition name="sidebar-login-transition" mode="out-in">
       <div v-if="!collapsed" class="auth-section">
         <div v-if="!username && !onAuthPage">
-          <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="false"></Login>
+          <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="false" field-surface="card"></Login>
         </div>
         <div v-else-if="username" class="user-info">
           <router-link to="/profile" class="user-avatar-link" aria-label="Your profile">
@@ -242,7 +242,7 @@
           </router-link>
           <p class="user-detail">{{ username }}</p>
           <p class="user-role">{{ roleLabel }}</p>
-          <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="true"></Login>
+          <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="true" field-surface="card"></Login>
         </div>
       </div>
     </transition>
