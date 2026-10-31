@@ -81,8 +81,10 @@
 
 <template>
   <router-link :to="to" :class="isActive ? 'active' : 'inactive'" @click="handleClick">
+    <!-- Decorative (§3.121, #9194): the label names the link, so the icon
+         adds nothing for a screen reader. -->
     <template v-if="loadedImage">
-      <img :src="loadedImage" alt="Sidebar Image" class="sidebar-image" />
+      <img :src="loadedImage" alt="" class="sidebar-image" />
     </template>
     <template v-else-if="isLoading">
       <div class="sidebar-image loading"></div>
@@ -93,7 +95,11 @@
     <span v-if="!collapsed" id="sidebar-link" class="fade-in">
       <slot></slot>
     </span>
-    <span v-else id="sidebar-link" class="empty-slot"></span>
+    <!-- Collapsed shows the icon only; the label stays for screen readers,
+         or the link would have no name. -->
+    <span v-else id="sidebar-link" class="empty-slot"
+      ><span class="sidebar-link-hidden-label"><slot></slot></span
+    ></span>
   </router-link>
 </template>
 
@@ -138,6 +144,18 @@
   .empty-slot {
     display: inline-block;
     height: 20px; /* Reduced from 50px to make collapsed sidebar more compact */
+  }
+
+  .sidebar-link-hidden-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .sidebar-image {
