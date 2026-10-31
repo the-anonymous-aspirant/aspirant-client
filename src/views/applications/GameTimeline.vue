@@ -1745,10 +1745,6 @@ h1 {
     padding: var(--space-sm);
   }
 
-  h1 {
-    font-size: var(--text-2xl);
-  }
-
   .mode-buttons {
     flex-direction: column;
     align-items: center;
