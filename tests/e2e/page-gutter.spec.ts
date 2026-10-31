@@ -129,3 +129,33 @@ for (const theme of ['light', 'dark'] as const) {
     });
   });
 }
+
+test('the sidebar nav stays centred in its column (the #app centring it used to inherit)', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) < 768, 'the desktop column; the phone drawer is the same component');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open(page, '/', 'light');
+  const rows = await page.evaluate(() => {
+    const col = document.querySelector('.nav-links')!.getBoundingClientRect();
+    const mid = (r: DOMRect) => r.left + r.width / 2;
+    return Array.from(document.querySelectorAll<HTMLElement>('.nav-links a')).map((a) => {
+      // The label span is a flex column as wide as the link, so measure the
+      // text run itself; the icon only moves with text-align when it is the
+      // loaded <img> (its placeholder is a block).
+      const label = a.querySelector('span') as HTMLElement;
+      const text = document.createRange();
+      text.selectNodeContents(label);
+      const icon = a.querySelector('img') as HTMLElement | null;
+      return {
+        label: label.textContent!.trim(),
+        labelOff: Math.round(mid(text.getBoundingClientRect()) - mid(col)),
+        iconOff: icon ? Math.round(mid(icon.getBoundingClientRect()) - mid(col)) : 0,
+      };
+    });
+  });
+  console.log(`SIDEBAR ${rows.map((r) => `${r.label}:${r.labelOff}/${r.iconOff}`).join(' ')}`);
+  expect(rows.length).toBeGreaterThan(0);
+  for (const r of rows) {
+    expect(Math.abs(r.labelOff), `${r.label} label centred`).toBeLessThanOrEqual(1);
+    expect(Math.abs(r.iconOff), `${r.label} icon centred`).toBeLessThanOrEqual(1);
+  }
+});

@@ -250,6 +250,12 @@
 </template>
 
 <style scoped>
+  /* The nav column centres its icon-over-label links. It inherited that from
+     #app until #9192 moved the page gutter off #app, so it states it here. */
+  .sidebar {
+    text-align: center;
+  }
+
   .collapse-icon {
     font-size: var(--text-lg);
     position: absolute;
