@@ -68,7 +68,7 @@
     <h2 class="page-subtitle">Just my little slice of the internet - feel free to look around :) </h2>
     <img
       :src="aspiringHandImageUrl"
-      alt="the.anonymous.aspirant@gmail.com"
+      alt="A hand reaching for a circle"
       @click="aspiringHandClickHandler"
       :style="{ opacity: aspiringHandTransperancy, transition: 'opacity 1s' }"
       class="aspiring-hand"
