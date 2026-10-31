@@ -16,8 +16,8 @@ test.describe('Graceful 404 catch-all', () => {
   test('unknown root-level path renders NotFound for anonymous visitor', async ({ page }) => {
     await page.goto('/totally-nonexistent-page');
     await dismissMobileSidebarIfPresent(page);
-    await expect(page.locator('.not-found-title')).toHaveText('404');
-    await expect(page.locator('.not-found-attempted code'))
+    await expect(page.locator('.not-found-title')).toHaveText('Page not found');
+    await expect(page.locator('.not-found-message code'))
       .toHaveText('/totally-nonexistent-page');
     await expect(page.locator('.not-found-home')).toBeVisible();
   });
@@ -25,7 +25,7 @@ test.describe('Graceful 404 catch-all', () => {
   test('unknown trusted-prefix path renders NotFound for anonymous visitor', async ({ page }) => {
     await page.goto('/trusted/nonexistent-page');
     await dismissMobileSidebarIfPresent(page);
-    await expect(page.locator('.not-found-title')).toHaveText('404');
+    await expect(page.locator('.not-found-title')).toHaveText('Page not found');
   });
 
   test('renamed route falls through to NotFound when nginx layer absent', async ({ page }) => {
@@ -37,7 +37,7 @@ test.describe('Graceful 404 catch-all', () => {
     // safety net.
     await page.goto('/trusted/pappas-armhavningar');
     await dismissMobileSidebarIfPresent(page);
-    await expect(page.locator('.not-found-title')).toHaveText('404');
+    await expect(page.locator('.not-found-title')).toHaveText('Page not found');
   });
 
   test('NotFound link returns to home', async ({ page }) => {
