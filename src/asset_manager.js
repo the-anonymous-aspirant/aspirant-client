@@ -32,6 +32,11 @@ const assetMap = {
   timeline_icon: { hash: '81a49b7a9f6c94b771d96f2f83edf4d7', type: AssetType.IMAGE },
   transparency_icon: { hash: '2c267c4b8ca0de90847cb4fcb7ffb1e3', type: AssetType.IMAGE },
   home_icon: { hash: 'bc942505fa501c3e1950efb1d7bc9e2b', type: AssetType.IMAGE },
+  // The sidebar's Home tile (#9194): drawn in the same set as `applications`
+  // and `default`, and on the server's public registry (as its `home_icon`).
+  // The `home_icon` above is a different house that the member cards use; the
+  // registry does not list it, so a signed-out fetch of it 404s.
+  nav_home_icon: { hash: '6a9cd5807678009a717d5f472d179876', type: AssetType.IMAGE },
   // Hand-drawn member-app icons (#4840): the operator's inked sketch, ink-extracted
   // to black-on-transparent PNGs. They render white via the .app-image invert(1) on
   // the always-dark app card (--surface-card #424242 light / #2a2a2a dark). Each hash

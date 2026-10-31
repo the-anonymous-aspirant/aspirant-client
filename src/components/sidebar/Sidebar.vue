@@ -96,53 +96,29 @@
         fetchProfileAvatar();
       };
 
-      // Pre-load assets before mounting to ensure they're ready
-      const preloadAssets = async () => {
-        try {
-          await assetManager.preloadAssets([
-            'aspiring_hand',
-            'home_icon',
-            'applications',
-            'family',
-            'admin',
-            'default',
-            'default_user',
-            'coffemug',
-          ]);
-          console.log('Successfully preloaded all assets');
-        } catch (error) {
-          console.error('Error preloading assets:', error);
-        }
-      };
+      // Each image loads on its own (#9194): a rejected asset leaves only its
+      // own item on SidebarLink's default image. These used to be awaited in
+      // turn inside one try, so the first rejection skipped every later
+      // assignment (and the avatar fetch), and the whole nav fell back.
+      const images = [
+        [aspiringHandImageUrl, 'aspiring_hand'],
+        [homeIconUrl, 'nav_home_icon'],
+        [applicationsIconUrl, 'applications'],
+        [memberIconUrl, 'family'],
+        [adminIconUrl, 'admin'],
+        [defaultUserIconUrl, 'default_user'],
+        [supportIconUrl, 'coffemug'],
+      ];
 
-      // Load all the required images using the asset manager
       onMounted(async () => {
-        console.log('Sidebar component mounted, loading assets...');
-        await preloadAssets();
+        const results = await Promise.allSettled(images.map(([, name]) => assetManager.getAsset(name)));
+        results.forEach((result, i) => {
+          if (result.status === 'fulfilled') images[i][0].value = result.value;
+        });
+        imagesLoaded.value = true;
 
-        try {
-          // Load assets sequentially and log each one
-          aspiringHandImageUrl.value = await assetManager.getAsset('aspiring_hand');
-
-          homeIconUrl.value = await assetManager.getAsset('home_icon');
-
-          applicationsIconUrl.value = await assetManager.getAsset('applications');
-
-          memberIconUrl.value = await assetManager.getAsset('family');
-
-          adminIconUrl.value = await assetManager.getAsset('admin');
-
-          defaultUserIconUrl.value = await assetManager.getAsset('default_user');
-
-          supportIconUrl.value = await assetManager.getAsset('coffemug');
-
-          imagesLoaded.value = true;
-
-          // Load the logged-in user's avatar (if any) for the Profile entry.
-          await fetchProfileAvatar();
-        } catch (error) {
-          console.error('Error loading images:', error);
-        }
+        // Load the logged-in user's avatar (if any) for the Profile entry.
+        await fetchProfileAvatar();
       });
 
       // #5330: the mirror of the HomeView release removed in the same change.
