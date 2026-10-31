@@ -134,7 +134,6 @@
 
   .login-view-card h1 {
     margin-bottom: var(--space-sm);
-    font-size: var(--text-lg);
   }
 
   .session-expired-notice {

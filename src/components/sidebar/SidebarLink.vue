@@ -105,27 +105,29 @@
     text-decoration: none;
   }
 
-  .active {
-    color: var(--text-on-dark);
-    font-size: 1.4rem;
-    transition: 0.1s linear;
+  /* One label step in every state (#9193, §3.121): only the ink and the
+     rule change, so the row never resizes. Amber marks the active item
+     (§1.3); the 3px inset rule is its non-colour cue (§3.21), drawn as a
+     shadow so the row's box and the centred label do not move. */
+  .active,
+  .inactive {
+    font-size: var(--text-md);
+    transition: color 0.1s linear;
   }
 
-  .active:hover {
-    color: var(--text-on-dark);
-    font-size: 1.4rem;
-    transition: 0.1s linear;
+  .active {
+    color: var(--brand-primary);
+    box-shadow: inset 3px 0 0 var(--brand-primary);
   }
 
   .inactive {
-    color: var(--brand-primary);
-    font-size: 1.1rem;
-    transition: 0.1s linear;
+    color: var(--text-on-dark);
   }
 
+  /* Hover lifts the ink only: no size change, and no rule (the rule is the
+     active cue). */
   .inactive:hover {
-    color: var(--text-on-dark);
-    transition: 0.2s linear;
+    color: var(--brand-primary);
   }
 
   #sidebar-link {

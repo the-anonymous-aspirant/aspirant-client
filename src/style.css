@@ -47,8 +47,11 @@ body {
   min-height: 100dvh;
 }
 
+/* The type steps (§3.120, #9193): the route title is --text-xl, a section
+   heading --text-lg, and a heading inside an AspCard --text-md bold. The
+   same steps as the console. */
 h1 {
-  font-size: var(--text-3xl);
+  font-size: var(--text-xl);
   line-height: 1.1;
   color: var(--text-on-light);
   margin-bottom: var(--space-md);
@@ -58,6 +61,12 @@ h2 {
   font-size: var(--text-lg);
   color: var(--text-on-light);
   margin-bottom: var(--space-md);
+}
+
+/* .card is AspCard's root class. */
+.card :is(h1, h2, h3) {
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
 }
 
 /* Subtitle pattern — muted h2 used on most hub/page views */

@@ -136,10 +136,6 @@
   }
 
   @media (max-width: 767.98px) {
-    .home h1 {
-      font-size: var(--text-2xl);
-    }
-
     .aspiring-hand {
       max-width: 70%;
     }

@@ -29,8 +29,8 @@
     max-width: 480px;
   }
 
+  /* The route title on the one title step (#9193, §3.120): no size of its own. */
   .not-found-title {
-    font-size: 4rem;
     margin: 0 0 var(--space-sm) 0;
     color: var(--text-on-light);
   }
