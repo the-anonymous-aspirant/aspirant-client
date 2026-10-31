@@ -3,37 +3,42 @@
     <h1>Remarkable PDFs</h1>
     <h2>Generate PDFs for your remarkable tablet</h2>
 
-    <!-- A label, not a control. This was a one-member "strip": `generators` has
-         exactly one key, `currentGenerator` initialises to it, and `mounted()`
-         has already loaded it — so the button was permanently in its `.active`
-         state and clicking it re-fetched what was on screen, blanking the
-         preview on the way. A one-member segmented control offers a choice the
-         user cannot make, so this is NOT an AspSegmented; it is the only text
-         naming which generator is showing, so it is not nothing either. The
-         `currentGenerator` / `loadGenerator(type)` seam stays for the second
-         generator. #4460. -->
-    <p class="generator-name">{{ generatorNames[currentGenerator] }}</p>
+    <!-- Two generators now (#9132): the planner for this year and for next.
+         They are one page, served from this site (public/remarkable/), which
+         takes ?year=next. This replaces the one-member label of #4460: with a
+         real choice, a segmented control is the right control. -->
+    <div class="generator-choice">
+      <AspSegmented
+        :options="generatorOptions"
+        :model-value="currentGenerator"
+        aria-label="Which planner"
+        @update:model-value="currentGenerator = $event"
+      />
+    </div>
 
     <div class="generator-card">
       <div class="preview-container">
         <h3>Preview</h3>
         <div class="preview-box">
+          <!-- Same-origin src, not a fetched srcdoc: the frame is the site's
+               own page under the site's own policy, and nothing is fetched
+               from a third party (the planner used to come from
+               raw.githubusercontent.com, which had gone 404). -->
           <iframe
-            v-if="previewUrl"
-            :srcdoc="htmlContent"
+            :key="previewUrl"
+            :src="previewUrl"
+            :title="generatorNames[currentGenerator]"
             class="preview-iframe"
+            data-test="remarkable-preview"
           ></iframe>
-          <div v-else class="loading">
-            <p>Loading generator...</p>
-          </div>
         </div>
       </div>
 
       <div class="actions">
-        <AspButton variant="secondary" @click="openInNewTab" :disabled="!htmlContent">
+        <AspButton variant="secondary" @click="openInNewTab">
           Open in New Tab
         </AspButton>
-        <AspButton variant="primary" @click="downloadPDF" :disabled="!htmlContent">
+        <AspButton variant="primary" @click="downloadPDF">
           Download as PDF
         </AspButton>
       </div>
@@ -42,78 +47,53 @@
 </template>
 
 <script>
-import { AspButton } from '@aspirant/design-system';
+import { AspButton, AspSegmented } from '@aspirant/design-system';
+
+const year = new Date().getFullYear();
 
 export default {
   name: 'RemarkablePdfs',
   components: {
     AspButton,
+    AspSegmented,
   },
   data() {
     return {
-      currentGenerator: 'planner',
-      // Display names, kept beside `generators` so a second generator adds one
-      // entry to each rather than a string literal in the template.
+      currentGenerator: 'current',
       generatorNames: {
-        planner: 'Planner Generator',
+        current: `${year} planner`,
+        next: `${year + 1} planner`,
       },
-      htmlContent: '',
-      previewUrl: '',
       generators: {
-        planner: 'https://raw.githubusercontent.com/the-anonymous-aspirant/remarkable-pdf-journal/main/generate_planner.html'
-      }
+        current: '/remarkable/calendar.html',
+        next: '/remarkable/calendar.html?year=next',
+      },
     };
   },
-  methods: {
-    async loadGenerator(type) {
-      this.currentGenerator = type;
-      this.htmlContent = '';
-      this.previewUrl = '';
-
-      try {
-        const response = await fetch(this.generators[type]);
-        if (!response.ok) throw new Error('Failed to fetch HTML');
-
-        const html = await response.text();
-        this.htmlContent = html;
-        this.previewUrl = this.generators[type];
-      } catch (error) {
-        console.error('Error loading generator:', error);
-        this.htmlContent = '<p>Error loading generator. Please try again.</p>';
-      }
+  computed: {
+    generatorOptions() {
+      return Object.keys(this.generators).map((value) => ({ value, label: this.generatorNames[value] }));
     },
-
-    openInNewTab() {
-      if (!this.htmlContent) return;
-
-      const blob = new Blob([this.htmlContent], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    previewUrl() {
+      return this.generators[this.currentGenerator];
     },
-
-    downloadPDF() {
-      if (!this.htmlContent) return;
-
-      const blob = new Blob([this.htmlContent], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const printWindow = window.open(url, '_blank');
-
-      if (printWindow) {
-        printWindow.onload = () => {
-          setTimeout(() => {
-            printWindow.print();
-          }, 500);
-        };
-      }
-
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    }
   },
-  mounted() {
-    this.loadGenerator('planner');
-  }
+  methods: {
+    openInNewTab() {
+      window.open(this.previewUrl, '_blank', 'noopener');
+    },
+
+    // The browser's print dialog is the PDF export ("Save as PDF"), as the
+    // generator's own README describes. The page is same-origin, so the
+    // opened window's load event and print() are ours to call.
+    downloadPDF() {
+      const printWindow = window.open(this.previewUrl, '_blank');
+      if (!printWindow) return;
+      printWindow.addEventListener('load', () => {
+        setTimeout(() => printWindow.print(), 500);
+      });
+    },
+  },
 };
 </script>
 
@@ -124,17 +104,10 @@ export default {
   margin: 0 auto;
 }
 
-/* Reads as the caption it is. The former selector's fill/hover/active rules are
-   gone with the button: an amber pill is the app's pressed-control treatment,
-   and wearing it here would keep promising the affordance the markup just
-   dropped. Ink is the ambient body ink so it stays legible on whatever surface
-   the page gives it, rather than pinning an absolute colour. */
-.generator-name {
-  text-align: center;
+.generator-choice {
+  display: flex;
+  justify-content: center;
   margin: var(--space-lg) 0;
-  font-size: var(--text-lg);
-  font-weight: var(--font-weight-medium);
-  color: inherit;
 }
 
 .generator-card {
