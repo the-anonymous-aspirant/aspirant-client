@@ -45,9 +45,6 @@ const GOAL_CARDS = [
 ];
 
 async function installDictionaryMock(page: Page) {
-  await page.route(/qrserver\.com/, async (route: Route) => {
-    await route.fulfill({ status: 200, contentType: 'image/png', body: '' });
-  });
   // Bare catch-all first; specific handlers below win (later route wins).
   await page.route(/\/api\//, async (route: Route) => {
     await route.fulfill({ status: 204, body: '' });

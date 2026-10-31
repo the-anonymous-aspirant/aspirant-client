@@ -31,9 +31,6 @@ async function installRoomMock(
 ) {
   const { isCreator = true, revealConnections = false, revealCards = false, settingsCalls } = opts;
 
-  await page.route(/qrserver\.com/, async (route: Route) => {
-    await route.fulfill({ status: 200, contentType: 'image/png', body: '' });
-  });
   // Bare catch-all FIRST; specific handlers below win (later route wins).
   await page.route(/\/api\//, async (route: Route) => {
     await route.fulfill({ status: 204, body: '' });

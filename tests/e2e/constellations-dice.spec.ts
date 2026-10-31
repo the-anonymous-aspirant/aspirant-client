@@ -24,10 +24,6 @@ async function installMock(page: Page, initialDice: DiceState) {
   let dice = initialDice;
   let rollCount = 0;
 
-  await page.route(/qrserver\.com/, async (route: Route) => {
-    await route.fulfill({ status: 200, contentType: 'image/png', body: '' });
-  });
-
   await page.route(/\/api\//, async (route: Route) => {
     await route.fulfill({ status: 204, body: '' });
   });
