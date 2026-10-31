@@ -1,16 +1,17 @@
 <template>
   <div class="login-view page">
-    <div class="login-view-card">
-      <h1>Login</h1>
+    <h1>Login</h1>
+    <AspCard class="login-view-card" padding="md">
       <p v-if="sessionExpired" class="session-expired-notice" role="status">
         Din session har gått ut. Logga in igen för att fortsätta.
       </p>
       <Login :loggedIn="false" @login="onLogin" />
-    </div>
+    </AspCard>
   </div>
 </template>
 
 <script>
+  import { AspCard } from '@aspirant/design-system';
   import Login from '../components/sidebar/Login.vue';
 
   // A focused login page for visitors bounced off a gated surface (system_3
@@ -20,7 +21,7 @@
   // implementation.
   export default {
     name: 'LoginView',
-    components: { Login },
+    components: { AspCard, Login },
     computed: {
       // Where to land after login. Only same-origin paths are honoured, or a
       // crafted /login?redirect=<x> could hand a fresh credential holder's next
@@ -116,32 +117,25 @@
 </script>
 
 <style scoped>
+  /* The form sits on the signature dark card (§1.2, §1.5; #9195). AspCard
+     owns the surface, border, radius, inset and ink (--text-on-dark), so the
+     fields resolve their card arm and links take `.card a`. The h1 stays the
+     page's route title above it: --text-xl at the one title y every public
+     route shares (#9193, #9192). */
   .login-view-card {
     width: 100%;
     max-width: 24rem;
-    /* An explicit theme-aware ink, because no ancestor declares one: neither
-       :root nor body sets `color` (src/style.css), so `.field__label`'s
-       `color: inherit` (AspInput takes the ink of whatever surface it is
-       dropped onto, by design) falls through to the browser's UA-default
-       text color, which does not flip with the theme. Re-measured on
-       origin/main after #4294 retired Vuetify: still 1.21:1 in dark without
-       this line. --text-body is the token that resolves per theme. The
-       sidebar mount of the same component needs no such line: the sidebar
-       already declares --brand-primary, which measures 5.6:1 light / 8.0:1
-       dark there. */
-    color: var(--text-body);
   }
 
-  .login-view-card h1 {
-    margin-bottom: var(--space-sm);
-  }
-
+  /* A warning tint under the card's own ink. It used to read
+     `--surface-caution, var(--surface-2)`, neither of which exists, so it
+     painted nothing, and its `--text-body` ink would be #424242 on the light
+     theme's #424242 card (#9195). */
   .session-expired-notice {
     margin: 0 0 var(--space-sm);
     padding: var(--space-xs) var(--space-sm);
     border-radius: var(--radius-sm);
-    background: var(--surface-caution, var(--surface-2));
-    color: var(--text-body);
+    background: var(--feedback-warning-bg);
     font-size: var(--text-sm);
   }
 </style>

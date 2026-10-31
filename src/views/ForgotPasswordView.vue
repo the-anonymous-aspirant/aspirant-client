@@ -1,8 +1,7 @@
 <template>
   <div class="token-view page">
-    <div class="token-view-card">
-      <h1>Reset your password</h1>
-
+    <h1>Reset your password</h1>
+    <AspCard class="token-view-card" padding="md">
       <template v-if="state === 'done'">
         <!-- The server's own words, verbatim. See the note in `submit`. -->
         <p class="message message--success" data-testid="forgot-done">{{ doneMessage }}</p>
@@ -28,12 +27,12 @@
         </AspButton>
         <p v-if="error" class="message message--error" data-testid="forgot-error">{{ error }}</p>
       </form>
-    </div>
+    </AspCard>
   </div>
 </template>
 
 <script>
-  import { AspInput, AspButton } from '@aspirant/design-system';
+  import { AspCard, AspInput, AspButton } from '@aspirant/design-system';
 
   // The START of password recovery (system_3 #5339, under #5296).
   //
@@ -44,7 +43,7 @@
 
   export default {
     name: 'ForgotPasswordView',
-    components: { AspInput, AspButton },
+    components: { AspCard, AspInput, AspButton },
     data() {
       return {
         email: '',
@@ -101,18 +100,19 @@
 
 <style scoped>
   /* Same shell as SignupView / ResetPasswordView / VerifyEmailView — one flow
-     seen at four moments. Feedback ink uses the real theme-aware tokens
-     (`--feedback-*-text`), not the `--text-danger` / `--text-success` that two
-     of those siblings reach for and that do not exist in the design system
+     seen at four moments. Feedback ink uses the design system's on-dark
+     feedback tokens, because the form sits on the dark card in both themes
+     (#9195), not the `--text-danger` / `--text-success` that two of those
+     siblings once reached for and that do not exist in the design system
      (#5340). */
+  /* The form sits on the signature dark card (§1.2, §1.5; #9195). AspCard
+     owns the surface, border, radius, inset and ink (--text-on-dark), so the
+     fields resolve their card arm and links take `.card a`. The h1 stays the
+     page's route title above it: --text-xl at the one title y every public
+     route shares (#9193, #9192). */
   .token-view-card {
     width: 100%;
     max-width: 24rem;
-    color: var(--text-body);
-  }
-
-  .token-view-card h1 {
-    margin-bottom: var(--space-sm);
   }
 
   .form-group {
@@ -134,11 +134,11 @@
   }
 
   .message--error {
-    color: var(--feedback-error-text);
+    color: var(--feedback-error-text-on-dark);
   }
 
   .message--success {
-    color: var(--feedback-success-text);
+    color: var(--feedback-success-on-dark);
   }
 
   /* Link ink from the global rule (#9191); a 24px standalone target (§3.99). */
