@@ -669,10 +669,11 @@ export async function installJobsMocks(page: Page): Promise<void> {
   });
 }
 
-/** A seeded session is display state only, so the sidebar's avatar read (GET
- *  /api/profile) would reach the preview proxy's backend, which answers 401 for
- *  it, and main.js's 401 handler then clears the seeded role: the next guarded
- *  navigation lands on /login (#9194). Answer it as the seeded user. A spec's
+/** A seeded session is display state only, so nothing answers the sidebar's
+ *  avatar read (GET /api/profile) for it. Before the unstubbed-call gate
+ *  (#9234) the read reached the production backend, which 401'd it, and
+ *  main.js's 401 handler cleared the seeded role, so the next guarded
+ *  navigation landed on /login (#9194). Answer it as the seeded user. A spec's
  *  own /api/profile mock, registered after the seed, still wins (routes match
  *  most-recent first). */
 async function answerSeededProfile(page: Page, username: string): Promise<void> {
