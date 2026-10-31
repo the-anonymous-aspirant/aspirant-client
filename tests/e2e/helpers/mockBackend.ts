@@ -669,6 +669,22 @@ export async function installJobsMocks(page: Page): Promise<void> {
   });
 }
 
+/** A seeded session is display state only, so the sidebar's avatar read (GET
+ *  /api/profile) would reach the preview proxy's backend, which answers 401 for
+ *  it, and main.js's 401 handler then clears the seeded role: the next guarded
+ *  navigation lands on /login (#9194). Answer it as the seeded user. A spec's
+ *  own /api/profile mock, registered after the seed, still wins (routes match
+ *  most-recent first). */
+async function answerSeededProfile(page: Page, username: string): Promise<void> {
+  await page.route(/\/api\/profile$/, (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ username, avatar_url: '' }),
+    }),
+  );
+}
+
 /** Seed localStorage with a Trusted-role session so the router guard lets
  *  the view mount; called via addInitScript so it runs before any nav. */
 export async function seedTrustedSession(page: Page): Promise<void> {
@@ -676,6 +692,7 @@ export async function seedTrustedSession(page: Page): Promise<void> {
     localStorage.setItem('user_role', 'Trusted');
     localStorage.setItem('user_name', 'e2e-tester');
   });
+  await answerSeededProfile(page, 'e2e-tester');
 }
 
 /** A viewer-tier session (#5113-A3). Applications require a viewer login since
@@ -686,6 +703,7 @@ export async function seedViewerSession(page: Page): Promise<void> {
     localStorage.setItem('user_role', 'Viewer');
     localStorage.setItem('user_name', 'e2e-viewer');
   });
+  await answerSeededProfile(page, 'e2e-viewer');
 }
 
 /** A Trusted session under a NAMED username. `seedTrustedSession` seeds the
@@ -700,6 +718,7 @@ export async function seedTrustedSessionAs(page: Page, username: string): Promis
     localStorage.setItem('user_role', 'Trusted');
     localStorage.setItem('user_name', name);
   }, username);
+  await answerSeededProfile(page, username);
 }
 
 /** On mobile the sidebar starts visible on initial page load and overlays
@@ -1059,6 +1078,7 @@ export async function seedAdminSession(page: Page): Promise<void> {
     localStorage.setItem('user_role', 'Admin');
     localStorage.setItem('user_name', 'e2e-admin');
   });
+  await answerSeededProfile(page, 'e2e-admin');
 }
 
 /** A pair of `name + buffer + mimeType` chunks fed to setInputFiles; the
