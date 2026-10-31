@@ -13,7 +13,9 @@ import { appendFileSync } from 'node:fs';
 // live backend, so there is no opt-in lane. ASPIRANT_E2E_REFUSED_LOG=<path>
 // tallies each refused `METHOD url`, for finding which stub a red spec lacks.
 export const E2E_ENV = 'ASPIRANT_E2E';
-const PROXIED = (url) => url === '/api' || url.startsWith('/api/') || url.startsWith('/api?');
+// The same test as the proxy key below: Vite proxies any URL that starts with
+// '/api' (so `/apihealth` too), and the gate must refuse exactly that set.
+const PROXIED = (url) => url.startsWith('/api');
 
 export function e2eUnstubbedGate(req, res, next) {
   if (process.env[E2E_ENV] !== '1' || !PROXIED(req.url ?? '')) return next();
