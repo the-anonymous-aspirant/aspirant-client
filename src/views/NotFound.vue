@@ -1,14 +1,13 @@
 <template>
   <div class="not-found page">
     <div class="not-found-content">
-      <h1 class="not-found-title">404</h1>
-      <p class="not-found-message">Sidan kunde inte hittas.</p>
-      <p class="not-found-attempted">
-        <code>{{ attemptedPath }}</code>
+      <h1 class="not-found-title">Page not found</h1>
+      <p class="not-found-message">
+        There is nothing at <code>{{ attemptedPath }}</code>.
       </p>
-      <router-link to="/" class="not-found-home">
-        Tillbaka till startsidan
-      </router-link>
+      <AspButton variant="primary" to="/" class="not-found-home">
+        Back to the home page
+      </AspButton>
     </div>
   </div>
 </template>
@@ -16,6 +15,7 @@
 <script setup lang="js">
   import { computed } from 'vue';
   import { useRoute } from 'vue-router';
+  import { AspButton } from '@aspirant/design-system';
 
   const route = useRoute();
   const attemptedPath = computed(() => route.fullPath);
@@ -36,33 +36,13 @@
   }
 
   .not-found-message {
-    font-size: var(--text-lg);
-    margin: 0 0 var(--space-sm) 0;
-    color: var(--text-on-light);
-  }
-
-  .not-found-attempted {
     margin: 0 0 var(--space-lg) 0;
     color: var(--text-on-light);
-    opacity: 0.7;
-    word-break: break-all;
+    word-break: break-word;
   }
 
-  .not-found-attempted code {
+  .not-found-message code {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: var(--text-base);
-  }
-
-  .not-found-home {
-    display: inline-block;
-    padding: var(--space-sm) var(--space-md);
-    color: var(--text-on-dark);
-    background-color: var(--bg-accent, #1976d2);
-    text-decoration: none;
-    border-radius: 4px;
-  }
-
-  .not-found-home:hover {
-    opacity: 0.9;
+    word-break: break-all;
   }
 </style>
