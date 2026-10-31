@@ -1,8 +1,7 @@
 <template>
   <div class="token-view page">
-    <div class="token-view-card">
-      <h1>Create an account</h1>
-
+    <h1>Create an account</h1>
+    <AspCard class="token-view-card" padding="md">
       <!-- Reading the kill-switch. Deliberately NOT rendered as "closed": not
            knowing and being closed are different states, and only one of them
            is a claim we can make. -->
@@ -74,12 +73,12 @@
         </AspButton>
         <p v-if="error" class="message message--error" data-testid="signup-error">{{ error }}</p>
       </form>
-    </div>
+    </AspCard>
   </div>
 </template>
 
 <script>
-  import { AspInput, AspButton } from '@aspirant/design-system';
+  import { AspCard, AspInput, AspButton } from '@aspirant/design-system';
 
   // The public sign-up entry (system_3 #5338, under #5296).
   //
@@ -97,7 +96,7 @@
 
   export default {
     name: 'SignupView',
-    components: { AspInput, AspButton },
+    components: { AspCard, AspInput, AspButton },
     data() {
       return {
         username: '',
@@ -208,19 +207,18 @@
      ink tokens are NOT copied: that file uses `var(--text-danger, #b3261e)`
      and `var(--text-success, #1b5e20)`, and neither token exists in the design
      system — both always fall through to a fixed literal that does not change
-     with the theme. The real, theme-aware tokens are `--feedback-error-text`
-     and `--feedback-success-text` (light #8b0f10/#005d26, dark #ff7a7c/#4de292),
-     used below. The siblings' dead tokens are filed separately rather than
-     copied for the sake of looking consistent. */
+     with the theme. The inks below are the design system's on-dark feedback
+     tokens, because the form sits on the dark card in both themes (#9195).
+     The siblings' dead tokens were filed separately rather than copied for
+     the sake of looking consistent. */
+  /* The form sits on the signature dark card (§1.2, §1.5; #9195). AspCard
+     owns the surface, border, radius, inset and ink (--text-on-dark), so the
+     fields resolve their card arm and links take `.card a`. The h1 stays the
+     page's route title above it: --text-xl at the one title y every public
+     route shares (#9193, #9192). */
   .token-view-card {
     width: 100%;
     max-width: 24rem;
-    /* Explicit theme-aware ink, for the reason LoginView.vue documents. */
-    color: var(--text-body);
-  }
-
-  .token-view-card h1 {
-    margin-bottom: var(--space-sm);
   }
 
   .form-group {
@@ -242,16 +240,16 @@
   }
 
   .message--error {
-    color: var(--feedback-error-text);
+    color: var(--feedback-error-text-on-dark);
   }
 
   /* A chosen state, not a fault: the informational ink, not the error one. */
   .message--notice {
-    color: var(--feedback-info-text);
+    color: var(--feedback-info);
   }
 
   .message--success {
-    color: var(--feedback-success-text);
+    color: var(--feedback-success-on-dark);
   }
 
   /* Link ink from the global rule (#9191); a 24px standalone target (§3.99). */

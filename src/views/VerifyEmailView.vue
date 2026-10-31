@@ -1,8 +1,7 @@
 <template>
   <div class="token-view page">
-    <div class="token-view-card">
-      <h1>Confirm your address</h1>
-
+    <h1>Confirm your address</h1>
+    <AspCard class="token-view-card" padding="md">
       <p v-if="!token" class="message message--error">
         This link is missing its confirmation code. Open the link from your email again, or
         request a new one.
@@ -29,12 +28,12 @@
       <template v-else>
         <p class="message message--error">{{ error }}</p>
       </template>
-    </div>
+    </AspCard>
   </div>
 </template>
 
 <script>
-  import { AspButton } from '@aspirant/design-system';
+  import { AspCard, AspButton } from '@aspirant/design-system';
 
   // The landing page for the confirmation link in a sign-up email
   // (system_3 #5228, under #5119).
@@ -54,7 +53,7 @@
   // was built to avoid. One click is the whole cost of closing that gap.
   export default {
     name: 'VerifyEmailView',
-    components: { AspButton },
+    components: { AspCard, AspButton },
     data() {
       return {
         state: 'ready',
@@ -108,17 +107,14 @@
 </script>
 
 <style scoped>
+  /* The form sits on the signature dark card (§1.2, §1.5; #9195). AspCard
+     owns the surface, border, radius, inset and ink (--text-on-dark), so the
+     fields resolve their card arm and links take `.card a`. The h1 stays the
+     page's route title above it: --text-xl at the one title y every public
+     route shares (#9193, #9192). */
   .token-view-card {
     width: 100%;
     max-width: 24rem;
-    /* An explicit theme-aware ink, for the reason LoginView.vue documents:
-       neither :root nor body declares `color`, so text that inherits falls
-       through to the UA default, which does not flip with the theme. */
-    color: var(--text-body);
-  }
-
-  .token-view-card h1 {
-    margin-bottom: var(--space-sm);
   }
 
   .lede {
@@ -134,11 +130,11 @@
   }
 
   .message--error {
-    color: var(--feedback-error-text, #8b0f10);
+    color: var(--feedback-error-text-on-dark);
   }
 
   .message--success {
-    color: var(--feedback-success-text, #005d26);
+    color: var(--feedback-success-on-dark);
   }
 
   /* Link ink from the global rule (#9191); a 24px standalone target (§3.99). */

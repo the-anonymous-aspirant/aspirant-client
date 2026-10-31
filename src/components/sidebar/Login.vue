@@ -228,6 +228,14 @@
     transition: all var(--transition-moderate);
   }
 
+  /* On /login the form is inside an AspCard (#9195), and the card is the box:
+     no second inset or shadow inside it. The sidebar mount keeps the block
+     above. */
+  .card .login-card {
+    padding: 0;
+    box-shadow: none;
+  }
+
   .login-card h1 {
     margin-bottom: var(--space-lg);
     font-size: var(--text-lg);
@@ -273,14 +281,17 @@
     margin-top: var(--space-2xs);
   }
 
+  /* Both mounts are on --surface-card (the sidebar, and /login's AspCard), so
+     the messages take the on-dark feedback inks: --feedback-error measured
+     2.8:1 on the light theme's #424242 (#9195). */
   .error-message {
-    color: var(--feedback-error);
+    color: var(--feedback-error-text-on-dark);
     margin-top: var(--space-xs);
     font-size: var(--text-sm);
   }
 
   .success-message {
-    color: var(--feedback-success);
+    color: var(--feedback-success-on-dark);
     margin-top: var(--space-xs);
     font-size: var(--text-sm);
   }
