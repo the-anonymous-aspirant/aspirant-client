@@ -104,6 +104,13 @@ src/
   resources/games/              -- Game data (quiz questions, timelines)
 ```
 
+## Changelog
+
+`docs/CHANGELOG.md` is never edited in a feature PR. Add one file per PR under
+`docs/changelog.d/` (format in `docs/changelog.d/README.md`; validate with
+`sh scripts/changelog.sh check`). `scripts/changelog.sh collect` folds the
+fragments into the changelog on a PR of its own. Tests: `npm run test:changelog`.
+
 ## Design System
 
 CSS custom properties are defined in `App.vue :root`. Key tokens:
