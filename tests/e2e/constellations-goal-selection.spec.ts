@@ -28,7 +28,6 @@ function installGoalMock(page: Page, opts: { achieved?: boolean } = {}) {
   const clearCalls: number[] = [];
 
   const install = async () => {
-    await page.route(/qrserver\.com/, (r: Route) => r.fulfill({ status: 200, contentType: 'image/png', body: '' }));
     await page.route(/\/api\//, (r: Route) => r.fulfill({ status: 204, body: '' }));
     await page.route('**/api/constellations/**', async (route: Route) => {
       const url = new URL(route.request().url());

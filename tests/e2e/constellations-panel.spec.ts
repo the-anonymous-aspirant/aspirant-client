@@ -62,10 +62,6 @@ async function installMock(page: Page, initialRelationships: Relationship[]) {
   const room = { relationships: [...initialRelationships] };
   const captured: Captured = { set: [], clear: [], undo: 0, redo: 0 };
 
-  await page.route(/qrserver\.com/, async (route: Route) => {
-    await route.fulfill({ status: 200, contentType: 'image/png', body: '' });
-  });
-
   await page.route(/\/api\//, async (route: Route) => {
     await route.fulfill({ status: 204, body: '' });
   });

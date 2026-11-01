@@ -227,10 +227,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { useRoomSync, unwrap } from '../../../composables/useRoomSync.js';
+import { createQrImage } from '../../../utils/qr';
 import ConstellationsDice from '../../../components/constellations/ConstellationsDice.vue';
 import ConstellationGraph from '../../../components/constellations/ConstellationGraph.vue';
 import ConstellationsSummary from '../../../components/constellations/ConstellationsSummary.vue';
@@ -309,14 +310,17 @@ async function saveGameUsername() {
   }
 }
 
-// Encode the room's deep-link so a scan lands a member on this room. Uses the
-// shared external QR service already used by QrGenerator.vue.
-const qrUrl = computed(() => {
-  if (!code.value) return '';
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  const joinUrl = `${origin}/applications/constellations/room/${encodeURIComponent(code.value)}`;
-  return `https://api.qrserver.com/v1/create-qr-code/?size=112x112&margin=0&data=${encodeURIComponent(joinUrl)}`;
-});
+// Encode the room's deep-link so a scan lands a member on this room. Drawn in
+// the browser (#9132): the room's join link no longer goes to a QR service.
+// margin 0, as before: the settings panel frames the code itself.
+const qrUrl = ref('');
+const roomQr = createQrImage((url) => { qrUrl.value = url; });
+watch(code, (c) => {
+  if (!c) { roomQr.clear(); return; }
+  const joinUrl = `${window.location.origin}/applications/constellations/room/${encodeURIComponent(c)}`;
+  roomQr.set(joinUrl, { size: 112, margin: 0 });
+}, { immediate: true });
+onBeforeUnmount(() => roomQr.clear());
 
 // The rulebook, bundled as a public static page (#4587-H2 / #4772). The
 // original epic body pointed at /api/uploads/… — but that is the system_3 admin
