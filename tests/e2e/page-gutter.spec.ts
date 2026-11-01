@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { seedAdminSession } from './helpers/mockBackend';
 
 /**
  * #9192 (§3.121, §3.114) — one page gutter at the root. `#app`'s padding
@@ -38,6 +39,7 @@ async function open(page: Page, path: string, theme: string): Promise<void> {
 
 interface Geometry {
   edge: number;
+  rootBottom: number;
   titleTop: number;
   titleAlign: string;
   scrollHeight: number;
@@ -75,9 +77,11 @@ function measure(page: Page): Promise<Geometry> {
         centred.push(`${el.tagName.toLowerCase()}.${el.className}`);
     }
     const h1 = root.querySelector('h1') as HTMLElement;
+    const rootBottom = Math.round(root.getBoundingClientRect().bottom + window.scrollY);
     const toggle = document.querySelector('.mobile-menu-toggle') as HTMLElement | null;
     return {
       edge: Math.round(edge * 10) / 10,
+      rootBottom,
       titleTop: Math.round(h1.getBoundingClientRect().top * 10) / 10,
       titleAlign: getComputedStyle(h1).textAlign,
       scrollHeight: document.documentElement.scrollHeight,
@@ -125,6 +129,45 @@ for (const theme of ['light', 'dark'] as const) {
 
       for (const r of rows.filter((x) => FITS.includes(x.path)))
         expect(r.scrollHeight, `${r.path} scrolls past nothing`).toBe(r.innerHeight);
+    });
+  });
+}
+
+/** The signed-in hubs (system_3 #9286, §3.121): the same gutter, title y and
+ *  no page-level centring as the public routes, under an admin session. */
+const HUBS = ['/member', '/admin', '/applications', '/applications/games', '/applications/quizzes'];
+
+async function openSignedIn(page: Page, path: string, theme: string): Promise<void> {
+  await seedAdminSession(page);
+  await open(page, path, theme);
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test.describe(`#9286 signed-in hubs take the one gutter (${theme})`, () => {
+    test('every hub: the public edge and title y, nothing centred, no scroll past the content', async ({
+      page,
+    }, info) => {
+      test.setTimeout(120_000);
+      const phone = (page.viewportSize()?.width ?? 1280) < 768;
+      await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+      await open(page, '/', theme);
+      const ref = await measure(page);
+      for (const path of HUBS) {
+        await openSignedIn(page, path, theme);
+        const g = await measure(page);
+        console.log(
+          `GUTTER ${info.project.name} ${theme} ${path} edge=${g.edge} title=${g.titleTop} ` +
+            `scroll=${g.scrollHeight}/${g.innerHeight} bottom=${g.rootBottom} centred=${g.centred.join(',') || '-'}`,
+        );
+        expect(g.edge, `${path} first content edge`).toBe(ref.edge);
+        expect(Math.abs(g.titleTop - ref.titleTop), `${path} title top ${g.titleTop} vs ${ref.titleTop}`).toBeLessThanOrEqual(1);
+        expect(g.titleAlign, `${path} title aligns left`).not.toBe('center');
+        expect(g.centred, `${path} centred text blocks`).toEqual([]);
+        // The document ends where the content does, plus the shell's bottom
+        // gutter; a 100vh root used to add the whole gutter again.
+        const gutter = phone ? 16 : 32;
+        expect(g.scrollHeight, `${path} scrolls past its content`).toBeLessThanOrEqual(Math.max(g.innerHeight, g.rootBottom + gutter + 1));
+      }
     });
   });
 }
