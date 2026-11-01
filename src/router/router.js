@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { clearForNavigation } from '../directives/overlayHistory';
-import AboutView from '../views/AboutView.vue';
 import HomeView from '../views/HomeView.vue';
 import MessageBoardView from '../views/member/shared/MessageBoardView.vue';
 import ApplicationsView from '../views/applications/Applications.vue';
@@ -105,7 +104,9 @@ const routes = [
   // cards sections, so an editor survives a reload and a link can land on it.
   { path: '/admin/cardgen/:tab?/:id?', component: CardgenApp, meta: ADMIN },
 
-  { path: '/about', component: AboutView },
+  // /about was the starter template's swatch board; retired (system_3 #9254,
+  // operator ruling c57325). Old links land on the home page, not the 404.
+  { path: '/about', redirect: '/' },
 
   { path: '/applications', component: ApplicationsView, meta: VIEWER },
   { path: '/applications/emotional-excellence', component: EmotionalExcellenceView, meta: VIEWER },
