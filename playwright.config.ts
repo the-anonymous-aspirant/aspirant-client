@@ -48,15 +48,25 @@ export default defineConfig({
   // Retry once on CI to absorb a flake on first run; locally a failure is a
   // failure — no retry hiding genuine regressions in dev.
   retries: process.env.CI ? 1 : 0,
+  // Clocks sized for the shared host, not for the spec (system_3 #9460,
+  // report 741): over 44 verify runs, 32 of 88 failure blocks were the default
+  // 30 s test timeout, first-pass red tracked host load (12% under load 8, 54%
+  // at 16-24), and 17 of 26 red runs passed later on the same sha. A spec that
+  // needs 15 s under load passes; a real hang still fails, 60 s later.
+  timeout: 90_000,
+  expect: { timeout: 15_000 },
   // Single worker keeps the mocked dev server load predictable and download
   // assertions race-free.
   workers: 1,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: PREVIEW_URL,
+    navigationTimeout: 60_000,
     trace: 'on-first-retry',
     video: 'retain-on-failure',
   },
+  // Project order is run order under one worker: all of chromium, then all of
+  // mobile-safari, so WebKit is not interleaved with the chromium hour.
   projects: [
     {
       name: 'chromium',
@@ -65,6 +75,11 @@ export default defineConfig({
     {
       name: 'mobile-safari',
       use: { ...devices['iPhone 13'] },
+      // WebKit carried 17 of its 31 failure blocks as timeouts and its single
+      // retry rescued none of them (a retry runs at once, under the same load).
+      // A second retry widens the window a little; a retry that can wait the
+      // load out is the verb-level split on system_3 #9436, not this file.
+      retries: process.env.CI ? 2 : 0,
     },
   ],
   webServer: {
