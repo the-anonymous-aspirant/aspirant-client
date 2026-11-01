@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import { decodeQrImage } from './helpers/qrDecode';
 
 /**
  * #4601 / #4587-E1 — the in-room board shell + live-state polling. Covers the
@@ -26,10 +27,6 @@ async function installMock(page: Page, initial: RoomState) {
   const putProfileBodies: Record<string, unknown>[] = [];
 
   // Stub the external QR image so the shell's <img> never hits the network.
-  await page.route(/qrserver\.com/, async (route: Route) => {
-    await route.fulfill({ status: 200, contentType: 'image/png', body: '' });
-  });
-
   // Bare /api catch-all first so unrelated background calls resolve quietly;
   // the specific handler below wins at match time (later route wins).
   await page.route(/\/api\//, async (route: Route) => {
@@ -148,6 +145,24 @@ test.describe('#4601 Constellations in-room shell', () => {
     await page.getByTestId('room-nav-settings').click();
     await expect(page.getByTestId('room-code')).toHaveText(ROOM_CODE);
     await expect(page.getByTestId('occupancy')).toContainText('2 / 4');
+  });
+
+  test('the join QR is drawn in the browser and decodes to this room\'s link (#9132)', async ({ page }) => {
+    const hits: string[] = [];
+    page.on('request', (r) => { if (/qrserver\.com/.test(r.url())) hits.push(r.url()); });
+    await seedTrustedSession(page);
+    await installMock(page, { occupancy: 2, player_count: 4, members: [{ user_id: 1 }, { user_id: 2 }] });
+
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+    await page.getByTestId('room-nav-settings').click();
+
+    const img = page.getByTestId('join-qr');
+    await expect(img).toHaveAttribute('src', /^blob:/);
+    const qr = await decodeQrImage(img);
+    expect(qr.width).toBe(112);
+    expect(qr.text).toBe(`${new URL(page.url()).origin}/applications/constellations/room/${ROOM_CODE}`);
+    expect(hits).toEqual([]);
   });
 
   test('occupancy updates live when the poll changes', async ({ page }) => {

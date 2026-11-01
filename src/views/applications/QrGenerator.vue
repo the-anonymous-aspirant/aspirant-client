@@ -60,8 +60,8 @@
         <a :href="qrUrl" download="qrcode.png" class="action-btn download-btn">
           Download PNG
         </a>
-        <AspButton variant="secondary" @click="copyUrl">
-          {{ copied ? 'Copied!' : 'Copy Image URL' }}
+        <AspButton variant="secondary" @click="copyImage">
+          {{ copied ? 'Copied!' : 'Copy image' }}
         </AspButton>
       </div>
 
@@ -74,17 +74,18 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onBeforeUnmount } from 'vue';
 import { AspButton, AspSelect, AspTextarea } from '@aspirant/design-system';
+import { createQrImage } from '../../utils/qr';
 
 const inputText = ref('');
 const encodedText = ref('');
 const qrUrl = ref('');
 const selectedSize = ref(300);
 // AspSelect takes `[{value,label}]` where the native took <option> markup. The
-// values stay NUMBERS: `selectedSize` is interpolated into the QR service's
-// `?size=NxN` query and into the image's inline width/height, and AspSelect
-// matches with `===`, so a string here would select nothing and size nothing.
+// values stay NUMBERS: `selectedSize` is the drawn PNG's edge in px and the
+// image's inline width/height, and AspSelect matches with `===`, so a string
+// here would select nothing and size nothing.
 const sizeOptions = [
   { value: 150, label: 'Small (150px)' },
   { value: 200, label: 'Medium (200px)' },
@@ -93,31 +94,34 @@ const sizeOptions = [
 ];
 const copied = ref(false);
 
+// Drawn here, in the browser (#9132): the text never leaves the device.
+const qrImage = createQrImage((url) => { qrUrl.value = url; });
+onBeforeUnmount(() => qrImage.clear());
+
 const generate = () => {
   const text = inputText.value.trim();
   if (!text) {
-    qrUrl.value = '';
+    qrImage.clear();
     encodedText.value = '';
     return;
   }
   encodedText.value = text;
-  qrUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=${selectedSize.value}x${selectedSize.value}&data=${encodeURIComponent(text)}`;
+  qrImage.set(text, { size: selectedSize.value });
 };
 
-const copyUrl = async () => {
+// Copies the drawn PNG itself. The old button copied the third-party image
+// URL, which carried the text in its query; a drawn code has no URL to share.
+const copyImage = async () => {
+  const blob = qrImage.blob();
+  if (!blob) return;
   try {
-    await navigator.clipboard.writeText(qrUrl.value);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
     copied.value = true;
     setTimeout(() => { copied.value = false; }, 2000);
   } catch {
-    const textarea = document.createElement('textarea');
-    textarea.value = qrUrl.value;
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textarea);
-    copied.value = true;
-    setTimeout(() => { copied.value = false; }, 2000);
+    // No image clipboard here (an insecure context, or an older browser):
+    // Download PNG still works.
+    copied.value = false;
   }
 };
 </script>

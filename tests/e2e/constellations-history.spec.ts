@@ -35,9 +35,6 @@ const HISTORY_EVENTS = [
 async function installRoomMock(page: Page, opts: { history?: unknown[]; members?: unknown[] } = {}) {
   const history = opts.history ?? HISTORY_EVENTS;
   const members = opts.members ?? MEMBERS;
-  await page.route(/qrserver\.com/, async (route: Route) => {
-    await route.fulfill({ status: 200, contentType: 'image/png', body: '' });
-  });
   // Bare catch-all FIRST; specific handlers below win (later route wins).
   await page.route(/\/api\//, async (route: Route) => {
     await route.fulfill({ status: 204, body: '' });

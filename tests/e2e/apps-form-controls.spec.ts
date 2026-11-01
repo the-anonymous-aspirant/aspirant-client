@@ -106,14 +106,14 @@ test.describe('#4481 QrGenerator form controls are DS components', () => {
     const sizeBox = await size.boundingBox();
     expect(Math.round(sizeBox!.width), 'the control keeps its 200px floor').toBeGreaterThanOrEqual(200);
 
-    const regenerated = page.waitForRequest((r) => /qrserver\.com/.test(r.url()) && /size=500x500/.test(r.url()));
     await size.click();
     await page.getByRole('listbox').first().getByRole('option', { name: 'Extra Large (500px)', exact: true }).click();
-    await regenerated;
 
-    // Both halves of "the value is still a number": the query the service got,
-    // and the inline style the image renders at. A string would break the
-    // === match in AspSelect and neither would move.
+    // Both halves of "the value is still a number": the PNG the site draws
+    // (#9132; it used to be a qrserver.com ?size=500x500 query) and the inline
+    // style the image renders at. A string would break the === match in
+    // AspSelect and neither would move.
+    await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth)).toBe(500);
     await expect(img).toHaveAttribute('style', /width:\s*500px/);
     await expect(size).toContainText('Extra Large (500px)');
   });
