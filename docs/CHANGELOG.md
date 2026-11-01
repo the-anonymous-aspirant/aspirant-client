@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Probe entry B (throwaway, system_3 #9455)
+
 - Shell: the persistent round Back button is gone from every page (system_3
   #9255, operator ruling c57325). It always went Home, which the sidebar
   already offers, and floated fixed over content on a phone. The Constellations
