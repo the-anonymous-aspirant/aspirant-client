@@ -1,5 +1,7 @@
 # Changelog
 
+_New entries are files in [changelog.d/](changelog.d/README.md), one per PR; `scripts/changelog.sh collect` folds them in here._
+
 ## Unreleased
 
 - Shell: the persistent round Back button is gone from every page (system_3

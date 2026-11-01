@@ -77,5 +77,5 @@ src/
 - [Client Specification](docs/SPEC.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Operations](docs/OPERATIONS.md)
-- [Changelog](docs/CHANGELOG.md)
+- [Changelog](docs/CHANGELOG.md) (rendered from [changelog.d/](docs/changelog.d/README.md): add one fragment per PR, never edit the file)
 - [Decisions](docs/DECISIONS.md)
