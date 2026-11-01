@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-view">
+  <div class="admin-view page">
     <h1>Admin</h1>
     <h2 class="page-subtitle">Admin stuff. Don't break anything.</h2>
 
@@ -183,15 +183,9 @@
 </script>
 
 <style scoped>
-  .admin-view {
-    text-align: center;
-    padding: var(--space-lg);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    min-height: 100vh;
-  }
+  /* The shell's .app-main carries the one gutter and .page the one title y
+     (system_3 #9192, #9286): no root padding, no 100vh box (it scrolled 64 px
+     past the content), nothing centred at page level (§3.114). */
 
   .admin-view h2 {
     margin-bottom: var(--space-xl);
@@ -205,18 +199,13 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: var(--space-lg);
-    margin: var(--space-lg) auto;
+    margin: var(--space-lg) 0 0;
     width: 100%;
     max-width: 900px;
-    justify-content: center;
     padding: var(--space-sm);
   }
 
   @media (max-width: 767px) {
-    .admin-view {
-      padding: var(--space-md) var(--space-sm);
-    }
-
     .application-list {
       grid-template-columns: repeat(2, 1fr);
       gap: var(--space-md);
