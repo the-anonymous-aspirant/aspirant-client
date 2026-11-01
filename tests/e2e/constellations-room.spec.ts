@@ -165,6 +165,26 @@ test.describe('#4601 Constellations in-room shell', () => {
     expect(hits).toEqual([]);
   });
 
+  // #9255: the room was the one in-room surface with no way back to the
+  // lobby short of Leave (which ends the player's seat) now that the global
+  // fixed Back button is retired. The inline AspBackButton fills that gap.
+  test('an inline Back button at the top of the shell returns to the lobby', async ({ page }) => {
+    await seedTrustedSession(page);
+    await installMock(page, { occupancy: 2, player_count: 4, members: [{ user_id: 1 }, { user_id: 2 }] });
+
+    await page.goto(`/applications/constellations/room/${ROOM_CODE}`);
+    await dismissMobileSidebarIfPresent(page);
+
+    const back = page.locator('.constellations-room-header button').first();
+    await expect(back, 'renders').toBeVisible();
+    await expect(back, 'is the DS component root').toHaveClass(/back-btn/);
+    await expect(back, 'shows its label, not icon-only').toHaveText(/Back/);
+    await expect(back, 'keeps an accessible name').toHaveAccessibleName('Back');
+
+    await back.click();
+    await expect(page).toHaveURL(/\/applications\/constellations$/);
+  });
+
   test('occupancy updates live when the poll changes', async ({ page }) => {
     await seedTrustedSession(page);
     const mock = await installMock(page, { occupancy: 1, player_count: 4, members: [{ user_id: 1 }] });

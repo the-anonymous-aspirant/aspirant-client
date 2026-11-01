@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Shell: the persistent round Back button is gone from every page (system_3
+  #9255, operator ruling c57325). It always went Home, which the sidebar
+  already offers, and floated fixed over content on a phone. The Constellations
+  room — the one in-room surface with no other way back to the lobby short of
+  Leave, which ends the player's seat — gets an inline, labelled `AspBackButton`
+  at the top of its shell instead. `FlowDetail`, `RunForensic` and
+  `GoalTreeCanvas` already carried their own in-content way back and are
+  unchanged.
 - Edge: the report-only CSP follows the location that serves a request, not
   the spelling of its URI (system_3 #9132). It was keyed on the raw
   `$request_uri`, but nginx decodes `%2f` and resolves `..` and `//` before

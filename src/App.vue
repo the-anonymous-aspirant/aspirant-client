@@ -27,16 +27,12 @@
         <div class="app-main" :style="{ 'margin-left': isMobile ? '0px' : sidebarWidth }">
           <router-view :key="$route.path + '-' + authVersion" class="fade-in"> </router-view>
         </div>
-        
-        <!-- Persistent Back Button -->
-        <BackButton></BackButton>
       </div>
   </div>
 </template>
 
 <script>
   import Sidebar from './components/sidebar/Sidebar.vue';
-  import BackButton from './components/BackButton.vue';
   import { sidebarWidth, collapsed, isMobile, sidebarHidden, toggleSidebar, checkMobile, authVersion } from './global_state_manager.js';
   import HomeView from './views/HomeView.vue';
   import { onMounted, onBeforeUnmount } from 'vue';
@@ -45,7 +41,6 @@
     components: {
       HomeView,
       Sidebar,
-      BackButton,
     },
     setup() {
       const handleResize = () => {
