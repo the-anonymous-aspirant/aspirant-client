@@ -214,8 +214,12 @@ test.describe('#4245 activating dark does not degrade brand-amber labels', () =>
     await page.emulateMedia({ colorScheme: 'light' });
   });
 
-  test('/about swatches hold their light-theme contrast in dark', async ({ page }) => {
-    const { light, dark } = await amberContrastBothThemes(page, '/about', '.swatches p');
+  // Read /about's swatch board until #9254 retired that page. The home page
+  // under a session paints one amber label on every viewport: the sidebar's
+  // primary action (Logout). The probe reads computed colours, so the phone
+  // drawer being closed does not hide it; `h1` is the page's own ready mark.
+  test('/ sidebar primary action holds its light-theme contrast in dark', async ({ page }) => {
+    const { light, dark } = await amberContrastBothThemes(page, '/', 'h1');
 
     expect(Object.keys(light).length, 'no amber-painted labels found — the probe went blind').toBeGreaterThan(0);
     for (const [key, lightRatio] of Object.entries(light)) {

@@ -34,7 +34,6 @@ docker run -p 80:80 aspirant-client
 
 ### Public (no auth required)
 - `/` -- Home
-- `/about` -- About
 - `/applications` -- Application hub (games, quizzes, tools)
 - `/quizzes/*` -- Quiz games (RGB guesser, SQL personality, timelines)
 - `/games/*` -- Games (Word Weaver, Flappy Duo)
@@ -95,7 +94,6 @@ src/
     UserForm.vue                -- User create/edit form
   views/
     HomeView.vue                -- Landing page
-    AboutView.vue               -- About page
     SupportView.vue             -- Support page
     MessageBoardView.vue        -- Message board
     LuddeAnalytics.vue          -- Analytics
