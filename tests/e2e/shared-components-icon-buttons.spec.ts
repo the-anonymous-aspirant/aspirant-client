@@ -5,10 +5,14 @@ import { seedTrustedSession, dismissMobileSidebarIfPresent } from './helpers/moc
  * #4444 (#4442-A10b) — the shared-component slice of the §3.89 residue.
  *
  * Two of the three files change and one deliberately does not:
- *  - BackButton.vue ADOPTS the DS AspBackButton wholesale (§3.13
+ *  - BackButton.vue ADOPTED the DS AspBackButton wholesale (§3.13
  *    build-in-DS-first; docs/COMPONENTS.md §9 names this file as the component
- *    it was ported from), which is why the assertions below are on the DS root
- *    and on the corrected no-history behaviour, not on a ported inner button.
+ *    it was ported from). The persistent, fixed instance it rendered on every
+ *    route is retired by #9255 (operator ruling c57325) — removed from
+ *    App.vue and deleted outright, so the BackButton assertions that used to
+ *    live here are gone with it. §9255's own inline, per-detail-page
+ *    AspBackButton instances are covered where each one lives (e.g.
+ *    tests/e2e/constellations-room.spec.ts), not in this shared-component file.
  *  - RobbansTusen's transport becomes AspButton size="icon".
  *  - PixelAvatarDraw's palette is HELD — every member carries aria-pressed and
  *    a colour swatch IS its content, both out of AspButton's contract by
@@ -66,35 +70,15 @@ const json = (body: unknown) => (route: Route) =>
 test.describe('#4444 shared components adopt the DS primitives', () => {
   test.beforeEach(async ({ page }) => { await seedTrustedSession(page); });
 
-  test('BackButton renders the DS AspBackButton, named and legible on its pill', async ({ page }) => {
+  test('the retired persistent Back button renders nowhere, home included', async ({ page }) => {
+    // #9255: BackButton.vue (and its .back-button-container) is deleted
+    // outright, not merely hidden on '/' — assert its absence on both a
+    // route that used to show it and the one that never did.
     await page.route(/\/api\/goals\/trees$/, json([]));
     await page.goto('/member/shared/goals');
     await dismissMobileSidebarIfPresent(page);
+    await expect(page.locator('.back-button-container')).toHaveCount(0);
 
-    const back = page.locator('.back-button-container button').first();
-    await expect(back, 'renders').toBeVisible();
-    await expect(back, 'is the DS component root').toHaveClass(/back-btn/);
-    await expect(back, 'keeps an accessible name').toHaveAccessibleName('Back');
-
-    const box = await back.boundingBox();
-    expect(Math.round(box!.height), 'DS 44px minimum target').toBeGreaterThanOrEqual(44);
-    expect(await contrastRatio(back), 'glyph reads on the pill (WCAG AA)').toBeGreaterThanOrEqual(4.5);
-  });
-
-  test('BackButton lands on home when there is no in-app history to pop', async ({ page }) => {
-    await page.route(/\/api\/goals\/trees$/, json([]));
-    // A direct load is the first entry in this tab: window.history.length is
-    // already > 1 in a driven browser, which is exactly why the old
-    // length-based check could pop the user out of the app. AspBackButton
-    // reads history.state.back instead and pushes `to` when there is nothing
-    // of ours behind.
-    await page.goto('/member/shared/goals');
-    await dismissMobileSidebarIfPresent(page);
-    await page.locator('.back-button-container button').first().click();
-    await expect(page).toHaveURL(/\/$/);
-  });
-
-  test('BackButton stays absent on the home route', async ({ page }) => {
     await page.goto('/');
     await dismissMobileSidebarIfPresent(page);
     await expect(page.locator('.back-button-container')).toHaveCount(0);
