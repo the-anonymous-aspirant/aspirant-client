@@ -117,6 +117,15 @@ export interface InstallOpts {
   decideResponse?: unknown;
   /** Delay /generate response in ms, holding the full spinner on screen. */
   generateDelayMs?: number;
+  /** Force /generate's status (default 200), for both the docx and pdf
+   *  requests alike — commander validates before it renders either format,
+   *  so a real rejection answers both the same way. Pair with
+   *  generateErrorBody; default body is FastAPI's own {"detail": ...}
+   *  shape (#9439), not the {error:{message}} envelope some other
+   *  commander routes use. */
+  generateStatus?: number;
+  /** Body for a non-200 /generate (default: {"detail": "error"}). */
+  generateErrorBody?: unknown;
   /** #5979: GET /jobs/:id returns status=failed (the async job crashed). */
   jobFails?: boolean;
   /** #5979: POST /extract-async 404s, so the client falls back to sync /extract
@@ -248,6 +257,16 @@ export async function installCommanderMocks(page: Page, opts: InstallOpts = {}):
 
     if (opts.generateDelayMs) {
       await new Promise(resolve => setTimeout(resolve, opts.generateDelayMs));
+    }
+
+    const status = opts.generateStatus ?? 200;
+    if (status !== 200) {
+      await route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(opts.generateErrorBody ?? { detail: 'error' }),
+      });
+      return;
     }
 
     if (isPdfRequest) {
