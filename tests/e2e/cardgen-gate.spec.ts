@@ -8,7 +8,10 @@ import {
 
 /** system_3 #8634 / #8645 — the admin-only card editor's shell. Operator
  *  decision 1: the app is visible to and usable by the admin only. The router
- *  guard bounces lower tiers to `/` (display-side; the server gates every
+ *  guard sends lower tiers to the admin sign-in, `/admin/login` (system_3
+ *  #9270: while the Cloudflare Access gate is on, an admin account signed in
+ *  through /login holds a Member session, and that page is its way to the
+ *  Admin tier); display-side only, since the server gates every
  *  /cardgen/* route to Admin, walked by aspirant-server's cardgen gate tests).
  *  No backend runs: every /api call is answered 204 by the catch-all, which is
  *  all this shell needs. */
@@ -23,19 +26,19 @@ async function installNoiseCatchAll(page: Page): Promise<void> {
 const TABS = ['templates', 'cards', 'export', 'assets'];
 
 test.describe('/admin/cardgen — admin-only shell', () => {
-  test('a Viewer is bounced to the home page', async ({ page }) => {
+  test('a Viewer is sent to the admin sign-in, not the shell', async ({ page }) => {
     await seedViewerSession(page);
     await installNoiseCatchAll(page);
     await page.goto('/admin/cardgen');
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL('/admin/login?redirect=/admin/cardgen');
     await expect(page.locator('[data-test="cardgen-app"]')).toHaveCount(0);
   });
 
-  test('a Member is bounced to the home page', async ({ page }) => {
+  test('a Member is sent to the admin sign-in, not the shell', async ({ page }) => {
     await seedTrustedSession(page);
     await installNoiseCatchAll(page);
     await page.goto('/admin/cardgen/templates');
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL('/admin/login?redirect=/admin/cardgen/templates');
     await expect(page.locator('[data-test="cardgen-app"]')).toHaveCount(0);
   });
 

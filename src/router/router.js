@@ -66,6 +66,10 @@ const ADMIN = { minTier: TIER.admin };
 const routes = [
   { path: '/', component: HomeView },
   { path: '/login', component: LoginView },
+  // The admin sign-in (system_3 #8798, #9270). Public: whoever needs it has no
+  // Admin session yet. It lives under /admin so the /admin Cloudflare Access
+  // application puts the PIN in front of it.
+  { path: '/admin/login', component: LoginView, props: { admin: true } },
   // The landing pages for the two links a sign-up email can carry (system_3
   // #5228). Public by definition: whoever follows them has no session yet, and
   // in the recovery case cannot get one. They exist as PAGES rather than the
@@ -226,8 +230,15 @@ router.beforeEach((to) => {
   // the target so they return after authenticating (#5925). A logged-in visitor
   // who simply lacks the tier is a permissions bounce, handled below by going
   // home, and must NOT be routed to login.
-  if (role == null) {
-    return { path: '/login', query: { redirect: to.fullPath } };
+  //
+  // An admin route goes to the admin sign-in instead, and so does a session
+  // below the admin tier (#9270): while the Cloudflare Access gate is on,
+  // /login gives an admin account Member, and /admin/login is how that person
+  // reaches the Admin tier. It grants nothing to anyone else; the server
+  // decides.
+  const adminRoute = minTier >= TIER.admin;
+  if (role == null || (adminRoute && tierOf(role) < minTier)) {
+    return { path: adminRoute ? '/admin/login' : '/login', query: { redirect: to.fullPath } };
   }
 
   if (tierOf(role) < minTier) {

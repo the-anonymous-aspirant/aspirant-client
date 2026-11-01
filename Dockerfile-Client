@@ -97,5 +97,5 @@ RUN node scripts/check-csp-hashes.mjs dist default.conf
 FROM nginx:alpine
 COPY default.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /src/aspirant-client/dist /usr/share/nginx/html
-EXPOSE 80
+EXPOSE 80 8098
 CMD ["nginx", "-g", "daemon off;"]

@@ -37,7 +37,9 @@
       // carry a second, different auth form in the rail beside it. On /signup
       // that was literally two `name="username"` inputs on one screen,
       // competing for the same intent.
-      const AUTH_PAGES = ['/login', '/signup', '/forgot-password'];
+      // #9270: `/admin/login`, the admin sign-in, for the same reason; there
+      // a rail form would also post to the other endpoint.
+      const AUTH_PAGES = ['/login', '/admin/login', '/signup', '/forgot-password'];
       const onAuthPage = computed(() => AUTH_PAGES.includes(route.path));
       const username = ref(localStorage.getItem('user_name'));
       const userRole = ref(localStorage.getItem('user_role'));
