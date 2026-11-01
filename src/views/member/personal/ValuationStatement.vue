@@ -846,6 +846,7 @@
 import { AspBadge, AspButton, AspCheckbox, AspInput, AspModal, AspSegmented, AspSelect, AspTextarea } from '@aspirant/design-system';
 import axios from 'axios';
 import { statementFilename } from '@/components/valuation/statementFilename.js';
+import { commanderErrorMessage } from '@/components/valuation/commanderErrorMessage.js';
 
 import { overlayHistoryWatch } from '@/directives/overlayHistory.js';
 import {
@@ -1847,13 +1848,7 @@ export default {
         // The API's own message when it sent one, page prose otherwise. The
         // old default was err.message, so a network blip printed axios's
         // English into a page that is otherwise entirely Swedish (#5304).
-        let msg = 'Servern svarade inte. Försök igen.';
-        if (err.response?.data instanceof Blob) {
-          try { msg = JSON.parse(await err.response.data.text()).error?.message || msg; }
-          catch (_) { /* keep msg */ }
-        } else {
-          msg = err.response?.data?.error?.message || msg;
-        }
+        const msg = await commanderErrorMessage(err, 'Servern svarade inte. Försök igen.');
         this.generateError = 'Misslyckades att generera: ' + msg;
         this.step = 'review';
       } finally {
@@ -1949,7 +1944,7 @@ export default {
       } catch (err) {
         this.processedError =
           'Kunde inte ladda listan: ' +
-          (err.response?.data?.error?.message || 'Servern svarade inte. Försök igen.');
+          (await commanderErrorMessage(err, 'Servern svarade inte. Försök igen.'));
       } finally {
         this.processedLoading = false;
       }
@@ -1980,7 +1975,7 @@ export default {
       } catch (err) {
         this.processedError =
           'Kunde inte byta namn: ' +
-          (err.response?.data?.error?.message || 'Servern svarade inte. Försök igen.');
+          (await commanderErrorMessage(err, 'Servern svarade inte. Försök igen.'));
       }
     },
 
@@ -2042,7 +2037,7 @@ export default {
       } catch (err) {
         this.processedError =
           'Kunde inte radera: ' +
-          (err.response?.data?.error?.message || 'Servern svarade inte. Försök igen.');
+          (await commanderErrorMessage(err, 'Servern svarade inte. Försök igen.'));
       }
     },
 
@@ -2078,7 +2073,7 @@ export default {
       } catch (err) {
         const msg = err.response?.status === 503
           ? 'PDF-konvertering inte tillgänglig på servern just nu.'
-          : (err.response?.data?.error?.message || 'Servern svarade inte. Försök igen.');
+          : await commanderErrorMessage(err, 'Servern svarade inte. Försök igen.');
         this.processedError = 'Kunde inte ladda ner: ' + msg;
       }
     },
