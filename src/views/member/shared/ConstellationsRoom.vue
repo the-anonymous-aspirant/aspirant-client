@@ -13,6 +13,17 @@
          into the settings face — the operator asked to make the board "much
          clearer", so chrome that is not the board comes off it. -->
     <header class="constellations-room-header">
+      <!-- #9255: the global fixed Back button is gone, and this is the one
+           in-room surface that had no other way back to the lobby (the
+           blocked section below already has its own; Leave, in settings,
+           is a different action — it ends the player's seat). Hidden while
+           blocked or still joining, same as the board itself. -->
+      <AspBackButton
+        v-if="!entering && !blocked"
+        to="/applications/constellations"
+        position="inline"
+        class="constellations-room-back"
+      />
       <div class="constellations-room-heading">
         <h1 class="constellations-room-title">Constellations</h1>
       </div>
@@ -230,6 +241,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
+import { AspBackButton } from '@aspirant/design-system';
 import { useRoomSync, unwrap } from '../../../composables/useRoomSync.js';
 import { createQrImage } from '../../../utils/qr';
 import ConstellationsDice from '../../../components/constellations/ConstellationsDice.vue';
@@ -856,6 +868,7 @@ onMounted(() => {
   width: 100%;
   max-width: 52rem;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 1.5rem;
@@ -864,6 +877,17 @@ onMounted(() => {
 
 .constellations-room-heading {
   text-align: center;
+}
+
+/* The room's chrome is hard-coded dark regardless of the app's own
+   light/dark toggle (#f8fafc on #0b1020, like the rest of this file) — not
+   the themeable surface AspBackButton's --text-muted ink assumes. Pin it
+   locally, matching the ink the room's other actions already use
+   (.constellations-room-rules / -leave), rather than let it resolve to
+   whichever the active site theme defines. */
+.constellations-room-back {
+  align-self: flex-start;
+  --text-muted: #f8fafc;
 }
 
 /* The colour is stated explicitly rather than inherited: the room's own
