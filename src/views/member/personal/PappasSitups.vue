@@ -1,6 +1,6 @@
 <template>
   <!-- Intended user: father (personal app — #4184 IA) -->
-  <div class="pappas-view">
+  <div class="pappas-view page">
     <h1>Pappas sit-ups</h1>
     <p class="page-subtitle">
       57 dagar — 60 situps om dagen, 18 oktober till 13 december 2026.
@@ -440,23 +440,21 @@
 </script>
 
 <style scoped>
+/* The gutter is the shell's (.page, #9501, §3.121): no padding, no 100vh, no
+   centring. The 900px cap is the reading width, held at the gutter (§3.114). */
 .pappas-view {
-  padding: var(--space-lg);
   display: flex;
   flex-direction: column;
-  align-items: center;
   width: 100%;
   max-width: 900px;
-  margin: 0 auto;
+  margin: 0;
   color: var(--text-on-light);
-  min-height: 100vh;
 }
 
 .page-subtitle {
   color: var(--text-muted);
   font-weight: normal;
   margin-bottom: var(--space-xs);
-  text-align: center;
 }
 
 .loading-text,
