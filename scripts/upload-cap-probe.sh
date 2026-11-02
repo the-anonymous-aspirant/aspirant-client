@@ -21,6 +21,16 @@
 set -eu
 
 fail=0
+
+# Static pin (security review, system_3 #9602 c59329): the uploads location
+# streams parts and never spools them to the container's unencrypted disk.
+# Read from the block itself, so a later edit that drops a line fails here.
+block=$(awk '/^  location \/admin\/explorer\/api\/uploads\/ \{/ { on = 1 } on { print } on && /^  \}/ { exit }' default.conf)
+for d in 'proxy_request_buffering off;' 'proxy_http_version 1.1;' 'client_max_body_size 40m;'; do
+  if printf '%s\n' "$block" | grep -q "^ *$d"; then echo "ok   uploads location: $d"
+  else echo "FAIL uploads location lacks: $d"; fail=1; fi
+done
+
 tmp=$(mktemp -d)
 name="upload-cap-probe-$$"
 if [ "${1:-}" = "--docker" ]; then
@@ -73,5 +83,19 @@ check /admin/explorer/api/health 26 413
 check /admin/explorer/api/health 24 through
 # Penpot's location allows 100m behind the same admin gate.
 check /admin/penpot/api/upload 30 through
+
+# Behavioural half, under --docker: with buffering on, nginx writes the whole
+# part to client_temp before it even resolves the upstream, and logs it. With
+# buffering off it must not. (The health request above still buffers: that
+# location is not the upload path, and its log line is the positive control.)
+if [ "$docker_mode" = yes ]; then
+  log=$(docker logs "$name" 2>&1 || true)
+  if echo "$log" | grep -q 'buffered to a temporary file.*PUT /admin/explorer/api/uploads/'; then
+    echo "FAIL uploads part was spooled to a temp file"; fail=1
+  else echo "ok   uploads part not spooled to a temp file"; fi
+  if echo "$log" | grep -q 'buffered to a temporary file.*PUT /admin/explorer/api/health'; then
+    echo "ok   control: a buffered location's body is spooled (the log check can see it)"
+  else echo "FAIL control: no spool logged for the buffered health request"; fail=1; fi
+fi
 
 if [ "$fail" = 0 ]; then echo "upload-cap-probe: OK"; else echo "upload-cap-probe: FAILED"; exit 1; fi
