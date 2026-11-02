@@ -89,6 +89,23 @@ export function measure(page: Page): Promise<Geometry> {
         !inEmptyState
       )
         centred.push(`${el.tagName.toLowerCase()}.${el.className}`);
+      // A page-level column that centres its children: the 100vh root's own
+      // shape, repeated one level down. Text-align alone misses it (the
+      // children keep text-align: start), and the title-x read only covers
+      // the heading. Flagged when a child is narrower than the column, so a
+      // column of full-width children centres nothing and passes (#9596).
+      if (
+        cs.display.includes('flex') &&
+        cs.flexDirection.startsWith('column') &&
+        cs.alignItems === 'center' &&
+        !onOwnGround(el) &&
+        !inEmptyState &&
+        Array.from(el.children).some((c) => {
+          const cr = (c as HTMLElement).getBoundingClientRect();
+          return cr.width > 0 && cr.width < r.width - 1;
+        })
+      )
+        centred.push(`flex-centre:${el.tagName.toLowerCase()}.${el.className}`);
     }
     const h1 = root.querySelector('h1') as HTMLElement;
     const rootBottom = Math.round(root.getBoundingClientRect().bottom + window.scrollY);

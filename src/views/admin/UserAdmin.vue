@@ -363,10 +363,12 @@
     color: var(--text-on-light);
   }
 
+  /* Starts at the gutter like the rest of the page: centring this section was
+     the root's page-level centring repeated one level down (#9596, §3.114). */
   .signup-switch {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-sm);
     margin-bottom: var(--space-lg);
   }
@@ -387,6 +389,11 @@
     display: flex;
     align-items: center;
     gap: var(--space-sm);
+  }
+
+  /* The roster note sits in the table area, centred like the table's own
+     "No users." row; the sign-up note above is page text and stays left. */
+  .roster-note {
     text-align: center;
   }
 
