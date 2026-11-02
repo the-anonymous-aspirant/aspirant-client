@@ -16,8 +16,13 @@ import './style.css';
 // resolves from here — no local re-declaration to drift out of sync. styles.css
 // carries the component CSS (.card, .sidebar, …) — the Vite lib build ships it
 // separately and does not inject it, so consuming AspCard without this import
-// renders it unstyled.
+// renders it unstyled. fonts.css registers the Iosevka faces that
+// `--font-family-base` names (system_3 #9580). Without it every page rendered
+// in the viewer's OS monospace and still looked styled, so nothing caught it.
+// It goes before styles.css, as the DS asks and the console does (#7967), so
+// the faces exist before components mount.
 import '@aspirant/design-system/tokens.css';
+import '@aspirant/design-system/fonts.css';
 import '@aspirant/design-system/styles.css';
 import axios from 'axios';
 
