@@ -1,5 +1,5 @@
 <template>
-  <div class="goals-view">
+  <div class="goals-view page">
     <h1>Goal Trees</h1>
     <h2 class="page-subtitle">Plan and track your goals</h2>
 
@@ -296,15 +296,14 @@ export default {
 </script>
 
 <style scoped>
+/* The gutter is the shell's (.page, #9501, §3.121): no padding, no 100vh, no
+   centring. The 900px cap is the reading width, held at the gutter (§3.114). */
 .goals-view {
-  padding: var(--space-lg);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  min-height: 100vh;
   width: 100%;
   max-width: 900px;
-  margin: 0 auto;
+  margin: 0;
   color: var(--text-on-light);
 }
 
@@ -441,10 +440,6 @@ export default {
 
 
 @media (max-width: 768px) {
-  .goals-view {
-    padding: var(--space-md);
-  }
-
   .card-header {
     flex-direction: column;
     align-items: flex-start;

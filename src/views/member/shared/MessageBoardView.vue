@@ -1,5 +1,5 @@
 <template>
-  <div class="messageBoard">
+  <div class="messageBoard page">
     <div class="messageboard-content">
       <div class="messageboard-header">
         <h1>Anything to say?</h1>
@@ -197,15 +197,32 @@
 </script>
 
 <style scoped>
+  /* The gutter is the shell's (.page, #9501, §3.121): no padding of its own
+     and no centring. The board still fills the window so its list scrolls
+     inside its own frame under the form, but it fills the shell's content box,
+     not 100vh: 100vh plus `.app-main`'s padding scrolled the page by the whole
+     gutter (64 px at desktop, 86 px on a phone). The two subtractions are
+     `.app-main`'s top and bottom padding in App.vue; change them together. */
   .messageBoard {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    height: 100vh;
+    height: calc(100dvh - 2 * var(--space-xl));
     color: var(--text-on-light);
     width: 100%;
-    padding: var(--space-lg);
     overflow: hidden;
+  }
+
+  @media (max-width: 767.98px) {
+    .messageBoard {
+      height: calc(100dvh - (var(--space-lg) + 30px + var(--space-md)) - var(--space-md));
+    }
+  }
+
+  /* The title sits two levels below the root (content > header), past the
+     reach of style.css's `.page > :first-child > h1:first-child`, so it drops
+     its own top margin here to read the one title y. */
+  .messageboard-header h1 {
+    margin-top: 0;
   }
 
   .messageboard-content {
