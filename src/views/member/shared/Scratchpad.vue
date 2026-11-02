@@ -1,5 +1,5 @@
 <template>
-  <div class="scratchpad-view">
+  <div class="scratchpad-view page">
     <h1>Scratchpad</h1>
     <p class="page-subtitle">
       A personal note that syncs live across every device you're logged in on.
@@ -139,18 +139,16 @@ export default {
 
 <style scoped>
 /* Match the member tool-page vocabulary (#4220): flow inside the router content
-   area with the shared padded, centered container + <h1> + .page-subtitle, and
-   shell the editor in a token-styled card — the pattern PappasPushups and the
-   other member pages use. Replaces the previous position:fixed full-bleed layout
-   that read as a one-off. */
+   area as a .page (the shell's gutter, nothing centred, #9501, §3.121) with
+   <h1> + .page-subtitle, and shell the editor in a token-styled card. The
+   900px cap is the reading width, held at the gutter (§3.114). Replaces the
+   previous position:fixed full-bleed layout that read as a one-off. */
 .scratchpad-view {
   display: flex;
   flex-direction: column;
   width: 100%;
   max-width: 900px;
-  margin: 0 auto;
-  padding: var(--space-lg);
-  min-height: 100vh;
+  margin: 0;
   color: var(--text-on-light);
 }
 
@@ -158,7 +156,6 @@ export default {
   color: var(--text-muted);
   font-weight: normal;
   margin-bottom: var(--space-md);
-  text-align: center;
 }
 
 .scratchpad-card {

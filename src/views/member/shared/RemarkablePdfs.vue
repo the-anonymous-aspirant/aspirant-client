@@ -1,5 +1,5 @@
 <template>
-  <div class="remarkable-pdfs">
+  <div class="remarkable-pdfs page">
     <h1>Remarkable PDFs</h1>
     <h2>Generate PDFs for your remarkable tablet</h2>
 
@@ -118,10 +118,11 @@ export default {
 </script>
 
 <style scoped>
+/* The gutter is the shell's (.page, #9501, §3.121). The 900px cap is the
+   reading width, held at the gutter, not centred (§3.114). */
 .remarkable-pdfs {
-  padding: var(--space-lg);
   max-width: 900px;
-  margin: 0 auto;
+  margin: 0;
 }
 
 /* Reads as the caption it is. The former selector's fill/hover/active rules are
@@ -130,7 +131,6 @@ export default {
    dropped. Ink is the ambient body ink so it stays legible on whatever surface
    the page gives it, rather than pinning an absolute colour. */
 .generator-name {
-  text-align: center;
   margin: var(--space-lg) 0;
   font-size: var(--text-lg);
   font-weight: var(--font-weight-medium);
