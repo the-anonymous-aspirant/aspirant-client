@@ -124,6 +124,11 @@ for (const theme of ['light', 'dark'] as const) {
         `AC5 ${theme} address lines=${geo.lines} width=${geo.width}/${geo.boxWidth} copyTop=${copyTop} codeBottom=${geo.bottom}`
       );
       expect(geo.lines).toBeLessThanOrEqual(2);
+      // Visible to Playwright is not readable: the link inherits its ink, and
+      // on a card that set none it measured 1:1 (#9582).
+      const linkRatio = await contrastOf(page, '.copy-address');
+      console.log(`AC5 ${theme} copy link contrast=${linkRatio.toFixed(2)}`);
+      expect(linkRatio).toBeGreaterThanOrEqual(4.5);
       expect(copyTop).toBeGreaterThanOrEqual(geo.bottom);
       await copy.click();
       await expect(page.getByRole('button', { name: 'Copied!' })).toBeVisible();

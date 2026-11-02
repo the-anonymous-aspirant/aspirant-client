@@ -161,7 +161,12 @@ onMounted(async () => {
   margin-bottom: var(--space-lg);
 }
 
+/* The card paints a dark ground, so it declares the ink that goes on it
+   (§3.18). Without this its children inherit the page's dark ink: the copy
+   link (AspButton variant="link", `color: inherit`) measured 1:1 on the card
+   (#9582). Headings and labels name their own ink below. */
 .donation-card {
+  color: var(--text-on-dark);
   background-color: var(--surface-card);
   border: 3px solid var(--border-card);
   border-radius: var(--radius-pill);
