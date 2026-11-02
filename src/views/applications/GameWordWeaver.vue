@@ -1,5 +1,5 @@
 <template>
-  <div id="wordweaver">
+  <div id="wordweaver" class="page">
     <h1>WordWeaver</h1>
     <div class="intro-text">
       <p><em>25 letters will fall in a pre-determined sequence</em></p>
@@ -944,14 +944,15 @@
 </script>
 
 <style scoped>
+  /* The gutter is the shell's (.page, #9501, §3.121): no top margin, no
+     padding, and nothing centred at page level. The board, score, about and
+     fanfare cards keep their own interiors; the phone d-pad keeps its centred
+     rows. */
   #wordweaver {
     font-family: var(--font-family-base);
-    text-align: center;
-    margin-top: var(--space-lg);
     display: flex;
     flex-direction: column;
-    align-items: center;
-    padding: 0 var(--space-sm);
+    align-items: flex-start;
     color: var(--text-on-light);
   }
 
@@ -976,7 +977,6 @@
     gap: var(--space-sm);
     margin-bottom: var(--space-md);
     flex-wrap: wrap;
-    justify-content: center;
   }
 
   .language-selector {
@@ -1037,7 +1037,7 @@
     border: 3px solid var(--border-card);
     padding: var(--space-lg);
     border-radius: var(--radius-lg);
-    margin: 0 auto;
+    margin: 0;
     width: fit-content;
     max-width: calc(100vw - var(--space-lg));
     box-shadow: var(--shadow-lg);
@@ -1104,11 +1104,6 @@
   }
 
   @media (max-width: 768px) {
-    #wordweaver {
-      margin-top: var(--space-sm);
-      padding: 0 var(--space-xs);
-    }
-
     #wordweaver h1 {
       margin-bottom: var(--space-2xs);
       font-size: var(--text-xl);
@@ -1239,7 +1234,6 @@
   .tabs {
     display: flex;
     gap: var(--space-xs);
-    justify-content: center;
     margin-bottom: var(--space-md);
   }
 
@@ -1247,7 +1241,6 @@
   .scores {
     display: flex;
     flex-direction: column;
-    align-items: center;
   }
 
   .winning-words h2,
@@ -1318,8 +1311,6 @@
     color: var(--text-on-dark);
     line-height: 1.6;
     width: 80%;
-    margin-left: auto;
-    margin-right: auto;
     min-height: 0;
     height: auto;
     display: block;
@@ -1359,8 +1350,6 @@
     color: var(--brand-primary);
     line-height: 1.6;
     width: 80%;
-    margin-left: auto;
-    margin-right: auto;
     display: flex;
     flex-direction: column;
     align-items: center;

@@ -155,9 +155,12 @@
 </script>
 
 <template>
-  <div class="profile-view">
+  <div class="profile-view page">
+    <!-- The page title sits on the page, above the card, so it takes the
+         shared gutter and title y like every other page (#9599, §3.121). It
+         used to open the card, which the root centred. -->
+    <h1 class="profile-title">Your profile</h1>
     <div class="profile-card">
-      <h1 class="profile-title">Your profile</h1>
 
       <!-- The read state. The `error` line further down is NOT one — it is an
            inline notice shared by the load failure and by the save/upload
@@ -256,11 +259,10 @@
 </template>
 
 <style scoped>
+  /* The gutter is the shell's (.page, #9501, §3.121): no padding, and the
+     card is not centred; it keeps its 520px cap at the gutter (§3.114). */
   .profile-view {
-    display: flex;
-    justify-content: center;
     width: 100%;
-    padding: var(--space-lg);
     color: var(--text-on-light);
   }
 
@@ -276,9 +278,9 @@
     gap: var(--space-lg);
   }
 
+  /* Page ink: the title is on the page ground now, not on the card. */
   .profile-title {
-    margin: 0;
-    color: var(--text-on-dark);
+    margin: 0 0 var(--space-lg);
   }
 
   .profile-loading {
