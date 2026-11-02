@@ -1,5 +1,5 @@
 <template>
-  <div class="kvitto-maker">
+  <div class="kvitto-maker page">
     <h1>Kvitto Maker</h1>
     <h2 class="page-subtitle">Generate 12-month rent receipt PDFs</h2>
 
@@ -137,14 +137,9 @@
 </script>
 
 <style scoped>
-  .kvitto-maker {
-    text-align: center;
-    padding: var(--space-lg);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
-  }
+  /* The shell's .app-main carries the one gutter and .page the one title y
+     (system_3 #9192, #9501): no root padding, no 100vh box (it scrolled 64 px
+     past the content), nothing centred at page level (§3.114). */
 
   .kvitto-maker h2 {
     margin-bottom: var(--space-xl);
@@ -176,9 +171,4 @@
   }
 
 
-  @media (max-width: 767px) {
-    .kvitto-maker {
-      padding: var(--space-md) var(--space-sm);
-    }
-  }
 </style>

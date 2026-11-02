@@ -1,5 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
-import { seedAdminSession } from './helpers/mockBackend';
+import { test, expect } from '@playwright/test';
+import { expectSignedInGutter, measure, open, type Geometry } from './helpers/pageGutter';
 
 /**
  * #9192 (§3.121, §3.114) — one page gutter at the root. `#app`'s padding
@@ -25,72 +25,6 @@ const ROUTES = [
 /** Routes whose content fits a 900 px (desktop) and 844 px (phone) window. */
 const FITS = ['/login', '/verify-email', '/reset-password', '/signup', '/forgot-password', '/no-such-page'];
 
-async function open(page: Page, path: string, theme: string): Promise<void> {
-  await page.addInitScript((t) => localStorage.setItem('theme', t as string), theme);
-  await page.route(/\/api\//, (route) => route.fulfill({ status: 204, body: '' }));
-  await page.route('**/api/signup/status', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ signup_enabled: true }) }),
-  );
-  await page.goto(path);
-  await page.locator('.fade-in h1').first().waitFor();
-  // Let the route's fade-in and any image settle before reading geometry.
-  await page.waitForTimeout(400);
-}
-
-interface Geometry {
-  edge: number;
-  rootBottom: number;
-  titleTop: number;
-  titleAlign: string;
-  scrollHeight: number;
-  innerHeight: number;
-  centred: string[];
-  toggleBottom: number | null;
-}
-
-/** The view's first content edge (leftmost in-flow box with size), the first
- *  heading's top, the document's scroll extent, and any in-flow text block
- *  that centres itself. */
-function measure(page: Page): Promise<Geometry> {
-  return page.evaluate(() => {
-    // The routed view's root: router-view carries .fade-in (App.vue), and so
-    // may other nodes, so take the one holding the route's heading.
-    const root = Array.from(document.querySelectorAll<HTMLElement>('.fade-in')).find((e) => e.querySelector('h1'))!;
-    const onOwnGround = (el: HTMLElement) => {
-      for (let n = el.parentElement; n && n !== root; n = n.parentElement) {
-        const bg = getComputedStyle(n).backgroundColor;
-        if (bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return true;
-      }
-      return false;
-    };
-    let edge = Infinity;
-    const centred: string[] = [];
-    for (const el of Array.from(root.querySelectorAll<HTMLElement>('*'))) {
-      const cs = getComputedStyle(el);
-      if (cs.position === 'fixed' || cs.visibility === 'hidden') continue;
-      const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) continue;
-      edge = Math.min(edge, r.left);
-      // Page-level text only: a card (any box below the root that paints its
-      // own ground) lays out its own interior.
-      if (/^H[1-6]$|^P$/.test(el.tagName) && cs.textAlign === 'center' && !onOwnGround(el))
-        centred.push(`${el.tagName.toLowerCase()}.${el.className}`);
-    }
-    const h1 = root.querySelector('h1') as HTMLElement;
-    const rootBottom = Math.round(root.getBoundingClientRect().bottom + window.scrollY);
-    const toggle = document.querySelector('.mobile-menu-toggle') as HTMLElement | null;
-    return {
-      edge: Math.round(edge * 10) / 10,
-      rootBottom,
-      titleTop: Math.round(h1.getBoundingClientRect().top * 10) / 10,
-      titleAlign: getComputedStyle(h1).textAlign,
-      scrollHeight: document.documentElement.scrollHeight,
-      innerHeight: window.innerHeight,
-      centred,
-      toggleBottom: toggle && toggle.getBoundingClientRect().width > 0 ? Math.round(toggle.getBoundingClientRect().bottom) : null,
-    };
-  });
-}
 
 for (const theme of ['light', 'dark'] as const) {
   test.describe(`#9192 one page gutter (${theme})`, () => {
@@ -133,14 +67,10 @@ for (const theme of ['light', 'dark'] as const) {
   });
 }
 
+
 /** The signed-in hubs (system_3 #9286, §3.121): the same gutter, title y and
  *  no page-level centring as the public routes, under an admin session. */
 const HUBS = ['/member', '/admin', '/applications', '/applications/games', '/applications/quizzes'];
-
-async function openSignedIn(page: Page, path: string, theme: string): Promise<void> {
-  await seedAdminSession(page);
-  await open(page, path, theme);
-}
 
 for (const theme of ['light', 'dark'] as const) {
   test.describe(`#9286 signed-in hubs take the one gutter (${theme})`, () => {
@@ -150,24 +80,7 @@ for (const theme of ['light', 'dark'] as const) {
       test.setTimeout(120_000);
       const phone = (page.viewportSize()?.width ?? 1280) < 768;
       await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1440, height: 900 });
-      await open(page, '/', theme);
-      const ref = await measure(page);
-      for (const path of HUBS) {
-        await openSignedIn(page, path, theme);
-        const g = await measure(page);
-        console.log(
-          `GUTTER ${info.project.name} ${theme} ${path} edge=${g.edge} title=${g.titleTop} ` +
-            `scroll=${g.scrollHeight}/${g.innerHeight} bottom=${g.rootBottom} centred=${g.centred.join(',') || '-'}`,
-        );
-        expect(g.edge, `${path} first content edge`).toBe(ref.edge);
-        expect(Math.abs(g.titleTop - ref.titleTop), `${path} title top ${g.titleTop} vs ${ref.titleTop}`).toBeLessThanOrEqual(1);
-        expect(g.titleAlign, `${path} title aligns left`).not.toBe('center');
-        expect(g.centred, `${path} centred text blocks`).toEqual([]);
-        // The document ends where the content does, plus the shell's bottom
-        // gutter; a 100vh root used to add the whole gutter again.
-        const gutter = phone ? 16 : 32;
-        expect(g.scrollHeight, `${path} scrolls past its content`).toBeLessThanOrEqual(Math.max(g.innerHeight, g.rootBottom + gutter + 1));
-      }
+      await expectSignedInGutter(page, info, theme, HUBS);
     });
   });
 }
