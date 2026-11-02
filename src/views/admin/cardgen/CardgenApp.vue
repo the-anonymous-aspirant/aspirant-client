@@ -91,7 +91,6 @@ export default {
      sits in .cardgen-head, the root's first child, which .page also covers. */
   max-width: 1200px;
   margin: 0;
-  text-align: left;
 }
 .meta {
   color: var(--text-muted);
