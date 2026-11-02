@@ -1,5 +1,5 @@
 <template>
-  <div class="cardgen-app" data-test="cardgen-app">
+  <div class="cardgen-app page" data-test="cardgen-app">
     <header class="cardgen-head">
       <h1>Card Editor</h1>
       <p class="meta">
@@ -85,11 +85,12 @@ export default {
 
 <style scoped>
 .cardgen-app {
+  /* One gutter (#8753 req 6, §3.114; system_3 #9501): the shell's .app-main
+     carries it and .page the title y, so the editor adds no padding of its own
+     and its 1200px cap starts at the gutter rather than centring. The title
+     sits in .cardgen-head, the root's first child, which .page also covers. */
   max-width: 1200px;
-  margin: 0 auto;
-  padding: var(--space-6, 24px) var(--space-4, 16px);
-  /* One gutter (#8753 req 6, §3.114): the global #app centring stops here; every
-     block of the editor, header included, sits at the content gutter. */
+  margin: 0;
   text-align: left;
 }
 .meta {

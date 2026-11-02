@@ -7,7 +7,7 @@
     ></iframe>
   </div>
 
-  <div v-else class="browser-flows-view" data-test="browser-flows-view">
+  <div v-else class="browser-flows-view page" data-test="browser-flows-view">
     <h1>Browser Flows</h1>
     <p class="meta">
       Rows = registered flows. Columns = last {{ maxRuns }} runs, oldest left, newest right.
@@ -237,8 +237,8 @@
 </script>
 
 <style scoped>
+  /* The shell's .app-main carries the one gutter (system_3 #9192, #9501). */
   .browser-flows-view {
-    padding: 1.5rem;
     max-width: 100%;
   }
   h1 {

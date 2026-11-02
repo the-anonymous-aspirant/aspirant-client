@@ -1,5 +1,5 @@
 <template>
-  <div class="system-health-view">
+  <div class="system-health-view page">
     <h1>System Health</h1>
     <h2 class="page-subtitle">Container metrics, disk usage, and database statistics</h2>
 
@@ -292,15 +292,13 @@ export default {
 </script>
 
 <style scoped>
+/* The shell's .app-main carries the one gutter and .page the one title y
+   (system_3 #9192, #9501): no root padding, no 100vh box (it scrolled 64 px
+   past the content), nothing centred at page level (§3.114). */
 .system-health-view {
-  padding: var(--space-lg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 100vh;
   width: 100%;
   max-width: 900px;
-  margin: 0 auto;
+  margin: 0;
   color: var(--text-on-light);
 }
 
@@ -682,10 +680,6 @@ export default {
 
   .container-grid {
     grid-template-columns: 1fr;
-  }
-
-  .system-health-view {
-    padding: var(--space-md);
   }
 
   .disk-details {
