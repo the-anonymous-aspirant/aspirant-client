@@ -220,7 +220,10 @@
     </div>
 
     <transition name="sidebar-login-transition" mode="out-in">
-      <div v-if="!collapsed" class="auth-section">
+      <!-- Only when it has content (#9582, UX walk AC4): on /login and /signup
+           with nobody signed in, the form below is hidden, and an empty section
+           still drew its top border as an orphan rule under the nav. -->
+      <div v-if="!collapsed && (username || !onAuthPage)" class="auth-section">
         <div v-if="!username && !onAuthPage">
           <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="false" field-surface="card"></Login>
         </div>

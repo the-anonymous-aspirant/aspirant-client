@@ -52,10 +52,14 @@
 
       <div class="address-section">
         <label>BTC Address</label>
-        <div class="address-box" @click="copyAddress">
+        <!-- The address is one line that wraps at the box width, and the copy
+             action is a real control under it (#9582, UX walk AC5, §1.5). -->
+        <div class="address-box">
           <code>{{ btcAddress }}</code>
-          <span class="copy-hint">{{ copied ? 'Copied!' : 'Click to copy' }}</span>
         </div>
+        <AspButton variant="link" type="button" class="copy-address" @click="copyAddress">
+          {{ copied ? 'Copied!' : 'Click to copy' }}
+        </AspButton>
       </div>
 
     </div>
@@ -241,35 +245,26 @@ onMounted(async () => {
   margin-bottom: var(--space-xs);
 }
 
+/* A display box, not a control: the copy action is the link button below. */
 .address-box {
   background: var(--surface-card-inner);
   border: 1px solid var(--border-card);
   border-radius: var(--radius-md);
   padding: var(--space-sm) var(--space-md);
-  cursor: pointer;
-  transition: all var(--transition-base);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-sm);
 }
 
-.address-box:hover {
-  border-color: var(--brand-accent);
-  background: rgba(0, 0, 0, 0.4);
-}
-
+/* The whole box width, wrapping anywhere only when it must (#9582 AC5): the
+   flex row it used to share with a nowrap hint squeezed it into a 10-character
+   column. */
 .address-box code {
+  display: block;
   color: var(--text-on-dark);
   font-size: var(--text-sm);
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
-.copy-hint {
-  color: var(--text-hint);
-  font-size: var(--text-xs);
-  white-space: nowrap;
-  flex-shrink: 0;
+.copy-address {
+  margin-top: var(--space-xs);
 }
 
 .btc-instructions {
@@ -280,9 +275,10 @@ onMounted(async () => {
   margin: 0;
 }
 
+/* Muted ink by token at full opacity, never an opacity on the element (§8
+   floors, §3.18): opacity .7 composited to 3.75:1 in light (#9582 AC3). */
 .support-footer {
-  color: var(--text-on-light);
-  opacity: 0.7;
+  color: var(--text-muted);
   font-size: var(--text-base);
   font-style: italic;
 }
@@ -295,12 +291,6 @@ onMounted(async () => {
   .qr-image {
     width: 130px;
     height: 130px;
-  }
-
-  .address-box {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-xs);
   }
 }
 </style>
