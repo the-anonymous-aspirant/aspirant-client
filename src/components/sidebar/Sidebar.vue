@@ -219,21 +219,27 @@
            redundant. That bottom avatar is now the single, clickable surface. -->
     </div>
 
+    <!-- The transition's child stays keyed on `collapsed` alone. Toggling it on
+         the route as well started a leave transition at first paint (the route
+         resolves after mount), which never finished in the off-canvas phone
+         drawer and left a second login form in the DOM. The bordered section
+         inside renders only when it has content (#9582, UX walk AC4): on /login
+         and /signup with nobody signed in, an empty one still drew its top
+         border as an orphan rule under the nav. -->
     <transition name="sidebar-login-transition" mode="out-in">
-      <!-- Only when it has content (#9582, UX walk AC4): on /login and /signup
-           with nobody signed in, the form below is hidden, and an empty section
-           still drew its top border as an orphan rule under the nav. -->
-      <div v-if="!collapsed && (username || !onAuthPage)" class="auth-section">
-        <div v-if="!username && !onAuthPage">
-          <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="false" field-surface="card"></Login>
-        </div>
-        <div v-else-if="username" class="user-info">
-          <router-link to="/profile" class="user-avatar-link" aria-label="Your profile">
-            <UserAvatar :avatar-url="profileAvatarUrl" :name="username" :size="48" />
-          </router-link>
-          <p class="user-detail">{{ username }}</p>
-          <p class="user-role">{{ roleLabel }}</p>
-          <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="true" field-surface="card"></Login>
+      <div v-if="!collapsed" class="auth-slot">
+        <div v-if="username || !onAuthPage" class="auth-section">
+          <div v-if="!username && !onAuthPage">
+            <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="false" field-surface="card"></Login>
+          </div>
+          <div v-else-if="username" class="user-info">
+            <router-link to="/profile" class="user-avatar-link" aria-label="Your profile">
+              <UserAvatar :avatar-url="profileAvatarUrl" :name="username" :size="48" />
+            </router-link>
+            <p class="user-detail">{{ username }}</p>
+            <p class="user-role">{{ roleLabel }}</p>
+            <Login @login="refreshUserData" @logout="refreshUserData" :loggedIn="true" field-surface="card"></Login>
+          </div>
         </div>
       </div>
     </transition>
