@@ -1,6 +1,6 @@
 <template>
   <!-- Intended user: sister (Ludde) (personal app — #4184 IA) -->
-  <div class="container">
+  <div class="container page">
     <h1>Ludde Meal Time Tracker (LMTT)</h1>
     <p>The date and time defaults to right now, but can be adjusted by clicking on it</p>
     <div class="image-container">
@@ -304,17 +304,17 @@
 </script>
 
 <style scoped>
-  .container {
-    text-align: center;
-    margin-top: var(--space-3xl);
-  }
+  /* No root rule: the gutter is the shell's (.page, #9501, §3.121). The root
+     used to centre all its text and add a 3xl top margin, so the title sat at
+     y 96, centred. Text inside each info box, which paints its own ground,
+     still centres. */
 
   .image-container {
     width: 40%;
     overflow: hidden;
     position: relative;
     height: 250px;
-    margin: auto;
+    margin: 0;
   }
 
   .ludde-image {
@@ -326,7 +326,6 @@
 
   .top-nav {
     display: flex;
-    justify-content: center;
     margin-bottom: var(--space-lg);
   }
 
@@ -353,13 +352,12 @@
   .button-group {
     margin-top: var(--space-lg);
     display: flex;
-    justify-content: center;
   }
 
   /* No `.button-group button` rule here any more, and it must not come back:
      a wrapper-descendant selector (0,1,1) still matches the <button> AspButton
      renders and outranks .btn--size-lg (0,1,0) on padding, so it would silently
-     re-pad the DS control. .button-group above still centres it.
+     re-pad the DS control. .button-group above still lays it out.
 
      .confirm-btn keeps only its width. It used to force --text-2xl; that is
      dropped rather than re-specified at a higher specificity, because a
@@ -408,7 +406,6 @@
   .info-boxes {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
     margin-bottom: var(--space-lg);
   }
 

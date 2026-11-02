@@ -1,6 +1,6 @@
 <template>
   <!-- Intended user: Viktor (personal app — #4184 IA) -->
-  <div class="jobs-view">
+  <div class="jobs-view page">
     <h1>Jobs</h1>
     <p class="page-subtitle">
       Berlin · part-time · English-speaking — deduplicated overview across the scraped boards.
@@ -525,10 +525,11 @@
 </script>
 
 <style scoped>
+  /* The gutter is the shell's (.page, #9501, §3.121). The 1100px cap is the
+     reading width, held at the gutter, not centred (§3.114). */
   .jobs-view {
-    padding: var(--space-lg);
     max-width: 1100px;
-    margin: 0 auto;
+    margin: 0;
   }
 
   .page-subtitle {
@@ -1002,10 +1003,6 @@
   }
 
   @media (max-width: 767px) {
-    .jobs-view {
-      padding: var(--space-md) var(--space-sm);
-    }
-
     .filter-bar {
       flex-direction: column;
       align-items: stretch;

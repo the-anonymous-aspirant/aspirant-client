@@ -1,6 +1,6 @@
 <template>
   <!-- Intended user: sister (värdering) (personal app — #4184 IA) -->
-  <div class="valuation-view">
+  <div class="valuation-view page">
     <h1>Värdeutlåtande</h1>
     <h2 v-if="activeTab === 'create'" class="page-subtitle">
       Skapa ett värdeutlåtande från PDF-underlag
@@ -2099,25 +2099,23 @@ export default {
 </script>
 
 <style scoped>
-/* #8423: the view centres its children, so each tab panel was sized to fit
-   its content, and as a flex item it could not shrink below it
+/* #8423: as a flex item a tab panel could not shrink below its content
    (`min-width: auto`): a 384px provenance row made the review card 451px on a
-   390px phone. A definite width — the view's own, which is what every panel
-   measures at desktop already (852 = 852) — plus `min-width: 0` holds it there,
-   so wide content has to fit or scroll in its own island. (`min-width: 0`
-   alone is not enough in WebKit: the fit-content size still counts a scroll
+   390px phone, back when the view centred its children and sized each panel
+   to fit. A definite width — the view's own — plus `min-width: 0` holds it
+   there, so wide content has to fit or scroll in its own island. (`min-width:
+   0` alone is not enough in WebKit: the fit-content size still counts a scroll
    island's table.) */
 .valuation-view > [role="tabpanel"] { width: 100%; min-width: 0; }
 
+/* The gutter is the shell's (.page, #9501, §3.121): no padding, no 100vh, no
+   centring. The 900px cap is the reading width, held at the gutter (§3.114). */
 .valuation-view {
-  padding: var(--space-lg);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  min-height: 100vh;
   width: 100%;
   max-width: 900px;
-  margin: 0 auto;
+  margin: 0;
   color: var(--text-on-light);
 }
 
@@ -2718,7 +2716,6 @@ export default {
    just adopted (#4323/#4324 measured that live). */
 .tab-nav {
   display: flex;
-  justify-content: center;
   margin: 0 0 var(--space-lg) 0;
   width: 100%;
 }
@@ -2882,7 +2879,6 @@ export default {
 
 /* Mobile */
 @media (max-width: 768px) {
-  .valuation-view { padding: var(--space-md); }
   .field-row { grid-template-columns: 1fr; gap: var(--space-2xs); }
   .field-row > label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em; }
   .field-row--top > label { padding-top: 0; }
