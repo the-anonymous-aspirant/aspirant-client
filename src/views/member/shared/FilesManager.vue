@@ -1,5 +1,5 @@
 <template>
-  <div class="files-manager">
+  <div class="files-manager page">
     <h1>Files</h1>
     <h2 class="page-subtitle">Upload, download, and share files</h2>
 
@@ -354,15 +354,14 @@
 </script>
 
 <style scoped>
+  /* The gutter is the shell's (.page, #9501, §3.121); this root adds no
+     padding, no 100vh and no centring. The 900px cap is the reading width,
+     held at the gutter, not centred (§3.114). */
   .files-manager {
-    text-align: center;
-    padding: var(--space-lg);
     display: flex;
     flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
     max-width: 900px;
-    margin: 0 auto;
+    margin: 0;
   }
 
   .files-manager h2 {
@@ -477,7 +476,6 @@
     gap: var(--space-md);
     margin-bottom: var(--space-lg);
     flex-wrap: wrap;
-    justify-content: center;
   }
 
   .file-input-hidden {
@@ -500,7 +498,6 @@
     gap: var(--space-sm);
     margin-bottom: var(--space-lg);
     flex-wrap: wrap;
-    justify-content: center;
   }
 
   /* Width only. The border, fill, ink and the placeholder treatment are
@@ -590,11 +587,6 @@
 
   /* Mobile */
   @media (max-width: 767px) {
-    .files-manager {
-      padding: var(--space-md) var(--space-sm);
-      padding-top: 70px;
-    }
-
     .files-manager h1 {
       font-size: var(--text-2xl);
     }
