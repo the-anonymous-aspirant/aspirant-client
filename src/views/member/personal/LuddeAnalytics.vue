@@ -1,6 +1,6 @@
 <template>
   <!-- Intended user: sister (Ludde) (personal app — #4184 IA) -->
-  <div class="container">
+  <div class="container page">
     <h1>Ludde Meal Time Tracker (LMTT)</h1>
     <p>The date and time defaults to right now, but can be adjusted by clicking on it</p>
     <div class="image-container">
@@ -304,9 +304,13 @@
 </script>
 
 <style scoped>
+  /* The gutter is the shell's (.page, #9501, §3.121). The root used to centre
+     all its text and add a 3xl top margin, so the title sat at y 96, centred.
+     Text inside each info box, which paints its own ground, still centres.
+     flow-root keeps the last child's bottom margin inside the root, so the
+     page ends at its content plus the shell's gutter rather than 24px past. */
   .container {
-    text-align: center;
-    margin-top: var(--space-3xl);
+    display: flow-root;
   }
 
   .image-container {
@@ -314,7 +318,7 @@
     overflow: hidden;
     position: relative;
     height: 250px;
-    margin: auto;
+    margin: 0;
   }
 
   .ludde-image {
@@ -326,7 +330,6 @@
 
   .top-nav {
     display: flex;
-    justify-content: center;
     margin-bottom: var(--space-lg);
   }
 
@@ -353,13 +356,12 @@
   .button-group {
     margin-top: var(--space-lg);
     display: flex;
-    justify-content: center;
   }
 
   /* No `.button-group button` rule here any more, and it must not come back:
      a wrapper-descendant selector (0,1,1) still matches the <button> AspButton
      renders and outranks .btn--size-lg (0,1,0) on padding, so it would silently
-     re-pad the DS control. .button-group above still centres it.
+     re-pad the DS control. .button-group above still lays it out.
 
      .confirm-btn keeps only its width. It used to force --text-2xl; that is
      dropped rather than re-specified at a higher specificity, because a
@@ -405,10 +407,14 @@
      a solid --feedback-error fill per row, so the DS destructive variant is the
      no-regression mapping here, not an accent escalation. */
 
+  /* Spacing between boxes is the row's gap, not each box's margin: a margin
+     on every side put the first box 8px inside the page edge, a third left
+     edge once the row stopped being centred (§3.114). */
   .info-boxes {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
+    gap: var(--space-md);
+    margin-top: var(--space-sm);
     margin-bottom: var(--space-lg);
   }
 
@@ -417,7 +423,6 @@
     border: 2px solid var(--border-card);
     border-radius: var(--radius-lg);
     padding: var(--space-md);
-    margin: var(--space-sm);
     width: 220px;
     text-align: center;
     box-shadow: var(--shadow-md);

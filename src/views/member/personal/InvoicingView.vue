@@ -1,6 +1,6 @@
 <template>
   <!-- Intended user: Flower (login vinoly), freelance invoices — system_3 #8367, #8633 -->
-  <div class="invoicing-view">
+  <div class="invoicing-view page">
     <header class="page-head">
       <h1>Invoices</h1>
       <p class="page-subtitle">
@@ -165,19 +165,19 @@
 </script>
 
 <style scoped>
+  /* The gutter is the shell's (.page, #9501, §3.121): no padding, no 100vh,
+     and the 1100px reading cap sits at the gutter, not centred (§3.114). */
   .invoicing-view {
-    padding: var(--space-lg);
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
     width: 100%;
     max-width: 1100px;
-    margin: 0 auto;
+    margin: 0;
     color: var(--text-on-light);
-    min-height: 100vh;
   }
 
-  /* Two left edges only (§3.114): the page edge (this padding) and each
+  /* Two left edges only (§3.114): the page edge (the shell's gutter) and each
      card's own padding token. #app centres text app-wide, so the view
      resets it rather than letting headings and inline controls drift. */
   .invoicing-view {
