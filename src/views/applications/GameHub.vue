@@ -1,5 +1,5 @@
 <template>
-  <div class="game-hub">
+  <div class="game-hub page">
     <h1>Game Center</h1>
     <h2>Challenge yourself with our collection of fun and engaging games!</h2>
     <div class="game-list">
@@ -117,15 +117,9 @@
 </script>
 
 <style scoped>
-  .game-hub {
-    text-align: center;
-    padding: var(--space-lg);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    min-height: 100vh;
-  }
+  /* The shell's .app-main carries the one gutter and .page the one title y
+     (system_3 #9192, #9286): no root padding, no 100vh box (it scrolled 64 px
+     past the content), nothing centred at page level (§3.114). */
 
   .game-hub h2 {
     margin-bottom: var(--space-xl);
@@ -135,18 +129,13 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: var(--space-lg);
-    margin: var(--space-lg) auto;
+    margin: var(--space-lg) 0 0;
     width: 100%;
     max-width: 900px;
-    justify-content: center;
     padding: var(--space-sm);
   }
 
   @media (max-width: 767px) {
-    .game-hub {
-      padding: var(--space-md) var(--space-sm);
-    }
-
     .game-list {
       grid-template-columns: repeat(2, 1fr);
       gap: var(--space-md);
