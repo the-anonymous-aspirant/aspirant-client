@@ -162,6 +162,10 @@
 
 <template>
   <div class="sidebar" :class="{ 'show': isMobile && !sidebarHidden }" :style="{ width: sidebarWidth }">
+    <!-- The logo's box is held from first paint (system_3 #9581, D13): an
+         unsized v-if image gave the container no height until the asset
+         resolved, and then pushed the whole nav down 143px. The placeholder
+         takes the logo's own class, so its size is the logo's. -->
     <div class="logo-container">
       <img
         v-if="aspiringHandImageUrl"
@@ -171,11 +175,17 @@
         :class="{ collapsed: collapsed, 'rotate-side': !collapsed }"
         @click="toggleSidebar"
       />
+      <div
+        v-else
+        class="aspiring-hand-logo logo-pending"
+        :class="{ collapsed: collapsed, 'rotate-side': !collapsed }"
+        aria-hidden="true"
+      ></div>
     </div>
 
     <div class="nav-links">
-      <SidebarLink :key="'home' + imagesLoaded" :image="homeIconUrl" to="/">Home</SidebarLink>
-      <SidebarLink :key="'apps' + imagesLoaded" :image="applicationsIconUrl" to="/applications"
+      <SidebarLink :pending="!imagesLoaded" :image="homeIconUrl" to="/">Home</SidebarLink>
+      <SidebarLink :pending="!imagesLoaded" :image="applicationsIconUrl" to="/applications"
         >Applications</SidebarLink
       >
       <!-- Member area (#4184): renamed from "Trusted"; the same role gate. A
@@ -185,7 +195,7 @@
            and swamped the nav). -->
       <template v-if="canSeeMember">
         <SidebarLink
-          :key="'member' + imagesLoaded"
+          :pending="!imagesLoaded"
           :image="memberIconUrl"
           to="/member"
           >Member</SidebarLink
@@ -193,13 +203,13 @@
       </template>
       <SidebarLink
         v-if="canSeeAdmin"
-        :key="'admin' + imagesLoaded"
+        :pending="!imagesLoaded"
         :image="adminIconUrl"
         to="/admin"
         >Admin</SidebarLink
       >
       <SidebarLink
-        :key="'support' + imagesLoaded"
+        :pending="!imagesLoaded"
         :image="supportIconUrl"
         to="/support"
         >Support</SidebarLink
@@ -355,6 +365,9 @@
 
   .aspiring-hand-logo {
     height: auto;
+    /* The asset's own proportions (aspiring_hand, 864x1648), so the box has
+       its final height before the image arrives (#9581). */
+    aspect-ratio: 864 / 1648;
     display: block;
     margin: 0 auto;
     background-color: var(--brand-primary);

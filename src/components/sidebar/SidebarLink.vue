@@ -19,6 +19,14 @@
         type: Boolean,
         default: false,
       },
+      // True while the sidebar's asset batch is still loading (#9581). An empty
+      // `image` then means "not here yet", shown as the sized loading box; only
+      // once the batch has resolved does an empty `image` mean "failed", and
+      // only then is the shared `default` asset loaded (#9194's fallback).
+      pending: {
+        type: Boolean,
+        default: false,
+      },
     },
     setup(props, { emit }) {
       const route = useRoute();
@@ -40,27 +48,21 @@
         }
       };
 
-      // Watch for changes to the image prop
-      watch(
-        () => props.image,
-        (newImage) => {
-          //console.log(`Image prop changed for ${props.to}: ${newImage ? 'has value' : 'empty'}`);
-          if (newImage) {
-            loadedImage.value = newImage;
-          } else {
-            loadDefaultImage();
-          }
-        }
-      );
-
-      onMounted(() => {
-        //console.log(`SidebarLink mounted for ${props.to}, image prop: ${props.image ? 'has value' : 'empty'}`);
+      // One place decides what the icon slot shows, so a change of image or of
+      // the batch's state updates it in place: the link never remounts, and its
+      // label fades in once (#9581).
+      const sync = () => {
         if (props.image) {
           loadedImage.value = props.image;
-        } else {
+          isLoading.value = false;
+        } else if (props.pending) {
+          isLoading.value = true;
+        } else if (!loadedImage.value) {
           loadDefaultImage();
         }
-      });
+      };
+      watch(() => [props.image, props.pending], sync);
+      onMounted(sync);
 
       const handleClick = (event) => {
         // Close sidebar on mobile when a link is clicked
@@ -158,7 +160,13 @@
     border: 0;
   }
 
+  /* A block, centred: the loaded <img> and the pending/error <div> then have
+     the same box. Inline, the img sat in a line box 7.2px taller than itself
+     (the strut below its baseline), so each row grew when its icon arrived and
+     the links below it moved down (#9581). */
   .sidebar-image {
+    display: block;
+    margin-inline: auto;
     width: 45px;
     height: 45px;
     background-color: var(--brand-primary);
