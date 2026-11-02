@@ -407,9 +407,14 @@
      a solid --feedback-error fill per row, so the DS destructive variant is the
      no-regression mapping here, not an accent escalation. */
 
+  /* Spacing between boxes is the row's gap, not each box's margin: a margin
+     on every side put the first box 8px inside the page edge, a third left
+     edge once the row stopped being centred (§3.114). */
   .info-boxes {
     display: flex;
     flex-wrap: wrap;
+    gap: var(--space-md);
+    margin-top: var(--space-sm);
     margin-bottom: var(--space-lg);
   }
 
@@ -418,7 +423,6 @@
     border: 2px solid var(--border-card);
     border-radius: var(--radius-lg);
     padding: var(--space-md);
-    margin: var(--space-sm);
     width: 220px;
     text-align: center;
     box-shadow: var(--shadow-md);

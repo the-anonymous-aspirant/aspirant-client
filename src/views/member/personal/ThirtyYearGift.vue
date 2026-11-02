@@ -202,8 +202,10 @@ export default {
   color: var(--text-on-light);
 }
 
+/* The page's own ink, not --text-on-dark: this line sits on the page ground,
+   and in the light theme --text-on-dark made it near-invisible (§3.18). */
 .subtitle {
-  color: var(--text-on-dark);
+  color: var(--text-muted);
   margin-bottom: var(--space-xl);
   font-size: var(--text-lg);
 }
