@@ -304,10 +304,14 @@
 </script>
 
 <style scoped>
-  /* No root rule: the gutter is the shell's (.page, #9501, §3.121). The root
-     used to centre all its text and add a 3xl top margin, so the title sat at
-     y 96, centred. Text inside each info box, which paints its own ground,
-     still centres. */
+  /* The gutter is the shell's (.page, #9501, §3.121). The root used to centre
+     all its text and add a 3xl top margin, so the title sat at y 96, centred.
+     Text inside each info box, which paints its own ground, still centres.
+     flow-root keeps the last child's bottom margin inside the root, so the
+     page ends at its content plus the shell's gutter rather than 24px past. */
+  .container {
+    display: flow-root;
+  }
 
   .image-container {
     width: 40%;
