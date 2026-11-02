@@ -1,5 +1,5 @@
 <template>
-  <div class="constellations-view">
+  <div class="constellations-view page">
     <h1>Constellations</h1>
     <p class="page-subtitle">
       The shared Connections sheet for the card game. Pick a game name, then

@@ -1,55 +1,59 @@
 <template>
-  <div class="quiz-container">
-    <h1>SQL Personality Revealer</h1>
-    <div v-if="!result">
-      <div class="progress-bar">
-        <div
-          v-for="(question, qIndex) in questions"
-          :key="qIndex"
-          :class="[
-            'progress-step',
-            { active: qIndex === currentQuestionIndex, completed: answers[qIndex] !== null },
-          ]"
-          @click="jumpToQuestion(qIndex)"
-        >
-          {{ qIndex + 1 }}
+  <div class="sql-quiz page">
+    <!-- The page title sits on the page, above the quiz panel, so it takes the
+         shared gutter and title y (#9599, §3.121); the panel keeps its look. -->
+    <h1 class="sql-quiz-title">SQL Personality Revealer</h1>
+    <div class="quiz-container">
+      <div v-if="!result">
+        <div class="progress-bar">
+          <div
+            v-for="(question, qIndex) in questions"
+            :key="qIndex"
+            :class="[
+              'progress-step',
+              { active: qIndex === currentQuestionIndex, completed: answers[qIndex] !== null },
+            ]"
+            @click="jumpToQuestion(qIndex)"
+          >
+            {{ qIndex + 1 }}
+          </div>
+        </div>
+        <h2>{{ currentQuestion.question }}</h2>
+        <div v-for="(option, oIndex) in currentQuestion.options" :key="oIndex" class="option">
+          <label>
+            <input
+              type="radio"
+              :name="'question' + currentQuestionIndex"
+              :value="JSON.stringify(option.vector)"
+              v-model="answers[currentQuestionIndex]"
+              @change="updateIntermediateResults"
+            />
+            {{ option.text }}
+          </label>
+        </div>
+        <AspButton variant="primary" @click="nextQuestion" :disabled="!answers[currentQuestionIndex]">Next</AspButton>
+        <div v-if="debugMode" class="debug-info">
+          <AspButton variant="primary" @click="calculateResult">Calculate Result</AspButton>
+          <div v-if="intermediateResults">
+            <h3>Current Scores:</h3>
+            <ul>
+              <li v-for="(score, index) in intermediateScores" :key="index">
+                {{ personalities[index].name }}: {{ score }}
+              </li>
+            </ul>
+            <p>Leading Personality: {{ leadingPersonality.name }}</p>
+          </div>
         </div>
       </div>
-      <h2>{{ currentQuestion.question }}</h2>
-      <div v-for="(option, oIndex) in currentQuestion.options" :key="oIndex" class="option">
-        <label>
-          <input
-            type="radio"
-            :name="'question' + currentQuestionIndex"
-            :value="JSON.stringify(option.vector)"
-            v-model="answers[currentQuestionIndex]"
-            @change="updateIntermediateResults"
-          />
-          {{ option.text }}
-        </label>
-      </div>
-      <AspButton variant="primary" @click="nextQuestion" :disabled="!answers[currentQuestionIndex]">Next</AspButton>
-      <div v-if="debugMode" class="debug-info">
-        <AspButton variant="primary" @click="calculateResult">Calculate Result</AspButton>
-        <div v-if="intermediateResults">
-          <h3>Current Scores:</h3>
-          <ul>
-            <li v-for="(score, index) in intermediateScores" :key="index">
-              {{ personalities[index].name }}: {{ score }}
-            </li>
-          </ul>
-          <p>Leading Personality: {{ leadingPersonality.name }}</p>
+      <div v-else>
+        <h2>You are...</h2>
+        <h1 class="sql-outcome">{{ result.type }}</h1>
+        <h2>{{ result.name }}</h2>
+        <p>{{ result.description }}</p>
+        <blockquote>{{ result.motto }}</blockquote>
+        <div class="chart-container">
+          <canvas id="radarChart"></canvas>
         </div>
-      </div>
-    </div>
-    <div v-else>
-      <h2>You are...</h2>
-      <h1 class="sql-outcome">{{ result.type }}</h1>
-      <h2>{{ result.name }}</h2>
-      <p>{{ result.description }}</p>
-      <blockquote>{{ result.motto }}</blockquote>
-      <div class="chart-container">
-        <canvas id="radarChart"></canvas>
       </div>
     </div>
   </div>
@@ -234,9 +238,11 @@
 </script>
 
 <style scoped>
+  /* The gutter is the shell's (.page, #9501, §3.121). The panel keeps its
+     800px cap at the gutter, not centred (§3.114). */
   .quiz-container {
     max-width: 800px;
-    margin: 0 auto;
+    margin: 0;
     padding: var(--space-lg);
     background-color: var(--surface-elevated);
     border-radius: var(--radius-lg);
@@ -245,9 +251,13 @@
 
   h1 {
     font-family: var(--font-family-base);
-    text-align: center;
     color: var(--text-on-light);
     margin-bottom: var(--space-lg);
+  }
+  /* Inside the panel, the result's heading still centres on the panel's own
+     ground; the page title above it does not. */
+  .quiz-container h1 {
+    text-align: center;
   }
 
   h1.sql-outcome {
@@ -401,7 +411,6 @@
     .quiz-container {
       padding: var(--space-md) var(--space-sm);
       margin: 0;
-      padding-top: 80px;
     }
 
     h1 {

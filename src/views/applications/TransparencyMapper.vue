@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="page">
     <h1>Transperator</h1>
     <h2 class="page-subtitle">Since the free ones online all suck</h2>
     <p>

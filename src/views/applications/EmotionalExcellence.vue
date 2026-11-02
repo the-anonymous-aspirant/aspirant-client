@@ -1,5 +1,5 @@
 <template>
-  <div class="emotional-excellence">
+  <div class="emotional-excellence page">
     <h1>Emotional Excellence (Alpha)</h1>
     <p><i>A proof-of-concept tracker of emotion. </i></p>
     <p>
@@ -333,13 +333,12 @@
 </script>
 
 <style scoped>
+  /* The gutter is the shell's (.page, #9501, §3.121): no padding, no 100vh,
+     and nothing centred at page level. Each emotion box, the comment card and
+     the tooltips still centre their own interior. */
   .emotional-excellence {
-    min-height: 100vh;
-    padding: var(--space-lg);
-    text-align: center;
     display: flex;
     flex-direction: column;
-    align-items: center;
     color: var(--text-on-light);
   }
 
@@ -358,7 +357,6 @@
   .content-wrapper {
     display: flex;
     flex-direction: column;
-    align-items: center;
     justify-content: flex-start;
     flex: 1;
     width: 100%;
@@ -368,7 +366,6 @@
   /* Tabs — layout only; the strip's paint comes from AspSegmented. */
   .tabs {
     display: flex;
-    justify-content: center;
     margin-bottom: var(--space-lg);
     gap: var(--space-sm);
     margin-top: var(--space-sm);
@@ -377,7 +374,6 @@
   /* Emotion boxes */
   .emotion-container {
     display: flex;
-    justify-content: center;
     flex-wrap: nowrap;
     gap: var(--space-lg);
     margin-bottom: var(--space-xl);
@@ -387,7 +383,6 @@
   .sub-emotion-container,
   .sub-sub-emotion-container {
     display: flex;
-    justify-content: center;
     flex-wrap: wrap;
     gap: var(--space-lg);
     margin-bottom: var(--space-xl);
@@ -528,9 +523,7 @@
   .data-view {
     width: 100%;
     max-width: 800px;
-    margin: 0 auto;
-    padding: var(--space-lg);
-    text-align: center;
+    margin: 0;
   }
 
   .data-date {
@@ -603,13 +596,11 @@
   /* Heatmap */
   .heatmap {
     margin-top: var(--space-lg);
-    text-align: center;
   }
 
   .heatmap-content {
     display: flex;
     flex-direction: column;
-    align-items: center;
     margin-top: var(--space-lg);
   }
 

@@ -1,5 +1,5 @@
 <template>
-  <div class="qr-generator">
+  <div class="qr-generator page">
     <h1>QR Code Generator</h1>
     <h2 class="page-subtitle">Generate a QR code from any text or URL</h2>
 
@@ -127,10 +127,11 @@ const copyImage = async () => {
 </script>
 
 <style scoped>
+/* The gutter is the shell's (.page, #9501, §3.121). The 640px cap is the
+   reading width, held at the gutter, not centred (§3.114). */
 .qr-generator {
   max-width: 640px;
-  margin: 0 auto;
-  padding: var(--space-xl) var(--space-lg);
+  margin: 0;
 }
 
 /* This card declares a background, so it declares the ink that goes on it
@@ -307,10 +308,6 @@ const copyImage = async () => {
 }
 
 @media (max-width: 768px) {
-  .qr-generator {
-    padding: var(--space-lg) var(--space-md);
-  }
-
   .result-actions {
     flex-direction: column;
     align-items: center;

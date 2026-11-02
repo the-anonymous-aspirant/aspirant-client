@@ -46,22 +46,22 @@ export function measure(page: Page): Promise<Geometry> {
     const root = Array.from(document.querySelectorAll<HTMLElement>('.fade-in')).find((e) =>
       e.querySelector('h1')
     )!;
+    // A box that paints its own ground, or is closed by a visible border on
+    // all four sides (a drop zone, a well), lays out its own interior (#9596).
+    const paintsOwnGround = (n: HTMLElement) => {
+      const ncs = getComputedStyle(n);
+      const bg = ncs.backgroundColor;
+      if (bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return true;
+      const sides = ['Top', 'Right', 'Bottom', 'Left'] as const;
+      return sides.every(
+        (s) =>
+          parseFloat(ncs.getPropertyValue(`border-${s.toLowerCase()}-width`)) > 0 &&
+          ncs.getPropertyValue(`border-${s.toLowerCase()}-style`) !== 'none'
+      );
+    };
     const onOwnGround = (el: HTMLElement) => {
       for (let n = el.parentElement; n && n !== root; n = n.parentElement) {
-        const ncs = getComputedStyle(n);
-        const bg = ncs.backgroundColor;
-        if (bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return true;
-        // A box closed by a visible border on all four sides (a drop zone, a
-        // well) also bounds its own interior, background or not (#9596).
-        const sides = ['Top', 'Right', 'Bottom', 'Left'] as const;
-        if (
-          sides.every(
-            (s) =>
-              parseFloat(ncs.getPropertyValue(`border-${s.toLowerCase()}-width`)) > 0 &&
-              ncs.getPropertyValue(`border-${s.toLowerCase()}-style`) !== 'none'
-          )
-        )
-          return true;
+        if (paintsOwnGround(n)) return true;
       }
       return false;
     };
@@ -98,6 +98,10 @@ export function measure(page: Page): Promise<Geometry> {
         cs.display.includes('flex') &&
         cs.flexDirection.startsWith('column') &&
         cs.alignItems === 'center' &&
+        // A card centring its own children is its interior, not the page's:
+        // the QR generator card is a painted column that centres its controls
+        // (#9599).
+        !paintsOwnGround(el) &&
         !onOwnGround(el) &&
         !inEmptyState &&
         Array.from(el.children).some((c) => {
