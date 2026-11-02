@@ -51,6 +51,9 @@ const assetMap = {
   situps_icon: { hash: 'ce1e9e2fdfc45e19b2e4ffb823f6d897', type: AssetType.IMAGE },
   jobs_icon: { hash: '4e6c654dece53e93029bc5cee19b3dbb', type: AssetType.IMAGE },
   vardeutlatande_icon: { hash: 'f728540c8354400762afab002220fdde', type: AssetType.IMAGE },
+  // The operator's "ecosiax" figure (system_3 #9735), same pipeline. Registered
+  // ahead of any surface: no app entry uses it until the operator names one.
+  ecosiax_icon: { hash: 'd295845abc3d5fbaa08c5697d2f9520f', type: AssetType.IMAGE },
   // Hand-drawn admin-tile icons (#4840): the three sketched glyphs that are not
   // member apps — they belong to AdminView tiles (operator ruling). Same pipeline
   // as the member icons: black-ink-on-transparent PNG, rendered white via the card
