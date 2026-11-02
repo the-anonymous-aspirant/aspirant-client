@@ -1,5 +1,5 @@
 <template>
-  <div class="advisor-view">
+  <div class="advisor-view page">
     <h1>Advisor</h1>
     <h2 class="page-subtitle">Ask questions about your contracts, insurance, and legal documents</h2>
 
@@ -434,15 +434,13 @@ export default {
 </script>
 
 <style scoped>
+/* The shell's .app-main carries the one gutter and .page the one title y
+   (system_3 #9192, #9501): no root padding, no 100vh box (it scrolled 64 px
+   past the content), nothing centred at page level (§3.114). */
 .advisor-view {
-  padding: var(--space-lg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 100vh;
   width: 100%;
   max-width: 900px;
-  margin: 0 auto;
+  margin: 0;
   color: var(--text-on-light);
 }
 
@@ -450,7 +448,6 @@ export default {
   color: var(--text-muted);
   font-weight: normal;
   margin-bottom: var(--space-xl);
-  text-align: center;
 }
 
 .loading-text,
@@ -885,9 +882,6 @@ export default {
 
 /* Mobile */
 @media (max-width: 768px) {
-  .advisor-view {
-    padding: var(--space-md) var(--space-sm);
-  }
 
   .form-row {
     flex-direction: column;

@@ -1,5 +1,5 @@
 <template>
-  <div class="assets-view">
+  <div class="assets-view page">
     <h1>Assets</h1>
     <h2 class="page-subtitle">Files stored in asset storage</h2>
 
@@ -297,15 +297,13 @@
 </script>
 
 <style scoped>
+  /* The shell's .app-main carries the one gutter and .page the one title y
+     (system_3 #9192, #9501): no root padding, no 100vh box (it scrolled 64 px
+     past the content), nothing centred at page level (§3.114). */
   .assets-view {
-    padding: var(--space-lg);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
     width: 100%;
     max-width: 1100px;
-    margin: 0 auto;
+    margin: 0;
     color: var(--text-on-light);
   }
 
@@ -544,9 +542,6 @@
 
 
   @media (max-width: 768px) {
-    .assets-view {
-      padding: var(--space-md) var(--space-sm);
-    }
 
     .toolbar {
       flex-direction: column;

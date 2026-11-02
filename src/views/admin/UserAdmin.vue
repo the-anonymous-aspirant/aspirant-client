@@ -1,5 +1,5 @@
 <template>
-  <div class="user-admin-view">
+  <div class="user-admin-view page">
     <h1>User Management</h1>
     <h2 class="page-subtitle">User accounts and permissions</h2>
 
@@ -347,12 +347,10 @@
 </script>
 
 <style scoped>
+  /* The shell's .app-main carries the one gutter and .page the one title y
+     (system_3 #9192, #9501): no root padding, no 100vh box (it scrolled 64 px
+     past the content), nothing centred at page level (§3.114). */
   .user-admin-view {
-    padding: var(--space-lg);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-height: 100vh;
     width: 100%;
     /* Nine columns wide: with a long email address the roster measures ~1250px,
        so a 1000px cap put the Actions column past the right edge of the DS
@@ -361,14 +359,16 @@
        roster's natural width, and narrow viewports still scroll, cued by the
        scroller's own edge fade. */
     max-width: 1400px;
-    margin: 0 auto;
+    margin: 0;
     color: var(--text-on-light);
   }
 
+  /* Starts at the gutter like the rest of the page: centring this section was
+     the root's page-level centring repeated one level down (#9596, §3.114). */
   .signup-switch {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-sm);
     margin-bottom: var(--space-lg);
   }
@@ -389,6 +389,11 @@
     display: flex;
     align-items: center;
     gap: var(--space-sm);
+  }
+
+  /* The roster note sits in the table area, centred like the table's own
+     "No users." row; the sign-up note above is page text and stays left. */
+  .roster-note {
     text-align: center;
   }
 
@@ -415,8 +420,5 @@
   }
 
   @media (max-width: 768px) {
-    .user-admin-view {
-      padding: var(--space-md);
-    }
   }
 </style>
