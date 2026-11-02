@@ -177,13 +177,6 @@
     color: var(--text-on-light);
   }
 
-  /* Two left edges only (§3.114): the page edge (the shell's gutter) and each
-     card's own padding token. #app centres text app-wide, so the view
-     resets it rather than letting headings and inline controls drift. */
-  .invoicing-view {
-    text-align: left;
-  }
-
   .page-head h1 {
     margin: 0 0 var(--space-2xs);
   }
