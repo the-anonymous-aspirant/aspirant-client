@@ -78,15 +78,15 @@ async function open(page: Page, fake: Fake): Promise<void> {
 }
 
 test.describe('#8409 Invoices app — a payment entered by hand', () => {
-  test('with no payments the two ways in are equal and the toolbar is hidden', async ({ page }) => {
+  test('with no payments the ways in are equal and the toolbar is hidden', async ({ page }) => {
     await open(page, newFake());
-    for (const id of ['manual-new', 'payments-import']) {
+    for (const id of ['manual-new', 'payments-import', 'n26-import']) {
       await expect(page.locator(`[data-test="${id}"]`)).toHaveClass(/btn--secondary/);
     }
     await expect(page.locator('[data-test="category-filter"]')).toHaveCount(0);
     await expect(page.locator('[data-test="create-invoice"]')).toHaveCount(0);
     await expect(page.locator('[data-test="payments-empty"]')).toContainText(
-      'Enter a payment by hand with New invoice, or import a PayPal activity CSV.',
+      'Enter a payment by hand with New invoice, or import a PayPal activity CSV or N26 PDFs.',
     );
   });
 
