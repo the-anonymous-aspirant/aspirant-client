@@ -203,7 +203,8 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
 
     await page.locator('[data-test="payments-file"]').setInputFiles(csvFile);
     const summary = page.locator('[data-test="import-summary"]');
-    await expect(summary).toContainText('Read 9 rows');
+    // One import-state region serves both imports, so the line names its source (design_agent c60358).
+    await expect(summary).toContainText('PayPal CSV: read 9 rows');
     await expect(summary).toContainText('3 imported');
     await expect(summary).toContainText('2 × currency conversion');
     const upload = fake.requests.find((r) => r.path === '/invoicing/payments/import')!;

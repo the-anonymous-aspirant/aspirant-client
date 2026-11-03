@@ -4,7 +4,7 @@
     <header class="page-head">
       <h1>Invoices</h1>
       <p class="page-subtitle">
-        Import PayPal payments, mark which were paid work, and issue invoices for that work.
+        Import payments from PayPal or N26, mark which were paid work, and issue invoices for that work.
       </p>
     </header>
 
