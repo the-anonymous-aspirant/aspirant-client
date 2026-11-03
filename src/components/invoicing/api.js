@@ -21,6 +21,41 @@ export function importPayPalCSV(file, dateOrder) {
   return axios.post(`${base}/payments/import`, form).then((r) => r.data.summary);
 }
 
+// N26 PDF import (system_3 #9760, server #9812). Two steps, unlike the
+// PayPal CSV: parse stores nothing and returns candidate rows per file; the
+// owner confirms or skips each row, and only the confirmed rows are posted
+// back to be stored (source "n26", uncategorised, deduped by transaction id).
+export function parseN26PDFs(files) {
+  const form = new FormData();
+  for (const file of files) form.append('files', file);
+  return axios.post(`${base}/payments/import-n26/parse`, form).then((r) => r.data.files || []);
+}
+export const confirmN26Rows = (rows) =>
+  axios.post(`${base}/payments/import-n26/confirm`, { rows }).then((r) => r.data.summary);
+
+// The server's limit per parse request (maxN26FilesPerRequest).
+export const N26_MAX_FILES = 10;
+
+export const N26_KIND_LABELS = {
+  n26_transfer_confirmation: 'Transfer confirmation',
+  n26_account_statement: 'Account statement',
+};
+
+// Why a file could not be read, short enough to follow its name in the
+// summary line ("statement-oct.pdf (not an N26 document)"). The server's own
+// message is the fallback for a code this list does not know.
+export const N26_FILE_ERROR_LABELS = {
+  too_large: 'larger than 5 MB',
+  not_a_pdf: 'not a PDF',
+  extract_failed: 'its text could not be read',
+  not_n26_document: 'not an N26 document',
+  parse_failed: 'an N26 document with a missing or unreadable field',
+};
+// `fileError` is the parse response's per-file `{ code, message }`: the
+// server's own prose, never an axios error.
+export const n26FileErrorReason = (fileError) =>
+  N26_FILE_ERROR_LABELS[fileError && fileError.code] || (fileError && fileError.message) || 'unreadable';
+
 export const listPayments = () => axios.get(`${base}/payments`).then((r) => r.data.payments || []);
 export const patchPayment = (id, patch) => axios.patch(`${base}/payments/${id}`, patch).then((r) => r.data.payment);
 // A payment entered by hand (#8409): always incoming paid work, audited.

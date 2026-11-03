@@ -2,9 +2,9 @@
   <section class="payments-panel" data-test="payments-panel">
     <div class="panel-head">
       <h2 class="visually-hidden">Payments</h2>
-      <!-- The two ways a payment gets in, equal (design_agent, #8409):
-           entered by hand, or imported from PayPal. Both stay secondary;
-           Create invoice holds the one primary slot. -->
+      <!-- The ways a payment gets in, equal (design_agent, #8409): entered
+           by hand, imported from PayPal, or imported from N26 PDFs (#9760).
+           All stay secondary; Create invoice holds the one primary slot. -->
       <div class="ways-in">
         <AspButton variant="secondary" class="block-on-phone" data-test="manual-new" @click="manualOpen = true">
           New invoice
@@ -17,12 +17,13 @@
           accept=".csv,text/csv,text/plain"
           aria-label="PayPal activity CSV"
           data-test="payments-file"
-          :disabled="importing"
+          :disabled="importing || n26Parsing"
           @change="onFileChosen"
         />
         <AspButton
           variant="secondary"
           :loading="importing"
+          :disabled="n26Parsing"
           class="block-on-phone"
           data-test="payments-import"
           @click="$refs.fileInput.click()"
@@ -30,12 +31,35 @@
           Import PayPal CSV
         </AspButton>
       </div>
+      <div class="upload">
+        <input
+          ref="n26Input"
+          class="upload__input"
+          type="file"
+          multiple
+          accept=".pdf,application/pdf"
+          aria-label="N26 PDFs"
+          data-test="n26-file-input"
+          :disabled="n26Parsing || importing"
+          @change="onN26Chosen"
+        />
+        <AspButton
+          variant="secondary"
+          :loading="n26Parsing"
+          :disabled="importing"
+          class="block-on-phone"
+          data-test="n26-import"
+          @click="$refs.n26Input.click()"
+        >
+          Import N26 PDFs
+        </AspButton>
+      </div>
       </div>
     </div>
 
     <div v-if="needsDateOrder" class="date-order" role="group" aria-labelledby="date-order-label" data-test="date-order">
       <p id="date-order-label">
-        Every date in this file reads both ways (for example 07/08/2026). Which order does the file use?
+        Every date in this PayPal CSV reads both ways (for example 07/08/2026). Which order does the file use?
       </p>
       <div class="date-order__actions">
         <AspButton variant="secondary" data-test="date-order-dmy" @click="reimport('dmy')">Day/month (07/08 = 7 August)</AspButton>
@@ -47,13 +71,25 @@
 
     <AspCard v-if="summary" class="summary" padding="sm" data-test="import-summary">
       <p class="summary__line">
-        Read {{ summary.rows_read }} rows: <strong>{{ summary.imported }}</strong> imported
+        PayPal CSV: read {{ summary.rows_read }} rows: <strong>{{ summary.imported }}</strong> imported
         <template v-if="summary.withdrawals"> (including {{ summary.withdrawals }} bank withdrawals)</template>,
         {{ summary.duplicates }} already imported, {{ summary.skipped }} skipped.
       </p>
       <ul v-if="skippedReasons.length" class="summary__reasons">
         <li v-for="r in skippedReasons" :key="r.key">{{ r.count }} × {{ r.label }}</li>
       </ul>
+    </AspCard>
+
+    <!-- One import-state region serves both imports, so each line names its
+         source, and one summary shows at a time (design_agent c60358). -->
+    <AspCard v-if="n26Summary" class="summary" padding="sm" data-test="n26-summary">
+      <p class="summary__line">
+        N26 PDFs: read {{ n26Summary.rows_read }} row{{ n26Summary.rows_read === 1 ? '' : 's' }} from
+        {{ n26Summary.files }} file{{ n26Summary.files === 1 ? '' : 's' }}:
+        <strong>{{ n26Summary.imported }}</strong> imported, {{ n26Summary.duplicates }} already imported,
+        {{ n26Summary.skipped }} skipped.<template v-if="n26Summary.failures.length">
+          {{ ' ' }}<span data-test="n26-summary-failures">{{ n26FailureLine }}</span></template>
+      </p>
     </AspCard>
 
     <!-- Nothing to filter or select before the first payment. -->
@@ -89,7 +125,7 @@
     <AspEmptyState
       v-if="incoming.length === 0"
       heading="No payments yet"
-      message="Enter a payment by hand with New invoice, or import a PayPal activity CSV."
+      message="Enter a payment by hand with New invoice, or import a PayPal activity CSV or N26 PDFs."
       data-test="payments-empty"
     />
     <AspEmptyState
@@ -272,21 +308,25 @@
       @changed="$emit('changed')"
       @created="(id) => $emit('open-invoice', id)"
     />
+    <N26ImportDialog v-model:open="n26Open" :files="n26Files" :payments="payments" @imported="onN26Imported" />
   </section>
 </template>
 
 <script>
   import { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect } from '@aspirant/design-system';
   import ManualPaymentDialog from './ManualPaymentDialog.vue';
+  import N26ImportDialog from './N26ImportDialog.vue';
   import {
     CATEGORY_LABELS,
     METHOD_LABELS,
+    N26_MAX_FILES,
     deleteManualPayment,
     SKIP_REASON_LABELS,
     errorOf,
     formatDay,
     formatMoney,
     importPayPalCSV,
+    parseN26PDFs,
     patchPayment,
     createDraft,
   } from './api.js';
@@ -297,7 +337,7 @@
   // payers, so they are only ever rendered as text interpolation.
   export default {
     name: 'PaymentsPanel',
-    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect, ManualPaymentDialog },
+    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect, ManualPaymentDialog, N26ImportDialog },
     props: {
       payments: { type: Array, required: true },
       clients: { type: Array, required: true },
@@ -318,6 +358,10 @@
         creating: false,
         createError: '',
         manualOpen: false,
+        n26Parsing: false,
+        n26Open: false,
+        n26Files: [],
+        n26Summary: null,
         confirmingDelete: null,
         deleting: null,
         columns: [
@@ -367,6 +411,14 @@
           { value: 0, label: 'Not grouped' },
           ...this.withdrawals.map((w) => ({ value: w.id, label: `${formatDay(w.paid_on)} ${formatMoney(w.gross_cents, w.currency)}` })),
         ];
+      },
+      // A file that could not be read stays named after the dialog closes
+      // (D2: a fold may hide detail, never a failure).
+      n26FailureLine() {
+        const failures = (this.n26Summary && this.n26Summary.failures) || [];
+        const n = failures.length;
+        const list = failures.map((f) => `${f.filename} (${f.reason})`).join(', ');
+        return `${n} file${n === 1 ? '' : 's'} could not be read: ${list}.`;
       },
       skippedReasons() {
         const reasons = (this.summary && this.summary.skipped_reasons) || {};
@@ -428,10 +480,38 @@
       reimport(order) {
         this.runImport(order);
       },
+      // N26 import, step one: the server reads the PDFs and stores nothing;
+      // the dialog then lets the owner confirm or skip each row.
+      async onN26Chosen(event) {
+        const files = [...((event.target && event.target.files) || [])];
+        if (this.$refs.n26Input) this.$refs.n26Input.value = '';
+        if (!files.length) return;
+        this.importError = '';
+        this.summary = null;
+        this.n26Summary = null;
+        if (files.length > N26_MAX_FILES) {
+          this.importError = `N26 PDFs: choose at most ${N26_MAX_FILES} PDFs at a time.`;
+          return;
+        }
+        this.n26Parsing = true;
+        try {
+          this.n26Files = await parseN26PDFs(files);
+          this.n26Open = true;
+        } catch (err) {
+          this.importError = `N26 PDFs: ${errorOf(err).message}`;
+        } finally {
+          this.n26Parsing = false;
+        }
+      },
+      onN26Imported(summary) {
+        this.n26Summary = summary;
+        if (summary.imported) this.$emit('changed');
+      },
       async runImport(dateOrder) {
         this.importing = true;
         this.importError = '';
         this.summary = null;
+        this.n26Summary = null;
         try {
           this.summary = await importPayPalCSV(this.pendingFile, dateOrder);
           this.needsDateOrder = false;
@@ -441,7 +521,7 @@
           if (failure.code === 'date_order_ambiguous') {
             this.needsDateOrder = true;
           } else {
-            this.importError = failure.message;
+            this.importError = `PayPal CSV: ${failure.message}`;
           }
         } finally {
           this.importing = false;
