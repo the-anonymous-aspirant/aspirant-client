@@ -110,19 +110,25 @@ async function open(page: Page, fake: Fake): Promise<void> {
 }
 
 async function createFromTwo(page: Page): Promise<void> {
-  await page.getByRole('checkbox', { name: 'Select TX1 for an invoice' }).check();
-  await page.getByRole('checkbox', { name: 'Select TX2 for an invoice' }).check();
+  await page.getByRole('checkbox', { name: 'Select TX1' }).check();
+  await page.getByRole('checkbox', { name: 'Select TX2' }).check();
   await page.locator('[data-test="create-invoice"]').click();
   await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
 }
 
 test.describe('#8367 Invoices app — draft, issue, Storno', () => {
-  test('selecting paid-work payments creates a prefilled draft; a gift offers no checkbox', async ({ page }) => {
+  // #9873: every row has a checkbox (it also feeds Set category); a
+  // selection holding a gift cannot create an invoice, and the caption says
+  // why (design_agent c60951 rule 6).
+  test('selecting paid-work payments creates a prefilled draft; a selected gift blocks it with a caption', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
 
-    await expect(page.getByRole('checkbox', { name: 'Select TX3 for an invoice' })).toHaveCount(0);
     await expect(page.locator('[data-test="create-invoice"]')).toBeDisabled();
+    await page.getByRole('checkbox', { name: 'Select TX3' }).check();
+    await expect(page.locator('[data-test="create-invoice"]')).toBeDisabled();
+    await expect(page.locator('[data-test="create-invoice-hint"]')).toHaveText('1 of the 1 selected is not Paid work. Only Paid work can be invoiced.');
+    await page.getByRole('checkbox', { name: 'Select TX3' }).uncheck();
     await createFromTwo(page);
 
     const post = fake.requests.find((r) => r.method === 'POST' && r.path === '/invoicing/invoices')!;
@@ -206,7 +212,7 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     const fake = newFake();
     fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];
     await open(page, fake);
-    await page.getByRole('checkbox', { name: 'Select TX2 for an invoice' }).check();
+    await page.getByRole('checkbox', { name: 'Select TX2' }).check();
     await page.locator('[data-test="create-invoice"]').click();
     await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
 

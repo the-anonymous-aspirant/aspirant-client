@@ -22,6 +22,8 @@ interface Fake {
   requests: Array<{ method: string; path: string; body: string; contentType: string }>;
   importResponses: Array<{ status: number; body: Json }>;
   patchFailure?: { status: number; body: Json };
+  /** #9873: a refusal for one payment id only, as a bulk action meets it. */
+  patchFailures?: Record<number, { status: number; body: Json }>;
   forbidden?: boolean;
 }
 
@@ -88,6 +90,8 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
     const patchMatch = path.match(/^\/invoicing\/payments\/(\d+)$/);
     if (patchMatch && method === 'PATCH') {
       if (fake.patchFailure) return json(route, fake.patchFailure.status, fake.patchFailure.body);
+      const oneFailure = fake.patchFailures && fake.patchFailures[Number(patchMatch[1])];
+      if (oneFailure) return json(route, oneFailure.status, oneFailure.body);
       const p = fake.payments.find((x) => x.id === Number(patchMatch[1]));
       Object.assign(p!, JSON.parse(req.postData() || '{}'));
       return json(route, 200, { payment: p });
@@ -342,5 +346,165 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await seedAdminSession(page);
     await openInvoicing(page);
     await expect(page.locator('[data-test="profile-name"]')).toHaveText('Flower Example');
+  });
+});
+
+/** #9873 (from #9862): PayPal Excel import, and one selection with two
+ *  actions on it, Set category for any rows and Create invoice for Paid work
+ *  only (design_agent c60951 on system_3 #9873). */
+const xlsxFile = {
+  name: 'activity.xlsx',
+  mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  buffer: Buffer.from('PK\x03\x04'),
+};
+
+function threeIncoming(): Fake {
+  const fake = newFake();
+  fake.payments.splice(2, 0, { id: 13, kind: 'incoming', transaction_id: 'TX3', paid_on: '2026-07-22T00:00:00Z', currency: 'EUR', gross_cents: 9000, sender_name: 'Noa', sender_email: 'noa@example.test', note: 'tattoo', category: 'uncategorised', client_id: null, bank_deposit_id: null });
+  return fake;
+}
+
+const selectAll = (page: Page) => page.getByRole('checkbox', { name: /^Select all (shown payments|\d+ shown)$/ });
+const bulk = (page: Page) => page.locator('[data-test="bulk-category"]');
+
+async function setBulkCategory(page: Page, label: string): Promise<void> {
+  await bulk(page).click();
+  await page.getByRole('option', { name: label }).click();
+}
+
+test.describe('#9873 Payments: PayPal Excel, set the category of several at once', () => {
+  test('an Excel file is offered, uploaded, and named on every PayPal line', async ({ page }) => {
+    const fake = newFake({
+      importResponses: [
+        { status: 200, body: { summary: { rows_read: 9, imported: 3, duplicates: 0, skipped: 6, withdrawals: 1, refunds: 1, format: 'xlsx', skipped_reasons: { reversal: 1, reversed: 1, fee: 4 } } } },
+        { status: 400, body: { error: { code: 'invalid_xlsx', message: 'not an Excel workbook (.xlsx)' } } },
+      ],
+    });
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+
+    const input = page.locator('[data-test="payments-file"]');
+    await expect(input).toHaveAttribute('accept', /\.xlsx/);
+    await expect(input).toHaveAttribute('aria-label', 'PayPal activity CSV or Excel file');
+    await expect(page.locator('[data-test="payments-import"]')).toHaveText('Import PayPal CSV or Excel');
+    await input.setInputFiles(xlsxFile);
+    const summary = page.locator('[data-test="import-summary"]');
+    await expect(summary).toContainText('PayPal Excel file: read 9 rows');
+    await expect(summary).toContainText('1 set to Refund');
+    await expect(summary).toContainText('1 × reversal (a bounce or cancellation)');
+    await expect(summary).toContainText('1 × row a reversal cancelled');
+    const upload = fake.requests.find((r) => r.path === '/invoicing/payments/import')!;
+    expect(upload.body).toContain('filename="activity.xlsx"');
+
+    await input.setInputFiles(xlsxFile);
+    await expect(page.locator('[data-test="import-error"]')).toHaveText('PayPal Excel file: not an Excel workbook (.xlsx)');
+  });
+
+  test('Set category writes every selected row, names the count, and clears the selection', async ({ page }) => {
+    const fake = threeIncoming();
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+
+    await expect(bulk(page)).toContainText('Set category of selected payments');
+    await expect(bulk(page)).toBeDisabled();
+    for (const txn of ['TX1', 'TX2', 'TX3']) await page.getByRole('checkbox', { name: `Select ${txn}` }).check();
+    await expect(bulk(page)).toContainText('Set category of 3 selected');
+    await setBulkCategory(page, 'Other');
+
+    // The writes go one after another; wait for the third before reading them.
+    await expect.poll(() => fake.requests.filter((r) => r.method === 'PATCH').length).toBe(3);
+    const patches = fake.requests.filter((r) => r.method === 'PATCH');
+    expect(patches.map((r) => r.path)).toEqual(['/invoicing/payments/10', '/invoicing/payments/11', '/invoicing/payments/13']);
+    for (const r of patches) expect(JSON.parse(r.body)).toEqual({ category: 'other' });
+    for (const txn of ['TX1', 'TX2', 'TX3']) {
+      await expect(page.getByRole('combobox', { name: `Category for ${txn}` })).toContainText('Other');
+      await expect(page.getByRole('checkbox', { name: `Select ${txn}` })).not.toBeChecked();
+    }
+    await expect(bulk(page)).toContainText('Set category of selected payments');
+    await expect(page.locator('[data-test="bulk-error"]')).toHaveCount(0);
+  });
+
+  test('a refused row stays selected and is named; the others change', async ({ page }) => {
+    const fake = threeIncoming();
+    fake.patchFailures = { 11: { status: 409, body: { error: { code: 'payment_on_issued_invoice', message: 'payment is on issued invoice 3; cancel that invoice before changing its category' } } } };
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+
+    for (const txn of ['TX1', 'TX2', 'TX3']) await page.getByRole('checkbox', { name: `Select ${txn}` }).check();
+    await setBulkCategory(page, 'Other');
+
+    const alert = page.locator('[data-test="bulk-error"]');
+    await expect(alert).toHaveAttribute('role', 'alert');
+    await expect(alert).toHaveText('1 of 3 kept its category: 2026-07-20 €50.00 (on an issued invoice; cancel it first).');
+    await expect(page.getByRole('checkbox', { name: 'Select TX2' })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Select TX1' })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Select TX3' })).not.toBeChecked();
+    await expect(page.getByRole('combobox', { name: 'Category for TX1' })).toContainText('Other');
+    await expect(page.getByRole('combobox', { name: 'Category for TX2' })).toContainText('Gift');
+    await expect(bulk(page)).toContainText('Set category of 1 selected');
+  });
+
+  test('Create invoice says why it cannot act, and acts once every selected row is Paid work', async ({ page }) => {
+    const fake = threeIncoming();
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+
+    const create = page.locator('[data-test="create-invoice"]');
+    const caption = page.locator('[data-test="create-invoice-hint"]');
+    await expect(caption).toHaveText('Select payments to set their category, or Paid work payments to create an invoice.');
+    await page.getByRole('checkbox', { name: 'Select TX1' }).check();
+    await page.getByRole('checkbox', { name: 'Select TX3' }).check();
+    await expect(create).toBeDisabled();
+    await expect(caption).toHaveText('2 of the 2 selected are not Paid work. Only Paid work can be invoiced.');
+    await setBulkCategory(page, 'Paid work');
+    // The rows that changed leave the selection; select them again.
+    await page.getByRole('checkbox', { name: 'Select TX1' }).check();
+    await page.getByRole('checkbox', { name: 'Select TX3' }).check();
+    await expect(create).toBeEnabled();
+    await expect(create).toHaveText('Create invoice from 2 payments');
+    await expect(caption).toHaveCount(0);
+  });
+
+  test('select all acts on the shown rows; a filter change unselects rows it hides', async ({ page }) => {
+    const fake = threeIncoming();
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+
+    const all = selectAll(page);
+    await expect(all).not.toBeChecked();
+    await page.getByRole('checkbox', { name: 'Select TX1' }).check();
+    expect(await all.evaluate((el) => (el as HTMLInputElement).indeterminate), 'some selected: indeterminate').toBe(true);
+    await all.check();
+    expect(await all.evaluate((el) => (el as HTMLInputElement).indeterminate)).toBe(false);
+    await expect(bulk(page)).toContainText('Set category of 3 selected');
+
+    // Filter to Uncategorised: the gift (TX2) leaves the view and the selection.
+    await page.locator('[data-test="category-filter"]').click();
+    await page.getByRole('option', { name: 'Uncategorised' }).click();
+    await expect(page.locator('[data-test="payment-row"]')).toHaveCount(2);
+    await expect(bulk(page)).toContainText('Set category of 2 selected');
+    await expect(all).toBeChecked();
+    await all.uncheck();
+    await expect(bulk(page)).toContainText('Set category of selected payments');
+  });
+
+  test('on a phone the stacked toolbar buttons wrap instead of overflowing', async ({ page }) => {
+    const viewport = page.viewportSize();
+    test.skip(!viewport || viewport.width >= 640, 'phone layout only');
+    const fake = threeIncoming();
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+
+    await page.getByRole('checkbox', { name: 'Select TX1' }).check();
+    const overflow = await page.locator('.payments-panel .ways-in button, .payments-panel .toolbar button').evaluateAll((els) =>
+      els.map((el) => ({ text: (el.textContent || '').trim(), over: el.scrollWidth - el.clientWidth })));
+    expect(overflow.length).toBeGreaterThan(3);
+    for (const b of overflow) expect(b.over, `"${b.text}" overflows by ${b.over}px`).toBeLessThanOrEqual(0);
   });
 });
