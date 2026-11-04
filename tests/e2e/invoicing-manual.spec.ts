@@ -86,7 +86,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await expect(page.locator('[data-test="category-filter"]')).toHaveCount(0);
     await expect(page.locator('[data-test="create-invoice"]')).toHaveCount(0);
     await expect(page.locator('[data-test="payments-empty"]')).toContainText(
-      'Enter a payment by hand with New invoice, or import a PayPal activity CSV or N26 PDFs.',
+      'Enter a payment by hand with New invoice, or import a PayPal CSV or Excel file, or N26 PDFs.',
     );
   });
 

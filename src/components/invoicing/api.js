@@ -26,6 +26,7 @@ export const listClients = () => axios.get(`${base}/clients`).then((r) => r.data
 export const createClient = (client) => axios.post(`${base}/clients`, client).then((r) => r.data.client);
 export const updateClient = (id, client) => axios.put(`${base}/clients/${id}`, client).then((r) => r.data.client);
 
+// The server reads a CSV or an .xlsx by its bytes (system_3 #9862-A1).
 export function importPayPalCSV(file, dateOrder) {
   const form = new FormData();
   form.append('file', file);
@@ -134,6 +135,9 @@ export const SKIP_REASON_LABELS = {
   outgoing: 'outgoing payment',
   memo: 'memo',
   missing_transaction_id: 'no transaction id',
+  // system_3 #9862-A1, in the singular "3 × fee" grammar (design_agent c60951).
+  reversal: 'reversal (a bounce or cancellation)',
+  reversed: 'row a reversal cancelled',
 };
 
 // ---- Invoices (system_3 #8367-D1) ----------------------------------------
