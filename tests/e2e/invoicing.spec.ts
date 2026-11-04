@@ -387,7 +387,7 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
     const input = page.locator('[data-test="payments-file"]');
     await expect(input).toHaveAttribute('accept', /\.xlsx/);
     await expect(input).toHaveAttribute('aria-label', 'PayPal activity CSV or Excel file');
-    await expect(page.locator('[data-test="payments-import"]')).toHaveText('Import PayPal CSV or Excel');
+    await expect(page.locator('[data-test="payments-import"]')).toHaveText('Import PayPal file');
     await input.setInputFiles(xlsxFile);
     const summary = page.locator('[data-test="import-summary"]');
     await expect(summary).toContainText('PayPal Excel file: read 9 rows');
@@ -399,6 +399,23 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
 
     await input.setInputFiles(xlsxFile);
     await expect(page.locator('[data-test="import-error"]')).toHaveText('PayPal Excel file: not an Excel workbook (.xlsx)');
+  });
+
+  // design_agent c60973: the button says "file", and she holds PayPal's PDF
+  // statement, so a file that is not a CSV or an .xlsx is refused before
+  // anything is sent, saying what to bring.
+  test('a PDF statement is refused before upload and the line says what to bring', async ({ page }) => {
+    const fake = newFake();
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+
+    await page.locator('[data-test="payments-file"]').setInputFiles({ name: 'Paypal jul-sep.PDF', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.6') });
+    await expect(page.locator('[data-test="import-error"]')).toHaveText(
+      "PayPal file: choose the CSV or Excel export from PayPal's activity download. A PDF statement cannot be read.",
+    );
+    expect(fake.requests.filter((r) => r.path === '/invoicing/payments/import')).toHaveLength(0);
+    await expect(page.locator('[data-test="import-summary"]')).toHaveCount(0);
   });
 
   test('Set category writes every selected row, names the count, and clears the selection', async ({ page }) => {

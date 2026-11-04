@@ -28,7 +28,7 @@
           data-test="payments-import"
           @click="$refs.fileInput.click()"
         >
-          Import PayPal CSV or Excel
+          Import PayPal file
         </AspButton>
       </div>
       <div class="upload">
@@ -376,6 +376,9 @@
     return `${head}${failed.map((f) => `${name(f)} (${f.reason})`).join(', ')}.`;
   }
 
+  const PAYPAL_WRONG_FILE =
+    "PayPal file: choose the CSV or Excel export from PayPal's activity download. A PDF statement cannot be read.";
+
   // PayPal import and categorisation (spec §4.3–4.4). Every payment starts
   // uncategorised; only "Paid work" can later be invoiced, and that rule is
   // the server's. Sender names, emails and notes are written by outside
@@ -568,6 +571,18 @@
       onFileChosen(event) {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
+        // "Import PayPal file" is looser than the formats it reads, and the
+        // owner may hold PayPal's PDF statement: refuse anything but a CSV or
+        // an .xlsx before sending it, and say what to bring (design_agent
+        // c60973 on system_3 #9873; §3.127 Decision 5).
+        if (!/\.(csv|xlsx)$/i.test(file.name || '')) {
+          this.summary = null;
+          this.n26Summary = null;
+          this.needsDateOrder = false;
+          this.importError = PAYPAL_WRONG_FILE;
+          if (this.$refs.fileInput) this.$refs.fileInput.value = '';
+          return;
+        }
         this.pendingFile = file;
         this.runImport('');
       },
