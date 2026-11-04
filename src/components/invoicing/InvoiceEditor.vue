@@ -140,6 +140,13 @@
           <AspBadge status="caution">Missing — issuing blocked</AspBadge>
           <span class="muted">Add a Steuernummer in the issuer profile to issue.</span>
         </div>
+        <!-- §33 UStDV (system_3 #9835): a client without an address can be
+             invoiced up to 250 € gross. The server checks the total at issue
+             and its refusal names it; this note only says so up front. -->
+        <div v-if="chosenClientHasNoAddress" class="issue-blocked" data-test="draft-no-address">
+          <AspBadge status="neutral">No client address</AspBadge>
+          <span class="muted">Fine up to 250 € gross. Above that, add the address in Clients to issue.</span>
+        </div>
       </template>
 
       <p v-if="error" class="error" role="alert" data-test="invoice-error">{{ error }}</p>
@@ -263,6 +270,11 @@
         if (this.detail && this.detail.client_name) return this.detail.client_name;
         const c = this.clients.find((x) => x.id === this.invoice.client_id);
         return c ? c.name : '—';
+      },
+      // The client picked in the draft form (not yet saved) has no address.
+      chosenClientHasNoAddress() {
+        const c = this.clients.find((x) => x.id === this.form.client_id);
+        return !!c && !(c.address || '').trim();
       },
       serviceLabel() {
         const from = formatDay(this.invoice.service_date_from);

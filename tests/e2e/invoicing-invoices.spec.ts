@@ -16,6 +16,7 @@ interface Fake {
   links: Record<number, number[]>;
   requests: Array<{ method: string; path: string; body: string }>;
   issueFailure?: { status: number; body: Json };
+  clients?: Json[];
 }
 
 function newFake(): Fake {
@@ -52,7 +53,7 @@ async function mockAll(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/profile') {
       return json(route, 200, { saved: true, profile: { full_name: 'Flower Example', address: 'Weg 1', steuernummer: '12/345/67890', email: '', is_kleinunternehmer: true, invoice_number_prefix: '2026', next_invoice_number: 1 } });
     }
-    if (path === '/invoicing/clients') return json(route, 200, { clients: [{ id: 1, name: 'Galerie Nord', address: 'Nordweg 2', email: '', paypal_email: '' }] });
+    if (path === '/invoicing/clients') return json(route, 200, { clients: fake.clients || [{ id: 1, name: 'Galerie Nord', address: 'Nordweg 2', email: '', paypal_email: '' }] });
     if (path === '/invoicing/payments') return json(route, 200, { payments: fake.payments });
     // #8376 (D2): the invoice detail loads its audit history.
     if (path === '/invoicing/audit-events') return json(route, 200, { events: [] });
@@ -151,6 +152,8 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await open(page, fake);
     await createFromTwo(page);
 
+    // A client with an address gets no §33 note (#9835).
+    await expect(page.locator('[data-test="draft-no-address"]')).toHaveCount(0);
     await page.locator('[data-test="draft-issue"]').click();
     await expect(page.locator('[data-test="issue-confirm"]')).toContainText('next number (2026-001)');
     expect(fake.requests.some((r) => r.path.endsWith('/issue'))).toBe(false);
@@ -177,6 +180,40 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await page.locator('[data-test="issue-confirm-button"]').click();
     await expect(page.locator('[data-test="invoice-error"]')).toContainText('needs a description');
     await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
+  });
+
+  // #9835 (§33 UStDV): a client without an address can be invoiced up to
+  // 250 € gross. The draft says so; above that, the server refuses and the
+  // editor shows its reason, which names the total and the threshold.
+  test('a client without an address: the draft says up to 250 €, and the refusal above it is shown', async ({ page }) => {
+    const fake = newFake();
+    fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];
+    fake.issueFailure = {
+      status: 422,
+      body: { error: { code: 'client_incomplete', message: "the client has no postal address, and this invoice totals 470,00 € gross: above 250,00 € an invoice must name the recipient's full address (§14 Abs. 4 UStG, §34a UStDV). Add the client's postal address to issue it" } },
+    };
+    await open(page, fake);
+    await createFromTwo(page);
+
+    await expect(page.locator('[data-test="draft-no-address"]')).toContainText('Fine up to 250 € gross. Above that, add the address in Clients to issue.');
+    await page.locator('[data-test="draft-issue"]').click();
+    await page.locator('[data-test="issue-confirm-button"]').click();
+    await expect(page.locator('[data-test="invoice-error"]')).toContainText('470,00 € gross: above 250,00 €');
+    await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
+  });
+
+  test('a client without an address: a small invoice issues', async ({ page }) => {
+    const fake = newFake();
+    fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];
+    await open(page, fake);
+    await page.getByRole('checkbox', { name: 'Select TX2 for an invoice' }).check();
+    await page.locator('[data-test="create-invoice"]').click();
+    await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
+
+    await expect(page.locator('[data-test="draft-no-address"]')).toBeVisible();
+    await page.locator('[data-test="draft-issue"]').click();
+    await page.locator('[data-test="issue-confirm-button"]').click();
+    await expect(page.locator('[data-test="invoice-editor"][data-status="issued"]')).toBeVisible();
   });
 
   test('Storno needs a reason, then marks the invoice cancelled', async ({ page }) => {

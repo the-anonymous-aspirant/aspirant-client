@@ -8,7 +8,7 @@
     <AspEmptyState
       v-if="clients.length === 0"
       heading="No clients yet"
-      message="An invoice needs a client with a name and a postal address."
+      message="An invoice needs a client with a name. Above 250 € gross it also needs their postal address."
       data-test="clients-empty"
     />
     <!-- Below 640px each client is a card (§3.114 decision 6): name and Edit
@@ -19,7 +19,8 @@
           <strong>{{ row.name }}</strong>
           <AspButton variant="ghost" size="sm" :data-test="`client-edit-${row.id}`" @click="startEdit(row)">Edit</AspButton>
         </div>
-        <span class="multiline">{{ row.address }}</span>
+        <span v-if="row.address" class="multiline">{{ row.address }}</span>
+        <span v-else class="muted" data-test="client-no-address">No postal address</span>
         <span v-if="row.email" class="muted">{{ row.email }}</span>
         <span v-if="row.paypal_email" class="muted">{{ row.paypal_email }}</span>
       </li>
@@ -34,7 +35,8 @@
       :row-attrs="(row) => ({ 'data-test': 'client-row' })"
     >
       <template #cell-address="{ value }">
-        <span class="multiline">{{ value }}</span>
+        <span v-if="value" class="multiline">{{ value }}</span>
+        <span v-else class="muted" data-test="client-no-address">No postal address</span>
       </template>
       <template #cell-actions="{ row }">
         <AspButton variant="ghost" size="sm" :data-test="`client-edit-${row.id}`" @click="startEdit(row)">Edit</AspButton>
@@ -44,7 +46,12 @@
     <AspModal v-model:open="editorOpen" :title="editing ? 'Edit client' : 'Add client'" size="md">
       <form class="client-form" data-test="client-form" @submit.prevent="save">
         <AspInput v-model="form.name" label="Name" required />
-        <AspTextarea v-model="form.address" label="Postal address" :rows="3" required />
+        <AspTextarea
+          v-model="form.address"
+          label="Postal address"
+          :rows="3"
+          hint="Optional for invoices up to 250 € gross (§33 UStDV). Above that, an invoice cannot be issued without it."
+        />
         <AspInput v-model="form.email" type="email" label="Email" />
         <AspInput v-model="form.paypal_email" type="email" label="PayPal email" hint="Imported payments from this address are linked to the client." />
         <p v-if="error" class="client-form__error" role="alert" data-test="client-error">{{ error }}</p>
@@ -64,8 +71,10 @@
   import ModalActions from './ModalActions.vue';
   import { createClient, errorOf, updateClient } from './api.js';
 
-  // The people Flower invoices (spec §4.2). Name and address are required
-  // here because the server requires them; the server is still the gate.
+  // The people Flower invoices (spec §4.2). The name is required here
+  // because the server requires it. The address is optional: an invoice up
+  // to 250 EUR gross needs none (§33 UStDV), and issuing refuses one above
+  // that without it (system_3 #9835). The server is still the gate.
   export default {
     name: 'ClientsPanel',
     components: { AspButton, AspDataTable, AspEmptyState, AspInput, AspModal, AspTextarea, ModalActions },
@@ -121,8 +130,8 @@
         this.editorOpen = true;
       },
       async save() {
-        if (!this.form.name.trim() || !this.form.address.trim()) {
-          this.error = 'A client needs a name and a postal address.';
+        if (!this.form.name.trim()) {
+          this.error = 'A client needs a name.';
           return;
         }
         this.saving = true;

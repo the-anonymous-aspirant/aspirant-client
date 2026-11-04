@@ -171,7 +171,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     expect(JSON.parse(put.body)).toMatchObject({ steuernummer: '98/765/43210', invoice_number_prefix: '2026', next_invoice_number: 1, is_kleinunternehmer: true });
   });
 
-  test('adding a client POSTs it; name and address are required first', async ({ page }) => {
+  test('adding a client POSTs it; the name is required, the address is not', async ({ page }) => {
     const fake = newFake();
     await mockInvoicing(page, fake);
     await seedTrustedSessionAs(page, 'vinoly');
@@ -180,17 +180,28 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
 
     await page.locator('[data-test="client-add"]').click();
     const form = page.locator('[data-test="client-form"]');
-    await form.getByLabel('Name').fill('Anna Example');
+    // #9835: the address is optional up to 250 € gross, and the form says so.
+    await expect(form).toContainText('Optional for invoices up to 250 € gross');
     await page.locator('[data-test="client-save"]').click();
-    await expect(page.locator('[data-test="client-error"]')).toContainText('name and a postal address');
+    await expect(page.locator('[data-test="client-error"]')).toContainText('A client needs a name.');
     expect(fake.requests.some((r) => r.method === 'POST' && r.path === '/invoicing/clients')).toBe(false);
 
+    await form.getByLabel('Name').fill('Anna Example');
+    await page.locator('[data-test="client-save"]').click();
+    await expect(form).toBeHidden();
+    const row = page.locator('[data-test="client-row"]', { hasText: 'Anna Example' });
+    await expect(row).toBeVisible();
+    await expect(row.locator('[data-test="client-no-address"]')).toHaveText('No postal address');
+    const post = fake.requests.find((r) => r.method === 'POST' && r.path === '/invoicing/clients')!;
+    expect(JSON.parse(post.body)).toMatchObject({ name: 'Anna Example', address: '' });
+
+    await page.locator('[data-test="client-add"]').click();
+    await form.getByLabel('Name').fill('Bert Example');
     await form.getByLabel('Postal address').fill('Weg 1\n10115 Berlin');
     await page.locator('[data-test="client-save"]').click();
     await expect(form).toBeHidden();
-    await expect(page.locator('[data-test="client-row"]', { hasText: 'Anna Example' })).toBeVisible();
-    const post = fake.requests.find((r) => r.method === 'POST' && r.path === '/invoicing/clients')!;
-    expect(JSON.parse(post.body)).toMatchObject({ name: 'Anna Example', address: 'Weg 1\n10115 Berlin' });
+    const post2 = fake.requests.filter((r) => r.method === 'POST' && r.path === '/invoicing/clients').pop()!;
+    expect(JSON.parse(post2.body)).toMatchObject({ name: 'Bert Example', address: 'Weg 1\n10115 Berlin' });
   });
 
   test('importing a CSV uploads it as multipart "file" and shows the summary', async ({ page }) => {
