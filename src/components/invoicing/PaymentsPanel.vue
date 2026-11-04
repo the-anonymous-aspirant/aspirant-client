@@ -87,7 +87,7 @@
         N26 PDFs: read {{ n26Summary.rows_read }} row{{ n26Summary.rows_read === 1 ? '' : 's' }} from
         {{ n26Summary.files }} file{{ n26Summary.files === 1 ? '' : 's' }}:
         <strong>{{ n26Summary.imported }}</strong> imported, {{ n26Summary.duplicates }} already imported,
-        {{ n26Summary.skipped }} skipped.<template v-if="n26Summary.failures.length">
+        {{ n26Summary.skipped }} skipped<template v-if="n26Summary.paypal_transfers">, <span data-test="n26-summary-paypal">{{ n26PayPalClause }}</span></template>.<template v-if="n26Summary.failures.length">
           {{ ' ' }}<span data-test="n26-summary-failures">{{ n26FailureLine }}</span></template>
       </p>
     </AspCard>
@@ -464,6 +464,14 @@
       },
       // A file that could not be read stays named after the dialog closes
       // (D2: a fold may hide detail, never a failure).
+      // Transfers from PayPal the server left out of the N26 files (#9881).
+      // "left out" is the rule; "skipped" stays her own unticking (c61091).
+      n26PayPalClause() {
+        const n = (this.n26Summary && this.n26Summary.paypal_transfers) || 0;
+        return n === 1
+          ? '1 transfer from PayPal left out (its payments come in through PayPal)'
+          : `${n} transfers from PayPal left out (their payments come in through PayPal)`;
+      },
       n26FailureLine() {
         const failures = (this.n26Summary && this.n26Summary.failures) || [];
         const n = failures.length;
