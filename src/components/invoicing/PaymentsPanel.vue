@@ -14,8 +14,8 @@
           ref="fileInput"
           class="upload__input"
           type="file"
-          accept=".csv,text/csv,text/plain"
-          aria-label="PayPal activity CSV"
+          accept=".csv,.xlsx,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          aria-label="PayPal activity CSV or Excel file"
           data-test="payments-file"
           :disabled="importing || n26Parsing"
           @change="onFileChosen"
@@ -28,7 +28,7 @@
           data-test="payments-import"
           @click="$refs.fileInput.click()"
         >
-          Import PayPal CSV
+          Import PayPal CSV or Excel
         </AspButton>
       </div>
       <div class="upload">
@@ -59,7 +59,7 @@
 
     <div v-if="needsDateOrder" class="date-order" role="group" aria-labelledby="date-order-label" data-test="date-order">
       <p id="date-order-label">
-        Every date in this PayPal CSV reads both ways (for example 07/08/2026). Which order does the file use?
+        Every date in this PayPal {{ paypalNoun }} reads both ways (for example 07/08/2026). Which order does the file use?
       </p>
       <div class="date-order__actions">
         <AspButton variant="secondary" data-test="date-order-dmy" @click="reimport('dmy')">Day/month (07/08 = 7 August)</AspButton>
@@ -71,9 +71,9 @@
 
     <AspCard v-if="summary" class="summary" padding="sm" data-test="import-summary">
       <p class="summary__line">
-        PayPal CSV: read {{ summary.rows_read }} rows: <strong>{{ summary.imported }}</strong> imported
+        PayPal {{ paypalNoun }}: read {{ summary.rows_read }} rows: <strong>{{ summary.imported }}</strong> imported
         <template v-if="summary.withdrawals"> (including {{ summary.withdrawals }} bank withdrawals)</template>,
-        {{ summary.duplicates }} already imported, {{ summary.skipped }} skipped.
+        <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ summary.duplicates }} already imported, {{ summary.skipped }} skipped.
       </p>
       <ul v-if="skippedReasons.length" class="summary__reasons">
         <li v-for="r in skippedReasons" :key="r.key">{{ r.count }} × {{ r.label }}</li>
@@ -102,30 +102,46 @@
           data-test="category-filter"
         />
       </div>
+      <!-- One selection, two actions on it (design_agent c60951 on system_3
+           #9873): Set category for any rows, Create invoice for Paid work
+           only. Create invoice stays the panel's one primary, rightmost. -->
       <div class="create">
-        <AspButton
-          :disabled="selected.length === 0"
-          :loading="creating"
-          :aria-describedby="selected.length === 0 ? 'create-invoice-hint' : undefined"
-          class="block-on-phone"
-          data-test="create-invoice"
-          @click="createInvoice"
-        >
-          Create invoice{{ selected.length ? ` from ${selected.length} payment${selected.length === 1 ? '' : 's'}` : '' }}
-        </AspButton>
-        <!-- States the category gate in the user's terms; the server is
-             still the rule (only paid work can be invoiced). -->
-        <p v-if="selected.length === 0" id="create-invoice-hint" class="create__hint" data-test="create-invoice-hint">
-          Mark payments as Paid work, then select them to create an invoice.
+        <div class="create__actions">
+          <div class="set-category full-select">
+            <AspSelect
+              :model-value="null"
+              :options="categoryOptions"
+              :placeholder="setCategoryPlaceholder"
+              :disabled="selected.length === 0 || bulkSaving"
+              data-test="bulk-category"
+              @update:model-value="setCategory"
+            />
+          </div>
+          <AspButton
+            :disabled="!canCreate"
+            :loading="creating"
+            :aria-describedby="createCaption ? 'create-invoice-hint' : undefined"
+            class="block-on-phone"
+            data-test="create-invoice"
+            @click="createInvoice"
+          >
+            Create invoice{{ selected.length ? ` from ${selected.length} payment${selected.length === 1 ? '' : 's'}` : '' }}
+          </AspButton>
+        </div>
+        <!-- States why Create invoice cannot act, in terms the owner can fix
+             here; the server is still the rule (only paid work is invoiced). -->
+        <p v-if="createCaption" id="create-invoice-hint" class="create__hint" data-test="create-invoice-hint">
+          {{ createCaption }}
         </p>
       </div>
     </div>
+    <p v-if="bulkError" class="error" role="alert" data-test="bulk-error">{{ bulkError }}</p>
     <p v-if="createError" class="error" role="alert" data-test="create-error">{{ createError }}</p>
 
     <AspEmptyState
       v-if="incoming.length === 0"
       heading="No payments yet"
-      message="Enter a payment by hand with New invoice, or import a PayPal activity CSV or N26 PDFs."
+      message="Enter a payment by hand with New invoice, or import a PayPal CSV or Excel file, or N26 PDFs."
       data-test="payments-empty"
     />
     <AspEmptyState
@@ -134,7 +150,16 @@
       heading="No payments in this category"
       data-test="payments-filtered-empty"
     />
-    <ul v-else-if="narrow" class="payment-cards" aria-label="Incoming payments">
+    <template v-else-if="narrow">
+    <div class="select-all" data-test="select-all-shown">
+      <AspCheckbox
+        :model-value="allShownSelected"
+        :indeterminate="someShownSelected"
+        :label="`Select all ${shown.length} shown`"
+        @update:model-value="selectAllShown"
+      />
+    </div>
+    <ul class="payment-cards" aria-label="Incoming payments">
       <li
         v-for="row in shown"
         :key="row.id"
@@ -145,9 +170,8 @@
         <div class="payment-card__top">
           <span class="payment-card__when">
             <AspCheckbox
-              v-if="row.category === 'paid_work'"
               :model-value="selected.includes(row.id)"
-              :aria-label="`Select ${row.transaction_id} for an invoice`"
+              :aria-label="`Select ${row.transaction_id}`"
               data-test="payment-select"
               @update:model-value="toggle(row.id, $event)"
             />
@@ -209,6 +233,7 @@
         </div>
       </li>
     </ul>
+    </template>
     <AspDataTable
       v-else
       :columns="columns"
@@ -218,11 +243,19 @@
       caption="Incoming payments"
       :row-attrs="(row) => ({ 'data-test': 'payment-row', 'data-txn': row.transaction_id })"
     >
+      <template #header-select>
+        <AspCheckbox
+          :model-value="allShownSelected"
+          :indeterminate="someShownSelected"
+          aria-label="Select all shown payments"
+          data-test="select-all-shown"
+          @update:model-value="selectAllShown"
+        />
+      </template>
       <template #cell-select="{ row }">
         <AspCheckbox
-          v-if="row.category === 'paid_work'"
           :model-value="selected.includes(row.id)"
-          :aria-label="`Select ${row.transaction_id} for an invoice`"
+          :aria-label="`Select ${row.transaction_id}`"
           data-test="payment-select"
           @update:model-value="toggle(row.id, $event)"
         />
@@ -331,6 +364,18 @@
     createDraft,
   } from './api.js';
 
+  // "2 of 5 kept their category: 2026-08-12 €40.00, 2026-08-14 €25.00 (on an
+  // issued invoice; cancel it first)." One shared reason closes the line;
+  // mixed reasons follow each row.
+  function bulkFailureLine(failed, total) {
+    const k = failed.length;
+    const head = `${k} of ${total} kept ${k === 1 ? 'its' : 'their'} category: `;
+    const name = (f) => `${formatDay(f.row.paid_on)} ${formatMoney(f.row.gross_cents, f.row.currency)}`;
+    const shared = failed.every((f) => f.reason === failed[0].reason);
+    if (shared) return `${head}${failed.map(name).join(', ')} (${failed[0].reason}).`;
+    return `${head}${failed.map((f) => `${name(f)} (${f.reason})`).join(', ')}.`;
+  }
+
   // PayPal import and categorisation (spec §4.3–4.4). Every payment starts
   // uncategorised; only "Paid work" can later be invoiced, and that rule is
   // the server's. Sender names, emails and notes are written by outside
@@ -355,6 +400,8 @@
         rowError: '',
         narrow: false,
         selected: [],
+        bulkSaving: false,
+        bulkError: '',
         creating: false,
         createError: '',
         manualOpen: false,
@@ -420,9 +467,56 @@
         const list = failures.map((f) => `${f.filename} (${f.reason})`).join(', ');
         return `${n} file${n === 1 ? '' : 's'} could not be read: ${list}.`;
       },
+      // The PayPal file type, named on every PayPal line (§3.127 D4): what the
+      // server read once it answered, otherwise the file the owner chose.
+      paypalNoun() {
+        if (this.summary && this.summary.format) return this.summary.format === 'xlsx' ? 'Excel file' : 'CSV';
+        const f = this.pendingFile;
+        const xlsx = f && (/\.xlsx$/i.test(f.name || '') || f.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        return xlsx ? 'Excel file' : 'CSV';
+      },
+      selectedRows() {
+        return this.incoming.filter((p) => this.selected.includes(p.id));
+      },
+      notPaidWork() {
+        return this.selectedRows.filter((p) => p.category !== 'paid_work').length;
+      },
+      canCreate() {
+        return this.selected.length > 0 && this.notPaidWork === 0;
+      },
+      // Why Create invoice cannot act, in terms the owner can fix from the
+      // panel (§3.114); it never quietly invoices the Paid work subset (D13).
+      createCaption() {
+        const n = this.selected.length;
+        if (n === 0) return 'Select payments to set their category, or Paid work payments to create an invoice.';
+        const k = this.notPaidWork;
+        if (k === 0) return '';
+        return `${k} of the ${n} selected ${k === 1 ? 'is' : 'are'} not Paid work. Only Paid work can be invoiced.`;
+      },
+      // The count in the trigger is what makes a one-pick bulk write safe
+      // without a confirm step (design_agent c60951 rule 4).
+      setCategoryPlaceholder() {
+        const n = this.selected.length;
+        return n ? `Set category of ${n} selected` : 'Set category of selected payments';
+      },
+      allShownSelected() {
+        return this.shown.length > 0 && this.shown.every((p) => this.selected.includes(p.id));
+      },
+      someShownSelected() {
+        return !this.allShownSelected && this.shown.some((p) => this.selected.includes(p.id));
+      },
       skippedReasons() {
         const reasons = (this.summary && this.summary.skipped_reasons) || {};
         return Object.entries(reasons).map(([key, count]) => ({ key, count, label: SKIP_REASON_LABELS[key] || key }));
+      },
+    },
+    watch: {
+      // The selection never holds a row the owner cannot see (§3.25): a
+      // filter change or a reload unselects rows that left the view.
+      shown(rows) {
+        const visible = new Set(rows.map((p) => p.id));
+        const kept = this.selected.filter((id) => visible.has(id));
+        if (kept.length !== this.selected.length) this.selected = kept;
       },
     },
     mounted() {
@@ -521,7 +615,7 @@
           if (failure.code === 'date_order_ambiguous') {
             this.needsDateOrder = true;
           } else {
-            this.importError = `PayPal CSV: ${failure.message}`;
+            this.importError = `PayPal ${this.paypalNoun}: ${failure.message}`;
           }
         } finally {
           this.importing = false;
@@ -531,8 +625,42 @@
       toggle(id, on) {
         this.selected = on ? [...new Set([...this.selected, id])] : this.selected.filter((x) => x !== id);
       },
-      // Only paid-work rows offer a checkbox; the server is still the rule
-      // (it refuses any other category, and a payment already invoiced).
+      selectAllShown(on) {
+        const ids = this.shown.map((p) => p.id);
+        this.selected = on ? [...new Set([...this.selected, ...ids])] : this.selected.filter((id) => !ids.includes(id));
+      },
+      // Set one category on every selected row: one PATCH per row, in list
+      // order. Rows that succeed leave the selection; rows the server refuses
+      // stay selected and are named in one alert that stays until the next
+      // bulk action (design_agent c60951 rule 5, D2).
+      async setCategory(category) {
+        if (!category || this.selected.length === 0 || this.bulkSaving) return;
+        const rows = this.shown.filter((p) => this.selected.includes(p.id));
+        this.bulkSaving = true;
+        this.bulkError = '';
+        const failed = [];
+        for (const row of rows) {
+          this.saving = new Set([...this.saving, row.id]);
+          try {
+            await patchPayment(row.id, { category });
+          } catch (err) {
+            const failure = errorOf(err);
+            const reason = failure.code === 'payment_on_issued_invoice' ? 'on an issued invoice; cancel it first' : failure.message;
+            failed.push({ row, reason });
+          } finally {
+            const next = new Set(this.saving);
+            next.delete(row.id);
+            this.saving = next;
+          }
+        }
+        this.selected = failed.map((f) => f.row.id);
+        if (failed.length) this.bulkError = bulkFailureLine(failed, rows.length);
+        this.bulkSaving = false;
+        this.$emit('changed');
+      },
+      // Create invoice acts only when every selected row is Paid work; the
+      // server is still the rule (it refuses any other category, and a
+      // payment already invoiced).
       async createInvoice() {
         this.creating = true;
         this.createError = '';
@@ -651,8 +779,12 @@
     padding-left: var(--space-lg);
   }
 
+  /* Filter left, actions right. If the actions cannot sit beside the
+     filter, they wrap below it as one unit, right-aligned; the two controls
+     never split (design_agent c60951, placement). */
   .toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--space-sm);
@@ -697,6 +829,22 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+    margin-left: auto;
+  }
+
+  .create__actions {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
+
+  .set-category {
+    width: 16rem;
+  }
+
+  .select-all {
+    margin-bottom: var(--space-sm);
   }
 
   .create__hint {
@@ -801,11 +949,18 @@
     }
 
     .filter,
-    .create {
+    .create,
+    .set-category {
       width: 100%;
     }
 
     .create {
+      align-items: stretch;
+      margin-left: 0;
+    }
+
+    .create__actions {
+      flex-direction: column;
       align-items: stretch;
     }
 
