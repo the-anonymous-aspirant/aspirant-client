@@ -7,8 +7,8 @@
       <template v-else-if="report">
         <template v-if="report.violations.length">
           <p class="lead" data-test="validation-blocked">
-            The export is blocked: the stored invoices break {{ report.violations.length }}
-            integrity rule{{ report.violations.length === 1 ? '' : 's' }}. Fix these first.
+            The export is blocked: {{ report.violations.length }}
+            problem{{ report.violations.length === 1 ? '' : 's' }} found. Fix them first.
           </p>
           <ul class="findings findings--violations" data-test="validation-violations">
             <li v-for="(v, i) in report.violations" :key="'v' + i">{{ v.message }}</li>

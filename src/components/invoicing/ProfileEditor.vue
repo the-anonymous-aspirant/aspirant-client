@@ -12,7 +12,7 @@
           v-model="form.next_invoice_number"
           type="number"
           label="Next invoice number"
-          hint="Fixed by the server once an invoice has been issued under this prefix."
+          hint="Locked once an invoice uses this prefix."
           required
         />
       </div>
@@ -61,7 +61,7 @@
           </div>
         </div>
         <p class="profile-logo__hint">
-          PNG or JPEG, up to 5 MB. Printed top right on every invoice issued after you save; issued invoices keep theirs.
+          PNG or JPEG, up to 5 MB. Used on invoices issued after you save.
         </p>
         <p v-if="logoError" class="profile-form__error" role="alert" data-test="profile-logo-error">{{ logoError }}</p>
       </div>
