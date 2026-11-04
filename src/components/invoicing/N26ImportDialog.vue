@@ -20,10 +20,18 @@
         <p v-if="file.error" class="n26-file__error" role="alert" data-test="n26-file-error">
           This file could not be read: {{ fileErrorReason(file.error) }}.
         </p>
+        <!-- A transfer from PayPal is her own money; its payments come in through the
+             PayPal import, so the server leaves it out (#9881, design_agent
+             c61091). Say so, or the
+             file reads as having lost a payment; when it was the file's only
+             row, this line replaces the empty-file line. -->
+        <p v-else-if="paypalSkipped(file)" class="n26-file__none n26-file__paypal" data-test="n26-file-paypal">
+          {{ paypalLine(paypalSkipped(file)) }}
+        </p>
         <p v-else-if="!(file.candidates || []).length" class="n26-file__none" data-test="n26-file-empty">
           No incoming payments in this file.
         </p>
-        <ul v-else class="n26-rows">
+        <ul v-if="!file.error && (file.candidates || []).length" class="n26-rows">
           <!-- §3.114 card grammar at every width: checkbox first, payer
                top-left, amount top-right, date and reference muted beneath,
                any flag as plain muted text under that. -->
@@ -99,7 +107,7 @@
     components: { AspButton, AspCheckbox, AspModal, ModalActions },
     props: {
       open: { type: Boolean, default: false },
-      // The parse response: [{ filename, document_kind, candidates, error }].
+      // The parse response: [{ filename, document_kind, candidates, skipped, error }].
       files: { type: Array, default: () => [] },
       // The stored payments, to name the one a look-alike row matches.
       payments: { type: Array, default: () => [] },
@@ -124,10 +132,14 @@
         const n = this.checkedRows.length;
         return `Import ${n} payment${n === 1 ? '' : 's'}`;
       },
+      // Rows the server left out because their payer is PayPal (#9881).
+      paypalTotal() {
+        return this.files.reduce((n, file) => n + this.paypalSkipped(file), 0);
+      },
       nothingLine() {
-        return this.rows.length
-          ? 'Nothing new to import: every row is already imported.'
-          : 'Nothing to import: no payment could be read from these files.';
+        if (this.rows.length) return 'Nothing new to import: every row is already imported.';
+        if (this.paypalTotal) return 'Nothing to import: every payment read is a transfer from PayPal.';
+        return 'Nothing to import: no payment could be read from these files.';
       },
     },
     watch: {
@@ -152,6 +164,16 @@
       },
       fileErrorReason(fileError) {
         return n26FileErrorReason(fileError);
+      },
+      paypalSkipped(file) {
+        return (file.skipped && file.skipped.paypal_transfer) || 0;
+      },
+      paypalLine(n) {
+        // States the rule, not that her PayPal file is already in: she may
+        // import N26 first (design_agent c61091, D2).
+        return n === 1
+          ? '1 transfer from PayPal left out: its payments come in through your PayPal import.'
+          : `${n} transfers from PayPal left out: their payments come in through your PayPal import.`;
       },
       // Name the stored payment a look-alike row matches, when it is loaded.
       duplicateLine(row) {
@@ -181,7 +203,9 @@
           failures: this.files
             .filter((file) => file.error)
             .map((file) => ({ filename: file.filename, reason: n26FileErrorReason(file.error) })),
-          rows_read: this.rows.length,
+          // The PayPal transfers were read too, so the line adds up.
+          rows_read: this.rows.length + this.paypalTotal,
+          paypal_transfers: this.paypalTotal,
           imported: result.confirmed,
           duplicates: result.duplicates + alreadyImported,
           skipped: this.rows.length - alreadyImported - posted.length,
@@ -237,6 +261,10 @@
     margin: 0;
     color: var(--text-muted);
     font-size: var(--text-sm);
+  }
+
+  .n26-file__paypal {
+    margin-bottom: var(--space-xs);
   }
 
   .n26-file__error,
