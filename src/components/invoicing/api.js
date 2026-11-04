@@ -10,6 +10,18 @@ const base = '/api/invoicing';
 export const getProfile = () => axios.get(`${base}/profile`).then((r) => r.data);
 export const saveProfile = (profile) => axios.put(`${base}/profile`, profile).then((r) => r.data);
 
+// The issuer's logo (system_3 #9858). The server normalizes the upload
+// (PNG or JPEG in, a trimmed and scaled PNG out) and prints it top right on
+// every invoice issued while it is set; issued invoices keep their own.
+export const logoUrl = () => `${base}/profile/logo`;
+export const getLogoBlob = () => axios.get(logoUrl(), { responseType: 'blob' }).then((r) => r.data);
+export function uploadLogo(file) {
+  const form = new FormData();
+  form.append('logo', file);
+  return axios.put(logoUrl(), form).then((r) => r.data.logo);
+}
+export const deleteLogo = () => axios.delete(logoUrl());
+
 export const listClients = () => axios.get(`${base}/clients`).then((r) => r.data.clients || []);
 export const createClient = (client) => axios.post(`${base}/clients`, client).then((r) => r.data.client);
 export const updateClient = (id, client) => axios.put(`${base}/clients/${id}`, client).then((r) => r.data.client);

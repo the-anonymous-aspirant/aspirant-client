@@ -71,7 +71,13 @@
         @changed="fetchAll"
       />
 
-      <ProfileEditor v-model:open="profileOpen" :profile="profile" @saved="onProfileSaved" />
+      <ProfileEditor
+        v-model:open="profileOpen"
+        :profile="profile"
+        :has-logo="hasLogo"
+        @saved="onProfileSaved"
+        @logo-changed="hasLogo = $event"
+      />
     </template>
   </div>
 </template>
@@ -112,6 +118,7 @@
         forbidden: false,
         profile: {},
         profileSaved: false,
+        hasLogo: false,
         clients: [],
         payments: [],
         refreshKey: 0,
@@ -142,6 +149,7 @@
           const [p, clients, payments] = await Promise.all([getProfile(), listClients(), listPayments()]);
           this.profile = p.profile || {};
           this.profileSaved = !!p.saved;
+          this.hasLogo = !!p.has_logo;
           this.clients = clients;
           this.payments = payments;
           this.refreshKey += 1;
