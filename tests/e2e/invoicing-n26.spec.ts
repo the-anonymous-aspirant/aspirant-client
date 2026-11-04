@@ -149,6 +149,15 @@ const noSideScroll = (page: Page) =>
       .every((el) => el.scrollWidth <= el.clientWidth + 1));
 
 const summary = (page: Page) => page.locator('[data-test="n26-summary"]');
+
+// read = imported + already imported + skipped + left out, on every path (design_agent c61091).
+async function expectSummaryAddsUp(page: Page): Promise<void> {
+  const text = (await summary(page).innerText()).replace(/\s+/g, ' ');
+  const m = text.match(/read (\d+) rows? .*?: (\d+) imported, (\d+) already imported, (\d+) skipped(?:, (\d+) transfers? from PayPal left out)?/);
+  expect(m, text).not.toBeNull();
+  const [read, imported, already, skipped, leftOut] = m!.slice(1).map((v) => Number(v || 0));
+  expect(read, text).toBe(imported + already + skipped + leftOut);
+}
 const checkbox = (page: Page, i: number) => page.locator('[data-test="n26-row"]').nth(i).locator('input[type="checkbox"]');
 
 test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () => {
@@ -294,6 +303,69 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await expect(page.locator('[data-test="n26-nothing"]')).toHaveText('Nothing new to import: every row is already imported.');
     await page.locator('[data-test="n26-close"]').click();
     await expect(summary(page)).toHaveText('N26 PDFs: read 1 row from 1 file: 0 imported, 1 already imported, 0 skipped.');
+  });
+
+  // #9881: a credit whose payer is PayPal is her own transfer, already counted
+  // in the PayPal import; the server leaves it out and counts it per file.
+  test('a file whose only row was a transfer from PayPal says so, and the footer and summary name it', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['paypal.pdf'] = { filename: 'paypal.pdf', document_kind: 'n26_transfer_confirmation', skipped: { paypal_transfer: 1 } };
+    await open(page, fake);
+    await upload(page, ['paypal.pdf']);
+
+    const file = page.locator('[data-test="n26-file"]').nth(0);
+    await expect(file.locator('[data-test="n26-file-paypal"]')).toHaveText(
+      '1 transfer from PayPal left out: its payments come in through your PayPal import.',
+    );
+    await expect(file.locator('[data-test="n26-file-empty"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="n26-row"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="n26-confirm"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="n26-nothing"]')).toHaveText('Nothing to import: every payment read is a transfer from PayPal.');
+    await page.locator('[data-test="n26-close"]').click();
+    expect(confirmRequests(fake)).toHaveLength(0);
+    await expect(summary(page)).toHaveText(
+      'N26 PDFs: read 1 row from 1 file: 0 imported, 0 already imported, 0 skipped, 1 transfer from PayPal left out (its payments come in through PayPal).',
+    );
+    await expectSummaryAddsUp(page);
+  });
+
+  test('a statement with transfers from PayPal lists its other rows and names how many it left out', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['statement.pdf'].skipped = { paypal_transfer: 2 };
+    await open(page, fake);
+    await upload(page, ['conferma.pdf', 'statement.pdf']);
+
+    const files = page.locator('[data-test="n26-file"]');
+    await expect(files.nth(0).locator('[data-test="n26-file-paypal"]')).toHaveCount(0);
+    await expect(files.nth(1).locator('[data-test="n26-file-paypal"]')).toHaveText(
+      '2 transfers from PayPal left out: their payments come in through your PayPal import.',
+    );
+    await expect(files.nth(1).locator('[data-test="n26-row"]')).toHaveCount(2);
+    expect(await noSideScroll(page)).toBe(true);
+
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+    expect(JSON.parse(confirmRequests(fake)[0].body).rows).toHaveLength(3);
+    await expect(summary(page)).toHaveText(
+      'N26 PDFs: read 5 rows from 2 files: 3 imported, 0 already imported, 0 skipped, 2 transfers from PayPal left out (their payments come in through PayPal).',
+    );
+    await expectSummaryAddsUp(page);
+  });
+
+  // Dismissing without importing (close(false)) still adds up (c61091 item 3).
+  test('cancelling a review with transfers from PayPal counts them as left out, apart from the skipped rows', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['statement.pdf'].skipped = { paypal_transfer: 2 };
+    fake.parsed['conferma.pdf'].candidates = [confirmation({ already_imported: true })];
+    await open(page, fake);
+    await upload(page, ['conferma.pdf', 'statement.pdf']);
+    await page.locator('[data-test="n26-cancel"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+    expect(confirmRequests(fake)).toHaveLength(0);
+    await expect(summary(page)).toHaveText(
+      'N26 PDFs: read 5 rows from 2 files: 0 imported, 1 already imported, 2 skipped, 2 transfers from PayPal left out (their payments come in through PayPal).',
+    );
+    await expectSummaryAddsUp(page);
   });
 
   test('Cancel imports nothing and reports every row as skipped', async ({ page }) => {
