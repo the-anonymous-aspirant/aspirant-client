@@ -231,6 +231,12 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await expect(page.locator('[data-test="invoice-number"]')).toHaveText('2026-001');
 
     await page.locator('[data-test="invoice-cancel"]').click();
+    // The reason box sits below the PDF preview, Payments covered and
+    // History; the click scrolls it into view and focuses it so it does not
+    // read as having done nothing (operator ask, #9926-A5).
+    const reasonInput = page.getByLabel('Reason for the cancellation (Storno)');
+    await expect(page.locator('[data-test="cancel-step"]')).toBeInViewport();
+    await expect(reasonInput).toBeFocused();
     await page.locator('[data-test="invoice-cancel-confirm"]').click();
     await expect(page.locator('[data-test="invoice-error"]')).toContainText('Give a reason');
     expect(fake.requests.some((r) => r.path.endsWith('/cancel'))).toBe(false);
