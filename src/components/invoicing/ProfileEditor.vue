@@ -5,6 +5,19 @@
       <AspTextarea v-model="form.address" label="Address" hint="One line per address line." :rows="3" required />
       <AspInput v-model="form.steuernummer" label="Steuernummer (Tax number)" hint="Invoices cannot be issued while this is empty." />
       <AspInput v-model="form.email" type="email" label="Email" />
+      <!-- Optional; printed under the email on new invoices only when set
+           (operator c61727, system_3 #9967). The server is the only gate on
+           its characters. A refusal shows on this field, in place of its
+           hint, with her text kept (design_agent on #9993). -->
+      <AspInput
+        ref="phone"
+        v-model="form.phone"
+        type="tel"
+        label="Phone"
+        hint="Printed under your email on new invoices. Leave it empty to leave it off."
+        :error="phoneError"
+        data-test="profile-phone"
+      />
       <AspCheckbox v-model="form.is_kleinunternehmer" label="Kleinunternehmerin under § 19 UStG (no VAT charged)" />
       <div class="profile-form__numbers">
         <AspInput v-model="form.invoice_number_prefix" label="Invoice number prefix" hint="For example 2026." required />
@@ -84,6 +97,10 @@
   // Edits the issuer header printed on every invoice (spec §4.1). The admin
   // seeds it and the owner edits it; issued invoices keep the snapshot taken
   // when they were issued, so nothing here changes an issued invoice.
+  // aspirant-server answers a refused phone with this code (system_3 #9967).
+  const PHONE_REFUSED = 'invalid_phone';
+  const PHONE_RULE = 'Use digits, spaces and + - ( ) / . only, at most 40 characters.';
+
   export default {
     name: 'ProfileEditor',
     components: { AspButton, AspCheckbox, AspInput, AspModal, AspTextarea, ModalActions },
@@ -98,6 +115,8 @@
         form: this.copy(this.profile),
         saving: false,
         error: '',
+        // The server's refusal of the phone, shown on the Phone field itself.
+        phoneError: '',
         // logoSet is what the server holds; logoStaged is the unsaved change,
         // null, { action: 'upload', file } or { action: 'delete' }.
         logoSet: this.hasLogo,
@@ -113,6 +132,10 @@
       },
     },
     watch: {
+      // Editing the number clears its refusal.
+      'form.phone'() {
+        this.phoneError = '';
+      },
       open(isOpen) {
         if (isOpen) {
           this.form = this.copy(this.profile);
@@ -199,6 +222,7 @@
           address: p.address || '',
           steuernummer: p.steuernummer || '',
           email: p.email || '',
+          phone: p.phone || '',
           is_kleinunternehmer: p.is_kleinunternehmer !== false,
           invoice_number_prefix: p.invoice_number_prefix || '',
           next_invoice_number: p.next_invoice_number || 1,
@@ -211,6 +235,7 @@
       async save() {
         this.saving = true;
         this.error = '';
+        this.phoneError = '';
         this.logoError = '';
         const logoChanged = !!this.logoStaged;
         try {
@@ -220,7 +245,14 @@
           this.$emit('saved', res.profile);
           this.$emit('update:open', false);
         } catch (err) {
-          const message = errorOf(err).message;
+          const { code, message } = errorOf(err);
+          if (code === PHONE_REFUSED) {
+            // On the field, in plain words; the rule stays the server's.
+            this.phoneError = PHONE_RULE;
+            if (logoChanged) this.error = 'The logo was saved; the profile was not.';
+            this.$nextTick(() => this.$refs.phone && this.$refs.phone.focus());
+            return;
+          }
           this.error = logoChanged ? `The logo was saved; the profile was not: ${message}` : message;
         } finally {
           this.saving = false;
