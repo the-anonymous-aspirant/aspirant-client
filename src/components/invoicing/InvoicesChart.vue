@@ -8,20 +8,20 @@
     :data-income="incomeEuros.join(',')"
   >
     <h3>Statistics</h3>
-    <p v-if="!labels.length" class="muted" data-test="invoices-chart-empty">No clients or issued invoices yet.</p>
+    <p v-if="!labels.length" class="muted" data-test="invoices-chart-empty">No issued invoices yet.</p>
     <!-- Three charts on one month axis, so a month lines up across all three
          (operator c61586: "# of clients by date (cumulative). EUR income.
          # invoices"; system_3 #9972). -->
     <div v-else class="stats">
       <figure class="stat" data-test="stat-clients">
         <figcaption><h4>Clients over time</h4></figcaption>
-        <AspChart type="line" :data="clientsData" :options="optionsFor('count')" :plugins="[plotAreaProbe]" :height="140" aria-label="Clients over time, running total per month" />
-        <p class="stat__range muted">running total, by the date a client was added</p>
+        <AspChart type="line" :data="clientsData" :options="optionsFor('count')" :plugins="[plotAreaProbe]" :height="140" aria-label="Clients over time, running total by the month of each client's first invoiced work" />
+        <p class="stat__range muted" data-test="stat-clients-range">running total; each client counts from the month of the work on their first issued invoice</p>
       </figure>
       <figure class="stat" data-test="stat-income">
         <figcaption><h4>Income per month</h4></figcaption>
-        <AspChart type="bar" :data="incomeData" :options="optionsFor('money')" :plugins="[plotAreaProbe]" :height="140" aria-label="Income per month in euros, issued invoices" />
-        <p class="stat__range muted">issued invoices per month, by issue date; this month so far</p>
+        <AspChart type="bar" :data="incomeData" :options="optionsFor('money')" :plugins="[plotAreaProbe]" :height="140" aria-label="Income per month in euros, issued invoices by the month the work was done" />
+        <p class="stat__range muted" data-test="stat-income-range">issued invoices, by the month the work was done; this month so far</p>
       </figure>
       <figure class="stat" data-test="stat-invoices">
         <figcaption><h4>Invoices issued per month</h4></figcaption>
@@ -34,7 +34,7 @@
 
 <script>
   import { AspChart } from '@aspirant/design-system';
-  import { formatMoney, listClients, listInvoices } from './api.js';
+  import { formatMoney, listInvoices } from './api.js';
 
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   // The y-axis labels of all three charts take the same width, so the plot
@@ -66,12 +66,19 @@
   };
 
   // The Invoices tab's statistics (spec §4.9; system_3 #9972). One month
-  // axis, zero-filled from the first month with a client or an issued invoice
-  // to this month. Only invoices currently issued count, for both the count
-  // and the income: a Storno's replacement is counted, so counting the
-  // cancelled one too would double the work. "EUR income" is the issued
-  // totals (communicator's recommended default while the operator's choice
-  // is open, #9972 c61811).
+  // axis, zero-filled from the first month any series has a value to this
+  // month. Only invoices currently issued count: a Storno's replacement is
+  // counted, so counting the cancelled one too would double the work.
+  //
+  // Dating (operator c61853 on #9972, system_3 #10005 c61867):
+  // - income: an issued invoice's total in the month its service period
+  //   starts (service_date_from), i.e. when the work was done;
+  // - clients: each client from the service month of their first issued
+  //   invoice; a client with no issued invoice is not counted yet;
+  // - invoices issued: the issue month, unchanged.
+  //
+  // An issued invoice always has a service period (the issue check requires
+  // it); the issue month stands in only if a row ever lacks one.
   export default {
     name: 'InvoicesChart',
     components: { AspChart },
@@ -81,14 +88,28 @@
       now: { type: Date, default: null },
     },
     data() {
-      return { invoices: [], clients: [], plotAreaProbe };
+      return { invoices: [], plotAreaProbe };
     },
     computed: {
       issued() {
         return this.invoices.filter((i) => i.status === 'issued');
       },
+      // The month an issued invoice's work was done.
+      serviceMonths() {
+        return this.issued.map((i) => monthOf(i.service_date_from) || monthOf(i.issue_date));
+      },
+      // client id -> the service month of their first issued invoice.
+      clientFirstMonths() {
+        const first = new Map();
+        this.issued.forEach((inv, k) => {
+          const m = this.serviceMonths[k];
+          if (inv.client_id == null || !m) return;
+          if (!first.has(inv.client_id) || m < first.get(inv.client_id)) first.set(inv.client_id, m);
+        });
+        return [...first.values()];
+      },
       months() {
-        const seen = [...this.issued.map((i) => monthOf(i.issue_date)), ...this.clients.map((c) => monthOf(c.created_at))].filter(Boolean);
+        const seen = [...this.issued.map((i) => monthOf(i.issue_date)), ...this.serviceMonths].filter(Boolean);
         if (!seen.length) return [];
         const today = this.now || new Date();
         const last = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -114,14 +135,11 @@
         return this.months.map((k) => this.issued.filter((i) => monthOf(i.issue_date) === k).length);
       },
       incomeEuros() {
-        return this.months.map((k) => this.issued.filter((i) => monthOf(i.issue_date) === k).reduce((s, i) => s + (Number(i.total_cents) || 0), 0) / 100);
+        return this.months.map((k) => this.issued.reduce((s, i, n) => (this.serviceMonths[n] === k ? s + (Number(i.total_cents) || 0) : s), 0) / 100);
       },
       // Clients by the end of each month (a running total).
       clientTotals() {
-        return this.months.map((k) => this.clients.filter((c) => {
-          const m = monthOf(c.created_at);
-          return m && m <= k;
-        }).length);
+        return this.months.map((k) => this.clientFirstMonths.filter((m) => m <= k).length);
       },
       chartData() {
         return { labels: this.labels, datasets: [{ label: 'Invoices issued', data: this.counts }] };
@@ -169,9 +187,11 @@
         };
       },
       async load() {
-        const [inv, cl] = await Promise.allSettled([listInvoices({}), listClients()]);
-        this.invoices = inv.status === 'fulfilled' ? inv.value : [];
-        this.clients = cl.status === 'fulfilled' ? cl.value : [];
+        try {
+          this.invoices = await listInvoices({});
+        } catch {
+          this.invoices = [];
+        }
       },
     },
   };
