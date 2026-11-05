@@ -138,7 +138,12 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await open(page, newFake({ clients: [] }));
     await page.locator('[data-test="manual-new"]').click();
     await expect(page.locator('[data-test="manual-no-clients"]')).toHaveText('Add the client on the Clients tab first.');
-    await expect(page.locator('[data-test="manual-save"]')).toBeDisabled();
+    const save = page.locator('[data-test="manual-save"]');
+    await expect(save).toBeDisabled();
+    // The reason reads next to the disabled button too (#9926-A4), not only
+    // up by the field it names, and the button points screen readers at it.
+    await expect(page.locator('[data-test="manual-save-hint"]')).toHaveText('Add a client first.');
+    await expect(save).toHaveAttribute('aria-describedby', 'manual-save-hint');
   });
 
   test('a hand-entered payment says so; Delete takes two presses and is offered only while no invoice covers it', async ({ page }) => {
