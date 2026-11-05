@@ -86,6 +86,14 @@ export const METHOD_LABELS = {
   other: 'Sonstige',
 };
 
+// Where an imported payment came from (`source` on an `entry != 'manual'`
+// row). Mirrors the server's invoicingPaymentSourceN26 / ...PayPal constants
+// (invoicing_payments.go, invoicing_n26.go).
+export const SOURCE_LABELS = {
+  n26: 'N26',
+  paypal: 'PayPal',
+};
+
 // The server's error envelope is { error: { code, message } }; fall back to
 // a generic line so a network failure still reads as a sentence.
 export function errorOf(err) {

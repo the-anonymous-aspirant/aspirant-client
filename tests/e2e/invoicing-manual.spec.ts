@@ -149,6 +149,8 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await expect(lines.nth(1)).toHaveText('Entered by hand · Bar');
     const del = page.locator('[data-test="payment-delete"]');
     await expect(del).toHaveCount(1);
+    // #9934-B2 (operator c61373): the row without Delete says why.
+    await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveText('On an invoice — delete or cancel that invoice first');
 
     await del.click();
     await expect(del).toHaveText('Delete this payment');
@@ -156,6 +158,22 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await del.click();
     await expect.poll(() => fake.requests.filter((r) => r.method === 'DELETE').map((r) => r.path)).toEqual(['/invoicing/payments/40']);
     await expect(page.locator('[data-test="payment-manual"]')).toHaveCount(1);
+  });
+
+  // #9934-B2 (operator c61373): an imported row never offers Delete, and says why.
+  test('an imported payment says why it has no Delete option', async ({ page }) => {
+    const fake = newFake({
+      payments: [
+        manualRow({ id: 50, entry: 'import', source: 'paypal', reference: '' }),
+        manualRow({ id: 51, entry: 'import', source: 'n26', reference: '' }),
+      ],
+    });
+    await open(page, fake);
+    await expect(page.locator('[data-test="payment-delete"]')).toHaveCount(0);
+    const reasons = page.locator('[data-test="payment-no-delete-reason"]');
+    await expect(reasons).toHaveCount(2);
+    await expect(reasons.first()).toHaveText('Imported from PayPal — the file is its record');
+    await expect(reasons.nth(1)).toHaveText('Imported from N26 — the file is its record');
   });
 
   test('a delete the server refuses is shown, and the row stays', async ({ page }) => {
