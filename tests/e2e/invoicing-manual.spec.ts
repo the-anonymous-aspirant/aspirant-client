@@ -86,15 +86,20 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await expect(page.locator('[data-test="category-filter"]')).toHaveCount(0);
     await expect(page.locator('[data-test="create-invoice"]')).toHaveCount(0);
     await expect(page.locator('[data-test="payments-empty"]')).toContainText(
-      'Enter a payment by hand with New invoice, or import a PayPal CSV or Excel file, or N26 PDFs.',
+      'Enter a payment by hand, or import a PayPal CSV or Excel file, or N26 PDFs.',
     );
   });
 
-  test('New invoice stores the payment, makes a draft from it and opens the editor', async ({ page }) => {
+  test('Enter payment by hand stores the payment, makes a draft from it and opens the editor', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
+    // system_3 #9942 (operator c61387): the button and the dialog say what
+    // they do, enter a payment; the invoice comes after.
+    await expect(page.locator('[data-test="manual-new"]')).toHaveText('Enter payment by hand');
     await page.locator('[data-test="manual-new"]').click();
     await expect(page.locator('[data-test="manual-form"]')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Enter payment by hand' })).toBeVisible();
+    await expect(page.getByText('New invoice', { exact: true })).toHaveCount(0);
 
     // Nothing is sent until the required fields are filled.
     await page.locator('[data-test="manual-save"]').click();
@@ -196,19 +201,47 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
 
   // design_agent's acceptance for the client PR (sign-off on #8409).
   for (const theme of ['light', 'dark'] as const) {
-    test(`the head row reads New invoice, then Import, with no primary (${theme})`, async ({ page }) => {
+    test(`the head row reads Enter payment by hand, then Import, with no primary (${theme})`, async ({ page }) => {
       await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
       await page.emulateMedia({ colorScheme: theme });
       await open(page, newFake({ payments: [manualRow()] }));
       const [manual, imp] = await Promise.all(['manual-new', 'payments-import'].map((id) =>
         page.locator(`[data-test="${id}"]`).evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, primary: el.classList.contains('btn--primary') }; })));
       const narrow = await page.evaluate(() => window.matchMedia('(max-width: 640px)').matches);
-      if (narrow) expect(manual.y, 'phone: New invoice above Import').toBeLessThan(imp.y);
-      else expect(manual.x, 'wide: New invoice left of Import').toBeLessThan(imp.x);
+      if (narrow) expect(manual.y, 'phone: Enter payment by hand above Import').toBeLessThan(imp.y);
+      else expect(manual.x, 'wide: Enter payment by hand left of Import').toBeLessThan(imp.x);
       expect([manual.primary, imp.primary], 'no primary in the head row').toEqual([false, false]);
       await expect(page.locator('[data-test="create-invoice"]')).toHaveClass(/btn--primary/);
     });
   }
+
+  // system_3 #9942 (design_agent c61923, §3.127): the ways in are one row or
+  // three, never two and one, at every width, and no label wraps within its
+  // button. Swept, so a longer label fails here instead of shipping a 2+1.
+  test('the head row is one line or three stacked full width, never two and one', async ({ page }) => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await open(page, newFake({ payments: [manualRow()] }));
+    for (let w = 600; w <= 1100; w += 4) {
+      await page.setViewportSize({ width: w, height: 900 });
+      const m = await page.evaluate(() => {
+        const row = document.querySelector('.ways-in') as HTMLElement;
+        const bs = ['manual-new', 'payments-import', 'n26-import'].map((id) => document.querySelector(`[data-test="${id}"]`) as HTMLElement);
+        const rects = bs.map((b) => b.getBoundingClientRect());
+        const lineHeight = (b: HTMLElement) => parseFloat(getComputedStyle(b).lineHeight) || 0;
+        return {
+          rows: new Set(rects.map((r) => Math.round(r.top))).size,
+          rowWidth: Math.round(row.getBoundingClientRect().width),
+          widths: rects.map((r) => Math.round(r.width)),
+          // One line of text: the label's height is under two line heights.
+          oneLine: bs.every((b) => { const span = b.querySelector('span') || b; return span.getBoundingClientRect().height < 2 * lineHeight(b) || b.getBoundingClientRect().height < 48; }),
+        };
+      });
+      expect([1, 3], `rows at ${w}px`).toContain(m.rows);
+      expect(m.oneLine, `a label wraps at ${w}px`).toBe(true);
+      if (m.rows === 3) for (const bw of m.widths) expect(Math.abs(bw - m.rowWidth), `stacked full width at ${w}px`).toBeLessThanOrEqual(1);
+    }
+  });
 
   test('the dialog footer: Create draft first on a phone, Cancel then Create draft at the right when wide', async ({ page }) => {
     await open(page, newFake());

@@ -7,7 +7,7 @@
            All stay secondary; Create invoice holds the one primary slot. -->
       <div class="ways-in">
         <AspButton variant="secondary" class="block-on-phone" data-test="manual-new" @click="manualOpen = true">
-          New invoice
+          Enter payment by hand
         </AspButton>
       <div class="upload">
         <input
@@ -141,7 +141,7 @@
     <AspEmptyState
       v-if="incoming.length === 0"
       heading="No payments yet"
-      message="Enter a payment by hand with New invoice, or import a PayPal CSV or Excel file, or N26 PDFs."
+      message="Enter a payment by hand, or import a PayPal CSV or Excel file, or N26 PDFs."
       data-test="payments-empty"
     />
     <AspEmptyState
@@ -711,10 +711,14 @@
     white-space: nowrap;
   }
 
+  /* The head row is the container the ways in measure themselves against
+     (design_agent c61923 on system_3 #9942): .ways-in is sized by its own
+     buttons, so it cannot be its own container; the full-width head can. */
   .panel-head {
     display: flex;
     justify-content: flex-end;
     margin-bottom: var(--space-md);
+    container: ways-in / inline-size;
   }
 
   .ways-in {
@@ -722,6 +726,23 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: var(--space-sm);
+  }
+
+  /* One row or three, never two and one (§3.127): when the three buttons
+     cannot share a line, all three stack full width, as on a phone. 35rem is
+     their widths plus the two gaps (202 + 178 + 154 + 2 × 12 = 558px at a
+     16px root), so it moves with her text size; the spec sweeps the widths
+     and fails if a label change outgrows it. */
+  @container ways-in (width < 35rem) {
+    .ways-in {
+      flex-direction: column;
+      align-items: stretch;
+      width: 100%;
+    }
+
+    .ways-in .block-on-phone {
+      width: 100%;
+    }
   }
 
   .manual-line {
