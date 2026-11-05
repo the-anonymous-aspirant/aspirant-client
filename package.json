@@ -12,7 +12,8 @@
     "guard:node-modules": "bash scripts/check-no-tracked-node-modules.sh",
     "guard:csp-hashes": "node scripts/check-csp-hashes.mjs",
     "guard:csp-scope": "sh scripts/csp-scope-probe.sh --docker",
-    "test:changelog": "sh tests/changelog_unit.sh"
+    "test:changelog": "sh tests/changelog_unit.sh",
+    "test:is-main-head": "sh tests/is_main_head_unit.sh"
   },
   "dependencies": {
     "@aspirant/design-system": "file:../aspirant-design-system",
