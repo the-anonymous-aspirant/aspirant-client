@@ -851,8 +851,13 @@
     gap: var(--space-sm);
   }
 
+  /* Wide enough for its longest label on one line, "Set category of selected
+     payments" (operator c61550: no wrapping in these buttons, system_3 #9968):
+     281px measured at the desktop text size and 314px below 768px, where
+     option text is --text-base. A fixed width in rem fits both, so picking
+     rows does not shift the row and it grows with her text size. */
   .set-category {
-    width: 16rem;
+    width: 20rem;
   }
 
   .select-all {
