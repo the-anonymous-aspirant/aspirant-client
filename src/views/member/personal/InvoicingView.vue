@@ -41,7 +41,7 @@
              the profile editor. -->
         <p class="glance__line">
           <span v-if="!profileSaved" class="muted" data-test="profile-unsaved">
-            No profile saved yet. Every invoice is printed with this header.
+            No profile yet. It is printed at the top of every invoice.
           </span>
           <span v-else data-test="profile-name">{{ profile.full_name || '—' }}</span>
         </p>
@@ -49,7 +49,7 @@
           <span v-if="profile.steuernummer">
             <span class="muted">Steuernummer</span> <span data-test="profile-steuernummer">{{ profile.steuernummer }}</span>
           </span>
-          <AspBadge v-else status="caution" data-test="steuernummer-missing">Missing — issuing blocked</AspBadge>
+          <AspBadge v-else status="caution" data-test="steuernummer-missing">Missing: needed to issue</AspBadge>
           <!-- The separator wraps with the text after it, never alone at a line end. -->
           <span class="nowrap"><span class="muted" aria-hidden="true">·</span> <span class="muted">next invoice</span> <span data-test="profile-next-number">{{ nextNumberLabel }}</span></span>
         </p>
@@ -92,8 +92,8 @@
   import ProfileEditor from '../../../components/invoicing/ProfileEditor.vue';
   import { errorOf, getProfile, listClients, listPayments } from '../../../components/invoicing/api.js';
 
-  // The Invoices app (system_3 #8367): Flower's retroactive invoicing for the
-  // Jobcenter. The server gates every route to the owner + Admin
+  // The Invoices app (system_3 #8367): one person's invoicing. The server
+  // gates every route to the owner + Admin
   // (aspirant-server routes.go, invoicesOwnerUsername) and enforces every
   // invoicing rule; this page shows its answers.
   export default {

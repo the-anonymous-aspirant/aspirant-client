@@ -130,7 +130,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
 
     await expect(page.locator('[data-test="profile-name"]')).toHaveText('Flower Example');
     await expect(page.locator('[data-test="profile-next-number"]')).toHaveText('2026-001');
-    await expect(page.locator('[data-test="steuernummer-missing"]')).toContainText('issuing blocked');
+    await expect(page.locator('[data-test="steuernummer-missing"]')).toContainText('Missing: needed to issue');
   });
 
   // #8401: a global `.card` rule in style.css matched AspCard's root and
@@ -185,7 +185,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await page.locator('[data-test="client-add"]').click();
     const form = page.locator('[data-test="client-form"]');
     // #9835: the address is optional up to 250 € gross, and the form says so.
-    await expect(form).toContainText('Optional for invoices up to 250 € gross');
+    await expect(form).toContainText('Needed for invoices over 250 € gross.');
     await page.locator('[data-test="client-save"]').click();
     await expect(page.locator('[data-test="client-error"]')).toContainText('A client needs a name.');
     expect(fake.requests.some((r) => r.method === 'POST' && r.path === '/invoicing/clients')).toBe(false);

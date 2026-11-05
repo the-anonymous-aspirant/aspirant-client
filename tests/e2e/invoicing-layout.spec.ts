@@ -99,7 +99,7 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
 
   test('the guardrail states are visible: missing Steuernummer on the card and in the draft, the Create invoice caption', async ({ page }) => {
     await open(page, 'light', { steuernummer: '' });
-    await expect(page.locator('[data-test="steuernummer-missing"]')).toContainText('issuing blocked');
+    await expect(page.locator('[data-test="steuernummer-missing"]')).toContainText('Missing: needed to issue');
     await expect(page.locator('[data-test="create-invoice-hint"]')).toHaveText('Select payments to set their category, or Paid work payments to create an invoice.');
     await expect(page.locator('[data-test="create-invoice"]')).toHaveAttribute('aria-describedby', 'create-invoice-hint');
 
@@ -119,7 +119,7 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
     await page.getByRole('tab', { name: 'Invoices' }).click();
     await page.locator('[data-test="invoice-row"][data-status="issued"]').click();
     await expect(page.locator('[data-test="invoice-readonly"]')).toHaveText(
-      'Issued invoices cannot be changed. To correct one, cancel it (Storno) and issue a new invoice.',
+      "An issued invoice can't be changed. To correct it, cancel it and issue a new one.",
     );
     await expect(page.locator('[data-test="draft-issue-blocked"]')).toHaveCount(0);
     expect(await noSideScroll(page), 'detail: no horizontal scroll').toBe(true);
