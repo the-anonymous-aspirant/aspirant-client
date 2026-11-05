@@ -59,7 +59,7 @@
   import { allCategories, isDefault, isSaved, removeCategory, saveCategory, storageAvailable } from './lineCategories.js';
 
   // Bumped on every save or remove so every field on the page (several draft
-  // lines, the New invoice dialog) re-reads the same list.
+  // lines, the Enter payment by hand dialog) re-reads the same list.
   const version = ref(0);
   let uid = 0;
   const EDGE = 8;

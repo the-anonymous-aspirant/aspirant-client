@@ -426,9 +426,13 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
 // design_agent c60358: the three ways in sit right-aligned on ONE row at 641
 // and 768px with the sidebar in its default state, each label whole
 // (§3.115: scrollWidth − clientWidth ≤ 0). A 2+1 split goes back to design.
+// Since "Enter payment by hand" (system_3 #9942) the three no longer fit one
+// row at 768 with the sidebar open, and design_agent ruled the break
+// (c61923, superseding c60358 there): one row or three stacked full width,
+// never two and one. 641 (sidebar hidden) still holds one row.
 test.describe('#9760-B1 the head row holds three ways in', () => {
-  for (const width of [641, 768]) {
-    test(`at ${width}px all three ways in share one row, no label clipped`, async ({ page }) => {
+  for (const [width, rows] of [[641, 1], [768, 3]] as const) {
+    test(`at ${width}px the three ways in take ${rows === 1 ? 'one row' : 'three rows, full width'}, no label clipped`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await open(page, newFake());
       const ids = ['manual-new', 'payments-import', 'n26-import'];
@@ -442,7 +446,8 @@ test.describe('#9760-B1 the head row holds three ways in', () => {
         };
       }, ids);
       console.log(`ways-in @${width}: ${JSON.stringify(m)}`);
-      expect(new Set(m.tops).size, `one row: tops ${m.tops}`).toBe(1);
+      expect(new Set(m.tops).size, `rows: tops ${m.tops}`).toBe(rows);
+      if (rows === 3) for (const w of m.widths) expect(Math.abs(w - m.row), 'stacked full width').toBeLessThanOrEqual(1);
       for (const o of m.overflow) expect(o).toBeLessThanOrEqual(0);
     });
   }
