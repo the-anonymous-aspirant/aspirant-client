@@ -140,7 +140,11 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     // Side by side, the hint hangs under Amount without pushing Date down
     // (the two labels' own spacing differs by under 2px; the drop was ~50px).
     const [d, m] = [await page.locator('[data-test="manual-date"]').boundingBox(), await amount.boundingBox()];
-    if (m!.x > d!.x + 10) expect(Math.abs(m!.y - d!.y), 'date and amount inputs stay level').toBeLessThanOrEqual(3);
+    // Side by side means Amount starts past Date's right edge; stacked on a
+    // phone, AspInput's own padding still puts its <input> a little right of
+    // the bare date input, so an x offset alone is not the test.
+    if (m!.x >= d!.x + d!.width) expect(Math.abs(m!.y - d!.y), 'date and amount inputs stay level').toBeLessThanOrEqual(3);
+    else expect(m!.y, 'stacked: Amount below Date').toBeGreaterThan(d!.y + d!.height);
     await amount.fill('120');
     await expect(dialog.getByText(hint)).toHaveCount(0);
     await amount.fill('400');
