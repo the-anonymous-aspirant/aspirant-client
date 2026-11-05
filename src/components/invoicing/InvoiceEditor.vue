@@ -45,7 +45,6 @@
         </div>
         <div class="downloads">
           <a class="link-button" :href="pdfUrl" data-test="invoice-pdf" target="_blank" rel="noopener">Download PDF</a>
-          <AspButton variant="secondary" size="sm" data-test="invoice-csv" @click="csvOpen = true">Download CSV</AspButton>
         </div>
         <iframe
           v-if="!narrow && previewUrl"
@@ -73,8 +72,6 @@
             </li>
           </ol>
         </section>
-        <ValidationScreen v-model:open="csvOpen" :url="csvUrl" :filename="`Rechnung-${invoice.invoice_number}.csv`" />
-
         <div v-if="cancelling" class="cancel-step" data-test="cancel-step">
           <AspTextarea v-model="cancelReason" label="Reason for the cancellation (Storno)" :rows="2" required />
           <p class="hint">It stays on record as cancelled. Its payments can go on a new invoice.</p>
@@ -179,7 +176,6 @@
   import { AspBadge, AspButton, AspInput, AspModal, AspSelect, AspTextarea } from '@aspirant/design-system';
   import axios from 'axios';
   import ReadState from '../ReadState.vue';
-  import ValidationScreen from './ValidationScreen.vue';
   import ModalActions from './ModalActions.vue';
   import {
     STATUS_LABELS,
@@ -191,7 +187,6 @@
     formatDay,
     formatMoney,
     getInvoice,
-    invoiceCsvUrl,
     invoicePdfUrl,
     listAuditEvents,
     issueInvoice,
@@ -206,7 +201,7 @@
   // read-only record that can only be cancelled (Storno).
   export default {
     name: 'InvoiceEditor',
-    components: { AspBadge, AspButton, AspInput, AspModal, AspSelect, AspTextarea, ModalActions, ReadState, ValidationScreen },
+    components: { AspBadge, AspButton, AspInput, AspModal, AspSelect, AspTextarea, ModalActions, ReadState },
     props: {
       open: { type: Boolean, default: false },
       invoiceId: { type: Number, default: null },
@@ -230,7 +225,6 @@
         cancelReason: '',
         history: [],
         historyError: '',
-        csvOpen: false,
         previewUrl: '',
         narrow: typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches,
       };
@@ -283,9 +277,6 @@
       },
       pdfUrl() {
         return invoicePdfUrl(this.invoice.id);
-      },
-      csvUrl() {
-        return invoiceCsvUrl(this.invoice.id);
       },
     },
     watch: {

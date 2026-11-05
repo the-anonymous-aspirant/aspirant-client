@@ -54,7 +54,7 @@ const statementRow = (n: number, over: Json = {}): Json => ({
 function newFake(over: Partial<Fake> = {}): Fake {
   return {
     payments: [
-      { id: 10, kind: 'incoming', source: 'paypal', transaction_id: 'TX1', paid_on: '2026-07-01T00:00:00Z', currency: 'EUR', gross_cents: 35000, sender_name: 'Galerie Nord', sender_email: '', note: '', category: 'uncategorised', client_id: null, bank_deposit_id: null },
+      { id: 10, kind: 'incoming', source: 'paypal', transaction_id: 'TX1', paid_on: '2026-07-01T00:00:00Z', currency: 'EUR', gross_cents: 35000, sender_name: 'Galerie Nord', sender_email: '', note: '', category: 'uncategorised', client_id: null },
     ],
     parsed: {
       'conferma.pdf': { filename: 'conferma.pdf', document_kind: 'n26_transfer_confirmation', candidates: [confirmation()] },
@@ -107,7 +107,7 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
           id: 100 + fake.payments.length, kind: 'incoming', source: 'n26', entry: 'import',
           transaction_id: row.transaction_id, paid_on: `${row.paid_on}T00:00:00Z`, currency: 'EUR',
           gross_cents: row.gross_cents, sender_name: row.sender_name, sender_email: '', note: row.note,
-          category: 'uncategorised', client_id: null, bank_deposit_id: null,
+          category: 'uncategorised', client_id: null,
         });
         confirmed++;
       }

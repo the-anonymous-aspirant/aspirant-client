@@ -22,9 +22,9 @@ interface Fake {
 function newFake(): Fake {
   return {
     payments: [
-      { id: 10, kind: 'incoming', transaction_id: 'TX1', paid_on: '2026-07-14T00:00:00Z', currency: 'EUR', gross_cents: 35000, sender_name: 'Galerie Nord', sender_email: 'pay@galerie.test', note: 'Wandbild Juli', category: 'paid_work', client_id: 1, bank_deposit_id: null },
-      { id: 11, kind: 'incoming', transaction_id: 'TX2', paid_on: '2026-07-20T00:00:00Z', currency: 'EUR', gross_cents: 12000, sender_name: 'Galerie Nord', sender_email: 'pay@galerie.test', note: 'Portrait', category: 'paid_work', client_id: 1, bank_deposit_id: null },
-      { id: 12, kind: 'incoming', transaction_id: 'TX3', paid_on: '2026-07-21T00:00:00Z', currency: 'EUR', gross_cents: 5000, sender_name: 'Aunt', sender_email: 'aunt@example.test', note: 'Happy birthday', category: 'gift', client_id: null, bank_deposit_id: null },
+      { id: 10, kind: 'incoming', transaction_id: 'TX1', paid_on: '2026-07-14T00:00:00Z', currency: 'EUR', gross_cents: 35000, sender_name: 'Galerie Nord', sender_email: 'pay@galerie.test', note: 'Wandbild Juli', category: 'paid_work', client_id: 1 },
+      { id: 11, kind: 'incoming', transaction_id: 'TX2', paid_on: '2026-07-20T00:00:00Z', currency: 'EUR', gross_cents: 12000, sender_name: 'Galerie Nord', sender_email: 'pay@galerie.test', note: 'Portrait', category: 'paid_work', client_id: 1 },
+      { id: 12, kind: 'incoming', transaction_id: 'TX3', paid_on: '2026-07-21T00:00:00Z', currency: 'EUR', gross_cents: 5000, sender_name: 'Aunt', sender_email: 'aunt@example.test', note: 'Happy birthday', category: 'gift', client_id: null },
     ],
     invoices: [],
     items: {},
