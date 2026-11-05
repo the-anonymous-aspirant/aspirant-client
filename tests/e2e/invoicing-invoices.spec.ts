@@ -153,6 +153,17 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     for (const key of ['issue_date', 'invoice_number', 'number', 'status']) expect(put).not.toHaveProperty(key);
   });
 
+  // #9934-B1 (operator c61373): Save draft closes the modal.
+  test('saving a draft closes the editor modal', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await createFromTwo(page);
+
+    await page.locator('[data-test="draft-save"]').click();
+    await expect.poll(() => fake.requests.filter((r) => r.method === 'PUT').length).toBe(1);
+    await expect(page.locator('[data-test="invoice-editor"]')).toBeHidden();
+  });
+
   test('issuing asks first, sends no date or number, then shows the server-assigned ones', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
