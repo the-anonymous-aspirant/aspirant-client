@@ -88,9 +88,9 @@
     <section class="export-group" aria-labelledby="export-heading">
       <h3 id="export-heading">Export</h3>
       <div class="exports">
-        <AspButton variant="secondary" data-test="export-all-csv" @click="startExport('csv')">Download all (CSV)</AspButton>
+        <AspButton variant="secondary" data-test="export-all-csv" @click="startExport('csv')">Invoice list (CSV)</AspButton>
         <AspButton variant="secondary" data-test="export-workbook" @click="startExport('xlsx')">Excel workbook</AspButton>
-        <AspButton variant="secondary" data-test="export-bundle" @click="startExport('bundle')">Jobcenter bundle (ZIP)</AspButton>
+        <AspButton variant="secondary" data-test="export-zip" @click="startExport('zip')">Issued invoices (PDF, ZIP)</AspButton>
       </div>
     </section>
 
@@ -105,7 +105,7 @@
   import {
     STATUS_LABELS,
     allInvoicesCsvUrl,
-    bundleUrl,
+    invoicesZipUrl,
     errorOf,
     formatDay,
     formatMoney,
@@ -117,7 +117,7 @@
   const EXPORTS = {
     csv: { url: allInvoicesCsvUrl(), filename: 'Rechnungen.csv' },
     xlsx: { url: workbookUrl(), filename: 'Rechnungen.xlsx' },
-    bundle: { url: bundleUrl(), filename: 'Jobcenter-Nachweise.zip' },
+    zip: { url: invoicesZipUrl(), filename: 'Rechnungen.zip' },
   };
 
   // The review list (spec §4.7): every invoice with number, status, client,

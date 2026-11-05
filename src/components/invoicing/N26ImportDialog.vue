@@ -2,7 +2,7 @@
   <AspModal :open="open" title="Import N26 payments" size="md" @update:open="close">
     <div class="n26" data-test="n26-review">
       <p class="n26__lead">
-        Check each payment read from your files. Only the ticked ones are imported, as uncategorised payments.
+        Only ticked payments are imported. They arrive without a category.
       </p>
       <section
         v-for="(file, f) in files"

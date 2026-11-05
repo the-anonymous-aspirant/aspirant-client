@@ -50,7 +50,7 @@
           v-model="form.address"
           label="Postal address"
           :rows="3"
-          hint="Optional for invoices up to 250 € gross (§33 UStDV). Above that, an invoice cannot be issued without it."
+          hint="Needed for invoices over 250 € gross."
         />
         <AspInput v-model="form.email" type="email" label="Email" />
         <AspInput v-model="form.paypal_email" type="email" label="PayPal email" hint="Imported payments from this address are linked to the client." />

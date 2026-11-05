@@ -17,7 +17,7 @@
           Cancelled on {{ formatDay(invoice.cancelled_at) }}: {{ invoice.cancel_reason }}
         </p>
         <p v-else class="statement" data-test="invoice-readonly">
-          Issued invoices cannot be changed. To correct one, cancel it (Storno) and issue a new invoice.
+          An issued invoice can't be changed. To correct it, cancel it and issue a new one.
         </p>
         <!-- Phone: one block per item instead of a table that scrolls
              sideways (#8399 spec §6.3). -->
@@ -77,7 +77,7 @@
 
         <div v-if="cancelling" class="cancel-step" data-test="cancel-step">
           <AspTextarea v-model="cancelReason" label="Reason for the cancellation (Storno)" :rows="2" required />
-          <p class="hint">The invoice stays on record as cancelled; its payments can then go on a corrected invoice.</p>
+          <p class="hint">It stays on record as cancelled. Its payments can go on a new invoice.</p>
         </div>
       </template>
 
@@ -129,15 +129,15 @@
 
         <div v-if="confirmingIssue" ref="confirm" class="confirm" role="alertdialog" aria-labelledby="issue-confirm-text" data-test="issue-confirm">
           <p id="issue-confirm-text">
-            Issuing gives this invoice the next number ({{ nextNumber }}) and today's date. Both are set by the server.
-            An issued invoice cannot be changed or deleted; a mistake is corrected by cancelling it and issuing a new one.
+            Issuing gives it number {{ nextNumber }} and today's date.
+            It can't be changed or deleted afterwards.
           </p>
         </div>
 
         <!-- The §10 Steuernummer guardrail made visible where issuing
              happens. The button is not disabled: the server is the gate. -->
         <div v-if="steuernummerMissing" class="issue-blocked" data-test="draft-issue-blocked">
-          <AspBadge status="caution">Missing — issuing blocked</AspBadge>
+          <AspBadge status="caution">Missing: needed to issue</AspBadge>
           <span class="muted">Add a Steuernummer in the issuer profile to issue.</span>
         </div>
         <!-- §33 UStDV (system_3 #9835): a client without an address can be
@@ -145,7 +145,7 @@
              and its refusal names it; this note only says so up front. -->
         <div v-if="chosenClientHasNoAddress" class="issue-blocked" data-test="draft-no-address">
           <AspBadge status="neutral">No client address</AspBadge>
-          <span class="muted">Fine up to 250 € gross. Above that, add the address in Clients to issue.</span>
+          <span class="muted">Needed over 250 € gross. Add it under Clients.</span>
         </div>
       </template>
 

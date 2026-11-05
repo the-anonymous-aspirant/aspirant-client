@@ -161,7 +161,7 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     // A client with an address gets no §33 note (#9835).
     await expect(page.locator('[data-test="draft-no-address"]')).toHaveCount(0);
     await page.locator('[data-test="draft-issue"]').click();
-    await expect(page.locator('[data-test="issue-confirm"]')).toContainText('next number (2026-001)');
+    await expect(page.locator('[data-test="issue-confirm"]')).toContainText('Issuing gives it number 2026-001 and today');
     expect(fake.requests.some((r) => r.path.endsWith('/issue'))).toBe(false);
     await page.locator('[data-test="issue-confirm-button"]').click();
 
@@ -201,7 +201,7 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await open(page, fake);
     await createFromTwo(page);
 
-    await expect(page.locator('[data-test="draft-no-address"]')).toContainText('Fine up to 250 € gross. Above that, add the address in Clients to issue.');
+    await expect(page.locator('[data-test="draft-no-address"]')).toContainText('Needed over 250 € gross. Add it under Clients.');
     await page.locator('[data-test="draft-issue"]').click();
     await page.locator('[data-test="issue-confirm-button"]').click();
     await expect(page.locator('[data-test="invoice-error"]')).toContainText('470,00 € gross: above 250,00 €');
