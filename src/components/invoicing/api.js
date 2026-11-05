@@ -200,7 +200,23 @@ export const allInvoicesCsvUrl = () => `${base}/export/invoices.csv`;
 // (not a plain link) means a 409 from the export's own validation arrives as
 // an error the page can show, instead of being saved as a file.
 export async function downloadBlob(url, filename) {
-  const res = await axios.get(url, { responseType: 'blob' });
+  let res;
+  try {
+    res = await axios.get(url, { responseType: 'blob' });
+  } catch (err) {
+    // With responseType 'blob' an error body arrives as a Blob too, so the
+    // server's {error:{code,message}} would be unreadable to errorOf. Parse it
+    // back into JSON so a refusal can say why (system_3 #9960).
+    const data = err && err.response && err.response.data;
+    if (data && typeof data.text === 'function') {
+      try {
+        err.response.data = JSON.parse(await data.text());
+      } catch {
+        // Not JSON: leave it, and errorOf falls back to its generic message.
+      }
+    }
+    throw err;
+  }
   const href = URL.createObjectURL(res.data);
   const a = document.createElement('a');
   a.href = href;
@@ -211,3 +227,7 @@ export async function downloadBlob(url, filename) {
   setTimeout(() => URL.revokeObjectURL(href), 1000);
 }
 export const invoicesZipUrl = () => `${base}/export/invoices.zip`;
+// Several issued invoices' stored PDFs as one file (system_3 #9959/#9960). The
+// server orders the pages by invoice number, whatever order the ids come in,
+// and refuses a draft, cancelled or unknown id with a 422 naming it.
+export const invoicesMergedPdfUrl = (ids) => `${base}/export/invoices-merged.pdf?ids=${ids.join(',')}`;

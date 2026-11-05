@@ -23,6 +23,13 @@
       </label>
     </div>
 
+    <!-- Only issued rows can be ticked for "Invoice list (single PDF)" below
+         (#9960, design ack c61576); this says why the others have no checkbox,
+         and shows only when one of them is on screen. -->
+    <p v-if="!loadError && hasUnselectable" class="caption" data-test="merge-left-out">
+      Drafts and cancelled invoices are left out: a draft has no PDF yet, and a cancelled invoice's PDF does not show it was cancelled.
+    </p>
+
     <p v-if="loadError" class="error" role="alert" data-test="invoices-error">{{ loadError }}</p>
     <AspEmptyState
       v-else-if="rows.length === 0 && !filtered"
@@ -37,9 +44,32 @@
       data-test="invoices-filtered-empty"
     />
     <!-- Six columns do not fit a phone (§3.114 decision 6): below 640px each
-         invoice is one whole-card button that opens it, like a row click. -->
-    <ul v-else-if="narrow" class="invoice-cards" aria-label="Invoices">
-      <li v-for="row in rows" :key="row.id">
+         invoice is a card button that opens it, like a row click. An issued
+         card has its checkbox beside the button, not inside it (a checkbox in
+         a button is invalid and the two clicks would collide); other cards keep
+         a blank gutter of the same width, so the numbers line up. -->
+    <template v-else-if="narrow">
+    <div v-if="shownIssued.length" class="select-all" data-test="select-all-shown">
+      <AspCheckbox
+        :model-value="allShownSelected"
+        :indeterminate="someShownSelected"
+        :label="`Select all ${shownIssued.length} issued shown`"
+        :disabled="mergeDownloading"
+        @update:model-value="selectAllShown"
+      />
+    </div>
+    <ul class="invoice-cards" aria-label="Invoices">
+      <li v-for="row in rows" :key="row.id" class="invoice-cards__item">
+        <span class="invoice-card__select">
+          <AspCheckbox
+            v-if="row.status === 'issued'"
+            :model-value="selected.includes(row.id)"
+            :aria-label="`Select invoice ${row.invoice_number}`"
+            :disabled="mergeDownloading"
+            data-test="invoice-select"
+            @update:model-value="toggle(row.id, $event)"
+          />
+        </span>
         <button
           type="button"
           class="invoice-card"
@@ -59,6 +89,7 @@
         </button>
       </li>
     </ul>
+    </template>
     <AspDataTable
       v-else
       :columns="columns"
@@ -70,6 +101,30 @@
       :row-attrs="(row) => ({ 'data-test': 'invoice-row', 'data-status': row.status })"
       @row-click="(row) => $emit('open', row.id)"
     >
+      <template #header-select>
+        <AspCheckbox
+          v-if="shownIssued.length"
+          :model-value="allShownSelected"
+          :indeterminate="someShownSelected"
+          :disabled="mergeDownloading"
+          aria-label="Select all shown issued invoices"
+          data-test="select-all-shown"
+          @update:model-value="selectAllShown"
+        />
+      </template>
+      <!-- The checkbox swallows its own click and key, so a tick never opens
+           the invoice; the rest of the row still does. -->
+      <template #cell-select="{ row }">
+        <span v-if="row.status === 'issued'" class="select-cell" @click.stop @keydown.stop>
+          <AspCheckbox
+            :model-value="selected.includes(row.id)"
+            :aria-label="`Select invoice ${row.invoice_number}`"
+            :disabled="mergeDownloading"
+            data-test="invoice-select"
+            @update:model-value="toggle(row.id, $event)"
+          />
+        </span>
+      </template>
       <template #cell-invoice_number="{ row }">
         <span class="nowrap">{{ row.invoice_number || 'Draft' }}</span>
       </template>
@@ -90,21 +145,45 @@
       <div class="exports">
         <AspButton variant="secondary" data-test="export-all-csv" @click="startExport('csv')">Invoice list (CSV)</AspButton>
         <AspButton variant="secondary" data-test="export-zip" @click="startExport('zip')">Issued invoices (PDF, ZIP)</AspButton>
+        <!-- The ticked issued invoices as one PDF, in number order (#9960,
+             design ack c61576: the operator's own name for it, c61550 on
+             #9656). Button and caption are one unit, as #9948's are. -->
+        <div class="export">
+          <AspButton
+            variant="secondary"
+            :disabled="selected.length === 0"
+            :loading="mergeDownloading"
+            aria-describedby="export-merged-scope"
+            data-test="download-merged"
+            @click="startMerge"
+          >
+            Invoice list (single PDF)
+          </AspButton>
+          <p id="export-merged-scope" class="export__scope muted" data-test="export-merged-scope">{{ mergeScope }}</p>
+        </div>
       </div>
+      <p v-if="mergeError" class="error" role="alert" data-test="merge-error">{{ mergeError }}</p>
     </section>
 
-    <ValidationScreen v-model:open="exportOpen" :url="exportTarget.url" :filename="exportTarget.filename" />
+    <ValidationScreen
+      v-model:open="exportOpen"
+      :url="exportTarget.url"
+      :filename="exportTarget.filename"
+      @downloading="onDownloading"
+      @download-failed="onDownloadFailed"
+    />
   </section>
 </template>
 
 <script>
-  import { AspBadge, AspButton, AspDataTable, AspEmptyState, AspInput, AspSelect } from '@aspirant/design-system';
+  import { AspBadge, AspButton, AspCheckbox, AspDataTable, AspEmptyState, AspInput, AspSelect } from '@aspirant/design-system';
   import ValidationScreen from './ValidationScreen.vue';
   import InvoicesChart from './InvoicesChart.vue';
   import {
     STATUS_LABELS,
     allInvoicesCsvUrl,
     invoicesZipUrl,
+    invoicesMergedPdfUrl,
     errorOf,
     formatDay,
     formatMoney,
@@ -122,7 +201,7 @@
   // searched by client on the server.
   export default {
     name: 'InvoicesPanel',
-    components: { AspBadge, AspButton, AspDataTable, AspEmptyState, AspInput, AspSelect, InvoicesChart, ValidationScreen },
+    components: { AspBadge, AspButton, AspCheckbox, AspDataTable, AspEmptyState, AspInput, AspSelect, InvoicesChart, ValidationScreen },
     props: {
       // Bumped by the page after any change, so the list reloads.
       refreshKey: { type: Number, default: 0 },
@@ -140,11 +219,16 @@
         narrow: false,
         exportOpen: false,
         exportTarget: EXPORTS.csv,
+        // Ids of ticked issued rows; only rows on screen (see the rows watch).
+        selected: [],
+        mergeDownloading: false,
+        mergeError: '',
         statusOptions: [
           { value: '', label: 'All statuses' },
           ...Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })),
         ],
         columns: [
+          { key: 'select', label: '', sortable: false, width: '2.5rem' },
           { key: 'invoice_number', label: 'Number' },
           { key: 'status', label: 'Status' },
           { key: 'client_name', label: 'Client' },
@@ -158,8 +242,38 @@
       filtered() {
         return !!(this.status || this.issuedFrom || this.issuedTo || this.search.trim());
       },
+      // Only an issued invoice has a stored PDF the merge accepts: a draft has
+      // none yet, and a cancelled one's PDF carries no cancellation mark.
+      shownIssued() {
+        return this.rows.filter((r) => r.status === 'issued');
+      },
+      hasUnselectable() {
+        return this.rows.some((r) => r.status !== 'issued');
+      },
+      allShownSelected() {
+        return this.shownIssued.length > 0 && this.shownIssued.every((r) => this.selected.includes(r.id));
+      },
+      someShownSelected() {
+        return !this.allShownSelected && this.shownIssued.some((r) => this.selected.includes(r.id));
+      },
+      // What the file will hold, where she clicks (§3.114); the ticks are up
+      // in the list, so the count is restated here.
+      mergeScope() {
+        const n = this.selected.length;
+        if (n === 0) return 'Tick issued invoices in the list to get them in one PDF.';
+        if (n === 1) return '1 ticked invoice in one PDF.';
+        return `${n} ticked invoices in one PDF, in number order.`;
+      },
     },
     watch: {
+      // The selection never holds a row the owner cannot see (§3.25): a
+      // filter change or a reload unselects rows that left the view, so the
+      // count on the button only ever counts rows on screen.
+      shownIssued(rows) {
+        const visible = new Set(rows.map((r) => r.id));
+        const kept = this.selected.filter((id) => visible.has(id));
+        if (kept.length !== this.selected.length) this.selected = kept;
+      },
       status: 'load',
       issuedFrom: 'load',
       issuedTo: 'load',
@@ -202,6 +316,31 @@
       startExport(kind) {
         this.exportTarget = EXPORTS[kind];
         this.exportOpen = true;
+      },
+      // Through the validation screen like the other exports: the merge route
+      // runs the same §5 check. The selection is kept afterwards, since a
+      // download changes no row.
+      startMerge() {
+        if (this.selected.length === 0 || this.mergeDownloading) return;
+        this.mergeError = '';
+        const ids = [...this.selected].sort((a, b) => a - b);
+        this.exportTarget = { url: invoicesMergedPdfUrl(ids), filename: 'Rechnungen.pdf', merge: true };
+        this.exportOpen = true;
+      },
+      onDownloading(on) {
+        if (this.exportTarget.merge) this.mergeDownloading = on;
+      },
+      onDownloadFailed(message) {
+        if (this.exportTarget.merge) this.mergeError = message;
+      },
+      toggle(id, on) {
+        if (this.mergeDownloading) return;
+        this.selected = on ? [...new Set([...this.selected, id])] : this.selected.filter((x) => x !== id);
+      },
+      selectAllShown(on) {
+        if (this.mergeDownloading) return;
+        const ids = this.shownIssued.map((r) => r.id);
+        this.selected = on ? [...new Set([...this.selected, ...ids])] : this.selected.filter((id) => !ids.includes(id));
       },
       serviceLabel(row) {
         const from = formatDay(row.service_date_from);
@@ -280,6 +419,21 @@
     min-width: 0;
   }
 
+  .caption {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .select-cell {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .select-all {
+    margin: 0;
+  }
+
   .invoice-cards {
     list-style: none;
     margin: 0;
@@ -287,6 +441,27 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);
+  }
+
+  .invoice-cards__item {
+    display: flex;
+    align-items: stretch;
+    gap: var(--space-2xs);
+  }
+
+  /* A 44px gutter on every card: the checkbox's hit area on an issued card,
+     blank on a draft or cancelled one, so every number starts on one edge. */
+  .invoice-card__select {
+    flex: 0 0 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .invoice-card__select :deep(.checkbox) {
+    width: 44px;
+    min-height: 44px;
+    justify-content: center;
   }
 
   .invoice-card {
@@ -302,6 +477,11 @@
     color: inherit;
     font: inherit;
     font-weight: inherit;
+  }
+
+  .invoice-cards__item .invoice-card {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .invoice-card:hover {
@@ -341,6 +521,24 @@
     gap: var(--space-sm);
   }
 
+  /* A button and its caption as one column (the same rules as #9948's). */
+  .export {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2xs);
+    max-width: 22rem;
+  }
+
+  .export__scope {
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  .export-group > .error {
+    margin-top: var(--space-sm);
+  }
+
   .error {
     color: var(--feedback-error);
     margin: 0;
@@ -362,6 +560,11 @@
 
     .exports {
       flex-direction: column;
+    }
+
+    .export {
+      align-items: stretch;
+      max-width: none;
     }
 
     .exports :deep(button) {

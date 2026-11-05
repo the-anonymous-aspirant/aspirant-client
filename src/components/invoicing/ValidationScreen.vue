@@ -58,7 +58,10 @@
       url: { type: String, required: true },
       filename: { type: String, required: true },
     },
-    emits: ['update:open'],
+    // `downloading` and `download-failed` let the page that opened this screen
+    // hold its own state while the file downloads, and keep the reason after
+    // the screen closes (system_3 #9960).
+    emits: ['update:open', 'downloading', 'download-failed'],
     data() {
       return { state: 'idle', report: null, error: '', downloading: false, downloadError: '' };
     },
@@ -87,12 +90,18 @@
       async download() {
         this.downloading = true;
         this.downloadError = '';
+        this.$emit('downloading', true);
         try {
           await downloadBlob(this.url, this.filename);
         } catch (err) {
-          this.downloadError = 'The export was refused or did not arrive. Run the check again.';
+          // The server's own reason when it gave one (a refused invoice names
+          // itself), else the generic line.
+          const { code, message } = errorOf(err);
+          this.downloadError = code ? message : 'The export was refused or did not arrive. Run the check again.';
+          this.$emit('download-failed', this.downloadError);
         } finally {
           this.downloading = false;
+          this.$emit('downloading', false);
         }
       },
     },
