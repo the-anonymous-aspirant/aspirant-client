@@ -72,8 +72,8 @@
             </li>
           </ol>
         </section>
-        <div v-if="cancelling" class="cancel-step" data-test="cancel-step">
-          <AspTextarea v-model="cancelReason" label="Reason for the cancellation (Storno)" :rows="2" required />
+        <div v-if="cancelling" ref="cancelStep" class="cancel-step" data-test="cancel-step">
+          <AspTextarea ref="cancelReasonInput" v-model="cancelReason" label="Reason for the cancellation (Storno)" :rows="2" required />
           <p class="hint">It stays on record as cancelled. Its payments can go on a new invoice.</p>
         </div>
       </template>
@@ -284,6 +284,19 @@
       // asked for it is in the footer.
       confirmingIssue(on) {
         if (on) this.$nextTick(() => this.$refs.confirm && this.$refs.confirm.scrollIntoView({ block: 'nearest' }));
+      },
+      // Same problem, the cancel (Storno) side: "Cancel invoice (Storno)…"
+      // reveals the reason box above the PDF preview, Payments covered and
+      // History, which a wide screen scrolls past (operator ask, #9926-A5,
+      // c61362). Scroll it into view and focus the textarea so the click
+      // reads as having done something, for a mouse and a keyboard user alike.
+      cancelling(on) {
+        if (on) {
+          this.$nextTick(() => {
+            if (this.$refs.cancelStep) this.$refs.cancelStep.scrollIntoView({ block: 'nearest' });
+            if (this.$refs.cancelReasonInput) this.$refs.cancelReasonInput.focus();
+          });
+        }
       },
       open: {
         immediate: true,
