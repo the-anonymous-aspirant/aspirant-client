@@ -202,12 +202,13 @@
             <span class="payment-card__caption" aria-hidden="true">Category</span>
             <AspSelect
               :model-value="row.category"
-              :options="categoryOptions"
+              :options="categoryOptionsFor(row)"
               :aria-label="`Category for ${row.transaction_id}`"
               :disabled="saving.has(row.id)"
               data-test="payment-category"
               @update:model-value="patch(row, { category: $event })"
             />
+            <span v-if="isPayPalTransferIntoN26(row)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
           </div>
           <div class="payment-card__field">
             <span class="payment-card__caption" aria-hidden="true">Client</span>
@@ -281,12 +282,13 @@
         <div class="cell-select">
           <AspSelect
             :model-value="row.category"
-            :options="categoryOptions"
+            :options="categoryOptionsFor(row)"
             :aria-label="`Category for ${row.transaction_id}`"
             :disabled="saving.has(row.id)"
             data-test="payment-category"
             @update:model-value="patch(row, { category: $event })"
           />
+          <span v-if="isPayPalTransferIntoN26(row)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
         </div>
       </template>
       <template #cell-client_id="{ row }">
@@ -514,6 +516,17 @@
         }
         if (row.on_invoice) return 'On an invoice — delete or cancel that invoice first';
         return '';
+      },
+      // Mirrors the server's isPayPalTransferIntoN26 (invoicing_n26.go):
+      // an N26 row whose payer is PayPal. The PayPal payments it sums are
+      // the paid work, so the transfer itself can never be (#9940-A1,
+      // operator c61402).
+      isPayPalTransferIntoN26(row) {
+        return row.source === 'n26' && (row.sender_name || '').toLowerCase().includes('paypal');
+      },
+      categoryOptionsFor(row) {
+        if (!this.isPayPalTransferIntoN26(row)) return this.categoryOptions;
+        return this.categoryOptions.map((o) => (o.value === 'paid_work' ? { ...o, disabled: true } : o));
       },
       // Two steps: the first press turns the button into "Delete this
       // payment"; the server still refuses one that an invoice covers.
@@ -816,6 +829,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .paid-work-reason {
+    display: block;
+    margin-top: var(--space-2xs);
+    font-size: var(--text-sm);
   }
 
   .create {

@@ -270,6 +270,28 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await expect(category).toContainText('Paid work');
   });
 
+  // #9940-A1 (operator c61402): a PayPal-into-N26 transfer can never be paid
+  // work (the PayPal payments it sums are), so Paid work is disabled and the
+  // row says why, instead of a round trip through a failed PATCH.
+  test('a PayPal-into-N26 transfer has Paid work disabled, with a reason', async ({ page }) => {
+    const fake = newFake({
+      payments: [
+        { id: 13, kind: 'incoming', source: 'n26', transaction_id: 'TX3', paid_on: '2026-07-23T00:00:00Z', currency: 'EUR', gross_cents: 40000, sender_name: 'PAYPAL / INSTANT TRANSFER', sender_email: '', note: '', category: 'uncategorised', client_id: null },
+      ],
+    });
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+
+    await expect(page.locator('[data-test="payment-no-paid-work-reason"]')).toHaveText('Not paid work -- the PayPal payments it sums are, in the PayPal import');
+    const category = page.getByRole('combobox', { name: 'Category for TX3' });
+    await category.click();
+    await expect(page.getByRole('option', { name: 'Paid work' })).toHaveAttribute('aria-disabled', 'true');
+    await page.getByRole('option', { name: 'Gift' }).click();
+    await expect(category).toContainText('Gift');
+    expect(JSON.parse(fake.requests.find((r) => r.method === 'PATCH')!.body)).toEqual({ category: 'gift' });
+  });
+
   // #8402: an AspSelect in the payments table opened into AspDataTable's
   // scroll box, so with the row near the window bottom the panel flipped up
   // and "Paid work" sat behind the table's edge, unreachable by mouse. The
