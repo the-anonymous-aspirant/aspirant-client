@@ -219,12 +219,12 @@ test.describe('#9858 Invoices: the issuer logo in the profile editor', () => {
     await seedTrustedSessionAs(page, 'vinoly');
     await openEditor(page);
 
-    await form(page).getByLabel('Steuernummer').fill('98/765/43210');
+    await form(page).getByLabel('Steuernummer (Tax number)').fill('98/765/43210');
     await chooseLogo(page, Buffer.from('GIF89a not a png'), 'logo.png');
     await save(page);
     await expect(page.locator('[data-test="profile-logo-error"]')).toHaveText('the logo must be a PNG or JPEG image');
     await expect(form(page)).toBeVisible();
-    await expect(form(page).getByLabel('Steuernummer')).toHaveValue('98/765/43210');
+    await expect(form(page).getByLabel('Steuernummer (Tax number)')).toHaveValue('98/765/43210');
     expect(fake.profilePuts).toBe(0);
   });
 
