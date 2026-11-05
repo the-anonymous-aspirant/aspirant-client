@@ -13,14 +13,18 @@
         <span class="filter-field__caption" aria-hidden="true">Status</span>
         <AspSelect v-model="status" :options="statusOptions" aria-label="Status" data-test="filter-status" />
       </div>
-      <label class="filter-field">
-        <span class="filter-field__caption">Issued from</span>
-        <input v-model="issuedFrom" type="date" data-test="filter-from" />
-      </label>
-      <label class="filter-field">
-        <span class="filter-field__caption">Issued until</span>
-        <input v-model="issuedTo" type="date" data-test="filter-to" />
-      </label>
+      <!-- The two dates wrap as one unit, so a date is never alone on a row
+           (design_agent on #9968, §3.53 applied to a toolbar). -->
+      <div class="filter-dates">
+        <label class="filter-field">
+          <span class="filter-field__caption">Issued from</span>
+          <input v-model="issuedFrom" type="date" data-test="filter-from" />
+        </label>
+        <label class="filter-field">
+          <span class="filter-field__caption">Issued until</span>
+          <input v-model="issuedTo" type="date" data-test="filter-to" />
+        </label>
+      </div>
     </div>
 
     <!-- Only issued rows can be ticked for "Invoice list (single PDF)" below
@@ -374,10 +378,33 @@
     white-space: nowrap;
   }
 
-  /* Wide: one captioned row, search widest (#8399 spec §3.2). */
+  /* Wide: one captioned row, search widest (#8399 spec §3.2). The row wraps
+     by its own content, not at a breakpoint (design_agent on #9968, §3.122
+     P2): where four do not fit, Client | Status sit above the date pair.
+     Status keeps the width its longest option needs on one line ("All
+     statuses": 134px measured at the desktop text size, 146px below 768px
+     where it is --text-base; it wrapped at 94px in the old grid, operator
+     c61550). */
   .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    align-items: end;
+  }
+
+  .filter-field--search {
+    flex: 2 1 14rem;
+  }
+
+  .filter-field--status {
+    flex: 0 0 auto;
+    width: 9.5rem;
+  }
+
+  .filter-dates {
+    flex: 2 1 18rem;
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: var(--space-sm);
     align-items: end;
   }
@@ -553,12 +580,18 @@
 
   @media (max-width: 640px) {
     .filters {
+      display: grid;
       grid-template-columns: 1fr 1fr;
     }
 
     .filter-field--search,
-    .filter-field--status {
+    .filter-field--status,
+    .filter-dates {
       grid-column: 1 / -1;
+    }
+
+    .filter-field--status {
+      width: auto;
     }
 
     .exports {

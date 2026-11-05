@@ -15,7 +15,7 @@
         </label>
         <AspInput v-model="form.amount" label="Amount (€)" inputmode="decimal" placeholder="350,00" data-test="manual-amount" />
       </div>
-      <div class="manual-form__pair">
+      <div class="manual-form__pair manual-form__pair--method">
         <div class="full-select">
           <AspSelect v-model="form.method" :options="methodOptions" label="Method" data-test="manual-method" />
         </div>
@@ -186,6 +186,13 @@
     grid-template-columns: 1fr 1fr;
     gap: var(--space-md);
     align-items: end;
+  }
+
+  /* Method keeps its one-line width ("Banküberweisung (Bank transfer)" wrapped
+     in a half column: operator c61550, system_3 #9965/#9968); Reference takes
+     the rest of the row. Still side by side, as signed off on #8409. */
+  .manual-form__pair--method {
+    grid-template-columns: minmax(max-content, 3fr) 2fr;
   }
 
   .full-select :deep(.select) {
