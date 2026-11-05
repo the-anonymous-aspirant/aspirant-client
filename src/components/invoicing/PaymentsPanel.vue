@@ -196,6 +196,7 @@
             {{ confirmingDelete === row.id ? 'Delete this payment' : 'Delete' }}
           </AspButton>
         </template>
+        <span v-if="deleteReason(row)" class="muted delete-reason" data-test="payment-no-delete-reason">{{ deleteReason(row) }}</span>
         <div class="payment-card__fields full-select">
           <div class="payment-card__field">
             <span class="payment-card__caption" aria-hidden="true">Category</span>
@@ -273,6 +274,7 @@
             {{ confirmingDelete === row.id ? 'Delete this payment' : 'Delete' }}
           </AspButton>
         </template>
+        <span v-if="deleteReason(row)" class="muted delete-reason" data-test="payment-no-delete-reason">{{ deleteReason(row) }}</span>
       </template>
       <template #cell-gross_cents="{ row }"><span class="nowrap">{{ formatMoney(row.gross_cents, row.currency) }}</span></template>
       <template #cell-category="{ row }">
@@ -320,6 +322,7 @@
   import {
     CATEGORY_LABELS,
     METHOD_LABELS,
+    SOURCE_LABELS,
     N26_MAX_FILES,
     deleteManualPayment,
     SKIP_REASON_LABELS,
@@ -501,6 +504,16 @@
       formatMoney,
       methodLabel(row) {
         return METHOD_LABELS[row.method] || row.method;
+      },
+      // Why Delete is missing (#9934-B2, operator c61373): the two reasons
+      // are distinct and the row gives no clue which one applies otherwise.
+      deleteReason(row) {
+        if (row.entry !== 'manual') {
+          const source = SOURCE_LABELS[row.source];
+          return source ? `Imported from ${source} — the file is its record` : 'Imported — the file is its record';
+        }
+        if (row.on_invoice) return 'On an invoice — delete or cancel that invoice first';
+        return '';
       },
       // Two steps: the first press turns the button into "Delete this
       // payment"; the server still refuses one that an invoice covers.
@@ -700,6 +713,11 @@
 
   .manual-line {
     margin-top: var(--space-2xs);
+  }
+
+  .delete-reason {
+    margin-top: var(--space-2xs);
+    font-size: var(--text-sm);
   }
 
   /* The ghost button's own padding would indent its label; pull it back so
