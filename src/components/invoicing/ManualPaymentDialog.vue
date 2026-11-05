@@ -24,7 +24,7 @@
       <AspInput v-model="form.sender_name" label="Payer (optional)" data-test="manual-payer" />
       <!-- The invoice line's description: issuing refuses an empty one, so it
            is asked for here rather than left to fail later. -->
-      <AspInput v-model="form.note" label="What it was for" placeholder="Wandbild, Acryl auf Leinwand" data-test="manual-note" />
+      <LineDescriptionInput v-model="form.note" label="What it was for" data-test="manual-note" />
       <p v-if="error" class="manual-form__error" role="alert" data-test="manual-error">{{ error }}</p>
     </form>
     <template #footer>
@@ -56,6 +56,7 @@
 
 <script>
   import { AspButton, AspInput, AspModal, AspSelect } from '@aspirant/design-system';
+  import LineDescriptionInput from './LineDescriptionInput.vue';
   import ModalActions from './ModalActions.vue';
   import { METHOD_LABELS, centsFromEuros, createDraft, createManualPayment, errorOf } from './api.js';
 
@@ -67,7 +68,7 @@
   // applies unchanged. The server checks everything again.
   export default {
     name: 'ManualPaymentDialog',
-    components: { AspButton, AspInput, AspModal, AspSelect, ModalActions },
+    components: { AspButton, AspInput, AspModal, AspSelect, LineDescriptionInput, ModalActions },
     props: {
       open: { type: Boolean, default: false },
       clients: { type: Array, default: () => [] },
