@@ -146,9 +146,19 @@
          off the first screen. -->
     <section class="export-group" aria-labelledby="export-heading">
       <h3 id="export-heading">Export</h3>
+      <!-- Each file says what it holds and how many, before the click
+           (operator c61373: "I seem to only get one item?"). The counts mirror
+           the server's own predicates and ignore the list filters above,
+           because the files do too (system_3 #9948). -->
       <div class="exports">
-        <AspButton variant="secondary" data-test="export-all-csv" @click="startExport('csv')">Invoice list (CSV)</AspButton>
-        <AspButton variant="secondary" data-test="export-zip" @click="startExport('zip')">Issued invoices (PDF, ZIP)</AspButton>
+        <div class="export">
+          <AspButton variant="secondary" data-test="export-all-csv" aria-describedby="export-csv-scope" :disabled="csvCount === 0" @click="startExport('csv')">Invoice list (CSV)</AspButton>
+          <p id="export-csv-scope" class="export__scope muted" data-test="export-csv-scope">{{ csvScope }}</p>
+        </div>
+        <div class="export">
+          <AspButton variant="secondary" data-test="export-zip" aria-describedby="export-zip-scope" :disabled="zipCount === 0" @click="startExport('zip')">Invoice list (PDF)</AspButton>
+          <p id="export-zip-scope" class="export__scope muted" data-test="export-zip-scope">{{ zipScope }}</p>
+        </div>
         <!-- The ticked issued invoices as one PDF, in number order (#9960,
              design ack c61576: the operator's own name for it, c61550 on
              #9656). Button and caption are one unit, as #9948's are. -->
@@ -214,6 +224,8 @@
     data() {
       return {
         rows: [],
+        // Every invoice, unfiltered, for the export captions (null until read).
+        allRows: null,
         loadError: '',
         status: '',
         issuedFrom: '',
@@ -268,6 +280,29 @@
         if (n === 1) return '1 ticked invoice in one PDF.';
         return `${n} ticked invoices in one PDF, in number order.`;
       },
+      // The CSV holds every numbered invoice (server: `number IS NOT NULL`;
+      // invoice_number is set with number at issue and never cleared), the
+      // ZIP every issued one (server: `status = 'issued'`).
+      csvCount() {
+        return this.allRows ? this.allRows.filter((r) => r.invoice_number != null && r.invoice_number !== '').length : null;
+      },
+      zipCount() {
+        return this.allRows ? this.allRows.filter((r) => r.status === 'issued').length : null;
+      },
+      csvScope() {
+        const n = this.csvCount;
+        if (n === null) return 'Issued and cancelled invoices, one row each. Drafts are left out.';
+        // At 0 the button is disabled and this line is the reason (design_agent
+        // on #9948, §3.114): issuing an invoice is what enables it.
+        if (n === 0) return 'No issued or cancelled invoices yet.';
+        return `${n === 1 ? '1 invoice, one row' : `${n} invoices, one row each`}: issued and cancelled. Drafts are left out.`;
+      },
+      zipScope() {
+        const n = this.zipCount;
+        if (n === null) return 'Issued invoices only, one PDF each, in a ZIP. Cancelled ones and drafts are left out.';
+        if (n === 0) return 'No issued invoices yet.';
+        return `${n === 1 ? '1 PDF' : `${n} PDFs`} in a ZIP: issued invoices only. Cancelled ones and drafts are left out.`;
+      },
     },
     watch: {
       // The selection never holds a row the owner cannot see (§3.25): a
@@ -281,7 +316,10 @@
       status: 'load',
       issuedFrom: 'load',
       issuedTo: 'load',
-      refreshKey: 'load',
+      refreshKey() {
+        this.load();
+        this.loadCounts();
+      },
       search() {
         clearTimeout(this.searchTimer);
         this.searchTimer = setTimeout(() => this.load(), 250);
@@ -289,6 +327,7 @@
     },
     mounted() {
       this.load();
+      this.loadCounts();
       // The same 640px switch as PaymentsPanel: cards below it, the table above.
       this.narrowQuery = window.matchMedia('(max-width: 640px)');
       this.narrow = this.narrowQuery.matches;
@@ -315,6 +354,15 @@
           this.loadError = '';
         } catch (err) {
           this.loadError = errorOf(err).message;
+        }
+      },
+      // The captions fall back to their count-free wording if this read
+      // fails; the list's own error line already reports a broken server.
+      async loadCounts() {
+        try {
+          this.allRows = await listInvoices({});
+        } catch {
+          this.allRows = null;
         }
       },
       startExport(kind) {
