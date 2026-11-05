@@ -427,7 +427,10 @@
         }
       },
       save() {
-        return this.run(async () => this.setDetail(await updateDraft(this.invoice.id, this.buildPatch())));
+        return this.run(async () => {
+          this.setDetail(await updateDraft(this.invoice.id, this.buildPatch()));
+          this.close(false);
+        });
       },
       issue() {
         return this.run(async () => {
