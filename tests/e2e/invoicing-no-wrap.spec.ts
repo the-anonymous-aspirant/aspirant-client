@@ -65,6 +65,12 @@ for (const width of [1440, 1024, 768, 700, 390]) {
       const status = page.locator('.filter-field--status [role="combobox"]');
       await expect(status).toContainText('All statuses');
       expect(await lines(status), 'All statuses').toBe(1);
+      // Every export button too, "Invoice list (single PDF)" (#9960) included.
+      const exports = page.locator('.exports button');
+      expect(await exports.count()).toBeGreaterThan(0);
+      for (const btn of await exports.all()) {
+        expect(await lines(btn), (await btn.textContent())?.trim()).toBe(1);
+      }
       expect(await noSideScroll(page), 'invoices: no side scroll').toBe(true);
     });
 
