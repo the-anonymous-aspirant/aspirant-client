@@ -3,7 +3,7 @@
     <form class="profile-form" data-test="profile-form" @submit.prevent="save">
       <AspInput v-model="form.full_name" label="Full name" required />
       <AspTextarea v-model="form.address" label="Address" hint="One line per address line." :rows="3" required />
-      <AspInput v-model="form.steuernummer" label="Steuernummer" hint="Invoices cannot be issued while this is empty." />
+      <AspInput v-model="form.steuernummer" label="Steuernummer (Tax number)" hint="Invoices cannot be issued while this is empty." />
       <AspInput v-model="form.email" type="email" label="Email" />
       <AspCheckbox v-model="form.is_kleinunternehmer" label="Kleinunternehmerin under § 19 UStG (no VAT charged)" />
       <div class="profile-form__numbers">

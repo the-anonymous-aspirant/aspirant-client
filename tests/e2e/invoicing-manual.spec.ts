@@ -150,8 +150,8 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     const fake = newFake({ payments: [manualRow(), manualRow({ id: 42, reference: '', method: 'cash', on_invoice: true })] });
     await open(page, fake);
     const lines = page.locator('[data-test="payment-manual"]');
-    await expect(lines.first()).toHaveText('Entered by hand · Banküberweisung · RE-17');
-    await expect(lines.nth(1)).toHaveText('Entered by hand · Bar');
+    await expect(lines.first()).toHaveText('Entered by hand · Banküberweisung (Bank transfer) · RE-17');
+    await expect(lines.nth(1)).toHaveText('Entered by hand · Bar (Cash)');
     const del = page.locator('[data-test="payment-delete"]');
     await expect(del).toHaveCount(1);
 

@@ -135,7 +135,7 @@
              happens. The button is not disabled: the server is the gate. -->
         <div v-if="steuernummerMissing" class="issue-blocked" data-test="draft-issue-blocked">
           <AspBadge status="caution">Missing: needed to issue</AspBadge>
-          <span class="muted">Add a Steuernummer in the issuer profile to issue.</span>
+          <span class="muted">Add a Steuernummer (tax number) in the issuer profile to issue.</span>
         </div>
         <!-- §33 UStDV (system_3 #9835): a client without an address can be
              invoiced up to 250 € gross. The server checks the total at issue
