@@ -175,6 +175,10 @@ function parseDecimal(raw, places) {
   return Number(whole) * 10 ** places + Number(frac.padEnd(places, '0') || 0);
 }
 export const centsFromEuros = (raw) => parseDecimal(raw, 2);
+
+// §33 UStDV: up to 250 € gross an invoice need not name the recipient's
+// address (aspirant-server data_models.KleinbetragLimitCents; system_3 #9949).
+export const KLEINBETRAG_LIMIT_CENTS = 25000;
 export const milliFromDecimal = (raw) => parseDecimal(raw, 3);
 
 // Back to an editable string: 1999 → "19.99", 2500 → "2.5".

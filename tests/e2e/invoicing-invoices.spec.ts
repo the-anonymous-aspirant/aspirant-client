@@ -17,6 +17,9 @@ interface Fake {
   requests: Array<{ method: string; path: string; body: string }>;
   issueFailure?: { status: number; body: Json };
   clients?: Json[];
+  kleinunternehmer?: boolean;
+  currency?: string;
+  steuernummer?: string;
 }
 
 function newFake(): Fake {
@@ -51,7 +54,7 @@ async function mockAll(page: Page, fake: Fake): Promise<void> {
     fake.requests.push({ method, path, body });
 
     if (path === '/invoicing/profile') {
-      return json(route, 200, { saved: true, profile: { full_name: 'Flower Example', address: 'Weg 1', steuernummer: '12/345/67890', email: '', is_kleinunternehmer: true, invoice_number_prefix: '2026', next_invoice_number: 1 } });
+      return json(route, 200, { saved: true, profile: { full_name: 'Flower Example', address: 'Weg 1', steuernummer: fake.steuernummer ?? '12/345/67890', email: '', is_kleinunternehmer: fake.kleinunternehmer !== false, invoice_number_prefix: '2026', next_invoice_number: 1 } });
     }
     if (path === '/invoicing/clients') return json(route, 200, { clients: fake.clients || [{ id: 1, name: 'Galerie Nord', address: 'Nordweg 2', email: '', paypal_email: '' }] });
     if (path === '/invoicing/payments') return json(route, 200, { payments: fake.payments });
@@ -65,7 +68,7 @@ async function mockAll(page: Page, fake: Fake): Promise<void> {
       const id = 100 + fake.invoices.length;
       const ps = fake.payments.filter((p) => ids.includes(p.id));
       const total = ps.reduce((s, p) => s + p.gross_cents, 0);
-      const inv = { id, status: 'draft', client_id: 1, service_date_from: '2026-07-14T00:00:00Z', service_date_to: '2026-07-20T00:00:00Z', vat_rate_bp: 1900, currency: 'EUR', invoice_number: null, issue_date: null, total_cents: total };
+      const inv = { id, status: 'draft', client_id: 1, service_date_from: '2026-07-14T00:00:00Z', service_date_to: '2026-07-20T00:00:00Z', vat_rate_bp: 1900, currency: fake.currency || 'EUR', invoice_number: null, issue_date: null, total_cents: total };
       fake.invoices.push(inv);
       fake.links[id] = ids;
       fake.items[id] = ps.map((p, i) => ({ id: i + 1, position: i + 1, description: p.note, quantity_milli: 1000, unit_price_cents: p.gross_cents, line_total_cents: p.gross_cents }));
@@ -212,7 +215,13 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await open(page, fake);
     await createFromTwo(page);
 
-    await expect(page.locator('[data-test="draft-no-address"]')).toContainText('Needed over 250 € gross. Add it under Clients.');
+    // #9949: over the limit, the note is a warning naming the total and the client.
+    const note = page.locator('[data-test="draft-no-address"]');
+    await expect(note).toHaveAttribute('data-level', 'caution');
+    await expect(note).toContainText('Address needed to issue');
+    await expect(page.locator('[data-test="draft-no-address-text"]')).toHaveText(
+      "This invoice totals €470.00 gross. Above €250.00 it must name Galerie Nord's postal address. Save the draft, then add it under Clients.",
+    );
     await page.locator('[data-test="draft-issue"]').click();
     await page.locator('[data-test="issue-confirm-button"]').click();
     await expect(page.locator('[data-test="invoice-error"]')).toContainText('470,00 € gross: above 250,00 €');
@@ -227,10 +236,91 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await page.locator('[data-test="create-invoice"]').click();
     await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
 
-    await expect(page.locator('[data-test="draft-no-address"]')).toBeVisible();
+    const note = page.locator('[data-test="draft-no-address"]');
+    await expect(note).toHaveAttribute('data-level', 'neutral');
+    await expect(note).toContainText('Needed over €250.00 gross. Add it under Clients.');
     await page.locator('[data-test="draft-issue"]').click();
     await page.locator('[data-test="issue-confirm-button"]').click();
     await expect(page.locator('[data-test="invoice-editor"][data-status="issued"]')).toBeVisible();
+  });
+
+  // #9949 (operator c61373): the note follows the draft's own gross as she
+  // edits, before any save, computed the way the server computes it at issue.
+  test('a client without an address: the note turns into a warning as the draft crosses 250 €', async ({ page }) => {
+    const fake = newFake();
+    fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];
+    await open(page, fake);
+    await page.getByRole('checkbox', { name: 'Select TX2' }).check();
+    await page.locator('[data-test="create-invoice"]').click();
+    const note = page.locator('[data-test="draft-no-address"]');
+    const price = page.getByLabel('Unit price, line 1');
+    await expect(note).toHaveAttribute('data-level', 'neutral');
+    const sent = fake.requests.length;
+    await price.fill('250');
+    await expect(note).toHaveAttribute('data-level', 'neutral');
+    await price.fill('250.01');
+    await expect(note).toHaveAttribute('data-level', 'caution');
+    await expect(page.locator('[data-test="draft-no-address-text"]')).toContainText('totals €250.01 gross');
+    // An extra line that is not a number yet does not hide the warning.
+    await page.getByRole('button', { name: 'Add line' }).click();
+    await expect(note).toHaveAttribute('data-level', 'caution');
+    await price.fill('100');
+    await expect(note).toHaveAttribute('data-level', 'neutral');
+    expect(fake.requests.slice(sent).filter((r) => r.method !== 'GET'), 'nothing is saved while she types').toEqual([]);
+  });
+
+  test('with VAT charged, the warning counts the gross, not the net', async ({ page }) => {
+    const fake = newFake();
+    fake.kleinunternehmer = false;
+    fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];
+    await open(page, fake);
+    await page.getByRole('checkbox', { name: 'Select TX2' }).check();
+    await page.locator('[data-test="create-invoice"]').click();
+    const note = page.locator('[data-test="draft-no-address"]');
+    const price = page.getByLabel('Unit price, line 1');
+    await price.fill('210');
+    await expect(note).toHaveAttribute('data-level', 'neutral'); // 210 + 19% = 249.90
+    await price.fill('211');
+    await expect(note).toHaveAttribute('data-level', 'caution'); // 211 + 19% = 251.09
+    await expect(page.locator('[data-test="draft-no-address-text"]')).toContainText('totals €251.09 gross');
+  });
+
+  test('an invoice in another currency needs the address at any total', async ({ page }) => {
+    const fake = newFake();
+    fake.currency = 'USD';
+    fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];
+    await open(page, fake);
+    await page.getByRole('checkbox', { name: 'Select TX2' }).check();
+    await page.locator('[data-test="create-invoice"]').click();
+    await expect(page.locator('[data-test="draft-no-address"]')).toHaveAttribute('data-level', 'caution');
+    await expect(page.locator('[data-test="draft-no-address-text"]')).toHaveText(
+      "An invoice in USD must name Galerie Nord's postal address. Save the draft, then add it under Clients.",
+    );
+  });
+
+  // design_agent c61924: what stops Issue reads in one grammar, each badge
+  // naming what is missing.
+  test('both guards at once read as two caution lines in one grammar', async ({ page }) => {
+    const fake = newFake();
+    fake.steuernummer = '';
+    fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];
+    await open(page, fake);
+    await createFromTwo(page);
+    const blocked = page.locator('.issue-blocked');
+    await expect(blocked).toHaveCount(2);
+    await expect(blocked.nth(0)).toContainText('Tax number needed to issue');
+    await expect(blocked.nth(1)).toContainText('Address needed to issue');
+    await expect(page.locator('.issue-blocked .badge--status-caution')).toHaveCount(2);
+  });
+
+  test('a client with an address gets no note at any total', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await page.getByRole('checkbox', { name: 'Select TX2' }).check();
+    await page.locator('[data-test="create-invoice"]').click();
+    await page.getByLabel('Unit price, line 1').fill('9000');
+    await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
+    await expect(page.locator('[data-test="draft-no-address"]')).toHaveCount(0);
   });
 
   test('Storno needs a reason, then marks the invoice cancelled', async ({ page }) => {

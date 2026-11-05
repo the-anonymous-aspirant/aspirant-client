@@ -120,6 +120,34 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     expect(JSON.parse(posts[1].body)).toEqual({ payment_ids: [41] });
   });
 
+  // system_3 #9949 (design_agent c61924): where the draft is made, a muted hint
+  // says an amount over €250.00 needs the client's address to be issued.
+  test('the amount hint names a client without an address above €250.00, and only then', async ({ page }) => {
+    await open(page, newFake({ clients: [{ id: 1, name: 'Galerie Nord', address: 'Nordweg 2' }, { id: 2, name: 'Anna Ohne', address: '' }] }));
+    await page.locator('[data-test="manual-new"]').click();
+    const hint = 'Anna Ohne has no address: an invoice above €250.00 needs one before it can be issued.';
+    const dialog = page.getByRole('dialog');
+    const pick = async (name: string) => {
+      await page.getByRole('combobox', { name: 'Client' }).click();
+      await page.getByRole('option', { name }).click();
+    };
+    await pick('Anna Ohne');
+    const amount = page.locator('[data-test="manual-amount"]');
+    await amount.fill('250,00');
+    await expect(dialog.getByText(hint)).toHaveCount(0);
+    await amount.fill('400');
+    await expect(dialog.getByText(hint)).toBeVisible();
+    // Side by side, the hint hangs under Amount without pushing Date down
+    // (the two labels' own spacing differs by under 2px; the drop was ~50px).
+    const [d, m] = [await page.locator('[data-test="manual-date"]').boundingBox(), await amount.boundingBox()];
+    if (m!.x > d!.x + 10) expect(Math.abs(m!.y - d!.y), 'date and amount inputs stay level').toBeLessThanOrEqual(3);
+    await amount.fill('120');
+    await expect(dialog.getByText(hint)).toHaveCount(0);
+    await amount.fill('400');
+    await pick('Galerie Nord');
+    await expect(dialog.getByText('has no address')).toHaveCount(0);
+  });
+
   test('a refused draft keeps the stored payment and says so', async ({ page }) => {
     const fake = newFake({ draftFailure: { status: 422, body: { error: { code: 'payment_not_paid_work', message: 'payment M-1 is not paid work' } } } });
     await open(page, fake);
