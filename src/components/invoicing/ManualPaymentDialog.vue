@@ -1,5 +1,5 @@
 <template>
-  <AspModal :open="open" title="New invoice" size="md" @update:open="$emit('update:open', $event)">
+  <AspModal :open="open" title="Enter payment by hand" size="md" @update:open="$emit('update:open', $event)">
     <form class="manual-form" data-test="manual-form" @submit.prevent="save">
       <p class="manual-form__lead">
         Enter a payment you received. It is saved as paid work and a draft invoice is made from it.
