@@ -6,7 +6,7 @@
       </p>
       <div class="manual-form__full full-select">
         <AspSelect v-model="form.client_id" :options="clientOptions" label="Client" data-test="manual-client" />
-        <p v-if="!clients.length" class="hint" data-test="manual-no-clients">Add the client on the Clients tab first.</p>
+        <p v-if="!clients.length" id="manual-no-clients-hint" class="hint" data-test="manual-no-clients">Add the client on the Clients tab first.</p>
       </div>
       <div class="manual-form__pair">
         <label class="date-field">
@@ -30,7 +30,25 @@
     <template #footer>
       <ModalActions>
         <AspButton variant="secondary" @click="$emit('update:open', false)">Cancel</AspButton>
-        <AspButton :loading="saving" :disabled="!clients.length" data-test="manual-save" @click="save">Create draft</AspButton>
+        <div class="save-group">
+          <AspButton
+            :loading="saving"
+            :disabled="!clients.length"
+            :aria-describedby="!clients.length ? 'manual-save-hint' : undefined"
+            data-test="manual-save"
+            @click="save"
+          >
+            Create draft
+          </AspButton>
+          <!-- Same "why is this grey" treatment as PaymentsPanel's Create
+               invoice button (operator ask, #9926-A4): the reason is already
+               on screen next to the field it names, but a disabled button
+               cannot itself say why, so it says it again right where the eye
+               lands on the greyed-out control. -->
+          <p v-if="!clients.length" id="manual-save-hint" class="hint save-group__hint" data-test="manual-save-hint">
+            Add a client first.
+          </p>
+        </div>
       </ModalActions>
     </template>
   </AspModal>
@@ -135,6 +153,29 @@
 
   .hint {
     margin-top: var(--space-2xs);
+  }
+
+  .save-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-2xs);
+  }
+
+  .save-group__hint {
+    margin-top: 0;
+    text-align: right;
+  }
+
+  @media (max-width: 640px) {
+    .save-group {
+      align-items: stretch;
+      width: 100%;
+    }
+
+    .save-group__hint {
+      text-align: left;
+    }
   }
 
   /* Wide: date + amount, method + reference side by side (design_agent's
