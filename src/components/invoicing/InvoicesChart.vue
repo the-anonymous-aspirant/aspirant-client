@@ -1,51 +1,103 @@
 <template>
-  <section class="invoices-chart" data-test="invoices-chart" :data-counts="counts.join(',')" :data-labels="labels.join(',')">
-    <h3>Invoices issued per month</h3>
-    <p v-if="!labels.length" class="muted" data-test="invoices-chart-empty">No invoices issued yet.</p>
-    <AspBarChart
-      v-else
-      :data="chartData"
-      unit="invoices"
-      range="per month, by issue date"
-      aria-label="Invoices issued per month"
-      :height="180"
-    />
+  <section
+    class="invoices-chart"
+    data-test="invoices-chart"
+    :data-counts="counts.join(',')"
+    :data-labels="labels.join(',')"
+    :data-clients="clientTotals.join(',')"
+    :data-income="incomeEuros.join(',')"
+  >
+    <h3>Statistics</h3>
+    <p v-if="!labels.length" class="muted" data-test="invoices-chart-empty">No clients or issued invoices yet.</p>
+    <!-- Three charts on one month axis, so a month lines up across all three
+         (operator c61586: "# of clients by date (cumulative). EUR income.
+         # invoices"; system_3 #9972). -->
+    <div v-else class="stats">
+      <figure class="stat" data-test="stat-clients">
+        <figcaption><h4>Clients over time</h4></figcaption>
+        <AspChart type="line" :data="clientsData" :options="optionsFor('count')" :plugins="[plotAreaProbe]" :height="140" aria-label="Clients over time, running total per month" />
+        <p class="stat__range muted">running total, by the date a client was added</p>
+      </figure>
+      <figure class="stat" data-test="stat-income">
+        <figcaption><h4>Income per month</h4></figcaption>
+        <AspChart type="bar" :data="incomeData" :options="optionsFor('money')" :plugins="[plotAreaProbe]" :height="140" aria-label="Income per month in euros, issued invoices" />
+        <p class="stat__range muted">issued invoices per month, by issue date; this month so far</p>
+      </figure>
+      <figure class="stat" data-test="stat-invoices">
+        <figcaption><h4>Invoices issued per month</h4></figcaption>
+        <AspChart type="bar" :data="chartData" :options="optionsFor('count')" :plugins="[plotAreaProbe]" :height="140" aria-label="Invoices issued per month" />
+        <p class="stat__range muted">per month, by issue date; this month so far</p>
+      </figure>
+    </div>
   </section>
 </template>
 
 <script>
-  import { AspBarChart } from '@aspirant/design-system';
-  import { listInvoices } from './api.js';
+  import { AspChart } from '@aspirant/design-system';
+  import { formatMoney, listClients, listInvoices } from './api.js';
 
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  // The y-axis labels of all three charts take the same width, so the plot
+  // areas start at the same x and one month sits at one x in every chart
+  // (design_agent on #10005).
+  const Y_AXIS_WIDTH = 56;
 
-  // Invoices issued over time (spec §4.9): a count per calendar month of the
-  // issue date, zero-filled from the first issue month to this month. Only
-  // invoices currently issued count — a Storno's replacement is counted, so
-  // counting the cancelled one too would double the work.
+  // Compact money ticks, one decimal (§3.120 Q4): €950, €1.2k.
+  const moneyTick = (v) => (Math.abs(v) >= 1000 ? `€${(v / 1000).toFixed(1)}k` : `€${Math.round(v)}`);
+
+  // Records each chart's plot area and month positions on its wrapper, so the
+  // alignment can be measured from the page (Chart.js itself is not reachable
+  // there). Per-instance, so no other chart in the app carries it.
+  const plotAreaProbe = {
+    id: 'plotAreaProbe',
+    afterLayout(chart) {
+      const el = chart.canvas && chart.canvas.parentElement;
+      if (!el || !chart.chartArea) return;
+      el.dataset.plotLeft = String(Math.round(chart.chartArea.left));
+      el.dataset.plotRight = String(Math.round(chart.chartArea.right));
+      const x = chart.scales && chart.scales.x;
+      if (x) el.dataset.monthX = chart.data.labels.map((_, i) => Math.round(x.getPixelForValue(i))).join(',');
+    },
+  };
+
+  const monthOf = (d) => {
+    const m = String(d || '').slice(0, 7);
+    return /^\d{4}-\d{2}$/.test(m) ? m : null;
+  };
+
+  // The Invoices tab's statistics (spec §4.9; system_3 #9972). One month
+  // axis, zero-filled from the first month with a client or an issued invoice
+  // to this month. Only invoices currently issued count, for both the count
+  // and the income: a Storno's replacement is counted, so counting the
+  // cancelled one too would double the work. "EUR income" is the issued
+  // totals (communicator's recommended default while the operator's choice
+  // is open, #9972 c61811).
   export default {
     name: 'InvoicesChart',
-    components: { AspBarChart },
+    components: { AspChart },
     props: {
       refreshKey: { type: Number, default: 0 },
       // Injected in tests; defaults to the browser clock.
       now: { type: Date, default: null },
     },
     data() {
-      return { issued: [] };
+      return { invoices: [], clients: [], plotAreaProbe };
     },
     computed: {
-      buckets() {
-        const months = this.issued.map((i) => String(i.issue_date || '').slice(0, 7)).filter((m) => /^\d{4}-\d{2}$/.test(m));
-        if (!months.length) return [];
+      issued() {
+        return this.invoices.filter((i) => i.status === 'issued');
+      },
+      months() {
+        const seen = [...this.issued.map((i) => monthOf(i.issue_date)), ...this.clients.map((c) => monthOf(c.created_at))].filter(Boolean);
+        if (!seen.length) return [];
         const today = this.now || new Date();
         const last = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
-        let [y, m] = months.reduce((a, b) => (a < b ? a : b)).split('-').map(Number);
-        const end = months.reduce((a, b) => (a > b ? a : b), last);
+        let [y, m] = seen.reduce((a, b) => (a < b ? a : b)).split('-').map(Number);
+        const end = seen.reduce((a, b) => (a > b ? a : b), last);
         const out = [];
         for (let guard = 0; guard < 240; guard++) {
           const key = `${y}-${String(m).padStart(2, '0')}`;
-          out.push({ key, label: `${MONTHS[m - 1]} ${y}`, count: months.filter((x) => x === key).length });
+          out.push(key);
           if (key >= end) break;
           m += 1;
           if (m > 12) {
@@ -56,13 +108,31 @@
         return out;
       },
       labels() {
-        return this.buckets.map((b) => b.label);
+        return this.months.map((k) => `${MONTHS[Number(k.slice(5)) - 1]} ${k.slice(0, 4)}`);
       },
       counts() {
-        return this.buckets.map((b) => b.count);
+        return this.months.map((k) => this.issued.filter((i) => monthOf(i.issue_date) === k).length);
+      },
+      incomeEuros() {
+        return this.months.map((k) => this.issued.filter((i) => monthOf(i.issue_date) === k).reduce((s, i) => s + (Number(i.total_cents) || 0), 0) / 100);
+      },
+      // Clients by the end of each month (a running total).
+      clientTotals() {
+        return this.months.map((k) => this.clients.filter((c) => {
+          const m = monthOf(c.created_at);
+          return m && m <= k;
+        }).length);
       },
       chartData() {
         return { labels: this.labels, datasets: [{ label: 'Invoices issued', data: this.counts }] };
+      },
+      incomeData() {
+        return { labels: this.labels, datasets: [{ label: 'Income (EUR)', data: this.incomeEuros }] };
+      },
+      clientsData() {
+        // Stepped, no smoothing: a count that only rises must not dip
+        // between months on screen (design_agent on #10005, D2).
+        return { labels: this.labels, datasets: [{ label: 'Clients', data: this.clientTotals, stepped: true, tension: 0, fill: false }] };
       },
     },
     watch: {
@@ -72,12 +142,36 @@
       this.load();
     },
     methods: {
+      // One options shape for all three: same y-axis width, points centred
+      // over the bars (offset), no legend (each chart has one series and a
+      // title), and money in the app's one format (formatMoney, en-GB).
+      optionsFor(kind) {
+        const money = kind === 'money';
+        return {
+          // One explicit padding for all three. Chart.js otherwise pads a line
+          // chart for its point markers (5px measured on the right), which
+          // shifts its plot off the bars'. With offset, every point sits half
+          // a month inside the plot, so nothing is clipped.
+          layout: { autoPadding: false, padding: { top: 6, right: 6, bottom: 0, left: 0 } },
+          plugins: {
+            legend: { display: false },
+            tooltip: money ? { callbacks: { label: (ctx) => formatMoney(Math.round(ctx.parsed.y * 100)) } } : {},
+          },
+          scales: {
+            x: { offset: true },
+            y: {
+              afterFit: (axis) => {
+                axis.width = Y_AXIS_WIDTH;
+              },
+              ticks: money ? { callback: moneyTick } : { precision: 0 },
+            },
+          },
+        };
+      },
       async load() {
-        try {
-          this.issued = await listInvoices({ status: 'issued' });
-        } catch (err) {
-          this.issued = [];
-        }
+        const [inv, cl] = await Promise.allSettled([listInvoices({}), listClients()]);
+        this.invoices = inv.status === 'fulfilled' ? inv.value : [];
+        this.clients = cl.status === 'fulfilled' ? cl.value : [];
       },
     },
   };
@@ -91,6 +185,30 @@
   .invoices-chart h3 {
     margin: 0 0 var(--space-xs);
     font-size: var(--text-md, 1rem);
+  }
+
+  /* Stacked at every width, full width each, so one month sits at one x in
+     all three (design_agent on #10005). */
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-md);
+  }
+
+  .stat {
+    margin: 0;
+    min-width: 0;
+  }
+
+  .stat figcaption h4 {
+    margin: 0 0 var(--space-2xs);
+    font-size: var(--text-sm);
+  }
+
+  .stat__range {
+    margin: var(--space-2xs) 0 0;
+    font-size: var(--text-xs, 0.75rem);
+    text-align: center;
   }
 
   .muted {
