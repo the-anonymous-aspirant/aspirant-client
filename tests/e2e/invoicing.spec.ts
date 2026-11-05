@@ -167,7 +167,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await expect(form).toBeVisible();
 
     await form.getByLabel('Invoice number prefix').fill('2026');
-    await form.getByLabel('Steuernummer').fill('98/765/43210');
+    await form.getByLabel('Steuernummer (Tax number)').fill('98/765/43210');
     await page.locator('[data-test="profile-save"]').click();
     await expect(form).toBeHidden();
     await expect(page.locator('[data-test="profile-steuernummer"]')).toHaveText('98/765/43210');

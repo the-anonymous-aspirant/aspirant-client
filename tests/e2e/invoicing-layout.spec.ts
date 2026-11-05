@@ -108,7 +108,7 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
 
     await page.getByRole('tab', { name: 'Invoices' }).click();
     await page.locator('[data-test="invoice-row"][data-status="draft"]').click();
-    await expect(page.locator('[data-test="draft-issue-blocked"]')).toContainText('Add a Steuernummer in the issuer profile to issue.');
+    await expect(page.locator('[data-test="draft-issue-blocked"]')).toContainText('Add a Steuernummer (tax number) in the issuer profile to issue.');
     // The server stays the gate: the issue button is not newly disabled.
     await expect(page.locator('[data-test="draft-issue"]')).toBeEnabled();
     expect(await noSideScroll(page), 'draft editor: no horizontal scroll').toBe(true);

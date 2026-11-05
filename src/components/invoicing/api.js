@@ -79,11 +79,11 @@ export const deleteManualPayment = (id) => axios.delete(`${base}/payments/${id}`
 
 // How a hand-entered payment was received, in the invoice's German wording.
 export const METHOD_LABELS = {
-  bank_transfer: 'Banküberweisung',
+  bank_transfer: 'Banküberweisung (Bank transfer)',
   paypal: 'PayPal',
   stripe: 'Stripe',
-  cash: 'Bar',
-  other: 'Sonstige',
+  cash: 'Bar (Cash)',
+  other: 'Sonstige (Other)',
 };
 
 // The server's error envelope is { error: { code, message } }; fall back to

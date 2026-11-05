@@ -47,7 +47,7 @@
         </p>
         <p class="glance__line glance__line--state">
           <span v-if="profile.steuernummer">
-            <span class="muted">Steuernummer</span> <span data-test="profile-steuernummer">{{ profile.steuernummer }}</span>
+            <span class="muted">Steuernummer (Tax number)</span> <span data-test="profile-steuernummer">{{ profile.steuernummer }}</span>
           </span>
           <AspBadge v-else status="caution" data-test="steuernummer-missing">Missing: needed to issue</AspBadge>
           <!-- The separator wraps with the text after it, never alone at a line end. -->
