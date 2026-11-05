@@ -15,6 +15,8 @@ interface Fake {
   logo: Buffer | null;
   refuseUpload?: string;
   profilePuts: number;
+  lastPut?: Record<string, any>;
+  storedPhone?: string;
   requests: Array<{ method: string; path: string; body: Buffer | null; contentType: string }>;
 }
 
@@ -72,10 +74,15 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
     fake.requests.push({ method, path, body: req.postDataBuffer(), contentType: req.headers()['content-type'] || '' });
 
     if (path === '/invoicing/profile' && method === 'GET') {
-      return json(route, 200, { profile, saved: true, has_logo: fake.hasLogo });
+      return json(route, 200, { profile: { ...profile, phone: fake.storedPhone || '' }, saved: true, has_logo: fake.hasLogo });
     }
     if (path === '/invoicing/profile' && method === 'PUT') {
       const body = JSON.parse(req.postData() || '{}');
+      // The server's phone rule (aspirant-server #9992): letters are refused.
+      if (/[a-z]/i.test(body.phone || '')) {
+        return json(route, 400, { error: { code: 'invalid_phone', message: 'phone may hold digits, spaces and + - ( ) / . only, at most 40 characters' } });
+      }
+      fake.lastPut = body;
       if (body.invoice_number_prefix === 'bad/prefix') {
         return json(route, 400, { error: { code: 'bad_request', message: 'invoice_number_prefix must be 1-20 letters, digits or hyphens' } });
       }
@@ -248,5 +255,65 @@ test.describe('#9858 Invoices: the issuer logo in the profile editor', () => {
     await expect(form(page)).toBeHidden();
     expect(logoRequests(fake, 'PUT')).toHaveLength(1);
     expect(fake.profilePuts).toBe(1);
+  });
+});
+
+// system_3 #9993 (operator c61727): an optional phone, printed under the email
+// on new invoices only when set. The server is the only gate on its characters.
+test.describe('#9993 Invoices: the issuer phone in the profile editor', () => {
+  test('a phone is offered after Email, says when it prints, and is saved with the profile', async ({ page }) => {
+    const fake = newFake();
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openEditor(page);
+    const phone = form(page).getByLabel('Phone');
+    await expect(phone).toHaveAttribute('type', 'tel');
+    await expect(form(page)).toContainText('Printed under your email on new invoices. Leave it empty to leave it off.');
+    await phone.fill('+49 30 1234567');
+    await save(page);
+    await expect(form(page)).toBeHidden();
+    expect(fake.lastPut?.phone).toBe('+49 30 1234567');
+  });
+
+  test('a stored phone loads into the field', async ({ page }) => {
+    const fake = newFake({ storedPhone: '+49 171 5550123' });
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openEditor(page);
+    await expect(form(page).getByLabel('Phone')).toHaveValue('+49 171 5550123');
+  });
+
+  // design_agent on #9993: the refusal shows on the Phone field itself, in
+  // place of its hint, the field takes focus, and her text is kept.
+  test('a refused phone says why on the field, takes focus and keeps her text', async ({ page }) => {
+    const fake = newFake();
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openEditor(page);
+    const phone = form(page).getByLabel('Phone');
+    await phone.fill('call me');
+    await save(page);
+    const field = page.locator('[data-test="profile-form"] .field').filter({ has: page.locator('[data-test="profile-phone"]') });
+    await expect(field).toContainText('Use digits, spaces and + - ( ) / . only, at most 40 characters.');
+    await expect(field).not.toContainText('Printed under your email on new invoices.');
+    await expect(phone).toBeFocused();
+    await expect(phone).toHaveValue('call me');
+    await expect(page.locator('[data-test="profile-error"]')).toHaveCount(0);
+    await expect(form(page)).toBeVisible();
+    expect(fake.profilePuts).toBe(0);
+    // Editing the number clears the refusal.
+    await phone.fill('+49 30 1234567');
+    await expect(field).toContainText('Printed under your email on new invoices.');
+  });
+
+  test('an empty phone is sent empty, so no Tel. line prints', async ({ page }) => {
+    const fake = newFake({ storedPhone: '+49 171 5550123' });
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openEditor(page);
+    await form(page).getByLabel('Phone').fill('');
+    await save(page);
+    await expect(form(page)).toBeHidden();
+    expect(fake.lastPut?.phone).toBe('');
   });
 });
