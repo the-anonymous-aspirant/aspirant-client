@@ -1,9 +1,9 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 
-/** Invoices app, E3 (system_3 #8367-E3, #9897): the Excel workbook and the
- *  issued-invoices ZIP downloads (behind the §5 validation screen) and the
- *  invoices-per-month chart. Catch-all /api/ → 404 first. */
+/** Invoices app, E3 (system_3 #8367-E3, #9897): the issued-invoices ZIP
+ *  download (behind the §5 validation screen) and the invoices-per-month
+ *  chart. Catch-all /api/ → 404 first. */
 
 type Json = Record<string, any>;
 
@@ -29,7 +29,6 @@ async function open(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/clients' || path === '/invoicing/payments') return json(route, 200, { clients: [], payments: [] });
     if (path === '/invoicing/invoices') return json(route, 200, { invoices: fake.issued });
     if (path === '/invoicing/validation') return json(route, 200, fake.validation);
-    if (path === '/invoicing/export/workbook.xlsx') return route.fulfill({ status: 200, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', body: 'PK' });
     if (path === '/invoicing/export/invoices.zip') return route.fulfill({ status: 200, contentType: 'application/zip', body: 'PK' });
     return json(route, 404, { error: { code: 'not_found', message: `unmocked ${path}` } });
   });
@@ -45,16 +44,7 @@ const newFake = (): Fake => ({
   requests: [],
 });
 
-test.describe('#8367 Invoices app — workbook and ZIP downloads, chart', () => {
-  test('the Excel workbook downloads after a clean validation', async ({ page }) => {
-    const fake = newFake();
-    await open(page, fake);
-    const download = page.waitForEvent('download');
-    await page.locator('[data-test="export-workbook"]').click();
-    expect((await download).suggestedFilename()).toBe('Rechnungen.xlsx');
-    expect(fake.requests).toContain('/invoicing/validation');
-  });
-
+test.describe('#8367 Invoices app — ZIP download, chart', () => {
   test('the issued invoices ZIP downloads after a clean validation', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
@@ -66,15 +56,13 @@ test.describe('#8367 Invoices app — workbook and ZIP downloads, chart', () => 
     expect(fake.requests).toContain('/invoicing/export/invoices.zip');
   });
 
-  test('a violation blocks both downloads', async ({ page }) => {
+  test('a violation blocks the download', async ({ page }) => {
     const fake = newFake();
     fake.validation = { ok: false, violations: [{ code: 'pdf_missing', message: 'Invoice 2026-003 has no PDF.' }], warnings: [] };
     await open(page, fake);
-    for (const button of ['export-workbook', 'export-zip']) {
-      await page.locator(`[data-test="${button}"]`).click();
-      await expect(page.locator('[data-test="validation-violations"]')).toContainText('Invoice 2026-003 has no PDF.');
-      await page.getByRole('button', { name: 'Close', exact: true }).click();
-    }
+    await page.locator('[data-test="export-zip"]').click();
+    await expect(page.locator('[data-test="validation-violations"]')).toContainText('Invoice 2026-003 has no PDF.');
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
     expect(fake.requests.some((r) => r.startsWith('/invoicing/export/'))).toBe(false);
   });
 
