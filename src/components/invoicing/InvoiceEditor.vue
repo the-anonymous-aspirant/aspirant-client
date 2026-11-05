@@ -102,7 +102,7 @@
             <!-- AspInput forwards class to its <input>, not its root, so each
                  grid cell is a wrapper. -->
             <div class="line__desc">
-              <AspInput v-model="line.description" :label="captioned(i) ? 'Description' : ''" :aria-label="`Description, line ${i + 1}`" />
+              <LineDescriptionInput v-model="line.description" :label="captioned(i) ? 'Description' : ''" :aria-label="`Description, line ${i + 1}`" />
             </div>
             <div class="line__num">
               <AspInput v-model="line.quantity" :label="captioned(i) ? 'Quantity' : ''" :aria-label="`Quantity, line ${i + 1}`" />
@@ -176,6 +176,7 @@
   import { AspBadge, AspButton, AspInput, AspModal, AspSelect, AspTextarea } from '@aspirant/design-system';
   import axios from 'axios';
   import ReadState from '../ReadState.vue';
+  import LineDescriptionInput from './LineDescriptionInput.vue';
   import ModalActions from './ModalActions.vue';
   import {
     STATUS_LABELS,
@@ -201,7 +202,7 @@
   // read-only record that can only be cancelled (Storno).
   export default {
     name: 'InvoiceEditor',
-    components: { AspBadge, AspButton, AspInput, AspModal, AspSelect, AspTextarea, ModalActions, ReadState },
+    components: { AspBadge, AspButton, AspInput, AspModal, AspSelect, AspTextarea, LineDescriptionInput, ModalActions, ReadState },
     props: {
       open: { type: Boolean, default: false },
       invoiceId: { type: Number, default: null },
