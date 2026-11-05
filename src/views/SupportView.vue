@@ -19,20 +19,18 @@
         <p class="qr-label">Scan to open in your browser</p>
       </div>
 
-      <!-- The primary action of record, rendered as the link it is (#9196,
-           §1.3, §1.5): AspButton's own fill, radius and height. -->
-      <AspButton
-        variant="primary"
+      <!-- AspButton renders only a <button>, which cannot navigate; this
+           stays a real <a> (#9944), styled as AspButton primary md to match
+           its fill, radius and height (#9196, §1.3, §1.5). -->
+      <a
         :href="bmacUrl"
         target="_blank"
         rel="noopener noreferrer"
         class="bmac-button"
       >
-        <template v-if="coffemugUrl" #iconLeft>
-          <img :src="coffemugUrl" alt="" class="bmac-button-icon" />
-        </template>
+        <img v-if="coffemugUrl" :src="coffemugUrl" alt="" class="bmac-button-icon" />
         Buy me a coffee
-      </AspButton>
+      </a>
     </div>
 
     <div class="donation-card btc-card">
@@ -199,9 +197,38 @@ onMounted(async () => {
   margin: 0 0 var(--space-lg) 0;
 }
 
-/* AspButton owns the fill, ink, radius, height and hover; the mug rides its
-   icon slot at the label's size, so it cannot make this button taller than
-   every other primary action (§3.121 B3-5: three button shapes were one). */
+/* A real <a> styled as AspButton primary md (#9944: AspButton renders only a
+   <button> and cannot navigate). The mug rides at the label's size, so it
+   cannot make this taller than every other primary action (§3.121 B3-5:
+   three button shapes were one). */
+.bmac-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  font-family: var(--font-family-base);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--brand-primary);
+  color: var(--text-on-fixed-light);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.bmac-button:hover {
+  background: var(--brand-primary-hover);
+  color: var(--text-on-dark);
+}
+
+.bmac-button:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
 .bmac-button-icon {
   width: 1em;
   height: 1em;
