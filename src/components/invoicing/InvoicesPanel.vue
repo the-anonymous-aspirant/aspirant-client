@@ -515,9 +515,12 @@
     margin: 0 0 var(--space-sm);
   }
 
+  /* flex-start: a button with a caption under it is taller than a bare one,
+     and must not stretch its neighbours to match. */
   .exports {
     display: flex;
     flex-wrap: wrap;
+    align-items: flex-start;
     gap: var(--space-sm);
   }
 
