@@ -19,13 +19,16 @@ set -euo pipefail
 sha=${1:?usage: is-main-head.sh <sha> [remote]}
 remote=${2:-origin}
 
-if ! line=$(git ls-remote "$remote" refs/heads/main); then
+if ! listing=$(git ls-remote "$remote" refs/heads/main); then
   echo "ERROR: could not read main's head from '$remote'" >&2
   exit 1
 fi
-head=${line%%[[:space:]]*}
+# ls-remote's pattern matches as a path suffix, so a branch named e.g.
+# `a/refs/heads/main` is listed too, and can sort first. Take only the line
+# whose ref is exactly refs/heads/main (security review c61631 on #9966).
+head=$(printf '%s\n' "$listing" | awk -F'\t' '$2 == "refs/heads/main" { print $1 }')
 if ! [[ $head =~ ^[0-9a-f]{40}$ ]]; then
-  echo "ERROR: '$remote' returned no usable head for refs/heads/main: '$line'" >&2
+  echo "ERROR: '$remote' returned no usable head for refs/heads/main" >&2
   exit 1
 fi
 

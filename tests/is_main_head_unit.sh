@@ -33,6 +33,16 @@ case $err in *"main is at $head"*) ok "an older commit says which head it lost t
 out=$(bash "$SCRIPT" "$head" "$T/no-such-remote.git" 2>/dev/null); rc=$?
 [ "$rc" != 0 ] && [ -z "$out" ] && ok "an unreadable remote fails the build and writes no output" || nok "unreadable remote -> got rc=$rc out='$out'"
 
+# A branch whose name ends in refs/heads/main, left on the older commit: the
+# suffix match would list it too, and it sorts before refs/heads/main.
+git clone -q --bare "$T/work" "$T/decoy.git"
+git -C "$T/decoy.git" update-ref refs/heads/a/refs/heads/main "$old"
+out=$(bash "$SCRIPT" "$head" "$T/decoy.git" 2>/dev/null); rc=$?
+out_old=$(bash "$SCRIPT" "$old" "$T/decoy.git" 2>/dev/null)
+[ "$rc" = 0 ] && [ "$out" = "is_head=true" ] && [ "$out_old" = "is_head=false" ] \
+  && ok "a branch named a/refs/heads/main does not stand in for main" \
+  || nok "decoy branch -> head build '$out' (rc=$rc), older build '$out_old'"
+
 git init -q --bare "$T/empty.git"
 out=$(bash "$SCRIPT" "$head" "$T/empty.git" 2>/dev/null); rc=$?
 [ "$rc" != 0 ] && [ -z "$out" ] && ok "a remote with no main fails the build" || nok "no main -> got rc=$rc out='$out'"
