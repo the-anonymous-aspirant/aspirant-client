@@ -219,17 +219,6 @@
               @update:model-value="patch(row, { client_id: $event || null })"
             />
           </div>
-          <div class="payment-card__field">
-            <span class="payment-card__caption" aria-hidden="true">Bank deposit</span>
-            <AspSelect
-              :model-value="row.bank_deposit_id ?? 0"
-              :options="depositOptions"
-              :aria-label="`Bank deposit for ${row.transaction_id}`"
-              :disabled="saving.has(row.id) || depositOptions.length < 2"
-              data-test="payment-deposit"
-              @update:model-value="patch(row, { bank_deposit_id: $event || null })"
-            />
-          </div>
         </div>
       </li>
     </ul>
@@ -311,29 +300,8 @@
           />
         </div>
       </template>
-      <template #cell-bank_deposit_id="{ row }">
-        <div class="cell-select">
-          <AspSelect
-            :model-value="row.bank_deposit_id ?? 0"
-            :options="depositOptions"
-            :aria-label="`Bank deposit for ${row.transaction_id}`"
-            :title="optionLabel(depositOptions, row.bank_deposit_id ?? 0)"
-            :disabled="saving.has(row.id) || depositOptions.length < 2"
-            data-test="payment-deposit"
-            @update:model-value="patch(row, { bank_deposit_id: $event || null })"
-          />
-        </div>
-      </template>
     </AspDataTable>
     <p v-if="rowError" class="error" role="alert" data-test="payment-error">{{ rowError }}</p>
-
-    <div v-if="withdrawals.length" class="deposits" data-test="deposits">
-      <h3>Bank deposits (withdrawals to the bank)</h3>
-      <AspDataTable :columns="depositColumns" :rows="withdrawals" row-key="id" density="compact" caption="Bank deposits">
-        <template #cell-paid_on="{ row }"><span class="nowrap">{{ formatDay(row.paid_on) }}</span></template>
-        <template #cell-gross_cents="{ row }"><span class="nowrap">{{ formatMoney(row.gross_cents, row.currency) }}</span></template>
-      </AspDataTable>
-    </div>
 
     <ManualPaymentDialog
       v-model:open="manualOpen"
@@ -419,29 +387,19 @@
           { key: 'paid_on', label: 'Date' },
           { key: 'sender', label: 'From', sortable: false },
           { key: 'gross_cents', label: 'Amount', align: 'right' },
-          // Widths measured at 1280 with the sidebar open, where the table has
+          // Width measured at 1280 with the sidebar open, where the table has
           // 968px (#8407): the cell pads 12px a side and a table-cell trigger
-          // ~32px, so 10.25rem shows "Uncategorised" (106px of text) whole,
-          // and 14rem a deposit with a four-digit amount ("2026-08-05
-          // €1,500.00", 164px). Longer values end in an ellipsis with the
-          // whole label as the trigger's title.
+          // ~32px, so 10.25rem shows "Uncategorised" (106px of text) whole.
+          // Longer values end in an ellipsis with the whole label as the
+          // trigger's title.
           { key: 'category', label: 'Category', sortable: false, width: '10.25rem' },
           { key: 'client_id', label: 'Client', sortable: false, width: '10.25rem' },
-          { key: 'bank_deposit_id', label: 'Bank deposit', sortable: false, width: '14rem' },
-        ],
-        depositColumns: [
-          { key: 'paid_on', label: 'Date' },
-          { key: 'gross_cents', label: 'Amount', align: 'right' },
-          { key: 'transaction_id', label: 'Transaction ID' },
         ],
       };
     },
     computed: {
       incoming() {
         return this.payments.filter((p) => p.kind === 'incoming');
-      },
-      withdrawals() {
-        return this.payments.filter((p) => p.kind === 'withdrawal');
       },
       shown() {
         if (this.categoryFilter === 'all') return this.incoming;
@@ -455,12 +413,6 @@
       },
       clientOptions() {
         return [{ value: 0, label: 'No client' }, ...this.clients.map((c) => ({ value: c.id, label: c.name }))];
-      },
-      depositOptions() {
-        return [
-          { value: 0, label: 'Not grouped' },
-          ...this.withdrawals.map((w) => ({ value: w.id, label: `${formatDay(w.paid_on)} ${formatMoney(w.gross_cents, w.currency)}` })),
-        ];
       },
       // A file that could not be read stays named after the dialog closes
       // (D2: a fold may hide detail, never a failure).
@@ -904,10 +856,6 @@
   .error {
     color: var(--feedback-error);
     margin: 0 0 var(--space-sm);
-  }
-
-  .deposits {
-    margin-top: var(--space-lg);
   }
 
   .payment-cards {

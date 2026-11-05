@@ -49,7 +49,6 @@ async function mockAll(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/audit-events') return json(route, 200, { events: fake.audit });
     if (path === '/invoicing/validation') return json(route, 200, fake.validation);
     if (path === '/invoicing/export/invoices.csv') return route.fulfill({ status: 200, contentType: 'text/csv', body: '\ufeffRechnungsnummer;Status\n2026-001;issued\n' });
-    if (path === '/invoicing/invoices/100/export.csv') return route.fulfill({ status: 200, contentType: 'text/csv', body: '\ufeffRechnungsnummer;Pos.\n2026-001;1\n' });
     return json(route, 404, { error: { code: 'not_found', message: `unmocked ${path}` } });
   });
 }
@@ -164,16 +163,5 @@ test.describe('#8367 Invoices app — review list, detail, validated exports', (
     await page.locator('[data-test="invoice-row"][data-status="issued"]').click();
     await expect(page.locator('[data-test="invoice-number"]')).toHaveText('2026-001');
     await expect(page.locator('[data-test="invoice-client"]')).toHaveText('Galerie Nord');
-  });
-
-  test('a single invoice downloads as CSV after validation', async ({ page }) => {
-    const fake = newFake();
-    await openInvoicesTab(page, fake);
-    await page.locator('[data-test="invoice-row"][data-status="issued"]').click();
-    // Headless Chromium has no PDF viewer, so the preview may raise its own
-    // download; wait for the CSV one.
-    const download = page.waitForEvent('download', (d) => d.suggestedFilename().endsWith('.csv'));
-    await page.locator('[data-test="invoice-csv"]').click();
-    expect((await download).suggestedFilename()).toBe('Rechnung-2026-001.csv');
   });
 });

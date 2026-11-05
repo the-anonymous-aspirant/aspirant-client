@@ -41,9 +41,9 @@ function newFake(over: Partial<Fake> = {}): Fake {
     saved: true,
     clients: [{ id: 1, name: 'Galerie Nord', address: 'Nordweg 2\n13353 Berlin', email: '', paypal_email: 'pay@galerie.test' }],
     payments: [
-      { id: 10, kind: 'incoming', transaction_id: 'TX1', paid_on: '2026-07-14T00:00:00Z', currency: 'EUR', gross_cents: 35000, sender_name: 'Galerie Nord', sender_email: 'pay@galerie.test', note: 'Wandbild Juli', category: 'uncategorised', client_id: 1, bank_deposit_id: null },
-      { id: 11, kind: 'incoming', transaction_id: 'TX2', paid_on: '2026-07-20T00:00:00Z', currency: 'EUR', gross_cents: 5000, sender_name: 'Aunt', sender_email: 'aunt@example.test', note: 'Happy birthday', category: 'gift', client_id: null, bank_deposit_id: null },
-      { id: 12, kind: 'withdrawal', transaction_id: 'W1', paid_on: '2026-08-01T00:00:00Z', currency: 'EUR', gross_cents: 150000, sender_name: '', sender_email: '', note: '', category: 'uncategorised', client_id: null, bank_deposit_id: null },
+      { id: 10, kind: 'incoming', transaction_id: 'TX1', paid_on: '2026-07-14T00:00:00Z', currency: 'EUR', gross_cents: 35000, sender_name: 'Galerie Nord', sender_email: 'pay@galerie.test', note: 'Wandbild Juli', category: 'uncategorised', client_id: 1 },
+      { id: 11, kind: 'incoming', transaction_id: 'TX2', paid_on: '2026-07-20T00:00:00Z', currency: 'EUR', gross_cents: 5000, sender_name: 'Aunt', sender_email: 'aunt@example.test', note: 'Happy birthday', category: 'gift', client_id: null },
+      { id: 12, kind: 'withdrawal', transaction_id: 'W1', paid_on: '2026-08-01T00:00:00Z', currency: 'EUR', gross_cents: 150000, sender_name: '', sender_email: '', note: '', category: 'uncategorised', client_id: null },
     ],
     requests: [],
     importResponses: [],
@@ -294,7 +294,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await expect(category).toContainText('Paid work');
   });
 
-  test('withdrawals are listed as bank deposits, not as payments to categorise', async ({ page }) => {
+  test('withdrawals are not listed as payments to categorise', async ({ page }) => {
     const fake = newFake();
     await mockInvoicing(page, fake);
     await seedTrustedSessionAs(page, 'vinoly');
@@ -302,7 +302,6 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
 
     await expect(page.locator('[data-test="payment-row"]')).toHaveCount(2);
     await expect(page.locator('[data-test="payment-row"][data-txn="W1"]')).toHaveCount(0);
-    await expect(page.locator('[data-test="deposits"]')).toContainText('W1');
   });
 
   test('empty states: no payments, no clients', async ({ page }) => {
@@ -360,7 +359,7 @@ const xlsxFile = {
 
 function threeIncoming(): Fake {
   const fake = newFake();
-  fake.payments.splice(2, 0, { id: 13, kind: 'incoming', transaction_id: 'TX3', paid_on: '2026-07-22T00:00:00Z', currency: 'EUR', gross_cents: 9000, sender_name: 'Noa', sender_email: 'noa@example.test', note: 'tattoo', category: 'uncategorised', client_id: null, bank_deposit_id: null });
+  fake.payments.splice(2, 0, { id: 13, kind: 'incoming', transaction_id: 'TX3', paid_on: '2026-07-22T00:00:00Z', currency: 'EUR', gross_cents: 9000, sender_name: 'Noa', sender_email: 'noa@example.test', note: 'tattoo', category: 'uncategorised', client_id: null });
   return fake;
 }
 

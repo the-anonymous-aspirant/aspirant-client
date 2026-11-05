@@ -89,7 +89,6 @@
       <h3 id="export-heading">Export</h3>
       <div class="exports">
         <AspButton variant="secondary" data-test="export-all-csv" @click="startExport('csv')">Invoice list (CSV)</AspButton>
-        <AspButton variant="secondary" data-test="export-workbook" @click="startExport('xlsx')">Excel workbook</AspButton>
         <AspButton variant="secondary" data-test="export-zip" @click="startExport('zip')">Issued invoices (PDF, ZIP)</AspButton>
       </div>
     </section>
@@ -110,13 +109,11 @@
     formatDay,
     formatMoney,
     listInvoices,
-    workbookUrl,
   } from './api.js';
 
   // Every export goes through the validation screen first (spec §5).
   const EXPORTS = {
     csv: { url: allInvoicesCsvUrl(), filename: 'Rechnungen.csv' },
-    xlsx: { url: workbookUrl(), filename: 'Rechnungen.xlsx' },
     zip: { url: invoicesZipUrl(), filename: 'Rechnungen.zip' },
   };
 

@@ -26,8 +26,8 @@ async function mock(page: Page, { steuernummer = '12/345/67890' } = {}): Promise
     if (path === '/invoicing/payments') {
       return json(route, 200, {
         payments: [
-          { id: 10, kind: 'incoming', transaction_id: 'TX1', paid_on: '2026-07-14T00:00:00Z', currency: 'EUR', gross_cents: 35000, sender_name: 'Galerie Nord', sender_email: 'pay@galerie.test', note: 'Wandbild Juli', category: 'paid_work', client_id: 1, bank_deposit_id: null },
-          { id: 11, kind: 'incoming', transaction_id: 'TX2', paid_on: '2026-07-20T00:00:00Z', currency: 'EUR', gross_cents: 5000, sender_name: 'Aunt', sender_email: 'aunt@example.test', note: 'Happy birthday', category: 'gift', client_id: null, bank_deposit_id: null },
+          { id: 10, kind: 'incoming', transaction_id: 'TX1', paid_on: '2026-07-14T00:00:00Z', currency: 'EUR', gross_cents: 35000, sender_name: 'Galerie Nord', sender_email: 'pay@galerie.test', note: 'Wandbild Juli', category: 'paid_work', client_id: 1 },
+          { id: 11, kind: 'incoming', transaction_id: 'TX2', paid_on: '2026-07-20T00:00:00Z', currency: 'EUR', gross_cents: 5000, sender_name: 'Aunt', sender_email: 'aunt@example.test', note: 'Happy birthday', category: 'gift', client_id: null },
         ],
       });
     }
@@ -147,7 +147,6 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
 
   test('the payments table fits its column at desktop width with the sidebar open', async ({ page }) => {
     await open(page, 'light');
-    // The first table is the incoming payments; a second lists bank deposits.
     const box = page.locator('[data-test="payments-panel"] .data-table__scroll').first();
     test.skip((await box.count()) === 0, 'phones show payment cards, not the table');
     const [scrollWidth, clientWidth] = await box.evaluate((el) => [el.scrollWidth, el.clientWidth]);

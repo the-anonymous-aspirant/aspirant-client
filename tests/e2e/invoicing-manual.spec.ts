@@ -20,7 +20,7 @@ const manualRow = (over: Json = {}) => ({
   id: 40, kind: 'incoming', entry: 'manual', source: 'manual', transaction_id: 'M-0011223344556677',
   method: 'bank_transfer', reference: 'RE-17', paid_on: '2026-07-14T00:00:00Z', currency: 'EUR',
   gross_cents: 35000, sender_name: 'Galerie Nord', sender_email: '', note: 'Wandbild Juli',
-  category: 'paid_work', client_id: 1, bank_deposit_id: null, on_invoice: false, ...over,
+  category: 'paid_work', client_id: 1, on_invoice: false, ...over,
 });
 
 function newFake(over: Partial<Fake> = {}): Fake {
