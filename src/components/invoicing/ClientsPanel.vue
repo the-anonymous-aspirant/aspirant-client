@@ -23,6 +23,7 @@
         <span v-else class="muted" data-test="client-no-address">No postal address</span>
         <span v-if="row.email" class="muted">{{ row.email }}</span>
         <span v-if="row.paypal_email" class="muted">{{ row.paypal_email }}</span>
+        <span v-if="row.notes" class="client-notes" :title="row.notes" data-test="client-notes">{{ row.notes }}</span>
       </li>
     </ul>
     <AspDataTable
@@ -34,6 +35,13 @@
       caption="Clients"
       :row-attrs="(row) => ({ 'data-test': 'client-row' })"
     >
+      <!-- Her notes read as one muted line under the name, cut with an
+           ellipsis so a cut shows (design ack c61704 on system_3 #9987); the
+           full text is in the editor. A client with no notes shows nothing. -->
+      <template #cell-name="{ row }">
+        <span class="client-name">{{ row.name }}</span>
+        <span v-if="row.notes" class="client-notes" :title="row.notes" data-test="client-notes">{{ row.notes }}</span>
+      </template>
       <template #cell-address="{ value }">
         <span v-if="value" class="multiline">{{ value }}</span>
         <span v-else class="muted" data-test="client-no-address">No postal address</span>
@@ -54,6 +62,16 @@
         />
         <AspInput v-model="form.email" type="email" label="Email" />
         <AspInput v-model="form.paypal_email" type="email" label="PayPal email" hint="Imported payments from this address are linked to the client." />
+        <!-- No maxlength: it would cut a paste silently. The server refuses
+             more than 5000 characters with a message shown below, and the
+             text stays here to shorten (design ack c61704, system_3 #9987). -->
+        <AspTextarea
+          v-model="form.notes"
+          label="Notes"
+          :rows="4"
+          hint="Never printed on an invoice or included in an export."
+          data-test="client-notes-input"
+        />
         <p v-if="error" class="client-form__error" role="alert" data-test="client-error">{{ error }}</p>
       </form>
       <template #footer>
@@ -87,7 +105,7 @@
         narrow: false,
         editorOpen: false,
         editing: null,
-        form: { name: '', address: '', email: '', paypal_email: '' },
+        form: { name: '', address: '', email: '', paypal_email: '', notes: '' },
         saving: false,
         error: '',
         columns: [
@@ -119,13 +137,14 @@
     methods: {
       startAdd() {
         this.editing = null;
-        this.form = { name: '', address: '', email: '', paypal_email: '' };
+        this.form = { name: '', address: '', email: '', paypal_email: '', notes: '' };
         this.error = '';
         this.editorOpen = true;
       },
       startEdit(row) {
         this.editing = row;
-        this.form = { name: row.name, address: row.address, email: row.email, paypal_email: row.paypal_email };
+        // A copy, so Cancel discards an edit to any field, the notes included.
+        this.form = { name: row.name, address: row.address, email: row.email, paypal_email: row.paypal_email, notes: row.notes || '' };
         this.error = '';
         this.editorOpen = true;
       },
@@ -201,6 +220,27 @@
   .muted {
     color: var(--text-muted);
     font-size: var(--text-sm);
+  }
+
+  .client-name {
+    display: block;
+  }
+
+  /* One line, cut with an ellipsis so a cut is visible (§3.23): line breaks
+     in the note fold into spaces here, and the editor holds the full text.
+     The max-width keeps a long note from widening the Name column. */
+  .client-notes {
+    display: block;
+    max-width: 24rem;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+
+  .client-card .client-notes {
+    max-width: 100%;
   }
 
   .client-form {
