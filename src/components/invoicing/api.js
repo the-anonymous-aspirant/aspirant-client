@@ -124,6 +124,44 @@ export function formatDay(iso) {
   return String(iso).slice(0, 10);
 }
 
+// The calendar day of a moment in her calendar (Berlin), in the app's ISO
+// day spelling: "2026-11-06" (system_3 #10003, design_agent c62046). sv-SE is
+// the locale whose date format is exactly YYYY-MM-DD.
+export function formatBerlinDay(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+
+// The "@name" a stored profile link shows as. The link itself is used as
+// stored (the server only stores https://www.instagram.com/<name>/ or
+// https://t.me/<name>, system_3 #10002); this is only its visible text.
+export function socialHandle(url) {
+  try {
+    const seg = new URL(url).pathname.split('/').filter(Boolean)[0];
+    return seg ? `@${seg}` : url;
+  } catch {
+    return url;
+  }
+}
+
+// Defence in depth (security, c62062 on #10003): a stored link is shown as a
+// link only in the two shapes the server stores (aspirant-server #10002). A
+// value in any other shape, from a server regression or a hand-edited row,
+// is not rendered at all, so no other scheme can reach an href.
+export function safeSocialUrl(kind, url) {
+  const prefix = kind === 'instagram' ? 'https://www.instagram.com/' : 'https://t.me/';
+  return typeof url === 'string' && url.startsWith(prefix) && url.length > prefix.length ? url : '';
+}
+
+// The server's field refusals for a phone and the two links (#10002), in her words.
+export const FIELD_REFUSALS = {
+  invalid_phone: { field: 'phone', text: 'Use digits, spaces and + - ( ) / . only, at most 40 characters.' },
+  invalid_instagram: { field: 'instagram_url', text: 'Use an Instagram name (@name) or a link to an Instagram profile.' },
+  invalid_telegram: { field: 'telegram_url', text: 'Use a Telegram name (@name) or a t.me link.' },
+};
+
 export const CATEGORY_LABELS = {
   uncategorised: 'Uncategorised',
   paid_work: 'Paid work',

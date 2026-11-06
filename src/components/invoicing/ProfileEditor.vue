@@ -15,9 +15,31 @@
         type="tel"
         label="Phone"
         hint="Printed under your email on new invoices. Leave it empty to leave it off."
-        :error="phoneError"
+        :error="fieldErrors.phone"
         data-test="profile-phone"
       />
+      <!-- Her own social links (operator c61586, system_3 #10003): stored,
+           never printed. Refusals show on their own field, as the phone's. -->
+      <fieldset class="social" data-test="profile-social-group">
+        <legend class="social__legend">Social media</legend>
+        <AspInput
+          ref="instagram_url"
+          v-model="form.instagram_url"
+          label="Instagram"
+          placeholder="@name or a link"
+          :error="fieldErrors.instagram_url"
+          data-test="profile-instagram"
+        />
+        <AspInput
+          ref="telegram_url"
+          v-model="form.telegram_url"
+          label="Telegram"
+          placeholder="@name or a link"
+          hint="Not printed on invoices."
+          :error="fieldErrors.telegram_url"
+          data-test="profile-telegram"
+        />
+      </fieldset>
       <AspCheckbox v-model="form.is_kleinunternehmer" label="Kleinunternehmerin under § 19 UStG (no VAT charged)" />
       <div class="profile-form__numbers">
         <AspInput v-model="form.invoice_number_prefix" label="Invoice number prefix" hint="For example 2026." required />
@@ -92,14 +114,14 @@
 <script>
   import { AspButton, AspCheckbox, AspInput, AspModal, AspTextarea } from '@aspirant/design-system';
   import ModalActions from './ModalActions.vue';
-  import { deleteLogo, errorOf, getLogoBlob, saveProfile, uploadLogo } from './api.js';
+  import { FIELD_REFUSALS, deleteLogo, errorOf, getLogoBlob, saveProfile, uploadLogo } from './api.js';
 
   // Edits the issuer header printed on every invoice (spec §4.1). The admin
   // seeds it and the owner edits it; issued invoices keep the snapshot taken
   // when they were issued, so nothing here changes an issued invoice.
-  // aspirant-server answers a refused phone with this code (system_3 #9967).
-  const PHONE_REFUSED = 'invalid_phone';
-  const PHONE_RULE = 'Use digits, spaces and + - ( ) / . only, at most 40 characters.';
+  // aspirant-server answers a refused phone or link with its own code
+  // (system_3 #9967, #10002); FIELD_REFUSALS maps each to its field and words.
+  const noErrors = () => ({ phone: '', instagram_url: '', telegram_url: '' });
 
   export default {
     name: 'ProfileEditor',
@@ -115,8 +137,8 @@
         form: this.copy(this.profile),
         saving: false,
         error: '',
-        // The server's refusal of the phone, shown on the Phone field itself.
-        phoneError: '',
+        // The server's refusal of the phone or a link, shown on that field.
+        fieldErrors: noErrors(),
         // logoSet is what the server holds; logoStaged is the unsaved change,
         // null, { action: 'upload', file } or { action: 'delete' }.
         logoSet: this.hasLogo,
@@ -132,14 +154,21 @@
       },
     },
     watch: {
-      // Editing the number clears its refusal.
+      // Editing a refused field clears its refusal.
       'form.phone'() {
-        this.phoneError = '';
+        this.fieldErrors.phone = '';
+      },
+      'form.instagram_url'() {
+        this.fieldErrors.instagram_url = '';
+      },
+      'form.telegram_url'() {
+        this.fieldErrors.telegram_url = '';
       },
       open(isOpen) {
         if (isOpen) {
           this.form = this.copy(this.profile);
           this.error = '';
+          this.fieldErrors = noErrors();
           this.logoSet = this.hasLogo;
           this.logoStaged = null;
           this.logoError = '';
@@ -223,6 +252,10 @@
           steuernummer: p.steuernummer || '',
           email: p.email || '',
           phone: p.phone || '',
+          // Listed, so a save sends them back: the PUT replaces the profile,
+          // and a field left out here would be cleared (system_3 #10003).
+          instagram_url: p.instagram_url || '',
+          telegram_url: p.telegram_url || '',
           is_kleinunternehmer: p.is_kleinunternehmer !== false,
           invoice_number_prefix: p.invoice_number_prefix || '',
           next_invoice_number: p.next_invoice_number || 1,
@@ -235,7 +268,7 @@
       async save() {
         this.saving = true;
         this.error = '';
-        this.phoneError = '';
+        this.fieldErrors = noErrors();
         this.logoError = '';
         const logoChanged = !!this.logoStaged;
         try {
@@ -246,11 +279,12 @@
           this.$emit('update:open', false);
         } catch (err) {
           const { code, message } = errorOf(err);
-          if (code === PHONE_REFUSED) {
+          const refusal = FIELD_REFUSALS[code];
+          if (refusal) {
             // On the field, in plain words; the rule stays the server's.
-            this.phoneError = PHONE_RULE;
+            this.fieldErrors[refusal.field] = refusal.text;
             if (logoChanged) this.error = 'The logo was saved; the profile was not.';
-            this.$nextTick(() => this.$refs.phone && this.$refs.phone.focus());
+            this.$nextTick(() => this.$refs[refusal.field] && this.$refs[refusal.field].focus());
             return;
           }
           this.error = logoChanged ? `The logo was saved; the profile was not: ${message}` : message;
@@ -267,6 +301,23 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
+  }
+
+  /* Her social links as one titled group (system_3 #10003). */
+  .social {
+    display: grid;
+    gap: var(--space-sm);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+  }
+
+  .social__legend {
+    padding: 0;
+    margin-bottom: var(--space-2xs);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium, 500);
   }
 
   .profile-form__numbers {
