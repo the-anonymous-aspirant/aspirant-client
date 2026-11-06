@@ -183,16 +183,17 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await expect(save).toHaveAttribute('aria-describedby', 'manual-save-hint');
   });
 
-  test('a hand-entered payment says so; Delete takes two presses and is offered only while no invoice covers it', async ({ page }) => {
-    const fake = newFake({ payments: [manualRow(), manualRow({ id: 42, reference: '', method: 'cash', on_invoice: true })] });
+  test('a hand-entered payment says so; Delete takes two presses and is offered only while no issued invoice covers it', async ({ page }) => {
+    const fake = newFake({ payments: [manualRow(), manualRow({ id: 42, reference: '', method: 'cash', on_invoice: true, on_issued_invoice: true })] });
     await open(page, fake);
     const lines = page.locator('[data-test="payment-manual"]');
     await expect(lines.first()).toHaveText('Entered by hand · Banküberweisung (Bank transfer) · RE-17');
     await expect(lines.nth(1)).toHaveText('Entered by hand · Bar (Cash)');
     const del = page.locator('[data-test="payment-delete"]');
     await expect(del).toHaveCount(1);
-    // #9934-B2 (operator c61373): the row without Delete says why.
-    await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveText('On an invoice — delete or cancel that invoice first');
+    // #9934-B2 (operator c61373): the row without Delete says why, in the
+    // server's own words (#10009: only an issued invoice blocks a delete).
+    await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveText('On an issued invoice — cancel that invoice first');
 
     await del.click();
     await expect(del).toHaveText('Delete this payment');
@@ -202,21 +203,84 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await expect(page.locator('[data-test="payment-manual"]')).toHaveCount(1);
   });
 
-  // #9934-B2 (operator c61373): an imported row never offers Delete, and says why.
-  test('an imported payment says why it has no Delete option', async ({ page }) => {
+  // system_3 #10010 (operator c61587/c61868, server #10009): an imported
+  // payment can be deleted too while no issued invoice covers it; armed, the
+  // row says a re-import will not bring it back.
+  test('an imported payment offers Delete, and says a re-import will not bring it back', async ({ page }) => {
+    const fake = newFake({ payments: [manualRow({ id: 50, entry: 'import', source: 'paypal', reference: '' })] });
+    await open(page, fake);
+    await expect(page.locator('[data-test="payment-manual"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveCount(0);
+    const del = page.locator('[data-test="payment-delete"]');
+    await expect(del).toHaveText('Delete');
+    await expect(page.locator('[data-test="payment-delete-consequence"]')).toHaveCount(0);
+    await del.click();
+    await expect(del).toHaveText('Delete this payment');
+    await expect(page.locator('[data-test="payment-delete-consequence"]')).toHaveText('Gone for good: importing the same file again will not bring it back.');
+    await del.click();
+    await expect.poll(() => fake.requests.filter((r) => r.method === 'DELETE').map((r) => r.path)).toEqual(['/invoicing/payments/50']);
+  });
+
+  test('a payment on a draft or cancelled invoice can go, and says it comes off that invoice; on an issued one it says why not', async ({ page }) => {
     const fake = newFake({
       payments: [
-        manualRow({ id: 50, entry: 'import', source: 'paypal', reference: '' }),
-        manualRow({ id: 51, entry: 'import', source: 'n26', reference: '' }),
+        manualRow({ id: 60, on_invoice: true, on_issued_invoice: false }),
+        manualRow({ id: 61, entry: 'import', source: 'n26', reference: '', on_invoice: true, on_issued_invoice: false, sender_name: 'Studio Süd' }),
+        manualRow({ id: 62, entry: 'import', source: 'paypal', reference: '', on_invoice: true, on_issued_invoice: true, sender_name: 'Atelier Ost' }),
       ],
     });
     await open(page, fake);
-    await expect(page.locator('[data-test="payment-delete"]')).toHaveCount(0);
-    const reasons = page.locator('[data-test="payment-no-delete-reason"]');
-    await expect(reasons).toHaveCount(2);
-    await expect(reasons.first()).toHaveText('Imported from PayPal — the file is its record');
-    await expect(reasons.nth(1)).toHaveText('Imported from N26 — the file is its record');
+    const dels = page.locator('[data-test="payment-delete"]');
+    await expect(dels).toHaveCount(2);
+    await dels.first().click();
+    await expect(page.locator('[data-test="payment-delete-consequence"]')).toHaveText('It also comes off the draft or cancelled invoice that lists it. A draft keeps its lines, so check its total.');
+    // Arming another row disarms the first; both sentences when both apply.
+    await dels.nth(1).click();
+    await expect(page.locator('[data-test="payment-delete-consequence"]')).toHaveText('Gone for good: importing the same file again will not bring it back. It also comes off the draft or cancelled invoice that lists it. A draft keeps its lines, so check its total.');
+    await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveCount(1);
+    await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveText('On an issued invoice — cancel that invoice first');
   });
+
+  // design_agent c62100 (§3.129 Decision 6): a payment on an issued invoice
+  // has nothing on this surface to act on, so it has no checkbox; its gutter
+  // stays, and select-all counts the selectable rows only.
+  for (const width of [1440, 390]) {
+    test(`at ${width}px a payment on an issued invoice has no checkbox, keeps the gutter, and select-all leaves it out`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const fake = newFake({
+        payments: [
+          manualRow({ id: 70 }),
+          manualRow({ id: 71, entry: 'import', source: 'paypal', reference: '', on_invoice: true, on_issued_invoice: true, sender_name: 'Atelier Ost' }),
+          manualRow({ id: 72, entry: 'import', source: 'n26', reference: '', sender_name: 'Studio Süd' }),
+        ],
+      });
+      await open(page, fake);
+      const rows = page.locator('[data-test="payment-row"]');
+      await expect(rows).toHaveCount(3);
+      await expect(page.locator('[data-test="payment-select"]')).toHaveCount(2);
+      const issued = rows.filter({ hasText: 'Atelier Ost' });
+      await expect(issued.locator('[data-test="payment-select"]')).toHaveCount(0);
+      // The gutter's stand-in is neither seen nor reachable.
+      const ghost = issued.locator('[data-test="payment-select-gutter"]');
+      await expect(ghost).toHaveCount(1);
+      const ghostState = await ghost.evaluate((el) => {
+        const all = [el, ...el.querySelectorAll('*')];
+        return { visible: all.some((n) => getComputedStyle(n).visibility !== 'hidden' && (n as HTMLElement).getBoundingClientRect().width > 0 && n.tagName !== 'DIV' && n.tagName !== 'LABEL'), focusable: all.some((n) => (n as HTMLElement).tabIndex >= 0 && getComputedStyle(n).visibility !== 'hidden') };
+      });
+      expect(ghostState, 'the stand-in shows and focuses nothing').toEqual({ visible: false, focusable: false });
+      // Every row's date starts on one left edge.
+      const xs = await rows.evaluateAll((els) => els.map((r) => {
+        const d = [...r.querySelectorAll('.nowrap')].find((n) => /\d{4}-\d{2}-\d{2}/.test(n.textContent || ''));
+        return d ? Math.round(d.getBoundingClientRect().left) : -1;
+      }));
+      expect(new Set(xs).size, `date left edges ${xs}`).toBe(1);
+      // Select-all takes the two selectable rows, not the issued one.
+      const all = page.locator('[data-test="select-all-shown"]').locator('input[type="checkbox"]').first();
+      await all.check();
+      await expect(page.locator('[data-test="payment-select"] input[type="checkbox"]:checked, input[type="checkbox"][data-test="payment-select"]:checked')).toHaveCount(2);
+      await expect(page.getByRole('button', { name: /Create invoice from 2 payments/ })).toBeVisible();
+    });
+  }
 
   test('a delete the server refuses is shown, and the row stays', async ({ page }) => {
     const fake = newFake({
