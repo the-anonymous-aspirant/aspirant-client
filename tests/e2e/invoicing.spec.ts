@@ -221,6 +221,8 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     // One import-state region serves both imports, so the line names its source (design_agent c60358).
     await expect(summary).toContainText('PayPal CSV: read 9 rows');
     await expect(summary).toContainText('3 imported');
+    // The whole line, punctuation included (system_3 #10040).
+    await expect(summary.locator('.summary__line')).toHaveText('PayPal CSV: read 9 rows: 3 imported (including 1 bank withdrawals), 0 already imported, 6 skipped.');
     await expect(summary).toContainText('2 × currency conversion');
     const upload = fake.requests.find((r) => r.path === '/invoicing/payments/import')!;
     expect(upload.contentType).toContain('multipart/form-data');
@@ -244,6 +246,9 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await expect(page.locator('[data-test="import-summary"]')).toHaveCount(0);
     await page.locator('[data-test="date-order-dmy"]').click();
     await expect(page.locator('[data-test="import-summary"]')).toContainText('1 imported');
+    // With no withdrawals the comma follows "imported" directly (#10040: it
+    // read "1 imported , 0 already imported").
+    await expect(page.locator('[data-test="import-summary"] .summary__line')).toHaveText(/ 1 imported, \d+ already imported, \d+ skipped\.\s*$/);
     await expect(page.locator('[data-test="date-order"]')).toHaveCount(0);
     const uploads = fake.requests.filter((r) => r.path === '/invoicing/payments/import');
     expect(uploads).toHaveLength(2);

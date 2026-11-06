@@ -71,8 +71,10 @@
 
     <AspCard v-if="summary" class="summary" padding="sm" data-test="import-summary">
       <p class="summary__line">
-        PayPal {{ paypalNoun }}: read {{ summary.rows_read }} rows: <strong>{{ summary.imported }}</strong> imported
-        <template v-if="summary.withdrawals"> (including {{ summary.withdrawals }} bank withdrawals)</template>,
+        <!-- The clause hangs on "imported" with no line break between, so the
+             comma follows directly (system_3 #10040: a break here rendered
+             "3 imported , 0 already imported"). -->
+        PayPal {{ paypalNoun }}: read {{ summary.rows_read }} rows: <strong>{{ summary.imported }}</strong> imported<template v-if="summary.withdrawals"> (including {{ summary.withdrawals }} bank withdrawals)</template>,
         <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ summary.duplicates }} already imported, {{ summary.skipped }} skipped.
       </p>
       <ul v-if="skippedReasons.length" class="summary__reasons">
