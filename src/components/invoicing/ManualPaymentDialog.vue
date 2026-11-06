@@ -8,12 +8,12 @@
         <AspSelect v-model="form.client_id" :options="clientOptions" label="Client" data-test="manual-client" />
         <p v-if="!clients.length" id="manual-no-clients-hint" class="hint" data-test="manual-no-clients">Add the client on the Clients tab first.</p>
       </div>
-      <div class="manual-form__pair">
+      <div class="manual-form__pair manual-form__pair--top">
         <label class="date-field">
           <span>Date received</span>
           <input v-model="form.paid_on" type="date" :max="today" data-test="manual-date" />
         </label>
-        <AspInput v-model="form.amount" label="Amount (€)" inputmode="decimal" placeholder="350,00" data-test="manual-amount" />
+        <AspInput v-model="form.amount" label="Amount (€)" inputmode="decimal" placeholder="350,00" :hint="addressHint" data-test="manual-amount" />
       </div>
       <div class="manual-form__pair manual-form__pair--method">
         <div class="full-select">
@@ -58,7 +58,7 @@
   import { AspButton, AspInput, AspModal, AspSelect } from '@aspirant/design-system';
   import LineDescriptionInput from './LineDescriptionInput.vue';
   import ModalActions from './ModalActions.vue';
-  import { METHOD_LABELS, centsFromEuros, createDraft, createManualPayment, errorOf } from './api.js';
+  import { KLEINBETRAG_LIMIT_CENTS, METHOD_LABELS, centsFromEuros, createDraft, createManualPayment, errorOf, formatMoney } from './api.js';
 
   const blankForm = () => ({ client_id: 0, paid_on: '', amount: '', method: 'bank_transfer', reference: '', sender_name: '', note: '' });
 
@@ -78,6 +78,15 @@
       return { form: blankForm(), saving: false, error: '' };
     },
     computed: {
+      // §33 UStDV, said where the draft is made (system_3 #9949, design_agent
+      // c61924): a muted hint, not a block. Issuing is what the server refuses.
+      addressHint() {
+        const c = this.clients.find((x) => x.id === this.form.client_id);
+        if (!c || (c.address || '').trim()) return null;
+        const cents = centsFromEuros(this.form.amount);
+        if (!cents || cents <= KLEINBETRAG_LIMIT_CENTS) return null;
+        return `${c.name} has no address: an invoice above ${formatMoney(KLEINBETRAG_LIMIT_CENTS)} needs one before it can be issued.`;
+      },
       clientOptions() {
         return [{ value: 0, label: 'Choose a client' }, ...this.clients.map((c) => ({ value: c.id, label: c.name }))];
       },
@@ -186,6 +195,12 @@
     grid-template-columns: 1fr 1fr;
     gap: var(--space-md);
     align-items: end;
+  }
+
+  /* Date and amount line up by their tops: the amount's §33 hint (system_3
+     #9949) hangs below its field without pushing the date down. */
+  .manual-form__pair--top {
+    align-items: start;
   }
 
   /* Method keeps its one-line width ("Banküberweisung (Bank transfer)" wrapped
