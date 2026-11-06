@@ -241,9 +241,42 @@ export const allInvoicesCsvUrl = () => `${base}/export/invoices.csv`;
 // Her client list as Kunden.csv (system_3 #10012).
 export const clientsCsvUrl = () => `${base}/export/clients.csv`;
 
+// The filename the server named in a Content-Disposition header, or '' when
+// it named none. RFC 5987's filename*=UTF-8''... wins over filename="...".
+// A path separator never reaches the saved name.
+export function filenameFromDisposition(header) {
+  if (!header) return '';
+  const star = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(header);
+  if (star) {
+    try {
+      return decodeURIComponent(star[1].trim()).replace(/[\\/]/g, '_');
+    } catch {
+      // A malformed escape: fall back to the plain parameter.
+    }
+  }
+  const plain = /filename\s*=\s*(?:"([^"]*)"|([^;]+))/i.exec(header);
+  const name = plain ? (plain[1] ?? plain[2] ?? '').trim() : '';
+  return name.replace(/[\\/]/g, '_');
+}
+
+// 'Rechnungen.csv' -> 'Rechnungen-2026-11-06-1049.csv': the caller's name with
+// the local time added, in the server's own format (system_3 #10056), for a
+// response that names no file.
+export function stampedFilename(filename, now = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+  const dot = filename.lastIndexOf('.');
+  return dot > 0 ? `${filename.slice(0, dot)}-${stamp}${filename.slice(dot)}` : `${filename}-${stamp}`;
+}
+
 // Fetch a file and hand it to the browser as a download. Going through axios
 // (not a plain link) means a 409 from the export's own validation arrives as
 // an error the page can show, instead of being saved as a file.
+//
+// The file is saved under the server's name, which carries the export time,
+// so an older download and a newer one differ in the Downloads folder
+// (system_3 #10057, from #9990 and #9964). `filename` is the fallback base
+// when the server names none.
 export async function downloadBlob(url, filename) {
   let res;
   try {
@@ -265,7 +298,7 @@ export async function downloadBlob(url, filename) {
   const href = URL.createObjectURL(res.data);
   const a = document.createElement('a');
   a.href = href;
-  a.download = filename;
+  a.download = filenameFromDisposition(res.headers && res.headers['content-disposition']) || stampedFilename(filename);
   document.body.appendChild(a);
   a.click();
   a.remove();
