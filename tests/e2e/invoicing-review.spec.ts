@@ -18,6 +18,8 @@ interface Fake {
   audit: Json[];
   /** The live client 1 has been renamed since invoice 100 was issued. */
   clientRenamed?: boolean;
+  /** A Content-Disposition for the CSV, as the server sends one (#10056). */
+  disposition?: string;
 }
 
 const json = (route: Route, status: number, body: Json) =>
@@ -48,7 +50,7 @@ async function mockAll(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/invoices/100/pdf') return route.fulfill({ status: 200, contentType: 'application/pdf', body: '%PDF-1.4\n%%EOF' });
     if (path === '/invoicing/audit-events') return json(route, 200, { events: fake.audit });
     if (path === '/invoicing/validation') return json(route, 200, fake.validation);
-    if (path === '/invoicing/export/invoices.csv') return route.fulfill({ status: 200, contentType: 'text/csv', body: '\ufeffRechnungsnummer;Status\n2026-001;issued\n' });
+    if (path === '/invoicing/export/invoices.csv') return route.fulfill({ status: 200, contentType: 'text/csv', headers: fake.disposition ? { 'Content-Disposition': fake.disposition } : {}, body: '\ufeffRechnungsnummer;Status\n2026-001;issued\n' });
     return json(route, 404, { error: { code: 'not_found', message: `unmocked ${path}` } });
   });
 }
@@ -103,8 +105,19 @@ test.describe('#8367 Invoices app — review list, detail, validated exports', (
     const download = page.waitForEvent('download');
     await page.locator('[data-test="export-all-csv"]').click();
     const file = await download;
-    expect(file.suggestedFilename()).toBe('Rechnungen.csv');
+    // No Content-Disposition from the fake: the caller's name, stamped with
+    // the local export time (#10057).
+    expect(file.suggestedFilename()).toMatch(/^Rechnungen-\d{4}-\d{2}-\d{2}-\d{4}\.csv$/);
     await expect(page.locator('[data-test="validation-ok"]')).toBeVisible();
+  });
+
+  test('the file is saved under the name the server sends, which carries the export time', async ({ page }) => {
+    const fake = newFake();
+    fake.disposition = 'attachment; filename="Rechnungen-2026-11-06-1049.csv"';
+    await openInvoicesTab(page, fake);
+    const download = page.waitForEvent('download');
+    await page.locator('[data-test="export-all-csv"]').click();
+    expect((await download).suggestedFilename()).toBe('Rechnungen-2026-11-06-1049.csv');
   });
 
   test('violations block the export and are listed; the CSV is never requested', async ({ page }) => {
@@ -131,7 +144,7 @@ test.describe('#8367 Invoices app — review list, detail, validated exports', (
     expect(fake.requests.some((r) => r.startsWith('/invoicing/export/invoices.csv'))).toBe(false);
     const download = page.waitForEvent('download');
     await page.locator('[data-test="validation-download-anyway"]').click();
-    expect((await download).suggestedFilename()).toBe('Rechnungen.csv');
+    expect((await download).suggestedFilename()).toMatch(/^Rechnungen-\d{4}-\d{2}-\d{2}-\d{4}\.csv$/);
     await expect(lead).toContainText('The download has started.');
     await expect(lead).not.toContainText('Nothing has downloaded yet');
   });
