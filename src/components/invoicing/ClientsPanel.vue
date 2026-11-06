@@ -106,6 +106,26 @@
         <!-- When she added the client and when it was updated, as days in her
              calendar (operator c61587, design_agent c62046). -->
         <p v-if="editing && editingStamp" class="client-form__stamp muted" data-test="client-stamp">{{ editingStamp }}</p>
+        <!-- What she has done for this client (operator c61586, system_3
+             #10006): issued invoices only, as the Statistics charts count
+             them. The block's box is the same in every state (loading, the
+             figures, none, failed), so the fields below never move once the
+             dialog is open (design_agent c62125, D15): the <dl> always lays
+             out, and a one-line state sits over it when there are no figures. -->
+        <div v-if="editing" class="client-stats-slot" :aria-busy="statsState === 'loading' ? 'true' : 'false'">
+          <dl
+            class="client-stats"
+            :class="{ 'client-stats--hidden': statsState === 'none' || statsState === 'failed' }"
+            :aria-hidden="statsState === 'none' || statsState === 'failed' ? 'true' : undefined"
+            :data-test="statsState === 'ready' ? 'client-stats' : undefined"
+          >
+            <div><dt>Issued invoices</dt><dd data-test="client-stats-count">{{ statsState === 'ready' ? stats.count : '…' }}</dd></div>
+            <div><dt>Invoiced</dt><dd data-test="client-stats-total">{{ statsState === 'ready' ? stats.totalLabel : '…' }}</dd></div>
+            <div><dt>Last invoice</dt><dd data-test="client-stats-last">{{ statsState === 'ready' ? stats.last : '…' }}</dd></div>
+          </dl>
+          <p v-if="statsState === 'none'" class="client-stats__state muted" data-test="client-stats-none">No issued invoices.</p>
+          <p v-if="statsState === 'failed'" class="client-stats__state muted" data-test="client-stats-failed">Invoice figures could not be loaded.</p>
+        </div>
         <AspInput v-model="form.name" label="Name" required />
         <AspTextarea
           v-model="form.address"
@@ -164,7 +184,7 @@
 <script>
   import { AspButton, AspDataTable, AspEmptyState, AspInput, AspModal, AspTextarea } from '@aspirant/design-system';
   import ModalActions from './ModalActions.vue';
-  import { FIELD_REFUSALS, createClient, errorOf, formatBerlinDay, safeSocialUrl, socialHandle, updateClient } from './api.js';
+  import { FIELD_REFUSALS, createClient, errorOf, formatBerlinDay, formatDay, formatMoney, listInvoices, safeSocialUrl, socialHandle, updateClient } from './api.js';
 
   const blank = () => ({ name: '', address: '', email: '', paypal_email: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
   const noErrors = () => ({ phone: '', instagram_url: '', telegram_url: '' });
@@ -189,6 +209,9 @@
         saving: false,
         error: '',
         fieldErrors: noErrors(),
+        stats: null,
+        // loading | ready | none | failed (#10006)
+        statsState: 'loading',
         columns: [
           { key: 'name', label: 'Name' },
           { key: 'address', label: 'Address', sortable: false },
@@ -247,6 +270,27 @@
         this.fieldErrors = noErrors();
         this.editorOpen = true;
       },
+      // A client's figures (#10006): issued invoices only (a Storno's
+      // replacement is counted, the cancelled one is not, as in #9972's
+      // charts); the gross total per currency, EUR first; the latest issue
+      // date. A late answer for a client no longer open is dropped.
+      async loadStats(clientId) {
+        this.stats = null;
+        this.statsState = 'loading';
+        try {
+          const all = await listInvoices({});
+          if (!this.editing || this.editing.id !== clientId) return;
+          const issued = all.filter((i) => i.status === 'issued' && i.client_id === clientId);
+          const sums = {};
+          for (const i of issued) sums[i.currency || 'EUR'] = (sums[i.currency || 'EUR'] || 0) + (Number(i.total_cents) || 0);
+          const currencies = Object.keys(sums).sort((a, b) => (a === 'EUR' ? -1 : b === 'EUR' ? 1 : a.localeCompare(b)));
+          const last = issued.map((i) => formatDay(i.issue_date)).filter(Boolean).sort().pop() || '';
+          this.stats = { count: issued.length, totalLabel: currencies.map((c) => formatMoney(sums[c], c)).join(' + '), last };
+          this.statsState = issued.length ? 'ready' : 'none';
+        } catch {
+          if (this.editing && this.editing.id === clientId) this.statsState = 'failed';
+        }
+      },
       startEdit(row) {
         this.editing = row;
         // A copy, so Cancel discards an edit to any field, the notes included.
@@ -263,6 +307,7 @@
         this.error = '';
         this.fieldErrors = noErrors();
         this.editorOpen = true;
+        this.loadStats(row.id);
       },
       async save() {
         if (!this.form.name.trim()) {
@@ -385,6 +430,49 @@
     margin-bottom: var(--space-2xs);
     font-size: var(--text-sm);
     font-weight: var(--font-weight-medium, 500);
+  }
+
+  /* One box for every state of the figures (#10006): the <dl> always lays
+     out; with no figures it is hidden and its one-line state sits over it. */
+  .client-stats-slot {
+    position: relative;
+  }
+
+  .client-stats--hidden {
+    visibility: hidden;
+  }
+
+  .client-stats__state {
+    position: absolute;
+    top: 0;
+    left: 0;
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  /* Three figures read across; stacked label over value on a phone. */
+  .client-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-sm);
+    margin: 0;
+  }
+
+  .client-stats dt {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+  }
+
+  .client-stats dd {
+    margin: 0;
+    font-weight: var(--font-weight-medium, 500);
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 640px) {
+    .client-stats {
+      grid-template-columns: 1fr;
+    }
   }
 
   .client-form__stamp {

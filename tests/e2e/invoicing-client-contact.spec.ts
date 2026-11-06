@@ -46,6 +46,9 @@ const refuse = (body: Json): Json | null => {
 };
 
 interface Fake {
+  invoices?: Json[];
+  invoicesFail?: boolean;
+  invoicesDelayMs?: number;
   clients: Json[];
   profile: Json;
   requests: { method: string; path: string; body: string }[];
@@ -80,7 +83,11 @@ async function open(page: Page, fake: Fake, tab = 'Clients'): Promise<void> {
       return json(route, 200, { profile: fake.profile, saved: true });
     }
     if (path === '/invoicing/payments') return json(route, 200, { payments: [] });
-    if (path === '/invoicing/invoices') return json(route, 200, { invoices: [] });
+    if (path === '/invoicing/invoices') {
+      if (fake.invoicesDelayMs) await new Promise((r) => setTimeout(r, fake.invoicesDelayMs));
+      if (fake.invoicesFail) return json(route, 500, { error: { code: 'internal', message: 'boom' } });
+      return json(route, 200, { invoices: fake.invoices || [] });
+    }
     if (path === '/invoicing/clients' && method === 'GET') return json(route, 200, { clients: fake.clients });
     if ((path === '/invoicing/clients' && method === 'POST') || (/^\/invoicing\/clients\/\d+$/.test(path) && method === 'PUT')) {
       const body = JSON.parse(req.postData() || '{}');
@@ -279,4 +286,81 @@ test.describe('#10003 Issuer profile — her social links', () => {
     await expect(ig).toBeFocused();
     await expect(pform(page)).toBeVisible();
   });
+});
+
+// system_3 #10006 (operator c61586): a small statistics section on the
+// client, in Edit client: invoices issued (count), what they came to, and
+// the last one's date. Issued only: a cancelled invoice (its Storno
+// replacement is counted) and a draft count for nothing.
+test.describe("#10006 Clients — a client's figures", () => {
+  const inv = (id: number, client: number, status: string, issue: string | null, cents: number) => ({
+    id, client_id: client, status, issue_date: issue ? `${issue}T00:00:00Z` : null, total_cents: cents, currency: 'EUR', invoice_number: issue ? `2026-00${id}` : null,
+  });
+
+  test('counts issued invoices, sums their gross, and names the latest issue date', async ({ page }) => {
+    const fake = newFake();
+    fake.invoices = [
+      inv(1, 1, 'issued', '2026-07-03', 35000),
+      inv(2, 1, 'issued', '2026-09-21', 12000),
+      inv(3, 1, 'cancelled', '2026-08-10', 50000),
+      inv(4, 1, 'draft', null, 7000),
+      inv(5, 2, 'issued', '2026-10-01', 9900),
+    ];
+    await open(page, fake);
+    await page.locator('[data-test="client-edit-1"]').click();
+    await expect(page.locator('[data-test="client-stats-count"]')).toHaveText('2');
+    await expect(page.locator('[data-test="client-stats-total"]')).toHaveText('€470.00');
+    await expect(page.locator('[data-test="client-stats-last"]')).toHaveText('2026-09-21');
+    await expect(page.locator('[data-test="client-stats"]')).toContainText('Issued invoices');
+  });
+
+  test('a client whose only invoice was cancelled reads "No issued invoices."; Add client shows no figures', async ({ page }) => {
+    const fake = newFake();
+    fake.invoices = [inv(3, 2, 'cancelled', '2026-08-10', 50000)];
+    await open(page, fake);
+    await page.locator('[data-test="client-edit-2"]').click();
+    await expect(page.locator('[data-test="client-stats-none"]')).toHaveText('No issued invoices.');
+    await expect(page.locator('[data-test="client-stats"]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.locator('[data-test="client-add"]').click();
+    await expect(page.locator('[data-test="client-stats"], [data-test="client-stats-none"]')).toHaveCount(0);
+  });
+
+  // design_agent c62125: a failure is said, not dropped; the form still saves.
+  test('if the invoice list cannot be read, the block says so and the client still saves', async ({ page }) => {
+    const fake = newFake();
+    fake.invoicesFail = true;
+    await open(page, fake);
+    await page.locator('[data-test="client-edit-1"]').click();
+    await expect(page.locator('[data-test="client-stats-failed"]')).toHaveText('Invoice figures could not be loaded.');
+    await expect(page.locator('[data-test="client-stats"]')).toHaveCount(0);
+    await page.locator('[data-test="client-form"]').getByLabel(/^Name/).fill('Galerie Nord GmbH');
+    await page.locator('[data-test="client-save"]').click();
+    await expect(page.locator('[data-test="client-form"]')).toBeHidden();
+    expect(fake.requests.some((r) => r.method === 'PUT' && r.path === '/invoicing/clients/1')).toBe(true);
+  });
+
+  // design_agent c62125 (D15): the fields never move once the dialog is open.
+  for (const width of [1440, 390]) {
+    for (const [label, setup] of [
+      ['figures', (f: Fake) => { f.invoices = [inv(1, 1, 'issued', '2026-07-03', 35000)]; }],
+      ['no issued invoices', (f: Fake) => { f.invoices = []; }],
+      ['a failed load', (f: Fake) => { f.invoicesFail = true; }],
+    ] as const) {
+      test(`at ${width}px Name does not move when ${label} arrive`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        const fake = newFake();
+        setup(fake);
+        fake.invoicesDelayMs = 800;
+        await open(page, fake);
+        await page.locator('[data-test="client-edit-1"]').click();
+        const name = page.locator('[data-test="client-form"]').getByLabel(/^Name/);
+        await expect(name).toBeVisible();
+        const before = (await name.boundingBox())!.y;
+        await expect(page.locator('.client-stats-slot')).toHaveAttribute('aria-busy', 'false', { timeout: 5000 });
+        const after = (await name.boundingBox())!.y;
+        expect(Math.abs(after - before), `Name moved from ${before} to ${after}`).toBeLessThanOrEqual(0.5);
+      });
+    }
+  }
 });
