@@ -226,12 +226,12 @@ test.describe('#9858 Invoices: the issuer logo in the profile editor', () => {
     await seedTrustedSessionAs(page, 'vinoly');
     await openEditor(page);
 
-    await form(page).getByLabel('Steuernummer (Tax number)').fill('98/765/43210');
+    await form(page).getByLabel(/^Steuernummer \(Tax number\)/).fill('98/765/43210');
     await chooseLogo(page, Buffer.from('GIF89a not a png'), 'logo.png');
     await save(page);
     await expect(page.locator('[data-test="profile-logo-error"]')).toHaveText('the logo must be a PNG or JPEG image');
     await expect(form(page)).toBeVisible();
-    await expect(form(page).getByLabel('Steuernummer (Tax number)')).toHaveValue('98/765/43210');
+    await expect(form(page).getByLabel(/^Steuernummer \(Tax number\)/)).toHaveValue('98/765/43210');
     expect(fake.profilePuts).toBe(0);
   });
 
@@ -242,7 +242,7 @@ test.describe('#9858 Invoices: the issuer logo in the profile editor', () => {
     await openEditor(page);
 
     await chooseLogo(page, blackPng(400, 200));
-    await form(page).getByLabel('Invoice number prefix').fill('bad/prefix');
+    await form(page).getByLabel(/^Invoice number prefix/).fill('bad/prefix');
     await save(page);
     await expect(page.locator('[data-test="profile-error"]')).toHaveText(
       'The logo was saved; the profile was not: invoice_number_prefix must be 1-20 letters, digits or hyphens',
@@ -250,7 +250,7 @@ test.describe('#9858 Invoices: the issuer logo in the profile editor', () => {
     await expect(form(page)).toBeVisible();
 
     // Retrying sends only the profile: the logo is already saved.
-    await form(page).getByLabel('Invoice number prefix').fill('2026');
+    await form(page).getByLabel(/^Invoice number prefix/).fill('2026');
     await save(page);
     await expect(form(page)).toBeHidden();
     expect(logoRequests(fake, 'PUT')).toHaveLength(1);

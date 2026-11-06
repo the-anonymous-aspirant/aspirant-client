@@ -161,13 +161,13 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
 
     await page.locator('[data-test="profile-edit"]').click();
     const form = page.locator('[data-test="profile-form"]');
-    await form.getByLabel('Invoice number prefix').fill('bad/prefix');
+    await form.getByLabel(/^Invoice number prefix/).fill('bad/prefix');
     await page.locator('[data-test="profile-save"]').click();
     await expect(page.locator('[data-test="profile-error"]')).toContainText('1-20 letters');
     await expect(form).toBeVisible();
 
-    await form.getByLabel('Invoice number prefix').fill('2026');
-    await form.getByLabel('Steuernummer (Tax number)').fill('98/765/43210');
+    await form.getByLabel(/^Invoice number prefix/).fill('2026');
+    await form.getByLabel(/^Steuernummer \(Tax number\)/).fill('98/765/43210');
     await page.locator('[data-test="profile-save"]').click();
     await expect(form).toBeHidden();
     await expect(page.locator('[data-test="profile-steuernummer"]')).toHaveText('98/765/43210');

@@ -5,7 +5,7 @@
         Enter a payment you received. It is saved as paid work and a draft invoice is made from it.
       </p>
       <div class="manual-form__full full-select">
-        <AspSelect v-model="form.client_id" :options="clientOptions" label="Client" data-test="manual-client" />
+        <AspSelect v-model="form.client_id" :options="clientOptions" label="Client" :label-hint="hints.client" data-test="manual-client" />
         <p v-if="!clients.length" id="manual-no-clients-hint" class="hint" data-test="manual-no-clients">Add the client on the Clients tab first.</p>
       </div>
       <div class="manual-form__pair manual-form__pair--top">
@@ -19,12 +19,12 @@
         <div class="full-select">
           <AspSelect v-model="form.method" :options="methodOptions" label="Method" data-test="manual-method" />
         </div>
-        <AspInput v-model="form.reference" label="Reference (optional)" data-test="manual-reference" />
+        <AspInput v-model="form.reference" label="Reference (optional)" :label-hint="hints.reference" data-test="manual-reference" />
       </div>
-      <AspInput v-model="form.sender_name" label="Payer (optional)" data-test="manual-payer" />
+      <AspInput v-model="form.sender_name" label="Payer (optional)" :label-hint="hints.payer" data-test="manual-payer" />
       <!-- The invoice line's description: issuing refuses an empty one, so it
            is asked for here rather than left to fail later. -->
-      <LineDescriptionInput v-model="form.note" label="What it was for" data-test="manual-note" />
+      <LineDescriptionInput v-model="form.note" label="What it was for" :label-hint="hints.whatFor" data-test="manual-note" />
       <p v-if="error" class="manual-form__error" role="alert" data-test="manual-error">{{ error }}</p>
     </form>
     <template #footer>
@@ -58,6 +58,7 @@
   import { AspButton, AspInput, AspModal, AspSelect } from '@aspirant/design-system';
   import LineDescriptionInput from './LineDescriptionInput.vue';
   import ModalActions from './ModalActions.vue';
+  import { FIELD_HINTS } from './fieldHints.js';
   import { KLEINBETRAG_LIMIT_CENTS, METHOD_LABELS, centsFromEuros, createDraft, createManualPayment, errorOf, formatMoney } from './api.js';
 
   const blankForm = () => ({ client_id: 0, paid_on: '', amount: '', method: 'bank_transfer', reference: '', sender_name: '', note: '' });
@@ -75,7 +76,7 @@
     },
     emits: ['update:open', 'created', 'changed'],
     data() {
-      return { form: blankForm(), saving: false, error: '' };
+      return { form: blankForm(), saving: false, error: '', hints: FIELD_HINTS };
     },
     computed: {
       // §33 UStDV, said where the draft is made (system_3 #9949, design_agent
