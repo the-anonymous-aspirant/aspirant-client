@@ -57,7 +57,7 @@ test.describe('#8367 Invoices app — ZIP download, chart', () => {
     await expect(zip).toHaveText('Invoice list (PDF)');
     const download = page.waitForEvent('download');
     await zip.click();
-    expect((await download).suggestedFilename()).toBe('Rechnungen.zip');
+    expect((await download).suggestedFilename()).toMatch(/^Rechnungen-\d{4}-\d{2}-\d{2}-\d{4}\.zip$/);
     expect(fake.requests).toContain('/invoicing/export/invoices.zip');
   });
 

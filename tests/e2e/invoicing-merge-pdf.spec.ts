@@ -131,14 +131,14 @@ test.describe('#9960 Invoices — select and download as one PDF', () => {
     await expect(download(page)).toBeDisabled();
   });
 
-  test('the ticked invoices download as Rechnungen.pdf after a clean validation', async ({ page }) => {
+  test('the ticked invoices download as Rechnungen-<export time>.pdf after a clean validation', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
     await tick(page, '2026-003').check();
     await tick(page, '2026-001').check();
     const file = page.waitForEvent('download');
     await download(page).click();
-    expect((await file).suggestedFilename()).toBe('Rechnungen.pdf');
+    expect((await file).suggestedFilename()).toMatch(/^Rechnungen-\d{4}-\d{2}-\d{2}-\d{4}\.pdf$/);
     expect(fake.requests).toContain('/invoicing/export/invoices-merged.pdf?ids=1,3');
     await page.getByRole('button', { name: 'Close', exact: true }).click();
     // The selection is kept: a download changes no row.
