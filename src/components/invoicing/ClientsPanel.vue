@@ -22,6 +22,27 @@
         <span v-if="row.address" class="multiline">{{ row.address }}</span>
         <span v-else class="muted" data-test="client-no-address">No postal address</span>
         <span v-if="row.email" class="muted">{{ row.email }}</span>
+        <a v-if="row.phone" class="client-contact" :href="`tel:${row.phone.replace(/[^0-9+]/g, '')}`" data-test="client-phone">{{ row.phone }}</a>
+        <span v-if="row.instagram_url || row.telegram_url" class="client-social" data-test="client-social">
+          <a
+            v-if="row.instagram_url"
+            :href="row.instagram_url"
+            target="_blank"
+            rel="noopener noreferrer"
+            :aria-label="`Instagram: ${socialHandle(row.instagram_url)} (opens in a new tab)`"
+            data-test="client-instagram"
+            >Instagram {{ socialHandle(row.instagram_url) }}</a
+          ><span v-if="row.instagram_url && row.telegram_url" aria-hidden="true"> · </span
+          ><a
+            v-if="row.telegram_url"
+            :href="row.telegram_url"
+            target="_blank"
+            rel="noopener noreferrer"
+            :aria-label="`Telegram: ${socialHandle(row.telegram_url)} (opens in a new tab)`"
+            data-test="client-telegram"
+            >Telegram {{ socialHandle(row.telegram_url) }}</a
+          >
+        </span>
         <span v-if="row.paypal_email" class="muted">{{ row.paypal_email }}</span>
         <span v-if="row.notes" class="client-notes" :title="row.notes" data-test="client-notes">{{ row.notes }}</span>
       </li>
@@ -46,6 +67,35 @@
         <span v-if="value" class="multiline">{{ value }}</span>
         <span v-else class="muted" data-test="client-no-address">No postal address</span>
       </template>
+      <!-- Contact: email, phone, then her social links (system_3 #10003). A
+           link's href is the URL as stored, never rebuilt from a handle
+           (security, c61900 on #10002); it opens in a new tab. -->
+      <template #cell-email="{ row }">
+        <span class="contact-stack">
+          <span v-if="row.email" class="muted">{{ row.email }}</span>
+          <a v-if="row.phone" class="client-contact" :href="`tel:${row.phone.replace(/[^0-9+]/g, '')}`" data-test="client-phone">{{ row.phone }}</a>
+          <span v-if="row.instagram_url || row.telegram_url" class="client-social" data-test="client-social">
+            <a
+              v-if="row.instagram_url"
+              :href="row.instagram_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              :aria-label="`Instagram: ${socialHandle(row.instagram_url)} (opens in a new tab)`"
+              data-test="client-instagram"
+              >Instagram {{ socialHandle(row.instagram_url) }}</a
+            ><span v-if="row.instagram_url && row.telegram_url" aria-hidden="true"> · </span
+            ><a
+              v-if="row.telegram_url"
+              :href="row.telegram_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              :aria-label="`Telegram: ${socialHandle(row.telegram_url)} (opens in a new tab)`"
+              data-test="client-telegram"
+              >Telegram {{ socialHandle(row.telegram_url) }}</a
+            >
+          </span>
+        </span>
+      </template>
       <template #cell-actions="{ row }">
         <AspButton variant="ghost" size="sm" :data-test="`client-edit-${row.id}`" @click="startEdit(row)">Edit</AspButton>
       </template>
@@ -53,6 +103,9 @@
 
     <AspModal v-model:open="editorOpen" :title="editing ? 'Edit client' : 'Add client'" size="md">
       <form class="client-form" data-test="client-form" @submit.prevent="save">
+        <!-- When she added the client and when it was updated, as days in her
+             calendar (operator c61587, design_agent c62046). -->
+        <p v-if="editing && editingStamp" class="client-form__stamp muted" data-test="client-stamp">{{ editingStamp }}</p>
         <AspInput v-model="form.name" label="Name" required />
         <AspTextarea
           v-model="form.address"
@@ -62,6 +115,30 @@
         />
         <AspInput v-model="form.email" type="email" label="Email" />
         <AspInput v-model="form.paypal_email" type="email" label="PayPal email" hint="Imported payments from this address are linked to the client." />
+        <!-- Phone and her social links are hers, not the invoice's (operator
+             c61586): never printed. A refusal shows on its own field, in
+             place of its hint, with her text kept (as #9993). -->
+        <AspInput ref="phone" v-model="form.phone" type="tel" label="Phone" hint="Not printed on invoices." :error="fieldErrors.phone" data-test="client-phone-input" />
+        <fieldset class="social" data-test="client-social-group">
+          <legend class="social__legend">Social media</legend>
+          <AspInput
+            ref="instagram_url"
+            v-model="form.instagram_url"
+            label="Instagram"
+            placeholder="@name or a link"
+            :error="fieldErrors.instagram_url"
+            data-test="client-instagram-input"
+          />
+          <AspInput
+            ref="telegram_url"
+            v-model="form.telegram_url"
+            label="Telegram"
+            placeholder="@name or a link"
+            hint="Not printed on invoices."
+            :error="fieldErrors.telegram_url"
+            data-test="client-telegram-input"
+          />
+        </fieldset>
         <!-- No maxlength: it would cut a paste silently. The server refuses
              more than 5000 characters with a message shown below, and the
              text stays here to shorten (design ack c61704, system_3 #9987). -->
@@ -87,7 +164,10 @@
 <script>
   import { AspButton, AspDataTable, AspEmptyState, AspInput, AspModal, AspTextarea } from '@aspirant/design-system';
   import ModalActions from './ModalActions.vue';
-  import { createClient, errorOf, updateClient } from './api.js';
+  import { FIELD_REFUSALS, createClient, errorOf, formatBerlinDay, socialHandle, updateClient } from './api.js';
+
+  const blank = () => ({ name: '', address: '', email: '', paypal_email: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
+  const noErrors = () => ({ phone: '', instagram_url: '', telegram_url: '' });
 
   // The people Flower invoices (spec §4.2). The name is required here
   // because the server requires it. The address is optional: an invoice up
@@ -105,13 +185,14 @@
         narrow: false,
         editorOpen: false,
         editing: null,
-        form: { name: '', address: '', email: '', paypal_email: '', notes: '' },
+        form: blank(),
         saving: false,
         error: '',
+        fieldErrors: noErrors(),
         columns: [
           { key: 'name', label: 'Name' },
           { key: 'address', label: 'Address', sortable: false },
-          { key: 'email', label: 'Email' },
+          { key: 'email', label: 'Contact' },
           { key: 'paypal_email', label: 'PayPal email' },
           { key: 'actions', label: '', sortable: false, align: 'right' },
         ],
@@ -120,6 +201,16 @@
     computed: {
       rows() {
         return this.clients.map((c) => ({ ...c, actions: '' }));
+      },
+      editingStamp() {
+        const c = this.editing;
+        if (!c) return '';
+        // Days in her calendar; "updated" is the operator's word, and true of
+        // any write to the row (design_agent c62046).
+        const added = formatBerlinDay(c.created_at);
+        const updated = formatBerlinDay(c.updated_at);
+        if (!added) return '';
+        return updated && updated !== added ? `Added ${added} · updated ${updated}` : `Added ${added}`;
       },
     },
     mounted() {
@@ -134,18 +225,42 @@
     beforeUnmount() {
       if (this.narrowQuery) this.narrowQuery.removeEventListener('change', this.onNarrowChange);
     },
+    watch: {
+      // Editing a refused field clears its refusal.
+      'form.phone'() {
+        this.fieldErrors.phone = '';
+      },
+      'form.instagram_url'() {
+        this.fieldErrors.instagram_url = '';
+      },
+      'form.telegram_url'() {
+        this.fieldErrors.telegram_url = '';
+      },
+    },
     methods: {
+      socialHandle,
       startAdd() {
         this.editing = null;
-        this.form = { name: '', address: '', email: '', paypal_email: '', notes: '' };
+        this.form = blank();
         this.error = '';
+        this.fieldErrors = noErrors();
         this.editorOpen = true;
       },
       startEdit(row) {
         this.editing = row;
         // A copy, so Cancel discards an edit to any field, the notes included.
-        this.form = { name: row.name, address: row.address, email: row.email, paypal_email: row.paypal_email, notes: row.notes || '' };
+        this.form = {
+          name: row.name,
+          address: row.address,
+          email: row.email,
+          paypal_email: row.paypal_email,
+          phone: row.phone || '',
+          instagram_url: row.instagram_url || '',
+          telegram_url: row.telegram_url || '',
+          notes: row.notes || '',
+        };
         this.error = '';
+        this.fieldErrors = noErrors();
         this.editorOpen = true;
       },
       async save() {
@@ -161,7 +276,14 @@
           this.editorOpen = false;
           this.$emit('changed');
         } catch (err) {
-          this.error = errorOf(err).message;
+          const { code, message } = errorOf(err);
+          const refusal = FIELD_REFUSALS[code];
+          if (refusal) {
+            this.fieldErrors[refusal.field] = refusal.text;
+            this.$nextTick(() => this.$refs[refusal.field] && this.$refs[refusal.field].focus());
+            return;
+          }
+          this.error = message;
         } finally {
           this.saving = false;
         }
@@ -229,6 +351,46 @@
   /* One line, cut with an ellipsis so a cut is visible (§3.23): line breaks
      in the note fold into spaces here, and the editor holds the full text.
      The max-width keeps a long note from widening the Name column. */
+  /* Contact: one item per line (system_3 #10003). */
+  .contact-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs, 2px);
+  }
+
+  .client-social {
+    font-size: var(--text-sm);
+  }
+
+  /* Wrap only between whole items: "Instagram @name" never splits from its
+     handle (§3.122 P3). */
+  .client-social a,
+  .client-contact {
+    white-space: nowrap;
+  }
+
+  /* Her social links as one titled group in the client dialog. */
+  .social {
+    display: grid;
+    gap: var(--space-sm);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+  }
+
+  .social__legend {
+    padding: 0;
+    margin-bottom: var(--space-2xs);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium, 500);
+  }
+
+  .client-form__stamp {
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
   .client-notes {
     display: block;
     max-width: 24rem;

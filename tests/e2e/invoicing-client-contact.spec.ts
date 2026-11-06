@@ -1,0 +1,268 @@
+import { test, expect, type Page, type Route } from '@playwright/test';
+import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+
+/** Invoices app (system_3 #10003, the client half of #9971): a client's
+ *  phone and social links, her own social links on the issuer profile, and
+ *  the client's added/edited times in Berlin time. The fake applies the
+ *  server's rules from aspirant-server #10002: a handle or link is stored as
+ *  one canonical URL, anything else is refused with its own code.
+ *  Catch-all /api/ → 404 first. */
+
+type Json = Record<string, any>;
+
+const json = (route: Route, status: number, body: Json) =>
+  route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+
+// The server's normalisation (handlers/invoicing_links.go), reduced to what
+// the spec feeds it.
+const normalise = (kind: 'instagram' | 'telegram', raw: string): string | null => {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  let handle = s;
+  if (s.includes('/') || s.includes(':')) {
+    let u: URL;
+    try {
+      u = new URL(s.includes('://') ? s : `https://${s}`);
+    } catch {
+      return null;
+    }
+    const hosts = kind === 'instagram' ? ['instagram.com', 'www.instagram.com'] : ['t.me', 'telegram.me'];
+    if (!/^https?:$/.test(u.protocol) || !hosts.includes(u.hostname)) return null;
+    // Exactly one path segment: a profile, not a post (as the server).
+    const segs = u.pathname.split('/').filter(Boolean);
+    if (segs.length !== 1) return null;
+    handle = segs[0];
+  }
+  handle = handle.replace(/^@/, '');
+  if (kind === 'instagram') return /^[A-Za-z0-9._]{1,30}$/.test(handle) && /\w/.test(handle) ? `https://www.instagram.com/${handle.toLowerCase()}/` : null;
+  return /^[A-Za-z][A-Za-z0-9_]{3,31}$/.test(handle) ? `https://t.me/${handle}` : null;
+};
+
+const refuse = (body: Json): Json | null => {
+  if (!/^[0-9+()/. -]{0,40}$/.test(String(body.phone || '').trim())) return { code: 'invalid_phone', message: 'phone may hold digits, spaces and + - ( ) / . only, at most 40 characters' };
+  if (normalise('instagram', body.instagram_url) === null) return { code: 'invalid_instagram', message: 'instagram_url takes a handle (@name) or a link to a profile on instagram.com' };
+  if (normalise('telegram', body.telegram_url) === null) return { code: 'invalid_telegram', message: 'telegram_url takes a handle (@name) or a link to a profile on t.me' };
+  return null;
+};
+
+interface Fake {
+  clients: Json[];
+  profile: Json;
+  requests: { method: string; path: string; body: string }[];
+}
+
+const newFake = (): Fake => ({
+  clients: [
+    {
+      id: 1, name: 'Galerie Nord', address: 'Nordweg 2', email: 'info@galerie.test', paypal_email: '', notes: '',
+      phone: '+49 30 1234567', instagram_url: 'https://www.instagram.com/galerie.nord/', telegram_url: 'https://t.me/galerie_nord',
+      created_at: '2026-11-05T14:07:31Z', updated_at: '2026-11-06T00:12:05Z',
+    },
+    { id: 2, name: 'Anna Example', address: 'Weg 1', email: '', paypal_email: '', notes: '', phone: '', instagram_url: '', telegram_url: '', created_at: '2026-07-01T08:00:00Z', updated_at: '2026-07-01T08:00:00Z' },
+  ],
+  profile: { full_name: 'F', address: 'A', steuernummer: '1', email: '', phone: '', instagram_url: 'https://www.instagram.com/flower.studio/', telegram_url: '', is_kleinunternehmer: true, invoice_number_prefix: '2026', next_invoice_number: 1 },
+  requests: [],
+});
+
+async function open(page: Page, fake: Fake, tab = 'Clients'): Promise<void> {
+  await page.route(/\/api\//, (route) => json(route, 404, { error: { code: 'not_found', message: 'not stubbed' } }));
+  await page.route(/\/api\/invoicing\//, async (route) => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname.replace(/^\/api/, '');
+    const method = req.method();
+    fake.requests.push({ method, path, body: req.postData() || '' });
+    if (path === '/invoicing/profile' && method === 'GET') return json(route, 200, { saved: true, profile: fake.profile, has_logo: false });
+    if (path === '/invoicing/profile' && method === 'PUT') {
+      const body = JSON.parse(req.postData() || '{}');
+      const r = refuse(body);
+      if (r) return json(route, 400, { error: r });
+      fake.profile = { ...body, instagram_url: normalise('instagram', body.instagram_url), telegram_url: normalise('telegram', body.telegram_url) };
+      return json(route, 200, { profile: fake.profile, saved: true });
+    }
+    if (path === '/invoicing/payments') return json(route, 200, { payments: [] });
+    if (path === '/invoicing/invoices') return json(route, 200, { invoices: [] });
+    if (path === '/invoicing/clients' && method === 'GET') return json(route, 200, { clients: fake.clients });
+    if ((path === '/invoicing/clients' && method === 'POST') || (/^\/invoicing\/clients\/\d+$/.test(path) && method === 'PUT')) {
+      const body = JSON.parse(req.postData() || '{}');
+      const r = refuse(body);
+      if (r) return json(route, 400, { error: r });
+      const stored = { ...body, phone: String(body.phone || '').trim(), instagram_url: normalise('instagram', body.instagram_url), telegram_url: normalise('telegram', body.telegram_url), updated_at: '2026-11-06T09:30:00Z' };
+      if (method === 'POST') {
+        const client = { id: 100 + fake.clients.length, ...stored, created_at: '2026-11-06T09:30:00Z' };
+        fake.clients.push(client);
+        return json(route, 201, { client });
+      }
+      const id = Number(path.split('/').pop());
+      const i = fake.clients.findIndex((c) => c.id === id);
+      fake.clients[i] = { ...fake.clients[i], ...stored };
+      return json(route, 200, { client: fake.clients[i] });
+    }
+    return json(route, 404, { error: { code: 'not_found', message: `unmocked ${method} ${path}` } });
+  });
+  await seedTrustedSessionAs(page, 'vinoly');
+  await page.goto('/member/personal/invoicing');
+  await dismissMobileSidebarIfPresent(page);
+  if (tab) await page.getByRole('tab', { name: tab }).click();
+}
+
+const row = (page: Page, name: string) => page.locator('[data-test="client-row"]', { hasText: name });
+const form = (page: Page) => page.locator('[data-test="client-form"]');
+const lastBody = (fake: Fake, method: string, path: RegExp) => JSON.parse(fake.requests.filter((r) => r.method === method && path.test(r.path)).pop()!.body);
+
+test.describe('#10003 Clients — phone and social links', () => {
+  test('the list shows the phone as a tel: link and each social link as the stored URL, in a new tab', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    const nord = row(page, 'Galerie Nord');
+    await expect(nord.locator('[data-test="client-phone"]')).toHaveAttribute('href', 'tel:+49301234567');
+    const ig = nord.locator('[data-test="client-instagram"]');
+    await expect(ig).toHaveText('Instagram @galerie.nord');
+    await expect(ig).toHaveAttribute('href', 'https://www.instagram.com/galerie.nord/');
+    await expect(ig).toHaveAttribute('target', '_blank');
+    await expect(ig).toHaveAttribute('rel', 'noopener noreferrer');
+    await expect(ig).toHaveAttribute('aria-label', 'Instagram: @galerie.nord (opens in a new tab)');
+    const tg = nord.locator('[data-test="client-telegram"]');
+    await expect(tg).toHaveText('Telegram @galerie_nord');
+    await expect(tg).toHaveAttribute('href', 'https://t.me/galerie_nord');
+    // A client with none of them shows nothing extra.
+    await expect(row(page, 'Anna Example').locator('[data-test="client-phone"], [data-test="client-social"]')).toHaveCount(0);
+  });
+
+  test('phone and links are saved with a new client and come back canonical', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await page.locator('[data-test="client-add"]').click();
+    await form(page).getByLabel('Name').fill('Clara Example');
+    await form(page).getByLabel('Phone').fill(' +49 151 2345678 ');
+    await form(page).getByLabel('Instagram').fill('@Clara.Ink');
+    await form(page).getByLabel('Telegram').fill('t.me/clara_ink');
+    await expect(form(page).getByRole('group', { name: 'Social media' })).toBeVisible();
+    await page.locator('[data-test="client-save"]').click();
+    await expect(form(page)).toBeHidden();
+    expect(lastBody(fake, 'POST', /^\/invoicing\/clients$/)).toMatchObject({ name: 'Clara Example', phone: ' +49 151 2345678 ', instagram_url: '@Clara.Ink', telegram_url: 't.me/clara_ink' });
+    const clara = row(page, 'Clara Example');
+    await expect(clara.locator('[data-test="client-instagram"]')).toHaveAttribute('href', 'https://www.instagram.com/clara.ink/');
+    await expect(clara.locator('[data-test="client-telegram"]')).toHaveAttribute('href', 'https://t.me/clara_ink');
+    const id = fake.clients.find((c) => c.name === 'Clara Example')!.id;
+    await page.locator(`[data-test="client-edit-${id}"]`).click();
+    await expect(form(page).getByLabel('Instagram')).toHaveValue('https://www.instagram.com/clara.ink/');
+  });
+
+  for (const [field, value, code, text] of [
+    ['Phone', 'call me', 'invalid_phone', 'Use digits, spaces and + - ( ) / . only, at most 40 characters.'],
+    ['Instagram', 'javascript:alert(1)', 'invalid_instagram', 'Use an Instagram name (@name) or a link to an Instagram profile.'],
+    ['Telegram', 'https://evil.example/x', 'invalid_telegram', 'Use a Telegram name (@name) or a t.me link.'],
+  ] as const) {
+    test(`a refused ${field} (${code}) shows on its own field, keeps the text and takes focus`, async ({ page }) => {
+      const fake = newFake();
+      await open(page, fake);
+      await page.locator('[data-test="client-edit-2"]').click();
+      const input = form(page).getByLabel(field);
+      await input.fill(value);
+      await page.locator('[data-test="client-save"]').click();
+      // A `has` locator is queried inside each .field, so it is rooted at page.
+      const fieldEl = form(page).locator('.field').filter({ has: page.getByLabel(field, { exact: true }) });
+      await expect(fieldEl).toContainText(text);
+      await expect(input).toHaveValue(value);
+      await expect(input).toBeFocused();
+      await expect(form(page)).toBeVisible();
+      await expect(page.locator('[data-test="client-error"]')).toHaveCount(0);
+      // Editing the field clears its refusal.
+      await input.fill('');
+      await expect(fieldEl).not.toContainText(text);
+    });
+  }
+
+  test('the edit dialog says the days the client was added and updated, in her calendar', async ({ page }) => {
+    const fake = newFake();
+    // Added 23:30Z on 5 Nov is 00:30 on 6 Nov in Berlin (design_agent c62046).
+    fake.clients.push({ id: 3, name: 'Late Example', address: '', email: '', paypal_email: '', notes: '', created_at: '2026-11-05T23:30:00Z', updated_at: '2026-11-05T23:45:00Z' });
+    await open(page, fake);
+    await page.locator('[data-test="client-edit-1"]').click();
+    await expect(page.locator('[data-test="client-stamp"]')).toHaveText('Added 2026-11-05 · updated 2026-11-06');
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    // Updated the same day it was added: no "updated".
+    await page.locator('[data-test="client-edit-2"]').click();
+    await expect(page.locator('[data-test="client-stamp"]')).toHaveText('Added 2026-07-01');
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.locator('[data-test="client-edit-3"]').click();
+    await expect(page.locator('[data-test="client-stamp"]')).toHaveText('Added 2026-11-06');
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    // A new client has no times yet.
+    await page.locator('[data-test="client-add"]').click();
+    await expect(page.locator('[data-test="client-stamp"]')).toHaveCount(0);
+  });
+});
+
+// design_agent c62046: the Contact links take the link ink of what they sit
+// on, and meet 4.5:1 there, in both themes, in the table and on the cards.
+test.describe('#10003 Contact links meet their setter', () => {
+  for (const width of [1440, 390]) {
+    for (const theme of ['light', 'dark'] as const) {
+      test(`at ${width}px (${theme}) the phone and social links read at 4.5:1`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
+        const fake = newFake();
+        await open(page, fake);
+        const nord = row(page, 'Galerie Nord');
+        for (const id of ['client-phone', 'client-instagram', 'client-telegram']) {
+          const ratio = await nord.locator(`[data-test="${id}"]`).evaluate((el) => {
+            // A color-mix() link ink computes to `color(srgb r g b)` in 0..1;
+            // rgb()/rgba() are 0..255.
+            const rgb = (s: string) => {
+              const n = (s.match(/\d*\.?\d+/g) || []).map(Number);
+              if (s.startsWith('color(srgb')) return [...n.slice(0, 3).map((v) => v * 255), ...n.slice(3, 4)];
+              return n.slice(0, 4);
+            };
+            const lum = (c: number[]) => {
+              const [r, g, b] = c.slice(0, 3).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+              return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            };
+            let bg: number[] = [255, 255, 255];
+            for (let n: Element | null = el; n; n = n.parentElement) {
+              const c = rgb(getComputedStyle(n).backgroundColor);
+              if (c.length === 3 || (c.length === 4 && c[3] > 0.99)) { bg = c; break; }
+            }
+            const fg = rgb(getComputedStyle(el).color);
+            const [x, y] = [lum(fg), lum(bg)].sort((p, q) => q - p);
+            return (x + 0.05) / (y + 0.05);
+          });
+          expect(ratio, `${id} at ${width}px ${theme}`).toBeGreaterThanOrEqual(4.5);
+        }
+      });
+    }
+  }
+});
+
+test.describe('#10003 Issuer profile — her social links', () => {
+  const openProfile = async (page: Page, fake: Fake) => {
+    await open(page, fake, '');
+    await page.getByRole('button', { name: 'Edit profile' }).click();
+  };
+  const pform = (page: Page) => page.locator('[data-test="profile-form"]');
+
+  test('a save keeps her stored links and stores new ones canonical', async ({ page }) => {
+    const fake = newFake();
+    await openProfile(page, fake);
+    await expect(pform(page).getByRole('group', { name: 'Social media' })).toBeVisible();
+    await expect(pform(page).getByLabel('Instagram')).toHaveValue('https://www.instagram.com/flower.studio/');
+    await pform(page).getByLabel('Telegram').fill('@flower_studio');
+    await page.locator('[data-test="profile-save"]').click();
+    await expect(pform(page)).toBeHidden();
+    // The Instagram link she did not touch goes back with the save, so the
+    // server's replace keeps it (it was dropped before #10003).
+    expect(lastBody(fake, 'PUT', /^\/invoicing\/profile$/)).toMatchObject({ instagram_url: 'https://www.instagram.com/flower.studio/', telegram_url: '@flower_studio' });
+    expect(fake.profile.telegram_url).toBe('https://t.me/flower_studio');
+  });
+
+  test('a refused link shows on its own field', async ({ page }) => {
+    const fake = newFake();
+    await openProfile(page, fake);
+    const ig = pform(page).getByLabel('Instagram');
+    await ig.fill('https://www.instagram.com/p/abc/');
+    await page.locator('[data-test="profile-save"]').click();
+    await expect(pform(page).locator('.field').filter({ has: page.getByLabel('Instagram', { exact: true }) })).toContainText('Use an Instagram name (@name) or a link to an Instagram profile.');
+    await expect(ig).toBeFocused();
+    await expect(pform(page)).toBeVisible();
+  });
+});
