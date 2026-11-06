@@ -28,7 +28,11 @@ async function open(page: Page, fake: Fake): Promise<void> {
     fake.requests.push(path + url.search);
     if (path === '/invoicing/profile') return json(route, 200, { saved: true, profile: { full_name: 'F', address: 'A', steuernummer: '1', is_kleinunternehmer: true, invoice_number_prefix: '2026', next_invoice_number: 4 } });
     if (path === '/invoicing/clients' || path === '/invoicing/payments') return json(route, 200, { clients: fake.clients || [], payments: [] });
-    if (path === '/invoicing/invoices') return json(route, 200, { invoices: fake.issued });
+    if (path === '/invoicing/invoices') {
+      // Honour ?status= the way the server does, so a filtered list differs from the unfiltered one.
+      const st = url.searchParams.get('status');
+      return json(route, 200, { invoices: st ? fake.issued.filter((i) => i.status === st) : fake.issued });
+    }
     if (path === '/invoicing/validation') return json(route, 200, fake.validation);
     if (path === '/invoicing/export/invoices.zip') return route.fulfill({ status: 200, contentType: 'application/zip', body: 'PK' });
     return json(route, 404, { error: { code: 'not_found', message: `unmocked ${path}` } });
@@ -50,7 +54,7 @@ test.describe('#8367 Invoices app — ZIP download, chart', () => {
     const fake = newFake();
     await open(page, fake);
     const zip = page.locator('[data-test="export-zip"]');
-    await expect(zip).toHaveText('Issued invoices (PDF, ZIP)');
+    await expect(zip).toHaveText('Invoice list (PDF)');
     const download = page.waitForEvent('download');
     await zip.click();
     expect((await download).suggestedFilename()).toBe('Rechnungen.zip');
@@ -156,4 +160,61 @@ test.describe('#9972 Invoices app: the statistics', () => {
       totals.slice(1).forEach((v, k) => expect(v, 'the running total never drops').toBeGreaterThanOrEqual(totals[k]));
     });
   }
+});
+
+// system_3 #9948 (operator c61373: "I seem to only get one item?"): each export
+// says what it holds and how many, before the click. The counts mirror the
+// server's predicates (CSV: every numbered invoice; ZIP: issued only) and
+// ignore the list filters, because the files do too.
+test.describe('#9948 Invoices app — the exports say what they hold', () => {
+  const mixed = (): Json[] => [
+    inv(1, '2026-07-03'),
+    inv(2, '2026-07-28'),
+    { ...inv(3, '2026-08-01'), status: 'cancelled' },
+    { ...inv(4, '2026-08-05'), status: 'draft', invoice_number: null, issue_date: null },
+  ];
+
+  test('captions count numbered invoices for the CSV and issued ones for the ZIP; drafts are in neither', async ({ page }) => {
+    const fake = newFake();
+    fake.issued = mixed();
+    await open(page, fake);
+    await expect(page.locator('[data-test="export-all-csv"]')).toHaveText('Invoice list (CSV)');
+    await expect(page.locator('[data-test="export-zip"]')).toHaveText('Invoice list (PDF)');
+    await expect(page.locator('[data-test="export-csv-scope"]')).toHaveText('3 invoices, one row each: issued and cancelled. Drafts are left out.');
+    await expect(page.locator('[data-test="export-zip-scope"]')).toHaveText('2 PDFs in a ZIP: issued invoices only. Cancelled ones and drafts are left out.');
+    await expect(page.locator('[data-test="export-zip"]')).toHaveAttribute('aria-describedby', 'export-zip-scope');
+    expect(fake.requests).toContain('/invoicing/invoices');
+  });
+
+  test('the counts ignore the list filters, because the files do', async ({ page }) => {
+    const fake = newFake();
+    fake.issued = mixed();
+    await open(page, fake);
+    await expect(page.locator('[data-test="export-csv-scope"]')).toContainText('3 invoices');
+    await page.getByRole('combobox', { name: 'Status' }).click();
+    await page.getByRole('option', { name: 'Draft' }).click();
+    // Positive control: the list itself did filter down to the one draft.
+    await expect(page.locator('[data-test="invoices-panel"]').getByText('Draft', { exact: true }).first()).toBeVisible();
+    expect(fake.requests).toContain('/invoicing/invoices?status=draft');
+    await expect(page.locator('[data-test="export-csv-scope"]')).toContainText('3 invoices');
+    await expect(page.locator('[data-test="export-zip-scope"]')).toContainText('2 PDFs');
+  });
+
+  test('one of each reads in the singular; none says so', async ({ page }) => {
+    const fake = newFake();
+    fake.issued = [inv(1, '2026-07-03')];
+    await open(page, fake);
+    await expect(page.locator('[data-test="export-csv-scope"]')).toHaveText('1 invoice, one row: issued and cancelled. Drafts are left out.');
+    await expect(page.locator('[data-test="export-zip-scope"]')).toHaveText('1 PDF in a ZIP: issued invoices only. Cancelled ones and drafts are left out.');
+    await expect(page.locator('[data-test="export-zip"]')).toBeEnabled();
+
+    const empty = newFake();
+    empty.issued = [];
+    await open(page, empty);
+    // At 0 the button is disabled and the caption is the reason.
+    await expect(page.locator('[data-test="export-csv-scope"]')).toHaveText('No issued or cancelled invoices yet.');
+    await expect(page.locator('[data-test="export-zip-scope"]')).toHaveText('No issued invoices yet.');
+    await expect(page.locator('[data-test="export-all-csv"]')).toBeDisabled();
+    await expect(page.locator('[data-test="export-zip"]')).toBeDisabled();
+  });
 });
