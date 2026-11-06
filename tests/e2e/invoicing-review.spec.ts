@@ -124,9 +124,16 @@ test.describe('#8367 Invoices app — review list, detail, validated exports', (
     await openInvoicesTab(page, fake);
     await page.locator('[data-test="export-all-csv"]').click();
     await expect(page.locator('[data-test="validation-warnings"]')).toContainText('its payments 34000 cents');
+    // Nothing has downloaded on the warnings screen until Download anyway is
+    // pressed, and it says so (#9989, from #9964).
+    const lead = page.locator('[data-test="validation-warned"]');
+    await expect(lead).toContainText('Nothing has downloaded yet: Download anyway sends the file.');
+    expect(fake.requests.some((r) => r.startsWith('/invoicing/export/invoices.csv'))).toBe(false);
     const download = page.waitForEvent('download');
     await page.locator('[data-test="validation-download-anyway"]').click();
     expect((await download).suggestedFilename()).toBe('Rechnungen.csv');
+    await expect(lead).toContainText('The download has started.');
+    await expect(lead).not.toContainText('Nothing has downloaded yet');
   });
 
   test('an issued invoice shows its payments, history and (on desktop) the PDF preview', async ({ page }, testInfo) => {
