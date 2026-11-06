@@ -238,6 +238,8 @@ export const listAuditEvents = (entityType, entityId) =>
     .get(`${base}/audit-events`, { params: { entity_type: entityType, entity_id: entityId } })
     .then((r) => r.data.events || []);
 export const allInvoicesCsvUrl = () => `${base}/export/invoices.csv`;
+// Her client list as Kunden.csv (system_3 #10012).
+export const clientsCsvUrl = () => `${base}/export/clients.csv`;
 
 // Fetch a file and hand it to the browser as a download. Going through axios
 // (not a plain link) means a 409 from the export's own validation arrives as

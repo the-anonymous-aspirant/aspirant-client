@@ -49,6 +49,7 @@ interface Fake {
   invoices?: Json[];
   invoicesFail?: boolean;
   invoicesDelayMs?: number;
+  csvFail?: boolean;
   clients: Json[];
   profile: Json;
   requests: { method: string; path: string; body: string }[];
@@ -87,6 +88,10 @@ async function open(page: Page, fake: Fake, tab = 'Clients'): Promise<void> {
       if (fake.invoicesDelayMs) await new Promise((r) => setTimeout(r, fake.invoicesDelayMs));
       if (fake.invoicesFail) return json(route, 500, { error: { code: 'internal', message: 'boom' } });
       return json(route, 200, { invoices: fake.invoices || [] });
+    }
+    if (path === '/invoicing/export/clients.csv') {
+      if (fake.csvFail) return json(route, 500, { error: { code: 'internal', message: 'recording the export failed' } });
+      return route.fulfill({ status: 200, contentType: 'text/csv; charset=utf-8', headers: { 'Content-Disposition': 'attachment; filename="Kunden.csv"' }, body: '\ufeffName;Adresse\n' });
     }
     if (path === '/invoicing/clients' && method === 'GET') return json(route, 200, { clients: fake.clients });
     if ((path === '/invoicing/clients' && method === 'POST') || (/^\/invoicing\/clients\/\d+$/.test(path) && method === 'PUT')) {
@@ -363,4 +368,45 @@ test.describe("#10006 Clients — a client's figures", () => {
       });
     }
   }
+});
+
+// system_3 #10013 (operator c61628; server #10012): the client list as a
+// CSV, from the Clients tab, saying what it holds and how many first.
+test.describe('#10013 Clients — the client list as a CSV', () => {
+  test('the caption counts the clients and says notes are left out; the file is Kunden.csv', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    const btn = page.locator('[data-test="export-clients-csv"]');
+    await expect(btn).toHaveText('Client list (CSV)');
+    await expect(page.locator('[data-test="export-clients-csv-scope"]')).toHaveText('2 clients, one row each. Notes are left out.');
+    await expect(btn).toHaveAttribute('aria-describedby', 'clients-csv-scope');
+    const dl = page.waitForEvent('download');
+    await btn.click();
+    expect((await dl).suggestedFilename()).toBe('Kunden.csv');
+    expect(fake.requests.some((r) => r.method === 'GET' && r.path === '/invoicing/export/clients.csv')).toBe(true);
+  });
+
+  test('one client reads in the singular; none disables the button and says why', async ({ page }) => {
+    const one = newFake();
+    one.clients = one.clients.slice(0, 1);
+    await open(page, one);
+    await expect(page.locator('[data-test="export-clients-csv-scope"]')).toHaveText('1 client, one row. Notes are left out.');
+
+    const none = newFake();
+    none.clients = [];
+    await open(page, none);
+    await expect(page.locator('[data-test="export-clients-csv"]')).toBeDisabled();
+    await expect(page.locator('[data-test="export-clients-csv-scope"]')).toHaveText('No clients yet.');
+  });
+
+  test('a failed download says why, and nothing is saved', async ({ page }) => {
+    const fake = newFake();
+    fake.csvFail = true;
+    await open(page, fake);
+    let downloaded = false;
+    page.on('download', () => { downloaded = true; });
+    await page.locator('[data-test="export-clients-csv"]').click();
+    await expect(page.locator('[data-test="export-clients-csv-error"]')).toHaveText('recording the export failed');
+    expect(downloaded).toBe(false);
+  });
 });

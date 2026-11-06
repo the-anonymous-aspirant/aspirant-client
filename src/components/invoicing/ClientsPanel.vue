@@ -101,6 +101,29 @@
       </template>
     </AspDataTable>
 
+    <!-- Her client list as a spreadsheet (operator c61628, system_3 #10013;
+         server #10012). An occasional action, so it follows the list, the
+         same place and shape as the Invoices tab's Export group: button and
+         caption are one unit (#9948, #9960). No check screen: a client list
+         has no integrity rules. -->
+    <section class="export-group" aria-labelledby="clients-export-heading" data-test="clients-export">
+      <h3 id="clients-export-heading">Export</h3>
+      <div class="export">
+        <AspButton
+          variant="secondary"
+          :disabled="clients.length === 0"
+          :loading="csvDownloading"
+          aria-describedby="clients-csv-scope"
+          data-test="export-clients-csv"
+          @click="downloadClientsCsv"
+        >
+          Client list (CSV)
+        </AspButton>
+        <p id="clients-csv-scope" class="export__scope muted" data-test="export-clients-csv-scope">{{ csvScope }}</p>
+      </div>
+      <p v-if="csvError" class="error" role="alert" data-test="export-clients-csv-error">{{ csvError }}</p>
+    </section>
+
     <AspModal v-model:open="editorOpen" :title="editing ? 'Edit client' : 'Add client'" size="md">
       <form class="client-form" data-test="client-form" @submit.prevent="save">
         <!-- When she added the client and when it was updated, as days in her
@@ -184,7 +207,7 @@
 <script>
   import { AspButton, AspDataTable, AspEmptyState, AspInput, AspModal, AspTextarea } from '@aspirant/design-system';
   import ModalActions from './ModalActions.vue';
-  import { FIELD_REFUSALS, createClient, errorOf, formatBerlinDay, formatDay, formatMoney, listInvoices, safeSocialUrl, socialHandle, updateClient } from './api.js';
+  import { FIELD_REFUSALS, clientsCsvUrl, createClient, downloadBlob, errorOf, formatBerlinDay, formatDay, formatMoney, listInvoices, safeSocialUrl, socialHandle, updateClient } from './api.js';
 
   const blank = () => ({ name: '', address: '', email: '', paypal_email: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
   const noErrors = () => ({ phone: '', instagram_url: '', telegram_url: '' });
@@ -212,6 +235,8 @@
         stats: null,
         // loading | ready | none | failed (#10006)
         statsState: 'loading',
+        csvDownloading: false,
+        csvError: '',
         columns: [
           { key: 'name', label: 'Name' },
           { key: 'address', label: 'Address', sortable: false },
@@ -224,6 +249,12 @@
     computed: {
       rows() {
         return this.clients.map((c) => ({ ...c, actions: '' }));
+      },
+      // What the CSV holds and how many, said before the click (#9948's unit).
+      csvScope() {
+        const n = this.clients.length;
+        if (n === 0) return 'No clients yet.';
+        return n === 1 ? '1 client, one row. Notes are left out.' : `${n} clients, one row each. Notes are left out.`;
       },
       editingStamp() {
         const c = this.editing;
@@ -263,6 +294,19 @@
     methods: {
       safeSocialUrl,
       socialHandle,
+      // The file holds every client, one row each, notes never (#10012).
+      async downloadClientsCsv() {
+        if (this.csvDownloading || this.clients.length === 0) return;
+        this.csvDownloading = true;
+        this.csvError = '';
+        try {
+          await downloadBlob(clientsCsvUrl(), 'Kunden.csv');
+        } catch (err) {
+          this.csvError = errorOf(err).message;
+        } finally {
+          this.csvDownloading = false;
+        }
+      },
       startAdd() {
         this.editing = null;
         this.form = blank();
@@ -475,6 +519,33 @@
     }
   }
 
+  /* The Export group, as on the Invoices tab (#10013). */
+  .export-group {
+    margin-top: var(--space-lg);
+  }
+
+  .export-group h3 {
+    margin: 0 0 var(--space-sm);
+  }
+
+  .export {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2xs);
+    max-width: 22rem;
+  }
+
+  .export__scope {
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  .export-group > .error {
+    margin: var(--space-sm) 0 0;
+    color: var(--feedback-error);
+  }
+
   .client-form__stamp {
     margin: 0;
     font-size: var(--text-sm);
@@ -506,6 +577,15 @@
   }
 
   @media (max-width: 640px) {
+    .export {
+      align-items: stretch;
+      max-width: none;
+    }
+
+    .export :deep(button) {
+      width: 100%;
+    }
+
     .block-on-phone {
       width: 100%;
     }
