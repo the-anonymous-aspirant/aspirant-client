@@ -23,24 +23,24 @@
         <span v-else class="muted" data-test="client-no-address">No postal address</span>
         <span v-if="row.email" class="muted">{{ row.email }}</span>
         <a v-if="row.phone" class="client-contact" :href="`tel:${row.phone.replace(/[^0-9+]/g, '')}`" data-test="client-phone">{{ row.phone }}</a>
-        <span v-if="row.instagram_url || row.telegram_url" class="client-social" data-test="client-social">
+        <span v-if="safeSocialUrl('instagram', row.instagram_url) || safeSocialUrl('telegram', row.telegram_url)" class="client-social" data-test="client-social">
           <a
-            v-if="row.instagram_url"
-            :href="row.instagram_url"
+            v-if="safeSocialUrl('instagram', row.instagram_url)"
+            :href="safeSocialUrl('instagram', row.instagram_url)"
             target="_blank"
             rel="noopener noreferrer"
-            :aria-label="`Instagram: ${socialHandle(row.instagram_url)} (opens in a new tab)`"
+            :aria-label="`Instagram: ${socialHandle(safeSocialUrl('instagram', row.instagram_url))} (opens in a new tab)`"
             data-test="client-instagram"
-            >Instagram {{ socialHandle(row.instagram_url) }}</a
-          ><span v-if="row.instagram_url && row.telegram_url" aria-hidden="true"> · </span
+            >Instagram {{ socialHandle(safeSocialUrl('instagram', row.instagram_url)) }}</a
+          ><span v-if="safeSocialUrl('instagram', row.instagram_url) && safeSocialUrl('telegram', row.telegram_url)" aria-hidden="true"> · </span
           ><a
-            v-if="row.telegram_url"
-            :href="row.telegram_url"
+            v-if="safeSocialUrl('telegram', row.telegram_url)"
+            :href="safeSocialUrl('telegram', row.telegram_url)"
             target="_blank"
             rel="noopener noreferrer"
-            :aria-label="`Telegram: ${socialHandle(row.telegram_url)} (opens in a new tab)`"
+            :aria-label="`Telegram: ${socialHandle(safeSocialUrl('telegram', row.telegram_url))} (opens in a new tab)`"
             data-test="client-telegram"
-            >Telegram {{ socialHandle(row.telegram_url) }}</a
+            >Telegram {{ socialHandle(safeSocialUrl('telegram', row.telegram_url)) }}</a
           >
         </span>
         <span v-if="row.paypal_email" class="muted">{{ row.paypal_email }}</span>
@@ -74,24 +74,24 @@
         <span class="contact-stack">
           <span v-if="row.email" class="muted">{{ row.email }}</span>
           <a v-if="row.phone" class="client-contact" :href="`tel:${row.phone.replace(/[^0-9+]/g, '')}`" data-test="client-phone">{{ row.phone }}</a>
-          <span v-if="row.instagram_url || row.telegram_url" class="client-social" data-test="client-social">
+          <span v-if="safeSocialUrl('instagram', row.instagram_url) || safeSocialUrl('telegram', row.telegram_url)" class="client-social" data-test="client-social">
             <a
-              v-if="row.instagram_url"
-              :href="row.instagram_url"
+              v-if="safeSocialUrl('instagram', row.instagram_url)"
+              :href="safeSocialUrl('instagram', row.instagram_url)"
               target="_blank"
               rel="noopener noreferrer"
-              :aria-label="`Instagram: ${socialHandle(row.instagram_url)} (opens in a new tab)`"
+              :aria-label="`Instagram: ${socialHandle(safeSocialUrl('instagram', row.instagram_url))} (opens in a new tab)`"
               data-test="client-instagram"
-              >Instagram {{ socialHandle(row.instagram_url) }}</a
-            ><span v-if="row.instagram_url && row.telegram_url" aria-hidden="true"> · </span
+              >Instagram {{ socialHandle(safeSocialUrl('instagram', row.instagram_url)) }}</a
+            ><span v-if="safeSocialUrl('instagram', row.instagram_url) && safeSocialUrl('telegram', row.telegram_url)" aria-hidden="true"> · </span
             ><a
-              v-if="row.telegram_url"
-              :href="row.telegram_url"
+              v-if="safeSocialUrl('telegram', row.telegram_url)"
+              :href="safeSocialUrl('telegram', row.telegram_url)"
               target="_blank"
               rel="noopener noreferrer"
-              :aria-label="`Telegram: ${socialHandle(row.telegram_url)} (opens in a new tab)`"
+              :aria-label="`Telegram: ${socialHandle(safeSocialUrl('telegram', row.telegram_url))} (opens in a new tab)`"
               data-test="client-telegram"
-              >Telegram {{ socialHandle(row.telegram_url) }}</a
+              >Telegram {{ socialHandle(safeSocialUrl('telegram', row.telegram_url)) }}</a
             >
           </span>
         </span>
@@ -164,7 +164,7 @@
 <script>
   import { AspButton, AspDataTable, AspEmptyState, AspInput, AspModal, AspTextarea } from '@aspirant/design-system';
   import ModalActions from './ModalActions.vue';
-  import { FIELD_REFUSALS, createClient, errorOf, formatBerlinDay, socialHandle, updateClient } from './api.js';
+  import { FIELD_REFUSALS, createClient, errorOf, formatBerlinDay, safeSocialUrl, socialHandle, updateClient } from './api.js';
 
   const blank = () => ({ name: '', address: '', email: '', paypal_email: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
   const noErrors = () => ({ phone: '', instagram_url: '', telegram_url: '' });
@@ -238,6 +238,7 @@
       },
     },
     methods: {
+      safeSocialUrl,
       socialHandle,
       startAdd() {
         this.editing = null;

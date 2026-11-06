@@ -128,6 +128,20 @@ test.describe('#10003 Clients — phone and social links', () => {
     await expect(row(page, 'Anna Example').locator('[data-test="client-phone"], [data-test="client-social"]')).toHaveCount(0);
   });
 
+  // security c62062: only the two stored shapes ever reach an href, even if a
+  // row somehow holds anything else.
+  test('a stored link in any other shape is not rendered as a link', async ({ page }) => {
+    const fake = newFake();
+    fake.clients[1] = { ...fake.clients[1], instagram_url: 'javascript:alert(1)', telegram_url: 'https://evil.example/t' };
+    await open(page, fake);
+    const anna = row(page, 'Anna Example');
+    await expect(anna.locator('[data-test="client-social"], [data-test="client-instagram"], [data-test="client-telegram"]')).toHaveCount(0);
+    expect(await page.locator('a[href^="javascript:"], a[href*="evil.example"]').count()).toBe(0);
+    // The edit form still shows what is stored, so she can correct it.
+    await page.locator('[data-test="client-edit-2"]').click();
+    await expect(form(page).getByLabel('Instagram', { exact: true })).toHaveValue('javascript:alert(1)');
+  });
+
   test('phone and links are saved with a new client and come back canonical', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
