@@ -75,7 +75,8 @@ export const patchPayment = (id, patch) => axios.patch(`${base}/payments/${id}`,
 export const createManualPayment = (payment) =>
   axios.post(`${base}/payments/manual`, payment).then((r) => r.data.payment);
 // Only a hand-entered payment that no invoice covers; the server refuses others.
-export const deleteManualPayment = (id) => axios.delete(`${base}/payments/${id}`);
+// Any payment not on an issued invoice, imported or entered by hand (#10009).
+export const deletePayment = (id) => axios.delete(`${base}/payments/${id}`);
 
 // How a hand-entered payment was received, in the invoice's German wording.
 export const METHOD_LABELS = {

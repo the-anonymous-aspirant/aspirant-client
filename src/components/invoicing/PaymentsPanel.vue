@@ -155,7 +155,7 @@
       <AspCheckbox
         :model-value="allShownSelected"
         :indeterminate="someShownSelected"
-        :label="`Select all ${shown.length} shown`"
+        :label="`Select all ${selectableShown.length} shown`"
         @update:model-value="selectAllShown"
       />
     </div>
@@ -170,11 +170,17 @@
         <div class="payment-card__top">
           <span class="payment-card__when">
             <AspCheckbox
+              v-if="!row.on_issued_invoice"
               :model-value="selected.includes(row.id)"
               :aria-label="`Select ${row.transaction_id}`"
               data-test="payment-select"
               @update:model-value="toggle(row.id, $event)"
             />
+            <!-- An issued invoice's payment can be neither recategorised,
+                 invoiced again nor deleted, so it has no checkbox (§3.129
+                 Decision 6, design_agent c62100); an invisible copy keeps
+                 the gutter, so every date starts on one edge. -->
+            <AspCheckbox v-else :model-value="false" class="select-gutter" aria-hidden="true" tabindex="-1" data-test="payment-select-gutter" />
             <span class="nowrap">{{ formatDay(row.paid_on) }}</span>
           </span>
           <strong class="nowrap amount">{{ formatMoney(row.gross_cents, row.currency) }}</strong>
@@ -182,21 +188,24 @@
         <span class="sender">{{ row.sender_name }}</span>
         <span v-if="row.sender_email" class="muted">{{ row.sender_email }}</span>
         <span v-if="row.note" class="note">{{ row.note }}</span>
-        <template v-if="row.entry === 'manual'">
-          <span class="muted manual-line" data-test="payment-manual">Entered by hand <span class="nowrap">· {{ methodLabel(row) }}</span><template v-if="row.reference">{{ ' ' }}<span class="nowrap">· {{ row.reference }}</span></template></span>
+        <span v-if="row.entry === 'manual'" class="muted manual-line" data-test="payment-manual">Entered by hand <span class="nowrap">· {{ methodLabel(row) }}</span><template v-if="row.reference">{{ ' ' }}<span class="nowrap">· {{ row.reference }}</span></template></span>
+        <!-- Any payment can be deleted while no ISSUED invoice covers it,
+             imported or entered by hand (operator c61868, system_3 #10009,
+             #10010). Armed, the row says what a delete does. -->
+        <template v-if="!row.on_issued_invoice">
           <AspButton
-            v-if="!row.on_invoice"
             :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
             size="sm"
             class="manual-delete"
             :loading="deleting === row.id"
             data-test="payment-delete"
-            @click="removeManual(row)"
+            @click="removePayment(row)"
           >
             {{ confirmingDelete === row.id ? 'Delete this payment' : 'Delete' }}
           </AspButton>
+          <span v-if="confirmingDelete === row.id && deleteConsequence(row)" class="muted delete-reason" data-test="payment-delete-consequence">{{ deleteConsequence(row) }}</span>
         </template>
-        <span v-if="deleteReason(row)" class="muted delete-reason" data-test="payment-no-delete-reason">{{ deleteReason(row) }}</span>
+        <span v-else class="muted delete-reason" data-test="payment-no-delete-reason">On an issued invoice — cancel that invoice first</span>
         <div class="payment-card__fields full-select">
           <div class="payment-card__field">
             <span class="payment-card__caption" aria-hidden="true">Category</span>
@@ -245,11 +254,13 @@
       </template>
       <template #cell-select="{ row }">
         <AspCheckbox
+          v-if="!row.on_issued_invoice"
           :model-value="selected.includes(row.id)"
           :aria-label="`Select ${row.transaction_id}`"
           data-test="payment-select"
           @update:model-value="toggle(row.id, $event)"
         />
+        <AspCheckbox v-else :model-value="false" class="select-gutter" aria-hidden="true" tabindex="-1" data-test="payment-select-gutter" />
       </template>
       <template #cell-paid_on="{ row }"><span class="nowrap">{{ formatDay(row.paid_on) }}</span></template>
       <!-- The payer's note reads under the sender, as on the phone cards: a
@@ -259,23 +270,26 @@
         <span class="sender">{{ row.sender_name }}</span>
         <span v-if="row.sender_email" class="muted">{{ row.sender_email }}</span>
         <span v-if="row.note" class="note note--cell">{{ row.note }}</span>
-        <!-- A hand-entered payment says so, and can be deleted while no
-             invoice covers it; no extra column (the table fills 968px). -->
-        <template v-if="row.entry === 'manual'">
-          <span class="muted manual-line" data-test="payment-manual">Entered by hand <span class="nowrap">· {{ methodLabel(row) }}</span><template v-if="row.reference">{{ ' ' }}<span class="nowrap">· {{ row.reference }}</span></template></span>
+        <!-- A hand-entered payment says so; no extra column for Delete (the
+             table fills 968px). -->
+        <span v-if="row.entry === 'manual'" class="muted manual-line" data-test="payment-manual">Entered by hand <span class="nowrap">· {{ methodLabel(row) }}</span><template v-if="row.reference">{{ ' ' }}<span class="nowrap">· {{ row.reference }}</span></template></span>
+        <!-- Any payment can be deleted while no ISSUED invoice covers it,
+             imported or entered by hand (operator c61868, system_3 #10009,
+             #10010). Armed, the row says what a delete does. -->
+        <template v-if="!row.on_issued_invoice">
           <AspButton
-            v-if="!row.on_invoice"
             :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
             size="sm"
             class="manual-delete"
             :loading="deleting === row.id"
             data-test="payment-delete"
-            @click="removeManual(row)"
+            @click="removePayment(row)"
           >
             {{ confirmingDelete === row.id ? 'Delete this payment' : 'Delete' }}
           </AspButton>
+          <span v-if="confirmingDelete === row.id && deleteConsequence(row)" class="muted delete-reason" data-test="payment-delete-consequence">{{ deleteConsequence(row) }}</span>
         </template>
-        <span v-if="deleteReason(row)" class="muted delete-reason" data-test="payment-no-delete-reason">{{ deleteReason(row) }}</span>
+        <span v-else class="muted delete-reason" data-test="payment-no-delete-reason">On an issued invoice — cancel that invoice first</span>
       </template>
       <template #cell-gross_cents="{ row }"><span class="nowrap">{{ formatMoney(row.gross_cents, row.currency) }}</span></template>
       <template #cell-category="{ row }">
@@ -324,9 +338,8 @@
   import {
     CATEGORY_LABELS,
     METHOD_LABELS,
-    SOURCE_LABELS,
     N26_MAX_FILES,
-    deleteManualPayment,
+    deletePayment,
     SKIP_REASON_LABELS,
     errorOf,
     formatDay,
@@ -467,11 +480,16 @@
         const n = this.selected.length;
         return n ? `Set category of ${n} selected` : 'Set category of selected payments';
       },
+      // The shown rows a checkbox can act on: not on an issued invoice
+      // (§3.129 Decisions 4 and 6, design_agent c62100 on #10010).
+      selectableShown() {
+        return this.shown.filter((p) => !p.on_issued_invoice);
+      },
       allShownSelected() {
-        return this.shown.length > 0 && this.shown.every((p) => this.selected.includes(p.id));
+        return this.selectableShown.length > 0 && this.selectableShown.every((p) => this.selected.includes(p.id));
       },
       someShownSelected() {
-        return !this.allShownSelected && this.shown.some((p) => this.selected.includes(p.id));
+        return !this.allShownSelected && this.selectableShown.some((p) => this.selected.includes(p.id));
       },
       skippedReasons() {
         const reasons = (this.summary && this.summary.skipped_reasons) || {};
@@ -482,7 +500,7 @@
       // The selection never holds a row the owner cannot see (§3.25): a
       // filter change or a reload unselects rows that left the view.
       shown(rows) {
-        const visible = new Set(rows.map((p) => p.id));
+        const visible = new Set(rows.filter((p) => !p.on_issued_invoice).map((p) => p.id));
         const kept = this.selected.filter((id) => visible.has(id));
         if (kept.length !== this.selected.length) this.selected = kept;
       },
@@ -507,15 +525,14 @@
       methodLabel(row) {
         return METHOD_LABELS[row.method] || row.method;
       },
-      // Why Delete is missing (#9934-B2, operator c61373): the two reasons
-      // are distinct and the row gives no clue which one applies otherwise.
-      deleteReason(row) {
-        if (row.entry !== 'manual') {
-          const source = SOURCE_LABELS[row.source];
-          return source ? `Imported from ${source} — the file is its record` : 'Imported — the file is its record';
-        }
-        if (row.on_invoice) return 'On an invoice — delete or cancel that invoice first';
-        return '';
+      // What a delete does, said while it is armed (#10010): an imported
+      // payment leaves a tombstone, so the same file will not bring it back
+      // (#10009); one on a draft or cancelled invoice comes off that invoice.
+      deleteConsequence(row) {
+        const parts = [];
+        if (row.entry !== 'manual') parts.push('Gone for good: importing the same file again will not bring it back.');
+        if (row.on_invoice && !row.on_issued_invoice) parts.push('It also comes off the draft or cancelled invoice that lists it. A draft keeps its lines, so check its total.');
+        return parts.join(' ');
       },
       // Mirrors the server's isPayPalTransferIntoN26 (invoicing_n26.go):
       // an N26 row whose payer is PayPal. The PayPal payments it sums are
@@ -529,8 +546,8 @@
         return this.categoryOptions.map((o) => (o.value === 'paid_work' ? { ...o, disabled: true } : o));
       },
       // Two steps: the first press turns the button into "Delete this
-      // payment"; the server still refuses one that an invoice covers.
-      async removeManual(row) {
+      // payment"; the server still refuses one that an issued invoice covers.
+      async removePayment(row) {
         if (this.confirmingDelete !== row.id) {
           this.confirmingDelete = row.id;
           return;
@@ -538,7 +555,7 @@
         this.rowError = '';
         this.deleting = row.id;
         try {
-          await deleteManualPayment(row.id);
+          await deletePayment(row.id);
           this.selected = this.selected.filter((x) => x !== row.id);
         } catch (err) {
           this.rowError = errorOf(err).message;
@@ -627,7 +644,7 @@
         this.selected = on ? [...new Set([...this.selected, id])] : this.selected.filter((x) => x !== id);
       },
       selectAllShown(on) {
-        const ids = this.shown.map((p) => p.id);
+        const ids = this.selectableShown.map((p) => p.id);
         this.selected = on ? [...new Set([...this.selected, ...ids])] : this.selected.filter((id) => !ids.includes(id));
       },
       // Set one category on every selected row: one PATCH per row, in list
@@ -879,6 +896,12 @@
      rows does not shift the row and it grows with her text size. */
   .set-category {
     width: 20rem;
+  }
+
+  /* The invisible checkbox on an issued invoice's row: its box keeps the
+     gutter; it is neither seen, focused nor announced. */
+  .select-gutter {
+    visibility: hidden;
   }
 
   .select-all {
