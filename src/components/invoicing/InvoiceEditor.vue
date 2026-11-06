@@ -7,10 +7,10 @@
       <template v-if="!isDraft">
         <dl class="facts">
           <div><dt>Invoice number</dt><dd data-test="invoice-number">{{ invoice.invoice_number }}</dd></div>
-          <div><dt>Issue date</dt><dd data-test="invoice-issue-date">{{ formatDay(invoice.issue_date) }}</dd></div>
+          <div><dt class="fact-label">Issue date<AspLabelHint label="Issue date" :content="hints.issueDate" /></dt><dd data-test="invoice-issue-date">{{ formatDay(invoice.issue_date) }}</dd></div>
           <div><dt>Status</dt><dd><AspBadge :status="invoice.status === 'cancelled' ? 'negative' : 'positive'" data-test="invoice-status">{{ statusLabel }}</AspBadge></dd></div>
           <div><dt>Client</dt><dd data-test="invoice-client">{{ clientName }}</dd></div>
-          <div><dt>Service</dt><dd>{{ serviceLabel }}</dd></div>
+          <div><dt class="fact-label">Service<AspLabelHint label="Service" :content="hints.serviceFrom" /></dt><dd>{{ serviceLabel }}</dd></div>
           <div><dt>Total</dt><dd>{{ formatMoney(invoice.total_cents, invoice.currency) }}</dd></div>
         </dl>
         <p v-if="invoice.status === 'cancelled'" class="statement" data-test="invoice-cancelled">
@@ -82,17 +82,25 @@
       <template v-else>
         <div class="row">
           <div class="row__client full-select">
-            <AspSelect v-model="form.client_id" :options="clientOptions" label="Client" data-test="draft-client" />
+            <AspSelect v-model="form.client_id" :options="clientOptions" label="Client" :label-hint="hints.client" data-test="draft-client" />
           </div>
-          <label class="date-field">
-            <span>Service date (from)</span>
-            <input v-model="form.service_date_from" type="date" data-test="draft-from" />
-          </label>
-          <label class="date-field">
-            <span>Service until (optional)</span>
-            <input v-model="form.service_date_to" type="date" data-test="draft-to" />
-          </label>
-          <AspInput v-if="!kleinunternehmer" v-model="form.vat_percent" label="VAT rate (%)" class="row__vat" data-test="draft-vat" />
+          <!-- The hint sits beside the label, never inside it: inside a
+               <label>, a tap on it would focus the date (#10033). -->
+          <div class="date-field">
+            <div class="label-row">
+              <label for="draft-service-from">Service date (from)</label>
+              <AspLabelHint label="Service date (from)" :content="hints.serviceFrom" />
+            </div>
+            <input id="draft-service-from" v-model="form.service_date_from" type="date" data-test="draft-from" />
+          </div>
+          <div class="date-field">
+            <div class="label-row">
+              <label for="draft-service-until">Service until (optional)</label>
+              <AspLabelHint label="Service until (optional)" :content="hints.serviceUntil" />
+            </div>
+            <input id="draft-service-until" v-model="form.service_date_to" type="date" data-test="draft-to" />
+          </div>
+          <AspInput v-if="!kleinunternehmer" v-model="form.vat_percent" label="VAT rate (%)" :label-hint="hints.vatRate" class="row__vat" data-test="draft-vat" />
         </div>
 
         <div class="lines" data-test="draft-lines">
@@ -102,13 +110,13 @@
             <!-- AspInput forwards class to its <input>, not its root, so each
                  grid cell is a wrapper. -->
             <div class="line__desc">
-              <LineDescriptionInput v-model="line.description" :label="captioned(i) ? 'Description' : ''" :aria-label="`Description, line ${i + 1}`" />
+              <LineDescriptionInput v-model="line.description" :label="captioned(i) ? 'Description' : ''" :label-hint="captioned(i) ? hints.description : null" :aria-label="`Description, line ${i + 1}`" />
             </div>
             <div class="line__num">
               <AspInput v-model="line.quantity" :label="captioned(i) ? 'Quantity' : ''" :aria-label="`Quantity, line ${i + 1}`" />
             </div>
             <div class="line__num">
-              <AspInput v-model="line.price" :label="captioned(i) ? 'Unit price (€)' : ''" :aria-label="`Unit price, line ${i + 1}`" />
+              <AspInput v-model="line.price" :label="captioned(i) ? 'Unit price (€)' : ''" :label-hint="captioned(i) ? hints.unitPrice : null" :aria-label="`Unit price, line ${i + 1}`" />
             </div>
             <span class="line__total">{{ lineTotalLabel(line) }}</span>
             <AspButton variant="ghost" size="sm" class="line__remove" :aria-label="`Remove line ${i + 1}`" @click="form.lines.splice(i, 1)">Remove</AspButton>
@@ -184,11 +192,12 @@
 </template>
 
 <script>
-  import { AspBadge, AspButton, AspInput, AspModal, AspSelect, AspTextarea } from '@aspirant/design-system';
+  import { AspBadge, AspButton, AspInput, AspLabelHint, AspModal, AspSelect, AspTextarea } from '@aspirant/design-system';
   import axios from 'axios';
   import ReadState from '../ReadState.vue';
   import LineDescriptionInput from './LineDescriptionInput.vue';
   import ModalActions from './ModalActions.vue';
+  import { FIELD_HINTS } from './fieldHints.js';
   import {
     KLEINBETRAG_LIMIT_CENTS,
     STATUS_LABELS,
@@ -214,7 +223,7 @@
   // read-only record that can only be cancelled (Storno).
   export default {
     name: 'InvoiceEditor',
-    components: { AspBadge, AspButton, AspInput, AspModal, AspSelect, AspTextarea, LineDescriptionInput, ModalActions, ReadState },
+    components: { AspBadge, AspButton, AspInput, AspLabelHint, AspModal, AspSelect, AspTextarea, LineDescriptionInput, ModalActions, ReadState },
     props: {
       open: { type: Boolean, default: false },
       invoiceId: { type: Number, default: null },
@@ -229,6 +238,7 @@
     data() {
       return {
         detail: null,
+        hints: FIELD_HINTS,
         limitCents: KLEINBETRAG_LIMIT_CENTS,
         loadError: false,
         form: { client_id: 0, service_date_from: '', service_date_to: '', vat_percent: '19', lines: [] },
@@ -539,6 +549,27 @@
     gap: var(--space-2xs);
     font-size: var(--text-sm);
     min-width: 0;
+  }
+
+  /* A label row with its hint (#10032): the row is the hint's containing
+     block (DS AspLabelHint's layout contract). */
+  .label-row,
+  .fact-label {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  /* A date label can wrap in its half-width column ("Service until" over
+     "(optional)" at 390). Laid out inline, the "?" follows the last word
+     instead of standing at the column's far edge. The row stays the
+     positioned containing block of the hint's hit area. */
+  .date-field .label-row {
+    display: block;
+  }
+
+  .date-field .label-row label {
+    display: inline;
   }
 
   .date-field input {

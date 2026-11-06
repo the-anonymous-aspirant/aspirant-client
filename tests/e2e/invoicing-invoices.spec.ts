@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from '@playwright/test';
+import { test, expect, type Locator, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 
 /** Invoices app, D1 (system_3 #8367-D1): create a draft from paid-work
@@ -403,5 +403,99 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await open(page, fake);
     await expect(page.locator('[data-test="payment-row"]')).toHaveCount(3);
     await expect(page.locator('[data-test="payment-row"][data-txn="TX3"]')).toContainText('50.00 X1');
+  });
+});
+
+// system_3 #10032 (operator c61358; wording per design_agent c62042): a "?"
+// beside each field label says what the field means. On a phone a tap opens
+// it without focusing the field (DS AspLabelHint, #10033); a second tap
+// closes it. No hint repeats its field's own visible hint line.
+test.describe('#10032 the invoicing fields explain themselves', () => {
+  // `marks` is how many "?" the scope shows: on a phone every line item is
+  // captioned, so a line's labels (and hints) repeat per line.
+  const tapEach = async (page: Page, scope: Locator, expected: Record<string, string>, marks = Object.keys(expected).length) => {
+    await expect(scope.locator('[data-asp-label-hint]')).toHaveCount(marks);
+    for (const [label, text] of Object.entries(expected)) {
+      const mark = scope.getByRole('button', { name: `More about ${label}`, exact: true }).first();
+      await mark.scrollIntoViewIfNeeded();
+      const b = (await mark.boundingBox())!;
+      await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+      await expect(page.getByRole('tooltip')).toHaveText(text);
+      const focused = await page.evaluate(() => !!document.activeElement && document.activeElement.hasAttribute('data-asp-label-hint'));
+      expect(focused, `${label}: the tap focuses the mark, not the field`).toBe(true);
+      await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+      await expect(page.getByRole('tooltip')).toHaveCount(0);
+    }
+  };
+
+  test('the draft editor: Client, both service dates, Description and Unit price; Quantity has none', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    const fake = newFake();
+    await open(page, fake);
+    await createFromTwo(page);
+    const editor = page.locator('[data-test="invoice-editor"]');
+    await tapEach(page, editor, {
+      Client: 'Who the invoice is for. Their name and address are printed on it.',
+      'Service date (from)': 'The day the work was done, or the first day if it ran over several days.',
+      'Service until (optional)': 'The last day, if the work ran over several days.',
+      Description: 'What the work was. This is the line on the invoice.',
+      'Unit price (€)': 'The price for one, before tax.',
+    }, 7); // Client, two dates, and Description + Unit price on each of the two lines
+    await expect(editor.getByRole('button', { name: 'More about Quantity', exact: true })).toHaveCount(0);
+    // A tap on a date's own label still focuses the date.
+    await editor.getByText('Service date (from)', { exact: true }).click();
+    await expect(page.locator('[data-test="draft-from"]')).toBeFocused();
+  });
+
+  test('Enter payment by hand: Client, Reference, Payer and What it was for; Amount and Method have none', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    const fake = newFake();
+    await open(page, fake);
+    await page.locator('[data-test="manual-new"]').click();
+    const form = page.locator('[data-test="manual-form"]');
+    await tapEach(page, form, {
+      Client: 'Who the invoice is for. Their name and address are printed on it.',
+      'Reference (optional)': 'A number from the bank or the payer, if there is one.',
+      'Payer (optional)': 'Who sent the money, if not the client.',
+      'What it was for': 'It becomes the line on the invoice.',
+    });
+    for (const label of ['Amount (€)', 'Method']) await expect(form.getByRole('button', { name: `More about ${label}`, exact: true })).toHaveCount(0);
+  });
+
+  test('the issued view: Issue date and Service', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    const fake = newFake();
+    await open(page, fake);
+    await createFromTwo(page);
+    await page.locator('[data-test="draft-issue"]').click();
+    await page.locator('[data-test="issue-confirm-button"]').click();
+    const editor = page.locator('[data-test="invoice-editor"][data-status="issued"]');
+    await expect(editor).toBeVisible();
+    await tapEach(page, editor, {
+      'Issue date': 'The day you issue the invoice. It is set when you press Issue.',
+      Service: 'The day the work was done, or the first day if it ran over several days.',
+    });
+  });
+
+  test('the issuer profile: Steuernummer, prefix and next number, none repeating its own hint line', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    const fake = newFake();
+    await open(page, fake);
+    await page.getByRole('button', { name: 'Edit profile' }).click();
+    const form = page.locator('[data-test="profile-form"]');
+    await tapEach(page, form, {
+      'Steuernummer (Tax number)': 'Your tax number from the Finanzamt. Printed on every invoice.',
+      'Invoice number prefix': 'The start of every invoice number.',
+      'Next invoice number': 'The number your next invoice gets.',
+    });
+    // Each hint against its field's visible hint line: never equal, never contained.
+    for (const [label, tip] of [
+      ['Steuernummer (Tax number)', 'Your tax number from the Finanzamt. Printed on every invoice.'],
+      ['Invoice number prefix', 'The start of every invoice number.'],
+      ['Next invoice number', 'The number your next invoice gets.'],
+    ]) {
+      const line = (await form.locator('.field').filter({ has: page.getByRole('button', { name: `More about ${label}`, exact: true }) }).locator('.field__message--hint').innerText()).trim();
+      expect(line.includes(tip) || tip.includes(line), `${label}: hint "${tip}" vs line "${line}"`).toBe(false);
+    }
   });
 });

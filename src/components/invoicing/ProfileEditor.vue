@@ -3,7 +3,7 @@
     <form class="profile-form" data-test="profile-form" @submit.prevent="save">
       <AspInput v-model="form.full_name" label="Full name" required />
       <AspTextarea v-model="form.address" label="Address" hint="One line per address line." :rows="3" required />
-      <AspInput v-model="form.steuernummer" label="Steuernummer (Tax number)" hint="Invoices cannot be issued while this is empty." />
+      <AspInput v-model="form.steuernummer" label="Steuernummer (Tax number)" :label-hint="hints.steuernummer" hint="Invoices cannot be issued while this is empty." />
       <AspInput v-model="form.email" type="email" label="Email" />
       <!-- Optional; printed under the email on new invoices only when set
            (operator c61727, system_3 #9967). The server is the only gate on
@@ -42,11 +42,12 @@
       </fieldset>
       <AspCheckbox v-model="form.is_kleinunternehmer" label="Kleinunternehmerin under § 19 UStG (no VAT charged)" />
       <div class="profile-form__numbers">
-        <AspInput v-model="form.invoice_number_prefix" label="Invoice number prefix" hint="For example 2026." required />
+        <AspInput v-model="form.invoice_number_prefix" label="Invoice number prefix" :label-hint="hints.prefix" hint="For example 2026." required />
         <AspInput
           v-model="form.next_invoice_number"
           type="number"
           label="Next invoice number"
+          :label-hint="hints.nextNumber"
           hint="Locked once an invoice uses this prefix."
           required
         />
@@ -114,6 +115,7 @@
 <script>
   import { AspButton, AspCheckbox, AspInput, AspModal, AspTextarea } from '@aspirant/design-system';
   import ModalActions from './ModalActions.vue';
+  import { FIELD_HINTS } from './fieldHints.js';
   import { FIELD_REFUSALS, deleteLogo, errorOf, getLogoBlob, saveProfile, uploadLogo } from './api.js';
 
   // Edits the issuer header printed on every invoice (spec §4.1). The admin
@@ -134,6 +136,7 @@
     emits: ['update:open', 'saved', 'logo-changed'],
     data() {
       return {
+        hints: FIELD_HINTS,
         form: this.copy(this.profile),
         saving: false,
         error: '',
