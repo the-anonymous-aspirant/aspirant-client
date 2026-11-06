@@ -134,15 +134,26 @@
         <!-- The §10 Steuernummer guardrail made visible where issuing
              happens. The button is not disabled: the server is the gate. -->
         <div v-if="steuernummerMissing" class="issue-blocked" data-test="draft-issue-blocked">
-          <AspBadge status="caution">Missing: needed to issue</AspBadge>
+          <AspBadge status="caution">Tax number needed to issue</AspBadge>
           <span class="muted">Add a Steuernummer (tax number) in the issuer profile to issue.</span>
         </div>
         <!-- §33 UStDV (system_3 #9835): a client without an address can be
              invoiced up to 250 € gross. The server checks the total at issue
-             and its refusal names it; this note only says so up front. -->
-        <div v-if="chosenClientHasNoAddress" class="issue-blocked" data-test="draft-no-address">
+             and its refusal names it; this note only says so up front, and
+             turns into a warning once the draft's own gross is over the limit
+             (#9949, operator c61373). -->
+        <div v-if="addressNeeded" class="issue-blocked" data-test="draft-no-address" data-level="caution">
+          <AspBadge status="caution">Address needed to issue</AspBadge>
+          <span v-if="draftCurrency === 'EUR'" class="muted" data-test="draft-no-address-text">
+            This invoice totals {{ formatMoney(draftGrossCents, draftCurrency) }} gross. Above {{ formatMoney(limitCents, 'EUR') }} it must name {{ chosenClientName }}'s postal address. Save the draft, then add it under Clients.
+          </span>
+          <span v-else class="muted" data-test="draft-no-address-text">
+            An invoice in {{ draftCurrency }} must name {{ chosenClientName }}'s postal address. Save the draft, then add it under Clients.
+          </span>
+        </div>
+        <div v-else-if="chosenClientHasNoAddress" class="issue-blocked" data-test="draft-no-address" data-level="neutral">
           <AspBadge status="neutral">No client address</AspBadge>
-          <span class="muted">Needed over 250 € gross. Add it under Clients.</span>
+          <span class="muted">Needed over {{ formatMoney(limitCents, 'EUR') }} gross. Add it under Clients.</span>
         </div>
       </template>
 
@@ -179,6 +190,7 @@
   import LineDescriptionInput from './LineDescriptionInput.vue';
   import ModalActions from './ModalActions.vue';
   import {
+    KLEINBETRAG_LIMIT_CENTS,
     STATUS_LABELS,
     cancelInvoice,
     centsFromEuros,
@@ -217,6 +229,7 @@
     data() {
       return {
         detail: null,
+        limitCents: KLEINBETRAG_LIMIT_CENTS,
         loadError: false,
         form: { client_id: 0, service_date_from: '', service_date_to: '', vat_percent: '19', lines: [] },
         busy: false,
@@ -270,6 +283,37 @@
       chosenClientHasNoAddress() {
         const c = this.clients.find((x) => x.id === this.form.client_id);
         return !!c && !(c.address || '').trim();
+      },
+      chosenClientName() {
+        const c = this.clients.find((x) => x.id === this.form.client_id);
+        return c ? c.name : '';
+      },
+      draftCurrency() {
+        return (this.invoice && this.invoice.currency) || 'EUR';
+      },
+      // The draft's gross as the server computes it at issue (aspirant-server
+      // recomputeTotals): each line rounds q×p/1000, the VAT rounds
+      // net×bp/10000, and a Kleinunternehmerin charges none. Read from the
+      // form, so it follows unsaved edits. A line that is not yet a number
+      // counts for nothing (issuing refuses it anyway); a VAT rate that is not
+      // a number leaves the gross unknown (null).
+      draftGrossCents() {
+        let net = 0;
+        for (const line of this.form.lines) {
+          const q = milliFromDecimal(line.quantity);
+          const p = centsFromEuros(line.price);
+          if (q !== null && p !== null) net += Math.round((q * p) / 1000);
+        }
+        if (this.kleinunternehmer) return net;
+        const bp = centsFromEuros(this.form.vat_percent);
+        return bp === null ? null : net + Math.round((net * bp) / 10000);
+      },
+      // §33 UStDV, as aspirant-server's InvoiceNeedsRecipientAddress: above
+      // 250 € gross, or in any other currency, the address is required.
+      addressNeeded() {
+        if (!this.chosenClientHasNoAddress) return false;
+        if (this.draftCurrency !== 'EUR') return true;
+        return this.draftGrossCents !== null && this.draftGrossCents > KLEINBETRAG_LIMIT_CENTS;
       },
       serviceLabel() {
         const from = formatDay(this.invoice.service_date_from);
