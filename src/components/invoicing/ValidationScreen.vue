@@ -15,7 +15,14 @@
           </ul>
         </template>
         <template v-else-if="report.warnings.length">
-          <p class="lead" data-test="validation-warned">The data passes every rule, with these warnings:</p>
+          <!-- Nothing downloads until Download anyway is pressed, and the screen
+               stays open after it, so the lead says which side of that it is on
+               (system_3 #9989, from #9964). -->
+          <p class="lead" data-test="validation-warned">
+            <template v-if="downloaded">The download has started.</template>
+            <template v-else>Nothing has downloaded yet: Download anyway sends the file.</template>
+            The data passes every rule, with these warnings:
+          </p>
           <ul class="findings" data-test="validation-warnings">
             <li v-for="(w, i) in report.warnings" :key="'w' + i">{{ w.message }}</li>
           </ul>
@@ -63,7 +70,7 @@
     // the screen closes (system_3 #9960).
     emits: ['update:open', 'downloading', 'download-failed'],
     data() {
-      return { state: 'idle', report: null, error: '', downloading: false, downloadError: '' };
+      return { state: 'idle', report: null, error: '', downloading: false, downloaded: false, downloadError: '' };
     },
     watch: {
       open: {
@@ -77,6 +84,7 @@
       async check() {
         this.state = 'checking';
         this.report = null;
+        this.downloaded = false;
         this.downloadError = '';
         try {
           this.report = await getValidation();
@@ -89,10 +97,12 @@
       },
       async download() {
         this.downloading = true;
+        this.downloaded = false;
         this.downloadError = '';
         this.$emit('downloading', true);
         try {
           await downloadBlob(this.url, this.filename);
+          this.downloaded = true;
         } catch (err) {
           // The server's own reason when it gave one (a refused invoice names
           // itself), else the generic line.
