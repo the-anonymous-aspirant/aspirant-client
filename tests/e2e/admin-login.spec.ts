@@ -91,4 +91,108 @@ test.describe('Admin sign-in at /admin/login', () => {
     await page.goto('/applications');
     await expect(page).toHaveURL('/login?redirect=/applications');
   });
+
+  // system_3 #8798-B2: nginx's auth_request 302s an already-Admin session
+  // here after the Cloudflare PIN hop, because the PIN redirect is a
+  // cross-site navigation and the SameSite=Strict auth_token cookie does not
+  // ride it. These two tests pin the live /api/profile check that tells a
+  // merely-stale cached role apart from a genuinely dead one, so the form
+  // only shows when the cookie is actually no longer good.
+  test.describe('the redirect case: admin + ?redirect, cookie verified live', () => {
+    test('a live Admin cookie goes straight to the redirect target, no form', async ({ page }) => {
+      // seedAdminSession also stubs GET /api/profile -> 200 (a live cookie).
+      await seedAdminSession(page);
+      await page.goto('/admin/login?redirect=/admin');
+      await expect(page).toHaveURL('/admin');
+      await dismissMobileSidebarIfPresent(page);
+      await expect(page.getByRole('heading', { level: 1, name: 'Admin' })).toBeVisible();
+      await expect(page.locator('input[name="username"]')).toHaveCount(0);
+    });
+
+    test('a cached Admin flag whose cookie has actually expired still shows the form', async ({ page }) => {
+      await seedAdminSession(page);
+      // Registered after the seed, so it wins (routes match most-recent
+      // first): the live check this time finds a dead cookie.
+      await page.route(/\/api\/profile$/, (route: Route) =>
+        route.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { message: 'Authentication required' } }),
+        }),
+      );
+      await page.goto('/admin/login?redirect=/admin');
+      await expect(page).toHaveURL('/admin/login?redirect=/admin');
+      await dismissMobileSidebarIfPresent(page);
+      await expect(page.getByRole('heading', { level: 1, name: 'Admin sign-in' })).toBeVisible();
+      await expect(page.locator('input[name="username"]')).toBeVisible();
+    });
+
+    test('an anonymous visitor bounced here by the guard still sees the form (no cached role at all)', async ({ page }) => {
+      await page.goto('/admin/login?redirect=/admin');
+      await dismissMobileSidebarIfPresent(page);
+      await expect(page).toHaveURL('/admin/login?redirect=/admin');
+      await expect(page.getByRole('heading', { level: 1, name: 'Admin sign-in' })).toBeVisible();
+      await expect(page.locator('input[name="username"]')).toBeVisible();
+    });
+
+    // design_agent's ack (c63362) on this task spells out three more states
+    // by number; these three tests pin them.
+    test('state 3: shows "Checking your session…" in place of the form while the check is in flight', async ({ page }) => {
+      await seedAdminSession(page);
+      await page.route(/\/api\/profile$/, async (route: Route) => {
+        await new Promise(resolve => setTimeout(resolve, 1_200));
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ username: 'e2e-admin' }) });
+      });
+      await page.goto('/admin/login?redirect=/admin');
+      // Checked before dismissMobileSidebarIfPresent: that call itself takes
+      // time the delayed response could outlast, racing the very state this
+      // test exists to observe.
+      await expect(page.getByRole('status')).toHaveText('Checking your session…');
+      await expect(page.locator('input[name="username"]')).toHaveCount(0);
+      await expect(page).toHaveURL('/admin'); // once the delayed answer lands
+    });
+
+    test('state 6: a second arrival for the same target inside the loop window shows the form without re-checking', async ({ page }) => {
+      await seedAdminSession(page);
+      let profileCalls = 0;
+      await page.route(/\/api\/profile$/, (route: Route) => {
+        profileCalls++;
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ username: 'e2e-admin' }) });
+      });
+      // Simulate "we already forwarded to /admin a moment ago and landed
+      // right back here" — the shape a disagreeing auth_request produces.
+      await page.addInitScript((target) => {
+        sessionStorage.setItem('admin_login_last_forward', JSON.stringify({ target, at: Date.now() }));
+      }, '/admin');
+      await page.goto('/admin/login?redirect=/admin');
+      await dismissMobileSidebarIfPresent(page);
+      await expect(page.getByRole('heading', { level: 1, name: 'Admin sign-in' })).toBeVisible();
+      await expect(page.locator('input[name="username"]')).toBeVisible();
+      await expect(page).toHaveURL('/admin/login?redirect=/admin');
+      // Sidebar.vue fetches GET /api/profile on its own, for the avatar,
+      // independent of this guard (mockBackend's answerSeededProfile exists
+      // for exactly that read) — that is the one call. The loop breaker is
+      // proven by there being no SECOND one from LoginView's own check.
+      expect(profileCalls).toBe(1);
+    });
+
+    test('states 3+5: a check that neither answers nor fails within ~2s falls back to the form, and a later answer is ignored', async ({ page }) => {
+      await seedAdminSession(page);
+      await page.route(/\/api\/profile$/, async (route: Route) => {
+        await new Promise(resolve => setTimeout(resolve, 3_000));
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ username: 'e2e-admin' }) });
+      });
+      await page.goto('/admin/login?redirect=/admin');
+      await dismissMobileSidebarIfPresent(page);
+      // The 2s cap puts the form up well before the 3s answer arrives.
+      await expect(page.getByRole('heading', { level: 1, name: 'Admin sign-in' })).toBeVisible({ timeout: 2_500 });
+      await expect(page.locator('input[name="username"]')).toBeVisible();
+      // Give the late 3s answer time to land, then confirm it changed nothing:
+      // still the form, still this URL — the late answer must not pull the
+      // form away or navigate out from under the operator (D13).
+      await page.waitForTimeout(1_500);
+      await expect(page).toHaveURL('/admin/login?redirect=/admin');
+      await expect(page.locator('input[name="username"]')).toBeVisible();
+    });
+  });
 });
