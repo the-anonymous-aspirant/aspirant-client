@@ -59,6 +59,7 @@
 
       <ClientsPanel v-if="tab === 'clients'" :clients="clients" @changed="fetchAll" />
       <InvoicesPanel v-else-if="tab === 'invoices'" :refresh-key="refreshKey" @open="openInvoice" />
+      <BookPanel v-else-if="tab === 'book'" :payments="payments" :expenses="expenses" @changed="fetchAll" />
       <PaymentsPanel v-else :payments="payments" :clients="clients" @changed="fetchAll" @open-invoice="openInvoice" />
 
       <InvoiceEditor
@@ -88,9 +89,10 @@
   import ClientsPanel from '../../../components/invoicing/ClientsPanel.vue';
   import PaymentsPanel from '../../../components/invoicing/PaymentsPanel.vue';
   import InvoicesPanel from '../../../components/invoicing/InvoicesPanel.vue';
+  import BookPanel from '../../../components/invoicing/BookPanel.vue';
   import InvoiceEditor from '../../../components/invoicing/InvoiceEditor.vue';
   import ProfileEditor from '../../../components/invoicing/ProfileEditor.vue';
-  import { errorOf, getProfile, listClients, listPayments } from '../../../components/invoicing/api.js';
+  import { errorOf, getProfile, listClients, listExpenses, listPayments } from '../../../components/invoicing/api.js';
 
   // The Invoices app (system_3 #8367): one person's invoicing. The server
   // gates every route to the owner + Admin
@@ -108,6 +110,7 @@
       ClientsPanel,
       PaymentsPanel,
       InvoicesPanel,
+      BookPanel,
       InvoiceEditor,
       ProfileEditor,
     },
@@ -121,6 +124,7 @@
         hasLogo: false,
         clients: [],
         payments: [],
+        expenses: [],
         refreshKey: 0,
         profileOpen: false,
         editorOpen: false,
@@ -129,6 +133,7 @@
         tabs: [
           { value: 'payments', label: 'Payments' },
           { value: 'invoices', label: 'Invoices' },
+          { value: 'book', label: 'Book' },
           { value: 'clients', label: 'Clients' },
         ],
       };
@@ -156,8 +161,19 @@
         } catch (err) {
           if (errorOf(err).status === 403) this.forbidden = true;
           else this.loadError = true;
-        } finally {
           this.loading = false;
+          return;
+        }
+        this.loading = false;
+        // Fetched separately and never fatal to the rest of the page: every
+        // other Invoicing spec's mock fixture predates this endpoint and
+        // does not stub it, so a hard dependency here 404s and blanks every
+        // tab, not just Book (system_3 #10430-adjacent regression, caught
+        // by the manager reading verify-aspirant-428's log live).
+        try {
+          this.expenses = await listExpenses();
+        } catch {
+          this.expenses = [];
         }
       },
       openInvoice(id) {

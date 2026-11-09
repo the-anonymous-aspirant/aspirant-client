@@ -70,6 +70,19 @@ export const n26FileErrorReason = (fileError) =>
   N26_FILE_ERROR_LABELS[fileError && fileError.code] || (fileError && fileError.message) || 'unreadable';
 
 export const listPayments = () => axios.get(`${base}/payments`).then((r) => r.data.payments || []);
+
+// Work expenses and their categories (system_3 #10414-A/#10424). An expense
+// is never invoiced, so there is no patch/draft path, only create/list/delete.
+export const listExpenses = () => axios.get(`${base}/expenses`).then((r) => r.data.expenses || []);
+export const createManualExpense = (expense) =>
+  axios.post(`${base}/expenses/manual`, expense).then((r) => r.data.expense);
+export const deleteExpense = (id) => axios.delete(`${base}/expenses/${id}`);
+// Seeded with ten starter types on first touch; the owner can add her own on
+// top (operator's own ask, #10424).
+export const listExpenseCategories = () =>
+  axios.get(`${base}/expense-categories`).then((r) => r.data.categories || []);
+export const createExpenseCategory = (category) =>
+  axios.post(`${base}/expense-categories`, category).then((r) => r.data.category);
 export const patchPayment = (id, patch) => axios.patch(`${base}/payments/${id}`, patch).then((r) => r.data.payment);
 // A payment entered by hand (#8409): always incoming paid work, audited.
 export const createManualPayment = (payment) =>
