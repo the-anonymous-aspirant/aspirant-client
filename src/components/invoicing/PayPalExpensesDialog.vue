@@ -5,7 +5,7 @@
   <AspModal :open="open" title="Add PayPal expenses" size="md" @update:open="close">
     <div class="ppx" data-test="paypal-expenses-review">
       <p class="ppx__lead">
-        Your PayPal payments are imported. The file also lists payments you made: add the ones that were for your work.
+        Your PayPal payments are imported. The file also lists payments you made: add the ones that were for your work. To add them later, import this file again.
       </p>
       <ExpenseCandidatesSection
         :items="items"
@@ -115,7 +115,9 @@
       setCategory(key, category) {
         this.state = { ...this.state, [key]: { ...this.state[key], category } };
       },
-      // Dismissing adds nothing; the payments are in either way.
+      // Dismissing adds nothing; the payments are in either way. Nothing on
+      // the page reopens the review: importing the same file again offers
+      // the rows not yet in the book (the lead says so).
       close(value) {
         if (this.confirming || value) return;
         this.$emit('done', { confirmed: 0, duplicates: 0 });
@@ -151,9 +153,12 @@
     margin: 0;
   }
 
+  /* AspModal's panel is --surface-card, a dark setter in both themes:
+     --feedback-error measures under 4.5:1 on it (system_3 #10438 design ack
+     c64136, §3 P20). */
   .ppx__error {
     margin: 0;
-    color: var(--feedback-error);
+    color: var(--feedback-error-text-on-dark);
   }
 
   .ppx-footer {

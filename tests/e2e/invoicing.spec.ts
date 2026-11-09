@@ -648,6 +648,35 @@ test.describe('#10438 PayPal import — outgoing payments reviewed as work expen
     await expect(page.locator('[data-test="paypal-summary-expenses"]')).toHaveCount(0);
   });
 
+  // Design ack c64136, condition 1: nothing on the page reopens a dismissed
+  // review, so the lead names the way back, and the way back must work.
+  test('after "Not now", importing the same file again offers the same rows, its payments already imported', async ({ page }) => {
+    const outgoing = [paypalOutgoing(1), paypalOutgoing(2)];
+    const fake = importWithOutgoing(outgoing);
+    // The server recomputes the candidates on every import and flags only the
+    // stored ones; the dismissed rows were never stored.
+    fake.importResponses.push({
+      status: 200,
+      body: {
+        summary: { rows_read: 4, imported: 0, duplicates: 2, skipped: 2, withdrawals: 0, skipped_reasons: { outgoing: 2 } },
+        expense_candidates: outgoing,
+      },
+    });
+    await importPayPal(page, fake);
+    await expect(ppxReview(page)).toContainText('To add them later, import this file again.');
+    await page.locator('[data-test="paypal-expenses-cancel"]').click();
+    await expect(ppxReview(page)).toBeHidden();
+
+    await page.locator('[data-test="payments-file"]').setInputFiles(paypalCsv);
+    await expect(ppxReview(page)).toBeVisible();
+    await expect(ppxRows(page)).toHaveCount(2);
+    await expect(ppxRows(page).nth(0)).toContainText('Some Shop');
+    await expect(ppxRows(page).nth(1)).toContainText('Print Shop');
+    for (let i = 0; i < 2; i++) await expect(ppxRows(page).nth(i).locator('input[type="checkbox"]')).not.toBeChecked();
+    await expect(page.locator('[data-test="import-summary"]')).toContainText('PayPal CSV: read 4 rows: 0 imported, 2 already imported, 2 skipped.');
+    expect(ppxConfirms(fake)).toHaveLength(0);
+  });
+
   test('a file whose outgoing payments are all in the book already, or that has none, opens no review', async ({ page }) => {
     const fake = importWithOutgoing([paypalOutgoing(1, { already_imported: true })]);
     await importPayPal(page, fake);
