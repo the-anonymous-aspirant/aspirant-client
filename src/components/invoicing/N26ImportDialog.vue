@@ -67,6 +67,16 @@
             </div>
           </li>
         </ul>
+        <!-- A statement's outgoing rows (system_3 #10417), offered as work
+             expenses beside the payments, never mixed into them. -->
+        <ExpenseCandidatesSection
+          v-if="!file.error && (file.expense_candidates || []).length"
+          :items="expenseItems(f)"
+          :categories="categories"
+          :disabled="confirming"
+          @update:checked="setExpenseChecked"
+          @update:category="setExpenseCategory"
+        />
       </section>
       <p v-if="error" class="n26__error" role="alert" data-test="n26-error">{{ error }}</p>
     </div>
@@ -76,14 +86,14 @@
         <ModalActions>
           <template v-if="importable">
             <AspButton variant="secondary" :disabled="confirming" data-test="n26-cancel" @click="close(false)">Cancel</AspButton>
-            <AspButton :loading="confirming" :disabled="checkedRows.length === 0" data-test="n26-confirm" @click="confirm">
+            <AspButton :loading="confirming" :disabled="nothingTicked" data-test="n26-confirm" @click="confirm">
               {{ confirmLabel }}
             </AspButton>
           </template>
           <AspButton v-else variant="secondary" data-test="n26-close" @click="close(false)">Close</AspButton>
         </ModalActions>
         <!-- States what enables the primary (§3.114, c60358 item 4). -->
-        <p v-if="importable && checkedRows.length === 0" class="n26-footer__note n26-footer__note--end" data-test="n26-tick-hint">
+        <p v-if="importable && nothingTicked" class="n26-footer__note n26-footer__note--end" data-test="n26-tick-hint">
           Tick at least one row to import.
         </p>
       </div>
@@ -93,8 +103,22 @@
 
 <script>
   import { AspButton, AspCheckbox, AspModal } from '@aspirant/design-system';
+  import ExpenseCandidatesSection from './ExpenseCandidatesSection.vue';
   import ModalActions from './ModalActions.vue';
-  import { N26_KIND_LABELS, confirmN26Rows, errorOf, formatDay, formatMoney, n26FileErrorReason } from './api.js';
+  import {
+    N26_KIND_LABELS,
+    confirmN26Expenses,
+    confirmN26Rows,
+    errorOf,
+    formatDay,
+    formatMoney,
+    listExpenseCategories,
+    n26FileErrorReason,
+  } from './api.js';
+
+  // Every book has this category (the server seeds it), so it is the
+  // default and the fallback when the list cannot be read.
+  const EXPENSE_CATEGORY_DEFAULT = 'other';
 
   // The confirm-each-row step of the N26 import (system_3 #9760-B1). The
   // server has parsed the files and stored nothing; this dialog posts back
@@ -104,17 +128,28 @@
   // statement) starts unticked. The server re-validates and dedupes anyway.
   export default {
     name: 'N26ImportDialog',
-    components: { AspButton, AspCheckbox, AspModal, ModalActions },
+    components: { AspButton, AspCheckbox, AspModal, ExpenseCandidatesSection, ModalActions },
     props: {
       open: { type: Boolean, default: false },
-      // The parse response: [{ filename, document_kind, candidates, skipped, error }].
+      // The parse response: [{ filename, document_kind, candidates,
+      // expense_candidates, skipped, error }].
       files: { type: Array, default: () => [] },
       // The stored payments, to name the one a look-alike row matches.
       payments: { type: Array, default: () => [] },
     },
     emits: ['update:open', 'imported'],
     data() {
-      return { checked: {}, confirming: false, error: '' };
+      return {
+        checked: {},
+        // Per outgoing row, keyed like `checked`: { checked, category }.
+        expenseState: {},
+        categories: [EXPENSE_CATEGORY_DEFAULT],
+        // The payments half of a confirm that already went through, so a
+        // retry after the expenses half failed does not post them again.
+        paymentsResult: null,
+        confirming: false,
+        error: '',
+      };
     },
     computed: {
       rows() {
@@ -122,22 +157,49 @@
         this.files.forEach((file, f) => (file.candidates || []).forEach((row, r) => out.push({ f, r, row })));
         return out;
       },
+      expenseRows() {
+        const out = [];
+        this.files.forEach((file, f) =>
+          (file.error ? [] : file.expense_candidates || []).forEach((row, r) => out.push({ f, r, row })));
+        return out;
+      },
       importable() {
-        return this.rows.some(({ row }) => !row.already_imported);
+        return [...this.rows, ...this.expenseRows].some(({ row }) => !row.already_imported);
       },
       checkedRows() {
         return this.rows.filter(({ f, r }) => this.isChecked(f, r)).map(({ row }) => row);
       },
+      // The ticked outgoing rows as the expense confirm takes them.
+      checkedExpenses() {
+        return this.expenseRows
+          .filter(({ f, r, row }) => !row.already_imported && this.expenseOf(f, r).checked)
+          .map(({ f, r, row }) => ({
+            transaction_id: row.transaction_id,
+            paid_on: row.paid_on,
+            currency: row.currency,
+            amount_cents: row.amount_cents,
+            payee_name: row.payee_name,
+            note: row.note,
+            category: this.expenseOf(f, r).category,
+          }));
+      },
+      nothingTicked() {
+        return this.checkedRows.length === 0 && this.checkedExpenses.length === 0;
+      },
       confirmLabel() {
         const n = this.checkedRows.length;
-        return `Import ${n} payment${n === 1 ? '' : 's'}`;
+        const payments = `${n} payment${n === 1 ? '' : 's'}`;
+        const e = this.checkedExpenses.length;
+        if (!e) return `Import ${payments}`;
+        const expenses = `${e} expense${e === 1 ? '' : 's'}`;
+        return n ? `Import ${payments} and ${expenses}` : `Import ${expenses}`;
       },
       // Rows the server left out because their payer is PayPal (#9881).
       paypalTotal() {
         return this.files.reduce((n, file) => n + this.paypalSkipped(file), 0);
       },
       nothingLine() {
-        if (this.rows.length) return 'Nothing new to import: every row is already imported.';
+        if (this.rows.length || this.expenseRows.length) return 'Nothing new to import: every row is already imported.';
         if (this.paypalTotal) return 'Nothing to import: every payment read is a transfer from PayPal.';
         return 'Nothing to import: no payment could be read from these files.';
       },
@@ -152,7 +214,16 @@
             checked[`${f}:${r}`] = !row.already_imported && !row.possible_duplicate_of;
           }
           this.checked = checked;
+          // Outgoing rows start unticked: most of a statement's spending is
+          // not work. Each starts in the catch-all category.
+          const expenseState = {};
+          for (const { f, r } of this.expenseRows) {
+            expenseState[`${f}:${r}`] = { checked: false, category: EXPENSE_CATEGORY_DEFAULT };
+          }
+          this.expenseState = expenseState;
+          this.paymentsResult = null;
           this.error = '';
+          if (this.expenseRows.length) this.loadCategories();
         },
       },
     },
@@ -189,14 +260,37 @@
       setChecked(f, r, on) {
         this.checked = { ...this.checked, [`${f}:${r}`]: on };
       },
+      async loadCategories() {
+        try {
+          const names = (await listExpenseCategories()).map((c) => c.name).filter(Boolean);
+          if (names.length) this.categories = names;
+        } catch (err) {
+          // The picker still offers the catch-all; the server checks the rest.
+          this.categories = [EXPENSE_CATEGORY_DEFAULT];
+        }
+      },
+      expenseOf(f, r) {
+        return this.expenseState[`${f}:${r}`] || { checked: false, category: EXPENSE_CATEGORY_DEFAULT };
+      },
+      expenseItems(f) {
+        return this.expenseRows
+          .filter((e) => e.f === f)
+          .map(({ r, row }) => ({ key: `${f}:${r}`, row, ...this.expenseOf(f, r) }));
+      },
+      setExpenseChecked(key, on) {
+        this.expenseState = { ...this.expenseState, [key]: { ...this.expenseState[key], checked: on } };
+      },
+      setExpenseCategory(key, category) {
+        this.expenseState = { ...this.expenseState, [key]: { ...this.expenseState[key], category } };
+      },
       // However the dialog is dismissed, the summary is still emitted, so a
       // file that could not be read stays named after it closes (c60358
       // item 2, D2); every row left unticked counts as skipped.
       close(value) {
         if (this.confirming || value) return;
-        this.finish({ confirmed: 0, duplicates: 0 }, []);
+        this.finish(this.paymentsResult || { confirmed: 0, duplicates: 0 }, this.paymentsResult ? this.checkedRows : [], null);
       },
-      finish(result, posted) {
+      finish(result, posted, expenses) {
         const alreadyImported = this.rows.filter(({ row }) => row.already_imported).length;
         this.$emit('imported', {
           files: this.files.length,
@@ -209,20 +303,31 @@
           imported: result.confirmed,
           duplicates: result.duplicates + alreadyImported,
           skipped: this.rows.length - alreadyImported - posted.length,
+          // Outgoing rows added to the expense book (system_3 #10432).
+          expenses_added: expenses ? expenses.confirmed : 0,
         });
         this.$emit('update:open', false);
       },
       async confirm() {
         const rows = this.checkedRows;
-        if (!rows.length) return;
+        const expenses = this.checkedExpenses;
+        if (!rows.length && !expenses.length) return;
         this.confirming = true;
         this.error = '';
         try {
-          const result = await confirmN26Rows(rows);
+          if (!this.paymentsResult) {
+            this.paymentsResult = rows.length ? await confirmN26Rows(rows) : { confirmed: 0, duplicates: 0 };
+          }
+          const expenseResult = expenses.length ? await confirmN26Expenses(expenses) : { confirmed: 0, duplicates: 0 };
           this.confirming = false;
-          this.finish(result, rows);
+          this.finish(this.paymentsResult, rows, expenseResult);
         } catch (err) {
-          this.error = errorOf(err).message;
+          // When the payments went through and the expenses did not, say so:
+          // Import again posts only the expenses.
+          const message = errorOf(err).message;
+          this.error = this.paymentsResult && rows.length
+            ? `The payments were imported, but the expenses were not: ${message}`
+            : message;
           this.confirming = false;
         }
       },
