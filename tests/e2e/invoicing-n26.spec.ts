@@ -20,6 +20,11 @@ interface Fake {
   confirmFailure?: { status: number; body: Json };
   // When set, the parse answers only after this settles (an import in flight).
   holdParse?: Promise<void>;
+  // #10432: the expense book behind /invoicing/expenses/import-n26/confirm.
+  expenses?: Json[];
+  expenseCategories?: string[];
+  categoriesFailure?: boolean;
+  expenseConfirmFailure?: { status: number; body: Json };
   requests: Array<{ method: string; path: string; body: string; contentType: string }>;
 }
 
@@ -109,6 +114,26 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
           gross_cents: row.gross_cents, sender_name: row.sender_name, sender_email: '', note: row.note,
           category: 'uncategorised', client_id: null,
         });
+        confirmed++;
+      }
+      return json(route, 200, { summary: { confirmed, duplicates } });
+    }
+    if (path === '/invoicing/expense-categories' && method === 'GET') {
+      if (fake.categoriesFailure) return json(route, 500, { error: { code: 'internal_error', message: 'Error listing categories' } });
+      const names = fake.expenseCategories || ['materials and supplies', 'travel', 'other'];
+      return json(route, 200, { categories: names.map((name, i) => ({ id: i + 1, name, counts_as: name })) });
+    }
+    if (path === '/invoicing/expenses/import-n26/confirm' && method === 'POST') {
+      if (fake.expenseConfirmFailure) return json(route, fake.expenseConfirmFailure.status, fake.expenseConfirmFailure.body);
+      fake.expenses = fake.expenses || [];
+      let confirmed = 0;
+      let duplicates = 0;
+      for (const row of JSON.parse(body).rows as Json[]) {
+        if (fake.expenses.some((e) => e.transaction_id === row.transaction_id)) {
+          duplicates++;
+          continue;
+        }
+        fake.expenses.push({ ...row, source: 'n26', entry: 'import' });
         confirmed++;
       }
       return json(route, 200, { summary: { confirmed, duplicates } });
@@ -451,4 +476,162 @@ test.describe('#9760-B1 the head row holds three ways in', () => {
       for (const o of m.overflow) expect(o).toBeLessThanOrEqual(0);
     });
   }
+});
+
+
+// --- #10432-A1: a statement's outgoing rows, offered as work expenses ---
+
+const outgoingRow = (n: number, over: Json = {}): Json => ({
+  transaction_id: `stmt-ou00000000000000000000${n}`,
+  paid_on: `2026-08-1${n}`,
+  currency: 'EUR',
+  amount_cents: 1000 * n + 90,
+  payee_name: n === 1 ? 'Colorificio Esempio' : 'Supermercato Esempio',
+  note: n === 1 ? 'Pigmenti e tele' : '',
+  already_imported: false,
+  ...over,
+});
+
+const withOutgoing = (outgoing: Json[], over: Partial<Fake> = {}): Fake =>
+  newFake({
+    parsed: {
+      'conferma.pdf': { filename: 'conferma.pdf', document_kind: 'n26_transfer_confirmation', candidates: [confirmation()] },
+      'statement.pdf': {
+        filename: 'statement.pdf', document_kind: 'n26_account_statement',
+        candidates: [statementRow(1), statementRow(2)], expense_candidates: outgoing,
+      },
+    },
+    ...over,
+  });
+
+const expenseRows = (page: Page) => page.locator('[data-test="expense-row"]');
+const expenseCheck = (page: Page, i: number) => expenseRows(page).nth(i).locator('input[type="checkbox"]');
+const expenseConfirms = (fake: Fake) =>
+  fake.requests.filter((r) => r.method === 'POST' && r.path === '/invoicing/expenses/import-n26/confirm');
+
+async function pickExpenseCategory(page: Page, i: number, label: string): Promise<void> {
+  await expenseRows(page).nth(i).locator('[data-test="expense-row-category"]').click();
+  await page.getByRole('option', { name: label }).click();
+}
+
+test.describe('#10432-A1 N26 import — outgoing rows as work expenses', () => {
+  test('outgoing rows sit in their own Expenses section, unticked; ticked ones post to the expense confirm with their category', async ({ page }) => {
+    const fake = withOutgoing([outgoingRow(1), outgoingRow(2)]);
+    await open(page, fake);
+    await upload(page, ['conferma.pdf', 'statement.pdf']);
+
+    // Only the statement carries outgoing rows; the payment rows are as before.
+    await expect(page.locator('[data-test="n26-row"]')).toHaveCount(3);
+    const section = page.locator('[data-test="expense-section"]');
+    await expect(section).toHaveCount(1);
+    await expect(page.locator('[data-test="n26-file"]').nth(1).locator('[data-test="expense-section"]')).toBeVisible();
+    await expect(expenseRows(page)).toHaveCount(2);
+    await expect(expenseRows(page).nth(0)).toContainText('Colorificio Esempio');
+    await expect(expenseRows(page).nth(0)).toContainText('€10.90');
+    await expect(expenseRows(page).nth(0).locator('[data-test="expense-row-meta"]')).toHaveText('2026-08-11 · Pigmenti e tele');
+    // Most of a statement's spending is not work: every expense starts unticked.
+    for (let i = 0; i < 2; i++) await expect(expenseCheck(page, i)).not.toBeChecked();
+    await expect(page.locator('[data-test="n26-confirm"]')).toHaveText('Import 3 payments');
+    expect(await noSideScroll(page)).toBe(true);
+
+    await expenseCheck(page, 0).check();
+    await pickExpenseCategory(page, 0, 'materials and supplies');
+    await expect(page.locator('[data-test="n26-confirm"]')).toHaveText('Import 3 payments and 1 expense');
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+
+    // Payments and expenses each go to their own endpoint; neither carries the other.
+    const payments = JSON.parse(confirmRequests(fake)[0].body).rows;
+    expect(payments.map((r: Json) => r.transaction_id)).not.toContain(outgoingRow(1).transaction_id);
+    expect(payments).toHaveLength(3);
+    expect(expenseConfirms(fake)).toHaveLength(1);
+    expect(JSON.parse(expenseConfirms(fake)[0].body).rows).toEqual([{
+      transaction_id: outgoingRow(1).transaction_id, paid_on: '2026-08-11', currency: 'EUR', amount_cents: 1090,
+      payee_name: 'Colorificio Esempio', note: 'Pigmenti e tele', category: 'materials and supplies',
+    }]);
+
+    // The payment line still adds up; the expenses get their own sentence.
+    await expectSummaryAddsUp(page);
+    await expect(summary(page)).toContainText('N26 PDFs: read 3 rows from 2 files: 3 imported, 0 already imported, 0 skipped.');
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
+  });
+
+  test('expenses alone: with every payment unticked, only the expense confirm is called', async ({ page }) => {
+    const fake = withOutgoing([outgoingRow(1)]);
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+    for (let i = 0; i < 2; i++) await checkbox(page, i).uncheck();
+    await expect(page.locator('[data-test="n26-confirm"]')).toBeDisabled();
+    await expect(page.locator('[data-test="n26-tick-hint"]')).toBeVisible();
+
+    await expenseCheck(page, 0).check();
+    await expect(page.locator('[data-test="n26-confirm"]')).toHaveText('Import 1 expense');
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+
+    expect(confirmRequests(fake)).toHaveLength(0);
+    // Left on its default, the category is the catch-all.
+    expect(JSON.parse(expenseConfirms(fake)[0].body).rows[0].category).toBe('other');
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
+    await expectSummaryAddsUp(page);
+  });
+
+  test('an expense already in the book has no checkbox or picker; a look-alike is flagged and starts unticked', async ({ page }) => {
+    const fake = withOutgoing([outgoingRow(1, { already_imported: true }), outgoingRow(2, { possible_duplicate_of: 41 })]);
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+
+    await expect(expenseRows(page).nth(0).locator('input[type="checkbox"]')).toHaveCount(0);
+    await expect(expenseRows(page).nth(0).locator('[data-test="expense-row-imported"]')).toHaveText('Already in your expenses');
+    await expect(expenseRows(page).nth(0).locator('[data-test="expense-row-category"]')).toHaveCount(0);
+    await expect(expenseRows(page).nth(1).locator('[data-test="expense-row-duplicate"]')).toContainText('Same date and amount as an expense already in your book');
+    await expect(expenseCheck(page, 1)).not.toBeChecked();
+
+    // Payments already imported too: only the look-alike expense is left.
+    for (let i = 0; i < 2; i++) await checkbox(page, i).uncheck();
+    await expect(page.locator('[data-test="n26-confirm"]')).toBeDisabled();
+  });
+
+  test('a failed expense confirm after the payments went through says so, and Import again posts only the expenses', async ({ page }) => {
+    const fake = withOutgoing([outgoingRow(1)], {
+      expenseConfirmFailure: { status: 400, body: { error: { code: 'invalid_row', message: 'row 0: category is not one of your expense categories' } } },
+    });
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+    await expenseCheck(page, 0).check();
+    await page.locator('[data-test="n26-confirm"]').click();
+
+    await expect(page.locator('[data-test="n26-error"]')).toHaveText(
+      'The payments were imported, but the expenses were not: row 0: category is not one of your expense categories');
+    await expect(page.locator('[data-test="n26-review"]')).toBeVisible();
+    expect(confirmRequests(fake)).toHaveLength(1);
+
+    fake.expenseConfirmFailure = undefined;
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+    expect(confirmRequests(fake), 'the payments are not posted twice').toHaveLength(1);
+    expect(expenseConfirms(fake)).toHaveLength(2);
+    await expect(summary(page)).toContainText('2 imported');
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
+  });
+
+  test('when the category list cannot be read, the picker still offers the catch-all', async ({ page }) => {
+    const fake = withOutgoing([outgoingRow(1)], { categoriesFailure: true });
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+    await expenseRows(page).nth(0).locator('[data-test="expense-row-category"]').click();
+    await expect(page.getByRole('option')).toHaveText(['other']);
+  });
+
+  test('a file with no outgoing rows shows no Expenses section and posts no expenses', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await upload(page, ['conferma.pdf', 'statement.pdf']);
+    await expect(page.locator('[data-test="expense-section"]')).toHaveCount(0);
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+    expect(expenseConfirms(fake)).toHaveLength(0);
+    expect(fake.requests.some((r) => r.path === '/invoicing/expense-categories')).toBe(false);
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveCount(0);
+  });
 });

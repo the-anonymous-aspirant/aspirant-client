@@ -46,6 +46,18 @@ export function parseN26PDFs(files) {
 export const confirmN26Rows = (rows) =>
   axios.post(`${base}/payments/import-n26/confirm`, { rows }).then((r) => r.data.summary);
 
+// A statement's outgoing rows come back as each file's `expense_candidates`
+// (system_3 #10417), never among the payment candidates. The ones the owner
+// ticks are posted here, each with her chosen category (empty means
+// "other"), and stored as work expenses: { confirmed, duplicates }.
+export const confirmN26Expenses = (rows) =>
+  axios.post(`${base}/expenses/import-n26/confirm`, { rows }).then((r) => r.data.summary);
+
+// The owner's expense categories (system_3 #10416/#10424): the ten starter
+// types plus any she added, oldest first.
+export const listExpenseCategories = () =>
+  axios.get(`${base}/expense-categories`).then((r) => r.data.categories || []);
+
 // The server's limit per parse request (maxN26FilesPerRequest).
 export const N26_MAX_FILES = 10;
 
