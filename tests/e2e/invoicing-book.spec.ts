@@ -22,6 +22,7 @@ interface Fake {
   requests: Array<{ method: string; path: string; body: string }>;
   nextExpenseId: number;
   nextCategoryId: number;
+  reportStatus?: number;
 }
 
 const incomeRow = (over: Json = {}) => ({
@@ -91,6 +92,17 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     if (del && method === 'DELETE') {
       fake.expenses = fake.expenses.filter((e) => e.id !== Number(del[1]));
       return route.fulfill({ status: 204, body: '' });
+    }
+    if (path === '/invoicing/export/book-report.csv' && method === 'GET') {
+      if (fake.reportStatus && fake.reportStatus !== 200) {
+        return json(route, fake.reportStatus, { error: { code: 'server_error', message: 'could not build the report' } });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'text/csv; charset=utf-8',
+        headers: { 'Content-Disposition': 'attachment; filename="Buchhaltung-2026-11-09-1200.csv"' },
+        body: '﻿Kategorie;2026-07;Gesamt\r\nEinnahmen;350,00;350,00\r\n',
+      });
     }
     return json(route, 404, { error: { code: 'not_found', message: `unmocked ${method} ${path}` } });
   });
@@ -265,5 +277,26 @@ test.describe('#10414-D Invoices app — the Book chart', () => {
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
     await expect(chart).toHaveAttribute('data-income-color', '#e0e0e0');
     await expect(chart).toHaveAttribute('data-expense-color', '#ff7a7c');
+  });
+});
+
+// system_3 #10414-E: the Book tab's income and expenses as a standard
+// bookkeeping CSV (design_agent ruling, report 886 §2; operator c63757).
+test.describe('#10414-E Invoices app — the bookkeeping report export', () => {
+  test('clicking the button downloads the server-named CSV', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    const download = page.waitForEvent('download');
+    await page.locator('[data-test="book-report-csv"]').click();
+    const file = await download;
+    expect(file.suggestedFilename()).toBe('Buchhaltung-2026-11-09-1200.csv');
+    expect(fake.requests.some((r) => r.method === 'GET' && r.path === '/invoicing/export/book-report.csv')).toBe(true);
+  });
+
+  test('a failed export says so instead of silently doing nothing', async ({ page }) => {
+    const fake = newFake({ reportStatus: 500 });
+    await open(page, fake);
+    await page.locator('[data-test="book-report-csv"]').click();
+    await expect(page.locator('[data-test="book-error"]')).toContainText('could not build the report');
   });
 });
