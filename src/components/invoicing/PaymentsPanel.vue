@@ -626,12 +626,16 @@
           this.n26Parsing = false;
         }
       },
+      // The page refetches its lists, the Book's expenses among them, on
+      // 'changed'. An expense added in either review must trigger it, or the
+      // Book tab shows it only after a reload (system_3 #10432).
       onPayPalExpensesDone(result) {
         this.paypalExpensesAdded = (result && result.confirmed) || 0;
+        if (this.paypalExpensesAdded) this.$emit('changed');
       },
       onN26Imported(summary) {
         this.n26Summary = summary;
-        if (summary.imported) this.$emit('changed');
+        if (summary.imported || summary.expenses_added) this.$emit('changed');
       },
       async runImport(dateOrder) {
         this.importing = true;
