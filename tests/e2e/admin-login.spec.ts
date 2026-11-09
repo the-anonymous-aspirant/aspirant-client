@@ -215,12 +215,20 @@ test.describe('Admin sign-in at /admin/login', () => {
     // design_agent's ack (c63362) on this task spells out three more states
     // by number; these three tests pin them.
     test('state 3: shows "Checking your session…" in place of the form while the check is in flight', async ({ page }) => {
+      // A fake clock, not just a held route: the component's own 2s
+      // give-up fallback (fallBackToForm) runs on real wall-clock from
+      // created(), independent of the network gate below — on a slow
+      // engine under load (mobile-safari), goto()-to-first-assertion time
+      // alone exceeded 2s, so the fallback had already fired and swapped
+      // "Checking" for the plain form before the assertion ever polled
+      // ("element(s) not found", not a wrong-text mismatch). Freezing time
+      // decouples the assertion from how long startup itself takes.
+      await page.clock.install();
+      await page.clock.pauseAt(new Date());
       await seedAdminSession(page);
-      // A gate the test controls, not a wall-clock delay: a fixed-ms delay
-      // raced browser startup time on mobile-safari under load (the
-      // "Checking" state had already resolved to "Continue" by the first
-      // assertion). Holding the route open until the test itself releases
-      // it makes the "Checking" assertion race-free on any engine or load.
+      // A gate the test controls, not a wall-clock delay: holding the route
+      // open until the test itself releases it makes the "Checking"-to-
+      // "Continue" transition race-free on any engine or load.
       let resolveProfile: () => void = () => {};
       const profileGate = new Promise<void>(resolve => { resolveProfile = resolve; });
       await page.route(/\/api\/profile$/, async (route: Route) => {
