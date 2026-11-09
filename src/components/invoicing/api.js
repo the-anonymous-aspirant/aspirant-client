@@ -269,6 +269,8 @@ export const listAuditEvents = (entityType, entityId) =>
 export const allInvoicesCsvUrl = () => `${base}/export/invoices.csv`;
 // Her client list as Kunden.csv (system_3 #10012).
 export const clientsCsvUrl = () => `${base}/export/clients.csv`;
+// The Book tab's income-and-expenses bookkeeping grid (system_3 #10414-E).
+export const bookReportCsvUrl = () => `${base}/export/book-report.csv`;
 
 // The filename the server named in a Content-Disposition header, or '' when
 // it named none. RFC 5987's filename*=UTF-8''... wins over filename="...".

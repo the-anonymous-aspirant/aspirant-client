@@ -5,6 +5,15 @@
       <AspButton variant="secondary" class="block-on-phone" data-test="expense-new" @click="expenseOpen = true">
         Enter expense by hand
       </AspButton>
+      <AspButton
+        variant="secondary"
+        class="block-on-phone"
+        :loading="reportDownloading"
+        data-test="book-report-csv"
+        @click="downloadBookReport"
+      >
+        Bookkeeping report (CSV)
+      </AspButton>
     </div>
 
     <p v-if="rowError" class="error" role="alert" data-test="book-error">{{ rowError }}</p>
@@ -100,7 +109,16 @@
   import { AspButton, AspDataTable, AspEmptyState } from '@aspirant/design-system';
   import BookChart from './BookChart.vue';
   import ManualExpenseDialog from './ManualExpenseDialog.vue';
-  import { CATEGORY_LABELS, deleteExpense, errorOf, formatDay, formatMoney, listExpenseCategories } from './api.js';
+  import {
+    CATEGORY_LABELS,
+    bookReportCsvUrl,
+    deleteExpense,
+    downloadBlob,
+    errorOf,
+    formatDay,
+    formatMoney,
+    listExpenseCategories,
+  } from './api.js';
 
   // The income-and-expenses book (system_3 #10414-C): payments and
   // hand-entered expenses merged into one dated list, grouped by month, with
@@ -125,6 +143,7 @@
         rowError: '',
         confirmingDelete: null,
         deleting: null,
+        reportDownloading: false,
         columns: [
           { key: 'paid_on', label: 'Date paid' },
           { key: 'description', label: 'What it was for', sortable: false },
@@ -200,6 +219,18 @@
           // server-side if she somehow submits with no category chosen.
         }
       },
+      async downloadBookReport() {
+        if (this.reportDownloading) return;
+        this.reportDownloading = true;
+        this.rowError = '';
+        try {
+          await downloadBlob(bookReportCsvUrl(), 'Buchhaltung.csv');
+        } catch (err) {
+          this.rowError = errorOf(err).message;
+        } finally {
+          this.reportDownloading = false;
+        }
+      },
       onCategoryAdded(category) {
         this.categories = [...this.categories, category];
       },
@@ -248,7 +279,9 @@
 
   .panel-head {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
+    gap: var(--space-sm);
     margin-bottom: var(--space-md);
   }
 
@@ -349,6 +382,7 @@
 
   @media (max-width: 640px) {
     .panel-head {
+      flex-direction: column;
       justify-content: stretch;
     }
 
