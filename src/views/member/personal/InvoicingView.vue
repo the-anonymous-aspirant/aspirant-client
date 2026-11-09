@@ -151,19 +151,29 @@
       async fetchAll() {
         this.loadError = false;
         try {
-          const [p, clients, payments, expenses] = await Promise.all([getProfile(), listClients(), listPayments(), listExpenses()]);
+          const [p, clients, payments] = await Promise.all([getProfile(), listClients(), listPayments()]);
           this.profile = p.profile || {};
           this.profileSaved = !!p.saved;
           this.hasLogo = !!p.has_logo;
           this.clients = clients;
           this.payments = payments;
-          this.expenses = expenses;
           this.refreshKey += 1;
         } catch (err) {
           if (errorOf(err).status === 403) this.forbidden = true;
           else this.loadError = true;
-        } finally {
           this.loading = false;
+          return;
+        }
+        this.loading = false;
+        // Fetched separately and never fatal to the rest of the page: every
+        // other Invoicing spec's mock fixture predates this endpoint and
+        // does not stub it, so a hard dependency here 404s and blanks every
+        // tab, not just Book (system_3 #10430-adjacent regression, caught
+        // by the manager reading verify-aspirant-428's log live).
+        try {
+          this.expenses = await listExpenses();
+        } catch {
+          this.expenses = [];
         }
       },
       openInvoice(id) {
