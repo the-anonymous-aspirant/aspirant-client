@@ -83,6 +83,8 @@
           </template>
         </AspDataTable>
       </section>
+
+      <BookChart :payments="payments" :expenses="expenses" />
     </template>
 
     <ManualExpenseDialog
@@ -96,6 +98,7 @@
 
 <script>
   import { AspButton, AspDataTable, AspEmptyState } from '@aspirant/design-system';
+  import BookChart from './BookChart.vue';
   import ManualExpenseDialog from './ManualExpenseDialog.vue';
   import { CATEGORY_LABELS, deleteExpense, errorOf, formatDay, formatMoney, listExpenseCategories } from './api.js';
 
@@ -108,7 +111,7 @@
   // sign, so colour is never the only signal (c63777).
   export default {
     name: 'BookPanel',
-    components: { AspButton, AspDataTable, AspEmptyState, ManualExpenseDialog },
+    components: { AspButton, AspDataTable, AspEmptyState, BookChart, ManualExpenseDialog },
     props: {
       payments: { type: Array, required: true },
       expenses: { type: Array, required: true },
