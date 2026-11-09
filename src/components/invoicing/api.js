@@ -53,11 +53,6 @@ export const confirmN26Rows = (rows) =>
 export const confirmN26Expenses = (rows) =>
   axios.post(`${base}/expenses/import-n26/confirm`, { rows }).then((r) => r.data.summary);
 
-// The owner's expense categories (system_3 #10416/#10424): the ten starter
-// types plus any she added, oldest first.
-export const listExpenseCategories = () =>
-  axios.get(`${base}/expense-categories`).then((r) => r.data.categories || []);
-
 // The server's limit per parse request (maxN26FilesPerRequest).
 export const N26_MAX_FILES = 10;
 
