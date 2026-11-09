@@ -25,6 +25,9 @@ interface Fake {
   /** #9873: a refusal for one payment id only, as a bulk action meets it. */
   patchFailures?: Record<number, { status: number; body: Json }>;
   forbidden?: boolean;
+  /** #10438: the expense book behind /invoicing/expenses/import-paypal/confirm. */
+  expenses?: Json[];
+  expenseConfirmFailure?: { status: number; body: Json };
 }
 
 function newFake(over: Partial<Fake> = {}): Fake {
@@ -83,6 +86,17 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: fake.payments });
     // #8375 (D1) loads the invoice list with the page; this spec has none.
     if (path === '/invoicing/invoices' && method === 'GET') return json(route, 200, { invoices: [] });
+    if (path === '/invoicing/expense-categories' && method === 'GET') {
+      const names = ['materials and supplies', 'travel', 'other'];
+      return json(route, 200, { categories: names.map((name, i) => ({ id: i + 1, name, counts_as: name })) });
+    }
+    if (path === '/invoicing/expenses/import-paypal/confirm' && method === 'POST') {
+      if (fake.expenseConfirmFailure) return json(route, fake.expenseConfirmFailure.status, fake.expenseConfirmFailure.body);
+      fake.expenses = fake.expenses || [];
+      const rows: Json[] = JSON.parse(req.postData() || '{}').rows;
+      fake.expenses.push(...rows);
+      return json(route, 200, { summary: { confirmed: rows.length, duplicates: 0 } });
+    }
     if (path === '/invoicing/payments/import' && method === 'POST') {
       const next = fake.importResponses.shift() || { status: 200, body: { summary: { rows_read: 0, imported: 0, duplicates: 0, skipped: 0, skipped_reasons: {}, withdrawals: 0 } } };
       return json(route, next.status, next.body);
@@ -549,5 +563,135 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
       els.map((el) => ({ text: (el.textContent || '').trim(), over: el.scrollWidth - el.clientWidth })));
     expect(overflow.length).toBeGreaterThan(3);
     for (const b of overflow) expect(b.over, `"${b.text}" overflows by ${b.over}px`).toBeLessThanOrEqual(0);
+  });
+});
+
+
+// --- #10438: a PayPal file's outgoing payments, reviewed as work expenses ---
+
+const paypalOutgoing = (n: number, over: Json = {}): Json => ({
+  transaction_id: `8HH8888${n}HH8888888`,
+  paid_on: `2026-07-2${n}`,
+  currency: n === 2 ? 'USD' : 'EUR',
+  amount_cents: 2500 * n,
+  payee_name: n === 1 ? 'Some Shop' : 'Print Shop',
+  note: n === 1 ? 'Leinwand' : '',
+  already_imported: false,
+  ...over,
+});
+
+const importWithOutgoing = (outgoing: Json[]): Fake =>
+  newFake({
+    importResponses: [{
+      status: 200,
+      body: {
+        summary: { rows_read: 4, imported: 2, duplicates: 0, skipped: 2, withdrawals: 0, skipped_reasons: { outgoing: 2 } },
+        expense_candidates: outgoing,
+      },
+    }],
+  });
+
+const paypalCsv = { name: 'activity.csv', mimeType: 'text/csv', buffer: Buffer.from('Date,Name,Type\n') };
+const ppxReview = (page: Page) => page.locator('[data-test="paypal-expenses-review"]');
+const ppxRows = (page: Page) => ppxReview(page).locator('[data-test="expense-row"]');
+const ppxConfirms = (fake: Fake) =>
+  fake.requests.filter((r) => r.method === 'POST' && r.path === '/invoicing/expenses/import-paypal/confirm');
+
+async function importPayPal(page: Page, fake: Fake): Promise<void> {
+  await mockInvoicing(page, fake);
+  await seedTrustedSessionAs(page, 'vinoly');
+  await openInvoicing(page);
+  await page.locator('[data-test="payments-file"]').setInputFiles(paypalCsv);
+  await expect(page.locator('[data-test="import-summary"]')).toBeVisible();
+}
+
+test.describe('#10438 PayPal import — outgoing payments reviewed as work expenses', () => {
+  test('after the import, the outgoing payments are offered unticked; ticked ones are added with their category', async ({ page }) => {
+    const fake = importWithOutgoing([paypalOutgoing(1), paypalOutgoing(2)]);
+    await importPayPal(page, fake);
+
+    await expect(ppxReview(page)).toBeVisible();
+    await expect(ppxRows(page)).toHaveCount(2);
+    await expect(ppxRows(page).nth(0)).toContainText('Some Shop');
+    await expect(ppxRows(page).nth(0)).toContainText('€25.00');
+    // A foreign-currency purchase keeps its currency.
+    await expect(ppxRows(page).nth(1)).toContainText('$50.00');
+    for (let i = 0; i < 2; i++) await expect(ppxRows(page).nth(i).locator('input[type="checkbox"]')).not.toBeChecked();
+    await expect(page.locator('[data-test="paypal-expenses-confirm"]')).toBeDisabled();
+    await expect(page.locator('[data-test="paypal-expenses-tick-hint"]')).toBeVisible();
+
+    await ppxRows(page).nth(0).locator('input[type="checkbox"]').check();
+    await ppxRows(page).nth(0).locator('[data-test="expense-row-category"]').click();
+    await page.getByRole('option', { name: 'materials and supplies' }).click();
+    await expect(page.locator('[data-test="paypal-expenses-confirm"]')).toHaveText('Add 1 expense');
+    await page.locator('[data-test="paypal-expenses-confirm"]').click();
+    await expect(ppxReview(page)).toBeHidden();
+
+    expect(JSON.parse(ppxConfirms(fake)[0].body).rows).toEqual([{
+      transaction_id: '8HH88881HH8888888', paid_on: '2026-07-21', currency: 'EUR', amount_cents: 2500,
+      payee_name: 'Some Shop', note: 'Leinwand', category: 'materials and supplies',
+    }]);
+    // The payment line is unchanged; the expenses get their own sentence.
+    const summary = page.locator('[data-test="import-summary"]');
+    await expect(summary).toContainText('PayPal CSV: read 4 rows: 2 imported, 0 already imported, 2 skipped.');
+    await expect(page.locator('[data-test="paypal-summary-expenses"]')).toHaveText('1 expense added to your book.');
+  });
+
+  test('"Not now" adds nothing and the payments stay imported', async ({ page }) => {
+    const fake = importWithOutgoing([paypalOutgoing(1)]);
+    await importPayPal(page, fake);
+    await expect(ppxReview(page)).toBeVisible();
+    await page.locator('[data-test="paypal-expenses-cancel"]').click();
+    await expect(ppxReview(page)).toBeHidden();
+    expect(ppxConfirms(fake)).toHaveLength(0);
+    await expect(page.locator('[data-test="import-summary"]')).toContainText('2 imported');
+    await expect(page.locator('[data-test="paypal-summary-expenses"]')).toHaveCount(0);
+  });
+
+  // Design ack c64136, condition 1: nothing on the page reopens a dismissed
+  // review, so the lead names the way back, and the way back must work.
+  test('after "Not now", importing the same file again offers the same rows, its payments already imported', async ({ page }) => {
+    const outgoing = [paypalOutgoing(1), paypalOutgoing(2)];
+    const fake = importWithOutgoing(outgoing);
+    // The server recomputes the candidates on every import and flags only the
+    // stored ones; the dismissed rows were never stored.
+    fake.importResponses.push({
+      status: 200,
+      body: {
+        summary: { rows_read: 4, imported: 0, duplicates: 2, skipped: 2, withdrawals: 0, skipped_reasons: { outgoing: 2 } },
+        expense_candidates: outgoing,
+      },
+    });
+    await importPayPal(page, fake);
+    await expect(ppxReview(page)).toContainText('To add them later, import this file again.');
+    await page.locator('[data-test="paypal-expenses-cancel"]').click();
+    await expect(ppxReview(page)).toBeHidden();
+
+    await page.locator('[data-test="payments-file"]').setInputFiles(paypalCsv);
+    await expect(ppxReview(page)).toBeVisible();
+    await expect(ppxRows(page)).toHaveCount(2);
+    await expect(ppxRows(page).nth(0)).toContainText('Some Shop');
+    await expect(ppxRows(page).nth(1)).toContainText('Print Shop');
+    for (let i = 0; i < 2; i++) await expect(ppxRows(page).nth(i).locator('input[type="checkbox"]')).not.toBeChecked();
+    await expect(page.locator('[data-test="import-summary"]')).toContainText('PayPal CSV: read 4 rows: 0 imported, 2 already imported, 2 skipped.');
+    expect(ppxConfirms(fake)).toHaveLength(0);
+  });
+
+  test('a file whose outgoing payments are all in the book already, or that has none, opens no review', async ({ page }) => {
+    const fake = importWithOutgoing([paypalOutgoing(1, { already_imported: true })]);
+    await importPayPal(page, fake);
+    await expect(page.locator('[data-test="import-summary"]')).toContainText('2 imported');
+    await expect(ppxReview(page)).toHaveCount(0);
+    expect(fake.requests.some((r) => r.path === '/invoicing/expense-categories')).toBe(false);
+  });
+
+  test('a refused confirm is shown in the dialog, which stays open', async ({ page }) => {
+    const fake = importWithOutgoing([paypalOutgoing(1)]);
+    fake.expenseConfirmFailure = { status: 400, body: { error: { code: 'invalid_row', message: 'row 0: category is not one of your expense categories' } } };
+    await importPayPal(page, fake);
+    await ppxRows(page).nth(0).locator('input[type="checkbox"]').check();
+    await page.locator('[data-test="paypal-expenses-confirm"]').click();
+    await expect(page.locator('[data-test="paypal-expenses-error"]')).toHaveText('row 0: category is not one of your expense categories');
+    await expect(ppxReview(page)).toBeVisible();
   });
 });

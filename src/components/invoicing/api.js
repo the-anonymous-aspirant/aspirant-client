@@ -26,13 +26,22 @@ export const listClients = () => axios.get(`${base}/clients`).then((r) => r.data
 export const createClient = (client) => axios.post(`${base}/clients`, client).then((r) => r.data.client);
 export const updateClient = (id, client) => axios.put(`${base}/clients/${id}`, client).then((r) => r.data.client);
 
-// The server reads a CSV or an .xlsx by its bytes (system_3 #9862-A1).
+// The server reads a CSV or an .xlsx by its bytes (system_3 #9862-A1). It
+// stores the payments, and returns the file's outgoing payments unstored as
+// expense candidates (system_3 #10425) for the owner to review.
 export function importPayPalCSV(file, dateOrder) {
   const form = new FormData();
   form.append('file', file);
   if (dateOrder) form.append('date_order', dateOrder);
-  return axios.post(`${base}/payments/import`, form).then((r) => r.data.summary);
+  return axios
+    .post(`${base}/payments/import`, form)
+    .then((r) => ({ summary: r.data.summary, expenseCandidates: r.data.expense_candidates || [] }));
 }
+
+// The outgoing PayPal payments the owner ticked, each with her category:
+// stored as work expenses, { confirmed, duplicates } (system_3 #10425).
+export const confirmPayPalExpenses = (rows) =>
+  axios.post(`${base}/expenses/import-paypal/confirm`, { rows }).then((r) => r.data.summary);
 
 // N26 PDF import (system_3 #9760, server #9812). Two steps, unlike the
 // PayPal CSV: parse stores nothing and returns candidate rows per file; the
