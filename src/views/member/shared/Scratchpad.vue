@@ -7,6 +7,14 @@
 
     <div class="scratchpad-card">
       <div class="scratchpad-card-header">
+        <AspButton
+          variant="link"
+          type="button"
+          class="scratchpad-copy-all"
+          @click="copyAll"
+        >
+          {{ copied ? 'Copied!' : 'Copy all' }}
+        </AspButton>
         <span class="scratchpad-status">{{ statusText }}</span>
       </div>
       <!-- The wrapper is parent-owned so its scoped rule (flex + padding) can
@@ -30,7 +38,7 @@
 </template>
 
 <script>
-import { AspTextarea } from '@aspirant/design-system';
+import { AspTextarea, AspButton } from '@aspirant/design-system';
 import { getScratchpad, putScratchpad } from '../../../composables/useScratchpad.js';
 
 // Cross-device sync tuning.
@@ -38,7 +46,7 @@ const SAVE_DEBOUNCE_MS = 500; // debounce a write after the last keystroke
 const POLL_INTERVAL_MS = 1000; // pull remote changes ~1s
 
 export default {
-  components: { AspTextarea },
+  components: { AspTextarea, AspButton },
   data() {
     return {
       text: '',
@@ -52,6 +60,8 @@ export default {
       error: null,
       saveTimer: null,
       pollTimer: null,
+      copied: false,
+      copiedTimer: null,
     };
   },
   computed: {
@@ -114,6 +124,23 @@ export default {
       if (!b) return true;
       return new Date(a).getTime() > new Date(b).getTime();
     },
+    async copyAll() {
+      try {
+        await navigator.clipboard.writeText(this.text);
+      } catch {
+        const textarea = document.createElement('textarea');
+        textarea.value = this.text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      this.copied = true;
+      clearTimeout(this.copiedTimer);
+      this.copiedTimer = setTimeout(() => {
+        this.copied = false;
+      }, 2000);
+    },
   },
   async mounted() {
     try {
@@ -131,6 +158,7 @@ export default {
   beforeUnmount() {
     clearTimeout(this.saveTimer);
     clearInterval(this.pollTimer);
+    clearTimeout(this.copiedTimer);
     // Flush a pending edit so navigating away doesn't drop the last change.
     if (this.dirty) this.save();
   },
@@ -174,10 +202,16 @@ export default {
 .scratchpad-card-header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   padding: var(--space-xs) var(--space-md);
   border-bottom: 1px solid var(--border-card);
   flex-shrink: 0;
+  /* --surface-card is dark in both themes (Constellations.vue, Translator.vue
+     carry the same note); the status span and the link-variant copy button
+     both read `color: inherit`/`currentColor`, so the fix is one declaration
+     here rather than one per child. Pre-existing: .scratchpad-status was
+     already unreadable against this background before this diff touched it. */
+  color: var(--text-on-dark);
 }
 
 .scratchpad-status {

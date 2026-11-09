@@ -93,6 +93,36 @@ test.describe('/member/shared/scratchpad — sync loop', () => {
     await expect(page.locator('.scratchpad-status')).toHaveText('Saved');
   });
 
+  test('"Copy all" copies the full text and confirms, then reverts', async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as unknown as { __copied: string[] }).__copied = [];
+      Object.defineProperty(navigator, 'clipboard', {
+        value: {
+          writeText: (text: string) => {
+            (window as unknown as { __copied: string[] }).__copied.push(text);
+            return Promise.resolve();
+          },
+        },
+        configurable: true,
+      });
+    });
+    await installScratchpadMock(page, { text: 'copy me please', updated_at: '2026-08-22T00:00:00Z' });
+
+    await page.goto('/member/shared/scratchpad');
+    const editor = page.locator('.scratchpad-editor');
+    await expect(editor).toHaveValue('copy me please');
+
+    const copyButton = page.locator('.scratchpad-copy-all');
+    await expect(copyButton).toHaveText('Copy all');
+    await copyButton.click();
+
+    await expect(copyButton).toHaveText('Copied!');
+    const copied = await page.evaluate(() => (window as unknown as { __copied: string[] }).__copied);
+    expect(copied).toEqual(['copy me please']);
+
+    await expect(copyButton).toHaveText('Copy all', { timeout: 3000 });
+  });
+
   test('poll pulls a remote change when the editor is not being typed in', async ({ page }) => {
     const mock = await installScratchpadMock(page, { text: 'start', updated_at: '2026-08-22T00:00:00Z' });
 
