@@ -75,7 +75,8 @@
              comma follows directly (system_3 #10040: a break here rendered
              "3 imported , 0 already imported"). -->
         PayPal {{ paypalNoun }}: read {{ summary.rows_read }} rows: <strong>{{ summary.imported }}</strong> imported<template v-if="summary.withdrawals"> (including {{ summary.withdrawals }} bank withdrawals)</template>,
-        <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ summary.duplicates }} already imported, {{ summary.skipped }} skipped.
+        <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ summary.duplicates }} already imported, {{ summary.skipped }} skipped.<template v-if="paypalExpensesAdded">
+          {{ ' ' }}<span data-test="paypal-summary-expenses">{{ paypalExpensesAdded }} expense{{ paypalExpensesAdded === 1 ? '' : 's' }} added to your book.</span></template>
       </p>
       <ul v-if="skippedReasons.length" class="summary__reasons">
         <li v-for="r in skippedReasons" :key="r.key">{{ r.count }} × {{ r.label }}</li>
@@ -331,6 +332,7 @@
       @created="(id) => $emit('open-invoice', id)"
     />
     <N26ImportDialog v-model:open="n26Open" :files="n26Files" :payments="payments" @imported="onN26Imported" />
+    <PayPalExpensesDialog v-model:open="paypalExpensesOpen" :candidates="paypalExpenseCandidates" @done="onPayPalExpensesDone" />
   </section>
 </template>
 
@@ -338,6 +340,7 @@
   import { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect } from '@aspirant/design-system';
   import ManualPaymentDialog from './ManualPaymentDialog.vue';
   import N26ImportDialog from './N26ImportDialog.vue';
+  import PayPalExpensesDialog from './PayPalExpensesDialog.vue';
   import {
     CATEGORY_LABELS,
     METHOD_LABELS,
@@ -374,7 +377,7 @@
   // payers, so they are only ever rendered as text interpolation.
   export default {
     name: 'PaymentsPanel',
-    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect, ManualPaymentDialog, N26ImportDialog },
+    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect, ManualPaymentDialog, N26ImportDialog, PayPalExpensesDialog },
     props: {
       payments: { type: Array, required: true },
       clients: { type: Array, required: true },
@@ -401,6 +404,11 @@
         n26Open: false,
         n26Files: [],
         n26Summary: null,
+        // The last PayPal file's outgoing payments, offered as expenses
+        // (system_3 #10438), and how many the owner added.
+        paypalExpenseCandidates: [],
+        paypalExpensesOpen: false,
+        paypalExpensesAdded: 0,
         confirmingDelete: null,
         deleting: null,
         columns: [
@@ -618,6 +626,9 @@
           this.n26Parsing = false;
         }
       },
+      onPayPalExpensesDone(result) {
+        this.paypalExpensesAdded = (result && result.confirmed) || 0;
+      },
       onN26Imported(summary) {
         this.n26Summary = summary;
         if (summary.imported) this.$emit('changed');
@@ -627,10 +638,15 @@
         this.importError = '';
         this.summary = null;
         this.n26Summary = null;
+        this.paypalExpensesAdded = 0;
         try {
-          this.summary = await importPayPalCSV(this.pendingFile, dateOrder);
+          const { summary, expenseCandidates } = await importPayPalCSV(this.pendingFile, dateOrder);
+          this.summary = summary;
           this.needsDateOrder = false;
           this.$emit('changed');
+          // Offer the outgoing payments only when one is new to the book.
+          this.paypalExpenseCandidates = expenseCandidates;
+          this.paypalExpensesOpen = expenseCandidates.some((row) => !row.already_imported);
         } catch (err) {
           const failure = errorOf(err);
           if (failure.code === 'date_order_ambiguous') {
