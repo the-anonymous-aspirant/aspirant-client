@@ -219,3 +219,51 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
     expect(fake.requests.some((r) => r.method === 'DELETE' && r.path === '/invoicing/expenses/101')).toBe(true);
   });
 });
+
+// system_3 #10414-D: a monthly income-vs-expenses bar chart, zero-filled to
+// this month like InvoicesChart.vue's own charts, on the same month axis
+// shape. Colours per design_agent c63777/c63825 (operator c63803: "let's go
+// with black"): income in the book's own ink, expenses in its red.
+test.describe('#10414-D Invoices app — the Book chart', () => {
+  test('with nothing in the book, there is no chart', async ({ page }) => {
+    await open(page, newFake());
+    await expect(page.locator('[data-test="book-chart"]')).toHaveCount(0);
+  });
+
+  test('bars per month, income and expenses, zero-filled to this month', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-09-15T12:00:00Z'));
+    const fake = newFake({
+      payments: [incomeRow()],
+      expenses: [expenseRow(101)],
+    });
+    await open(page, fake);
+    const chart = page.locator('[data-test="book-chart"]');
+    await expect(chart).toHaveAttribute('data-labels', 'Jul 2026,Aug 2026,Sep 2026');
+    await expect(chart).toHaveAttribute('data-income', '350,0,0');
+    await expect(chart).toHaveAttribute('data-expenses', '45.99,0,0');
+    await expect(page.locator('.asp-chart[data-rendered="true"]')).toHaveCount(1);
+  });
+
+  test('a withdrawal does not count as income on the chart either', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-07-15T12:00:00Z'));
+    const fake = newFake({
+      payments: [incomeRow(), incomeRow({ id: 11, kind: 'withdrawal', paid_on: '2026-07-15T00:00:00Z', gross_cents: 100000 })],
+    });
+    await open(page, fake);
+    await expect(page.locator('[data-test="book-chart"]')).toHaveAttribute('data-income', '350');
+  });
+
+  test('income is in the ink colour, expenses in the error-red colour, and both flip live with the theme', async ({ page }) => {
+    const fake = newFake({ payments: [incomeRow()], expenses: [expenseRow(101)] });
+    await open(page, fake);
+    const chart = page.locator('[data-test="book-chart"]');
+    await expect(chart).toHaveAttribute('data-income-color', '#424242');
+    await expect(chart).toHaveAttribute('data-expense-color', '#8b0f10');
+
+    // The console's own theme toggle sets this attribute on the root element
+    // live, with no reload (#4245) — simulate exactly that.
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+    await expect(chart).toHaveAttribute('data-income-color', '#e0e0e0');
+    await expect(chart).toHaveAttribute('data-expense-color', '#ff7a7c');
+  });
+});
