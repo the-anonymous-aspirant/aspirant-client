@@ -2,14 +2,37 @@
   <div class="login-view page">
     <h1>{{ admin ? 'Admin sign-in' : 'Login' }}</h1>
     <AspCard class="login-view-card" padding="md">
-      <!-- State 3 of design_agent's ack on #8798-B2: while the live
-           /api/profile check is in flight, the card stays but the form does
-           not — swapping the form in only once there's an answer avoids
-           showing, then yanking, a field the operator may already be typing
-           into (D13). -->
-      <p v-if="verifyingAdminSession" class="session-checking-notice" role="status">
+      <!-- State 3 of design_agent's ack on #8798-B2 (c63362, amended c63391
+           after security's c63381): while the live /api/profile check is in
+           flight, the card stays but the form does not — swapping the form
+           in only once there's an answer avoids showing, then yanking, a
+           field the operator may already be typing into (D13). -->
+      <p v-if="adminRedirectState === 'checking'" class="session-checking-notice" role="status">
         Checking your session…
       </p>
+      <!-- State 4, amended: a click, not an auto-forward. The zero-click
+           version let any cross-site link that could get a cached-Admin
+           browser to LOAD this page also get it to FORWARD — the live
+           /api/profile check is same-site and passes, and the forward
+           itself is then a same-site navigation that carries the
+           SameSite=Strict cookie, so Strict behaved like Lax for every
+           gated same-origin GET (security c63381). A user-initiated click
+           is what Strict was buying back; nothing here can synthesize one
+           (`frame-ancestors 'self'` in default.conf blocks framing this
+           page to script-click it). -->
+      <template v-else-if="adminRedirectState === 'continue'">
+        <p class="session-active-notice" role="status">Your session is still active.</p>
+        <p class="continue-target-label">Continue to</p>
+        <p class="continue-target-path">{{ redirectTarget }}</p>
+        <div ref="continueWrap" :data-continue-armed="continueArmed">
+          <AspButton
+            :href="redirectTarget"
+            class="continue-button"
+            @click="onContinueClick"
+            @keydown="onContinueKeydown"
+          >Continue</AspButton>
+        </div>
+      </template>
       <template v-else>
         <p v-if="sessionExpired" class="session-expired-notice" role="status">
           Din session har gått ut. Logga in igen för att fortsätta.
@@ -22,7 +45,7 @@
 
 <script>
   import axios from 'axios';
-  import { AspCard } from '@aspirant/design-system';
+  import { AspCard, AspButton } from '@aspirant/design-system';
   import Login from '../components/sidebar/Login.vue';
 
   // A focused login page for visitors bounced off a gated surface (system_3
@@ -32,7 +55,7 @@
   // implementation.
   export default {
     name: 'LoginView',
-    components: { AspCard, Login },
+    components: { AspCard, AspButton, Login },
     props: {
       // /admin/login (system_3 #9270): the same view and the same redirect
       // hardening, posting to the admin sign-in instead of /api/login.
@@ -92,10 +115,18 @@
     },
     data() {
       return {
-        // True only while the admin+redirect live-session check in created()
-        // (below) is in flight. Keeps the form off-screen so it never flashes
-        // before the forward lands (system_3 #8798-B2).
-        verifyingAdminSession: false,
+        // 'form' | 'checking' | 'continue'. Drives which of the three states
+        // in the admin+redirect flow below the card shows (system_3
+        // #8798-B2, design_agent ack c63391). Default 'form' is also every
+        // non-admin-redirect case's resting state.
+        adminRedirectState: 'form',
+        // Security hardening on the Continue control (c63400): false until
+        // the page has been visible AND focused, CONTINUOUSLY, for ~500ms.
+        // Blocks a "held key" / DoubleClickjacking gesture carried over from
+        // an attacker's own page onto the freshly-focused Continue control —
+        // neither needs framing, so `frame-ancestors 'self'` doesn't cover
+        // them. See resetArmTimer() and onContinueClick()/onContinueKeydown().
+        continueArmed: false,
       };
     },
     created() {
@@ -139,8 +170,12 @@
       // SameSite=Strict auth_token cookie (login.go:238) never rides it and
       // nginx's auth_request 401s before the SPA even loads — landing here
       // with a session that is, in fact, still good (operator report
-      // c62661). Six states below follow design_agent's ack on this task
-      // (c63362) exactly; the state numbers in the comments are its own.
+      // c62661). The states below follow design_agent's ack on this task,
+      // AS AMENDED (c63391, after security's c63381 found the first version
+      // zero-click-forwarded on ANY same-site arrival — an attacker's own
+      // link to `/admin/login?redirect=<gated-path>` triggered the identical
+      // flow, because the browser cannot tell that from the real PIN hop.
+      // The fix is a click: see state 4 below, in the template).
       //
       // State 3/"checking": this does NOT trust the cached flag alone the
       // way the guard above does for the no-redirect case — a stale
@@ -152,27 +187,27 @@
       if (this.admin && this.$route.query.redirect && cachedAdmin) {
         const target = this.redirectTarget;
 
-        // State 6/"loop breaker": if this page already forwarded to this
-        // exact target within the last ~10s and landed right back here, the
-        // server does not actually accept it for this cookie — /api/profile
-        // and nginx's auth_request disagree, or X needs more than Admin.
-        // State 4 would otherwise retry forever, reproducing #4155's
-        // infinite-reload loop. One remembered {target, at} pair is enough:
-        // a second arrival for the SAME target inside the window goes
-        // straight to state 5 (the form) instead of re-checking.
-        const LOOP_KEY = 'admin_login_last_forward';
+        // State 6/"loop breaker", amended: the mark is now written on the
+        // CONTINUE CLICK (onContinueClick below), not on an automatic
+        // forward — there is no automatic forward to loop on any more. If
+        // this page loads again for the SAME target within ~10s of that
+        // click, the server refused it for this cookie (`/api/profile` and
+        // nginx's auth_request disagree, or the target needs more than
+        // Admin): offering the identical click again would be a dead end,
+        // so this goes straight to state 5 (the form) instead.
+        const LOOP_KEY = 'admin_login_last_continue_click';
         const LOOP_WINDOW_MS = 10_000;
-        let lastForward = null;
+        let lastClick = null;
         try {
-          lastForward = JSON.parse(sessionStorage.getItem(LOOP_KEY) || 'null');
+          lastClick = JSON.parse(sessionStorage.getItem(LOOP_KEY) || 'null');
         } catch {
-          lastForward = null;
+          lastClick = null;
         }
-        if (lastForward && lastForward.target === target && Date.now() - lastForward.at < LOOP_WINDOW_MS) {
+        if (lastClick && lastClick.target === target && Date.now() - lastClick.at < LOOP_WINDOW_MS) {
           return; // state 5: show the form, unchanged
         }
 
-        this.verifyingAdminSession = true;
+        this.adminRedirectState = 'checking';
         // State 3's ~2s cap: a profile check that neither answers nor fails
         // inside it falls to state 5, same as a 401 would, rather than
         // leaving "Checking your session…" up indefinitely.
@@ -180,7 +215,7 @@
         const fallBackToForm = () => {
           if (settled) return;
           settled = true;
-          this.verifyingAdminSession = false;
+          this.adminRedirectState = 'form';
         };
         const timer = setTimeout(fallBackToForm, 2_000);
 
@@ -190,25 +225,96 @@
           // form up (and the operator may be typing into it, D13) — do not
           // pull it away for an answer that arrives after the fact.
           if (settled) return;
-          try {
-            sessionStorage.setItem(LOOP_KEY, JSON.stringify({ target, at: Date.now() }));
-          } catch {
-            // Private mode / quota: forward anyway. Worst case is one extra
-            // round trip through this check, not a loop — state 6's window
-            // check is a courtesy once storage works, not what prevents one.
-          }
-          // State 4: a full-page `window.location.assign`, not `.replace`
-          // and not `$router.replace` — matches onLogin()'s own precedent
-          // below, because `target` is frequently a proxied admin surface
-          // this SPA has no client route for (#4081, #4065).
-          window.location.assign(target);
+          settled = true;
+          // State 4, amended: offer the click, don't take it automatically.
+          this.adminRedirectState = 'continue';
+          this.resetArmTimer();
+          this.$nextTick(() => {
+            this.$refs.continueWrap?.querySelector('a')?.focus();
+          });
         }).catch(() => {
           clearTimeout(timer);
           fallBackToForm(); // state 5
         });
       }
     },
+    mounted() {
+      // The arm timer resets on any visibility/focus change while the
+      // Continue control is up (security c63400) — a held-key or
+      // DoubleClickjacking gesture typically arrives with the page having
+      // just gained focus/visibility, so restarting here (not just once)
+      // is what makes the window continuous rather than one-shot.
+      this._onFocusOrVisibilityChange = () => {
+        if (this.adminRedirectState === 'continue') this.resetArmTimer();
+      };
+      document.addEventListener('visibilitychange', this._onFocusOrVisibilityChange);
+      window.addEventListener('blur', this._onFocusOrVisibilityChange);
+      window.addEventListener('focus', this._onFocusOrVisibilityChange);
+    },
+    beforeUnmount() {
+      document.removeEventListener('visibilitychange', this._onFocusOrVisibilityChange);
+      window.removeEventListener('blur', this._onFocusOrVisibilityChange);
+      window.removeEventListener('focus', this._onFocusOrVisibilityChange);
+      this.clearArmTimer();
+    },
     methods: {
+      // Security c63400: the Continue control ignores activation until the
+      // page has been visible AND focused, continuously, for ~500ms.
+      // Neither a clickjacking frame nor the DoubleClickjacking /
+      // held-Enter techniques need that — they ride a gesture the operator
+      // made on the ATTACKER's page onto our freshly-loaded, freshly-focused
+      // control (`frame-ancestors 'self'` only blocks the framed variant).
+      resetArmTimer() {
+        this.continueArmed = false;
+        this.clearArmTimer();
+        if (document.visibilityState === 'visible' && document.hasFocus()) {
+          this._armTimer = setTimeout(() => {
+            this.continueArmed = true;
+          }, 500);
+        }
+      },
+      clearArmTimer() {
+        if (this._armTimer) {
+          clearTimeout(this._armTimer);
+          this._armTimer = null;
+        }
+      },
+      onContinueClick(event) {
+        // Unarmed: the control renders visibly enabled the whole time (no
+        // flicker), but an activation inside the arm window is swallowed
+        // silently — no error text, since a legitimate click a beat later
+        // works fine and nothing was actually wrong with the page.
+        if (!this.continueArmed) {
+          event.preventDefault();
+          return;
+        }
+        // Written on the click itself (not before): this is the state-6
+        // loop-breaker mark, and the click is also what state 4 exists to
+        // require — marking earlier would record a courtesy no click had
+        // actually happened yet. No preventDefault past this point: the
+        // AspButton `href` still navigates natively (middle-click,
+        // Ctrl/Cmd-click, open-in-new-tab all keep working — those are
+        // deliberate separate user acts, not what either attack rides).
+        try {
+          sessionStorage.setItem(
+            'admin_login_last_continue_click',
+            JSON.stringify({ target: this.redirectTarget, at: Date.now() }),
+          );
+        } catch {
+          // Private mode / quota: the click still navigates via href; the
+          // loop-breaker courtesy is lost, not a loop — there is no
+          // auto-navigation left to loop on without a click.
+        }
+      },
+      onContinueKeydown(event) {
+        // A held key auto-repeats as separate keydowns with repeat:true; the
+        // arm-delay alone doesn't cover it, because the repeats can keep
+        // arriving well past the 500ms window with no fresh (non-repeat)
+        // keydown in between to re-check. Swallow every repeat unconditionally.
+        if (event.repeat) {
+          event.preventDefault();
+        }
+      },
       onLogin() {
         // Sidebar.vue's username/userRole refs are local state, only
         // refreshed by its OWN embedded Login instance's @login handler
@@ -255,5 +361,31 @@
   .session-checking-notice {
     margin: 0;
     font-size: var(--text-sm);
+  }
+
+  /* State 4 of design_agent's ack, amended (c63391, #8798-B2): the
+     one-click Continue confirmation. */
+  .session-active-notice {
+    margin: 0 0 var(--space-sm);
+    font-size: var(--text-sm);
+  }
+
+  .continue-target-label {
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  /* The target path itself, in its own mono line so the operator can read
+     exactly where the click goes before taking it (D2) — never truncated,
+     and never allowed to overflow the card at narrow widths. */
+  .continue-target-path {
+    margin: 0 0 var(--space-sm);
+    font-family: var(--font-family-mono);
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .continue-button {
+    width: 100%;
   }
 </style>

@@ -99,14 +99,91 @@ test.describe('Admin sign-in at /admin/login', () => {
   // merely-stale cached role apart from a genuinely dead one, so the form
   // only shows when the cookie is actually no longer good.
   test.describe('the redirect case: admin + ?redirect, cookie verified live', () => {
-    test('a live Admin cookie goes straight to the redirect target, no form', async ({ page }) => {
-      // seedAdminSession also stubs GET /api/profile -> 200 (a live cookie).
+    // design_agent's ack was amended (c63391) after security found the
+    // original zero-click forward (c63381): ANY same-site arrival at this
+    // URL with a cached Admin role and a live cookie forwarded automatically
+    // — including one a cross-site attacker's link could produce, since the
+    // browser cannot tell that from the real PIN hop. The fix is a click:
+    // this test's core assertion (no navigation away from /admin/login
+    // without one) is the regression guard and fails against the pre-fix
+    // e0e6beb, which navigated automatically with no Continue state at all.
+    test('a live Admin cookie shows a one-click Continue card, naming the target, with no auto-navigation', async ({ page }) => {
+      await seedAdminSession(page); // also stubs GET /api/profile -> 200 (a live cookie)
+      const target = '/admin/apps/system_3/tasks/8798'; // a deep, non-landing path
+      await page.goto(`/admin/login?redirect=${target}`);
+      await dismissMobileSidebarIfPresent(page);
+      await expect(page.getByRole('status')).toHaveText('Your session is still active.');
+      await expect(page.getByText(target, { exact: true })).toBeVisible();
+      await expect(page.locator('input[name="username"]')).toHaveCount(0);
+      // No auto-navigation: give it a beat, confirm the URL hasn't moved.
+      await page.waitForTimeout(300);
+      await expect(page).toHaveURL(`/admin/login?redirect=${target}`);
+      // Past the ~500ms arm delay (security c63400), so the click below
+      // exercises the normal armed path, not the unarmed one (its own test).
+      // Waited on the DOM's own signal, not a fixed ms margin from goto()
+      // (engine startup speed varies — see the dedicated arm-delay test).
+      await expect(page.locator('[data-continue-armed]')).toHaveAttribute('data-continue-armed', 'true');
+
+      // The click is the only way forward, and it lands on exactly the target.
+      await page.getByRole('link', { name: 'Continue' }).click();
+      await expect(page).toHaveURL(target);
+    });
+
+    // security c63400, P2 hardening after the P1 fix above: neither a held
+    // key nor a "DoubleClickjacking" popup needs a frame (frame-ancestors
+    // only stops the framed variant), and both ride a gesture the operator
+    // made on the ATTACKER's page onto our freshly-focused Continue control.
+    test('security P2: the Continue control ignores activation for ~500ms after it renders', async ({ page }) => {
+      // A fake clock, not a wall-clock race: goto()-to-render time varies
+      // enough by itself (engine, machine load) that a fixed-ms margin
+      // measured from goto flipped both ways in practice — too short on a
+      // slow run, already elapsed on a fast one. Freezing time and advancing
+      // it explicitly makes the "still inside the window" and "past it"
+      // halves of this test deterministic on any engine or load.
+      await page.clock.install();
+      await page.clock.pauseAt(new Date()); // freeze: install() alone still ticks in realtime
       await seedAdminSession(page);
       await page.goto('/admin/login?redirect=/admin');
-      await expect(page).toHaveURL('/admin');
       await dismissMobileSidebarIfPresent(page);
-      await expect(page.getByRole('heading', { level: 1, name: 'Admin' })).toBeVisible();
-      await expect(page.locator('input[name="username"]')).toHaveCount(0);
+      const link = page.getByRole('link', { name: 'Continue' });
+      await expect(link).toBeVisible();
+      await expect(page.locator('[data-continue-armed]')).toHaveAttribute('data-continue-armed', 'false');
+      // Click while unarmed (clock frozen at render time): must not navigate.
+      await link.click();
+      await expect(page).toHaveURL('/admin/login?redirect=/admin');
+      // Advance the fake clock past the arm delay: the identical click now navigates.
+      await page.clock.runFor(600);
+      await expect(page.locator('[data-continue-armed]')).toHaveAttribute('data-continue-armed', 'true');
+      await link.click();
+      await expect(page).toHaveURL('/admin');
+    });
+
+    test('security P2: a repeated keydown (a held key) is swallowed, never activating Continue', async ({ page }) => {
+      await seedAdminSession(page);
+      await page.goto('/admin/login?redirect=/admin');
+      await dismissMobileSidebarIfPresent(page);
+      const link = page.getByRole('link', { name: 'Continue' });
+      await expect(link).toBeFocused();
+      await page.waitForTimeout(600); // past the arm delay
+      // A synthetic repeat:true keydown exercises onContinueKeydown's guard
+      // directly (a dispatched event carries no real browser default action
+      // to observe, so the assertion is on the guard itself: it must call
+      // preventDefault on a repeat, which a build without the guard does not).
+      const prevented = await link.evaluate((el) => {
+        const event = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', repeat: true, bubbles: true, cancelable: true });
+        el.dispatchEvent(event);
+        return event.defaultPrevented;
+      });
+      expect(prevented).toBe(true);
+      await page.waitForTimeout(200);
+      await expect(page).toHaveURL('/admin/login?redirect=/admin');
+    });
+
+    test('the Continue control is focused on arrival, so a keyboard user can act with one key', async ({ page }) => {
+      await seedAdminSession(page);
+      await page.goto('/admin/login?redirect=/admin');
+      await dismissMobileSidebarIfPresent(page);
+      await expect(page.getByRole('link', { name: 'Continue' })).toBeFocused();
     });
 
     test('a cached Admin flag whose cookie has actually expired still shows the form', async ({ page }) => {
@@ -139,30 +216,39 @@ test.describe('Admin sign-in at /admin/login', () => {
     // by number; these three tests pin them.
     test('state 3: shows "Checking your session…" in place of the form while the check is in flight', async ({ page }) => {
       await seedAdminSession(page);
+      // A gate the test controls, not a wall-clock delay: a fixed-ms delay
+      // raced browser startup time on mobile-safari under load (the
+      // "Checking" state had already resolved to "Continue" by the first
+      // assertion). Holding the route open until the test itself releases
+      // it makes the "Checking" assertion race-free on any engine or load.
+      let resolveProfile: () => void = () => {};
+      const profileGate = new Promise<void>(resolve => { resolveProfile = resolve; });
       await page.route(/\/api\/profile$/, async (route: Route) => {
-        await new Promise(resolve => setTimeout(resolve, 1_200));
+        await profileGate;
         await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ username: 'e2e-admin' }) });
       });
       await page.goto('/admin/login?redirect=/admin');
-      // Checked before dismissMobileSidebarIfPresent: that call itself takes
-      // time the delayed response could outlast, racing the very state this
-      // test exists to observe.
       await expect(page.getByRole('status')).toHaveText('Checking your session…');
       await expect(page.locator('input[name="username"]')).toHaveCount(0);
-      await expect(page).toHaveURL('/admin'); // once the delayed answer lands
+      resolveProfile();
+      // Once the answer lands: the Continue card, not an auto-forward.
+      await expect(page.getByRole('status')).toHaveText('Your session is still active.');
+      await expect(page).toHaveURL('/admin/login?redirect=/admin');
     });
 
-    test('state 6: a second arrival for the same target inside the loop window shows the form without re-checking', async ({ page }) => {
+    test('state 6: a second arrival for the same target inside the loop window (after a Continue click) shows the form without re-checking', async ({ page }) => {
       await seedAdminSession(page);
       let profileCalls = 0;
       await page.route(/\/api\/profile$/, (route: Route) => {
         profileCalls++;
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ username: 'e2e-admin' }) });
       });
-      // Simulate "we already forwarded to /admin a moment ago and landed
-      // right back here" — the shape a disagreeing auth_request produces.
+      // Simulate "the operator already clicked Continue for /admin a moment
+      // ago and landed right back here" — the shape a disagreeing
+      // auth_request produces (amended: the mark is written on the click,
+      // not on an automatic forward, since there is no longer one).
       await page.addInitScript((target) => {
-        sessionStorage.setItem('admin_login_last_forward', JSON.stringify({ target, at: Date.now() }));
+        sessionStorage.setItem('admin_login_last_continue_click', JSON.stringify({ target, at: Date.now() }));
       }, '/admin');
       await page.goto('/admin/login?redirect=/admin');
       await dismissMobileSidebarIfPresent(page);
@@ -174,6 +260,24 @@ test.describe('Admin sign-in at /admin/login', () => {
       // for exactly that read) — that is the one call. The loop breaker is
       // proven by there being no SECOND one from LoginView's own check.
       expect(profileCalls).toBe(1);
+    });
+
+    test('a Continue click that lands back here (the loop breaker) shows the form, not a second Continue card', async ({ page }) => {
+      await seedAdminSession(page);
+      await page.goto('/admin/login?redirect=/admin');
+      await dismissMobileSidebarIfPresent(page);
+      // Past the arm delay (security c63400) — the DOM's own signal, not a
+      // fixed ms margin from goto() (see the dedicated arm-delay test).
+      await expect(page.locator('[data-continue-armed]')).toHaveAttribute('data-continue-armed', 'true');
+      await page.getByRole('link', { name: 'Continue' }).click();
+      await expect(page).toHaveURL('/admin');
+      // Simulate auth_request having refused /admin after all (profile and
+      // verify-admin disagree) by returning to the same URL within the
+      // loop window — sessionStorage persists across this in-tab navigation.
+      await page.goto('/admin/login?redirect=/admin');
+      await dismissMobileSidebarIfPresent(page);
+      await expect(page.getByRole('heading', { level: 1, name: 'Admin sign-in' })).toBeVisible();
+      await expect(page.locator('input[name="username"]')).toBeVisible();
     });
 
     test('states 3+5: a check that neither answers nor fails within ~2s falls back to the form, and a later answer is ignored', async ({ page }) => {
@@ -188,11 +292,13 @@ test.describe('Admin sign-in at /admin/login', () => {
       await expect(page.getByRole('heading', { level: 1, name: 'Admin sign-in' })).toBeVisible({ timeout: 2_500 });
       await expect(page.locator('input[name="username"]')).toBeVisible();
       // Give the late 3s answer time to land, then confirm it changed nothing:
-      // still the form, still this URL — the late answer must not pull the
-      // form away or navigate out from under the operator (D13).
+      // still the form, still this URL, and no Continue card appeared behind
+      // it — the late answer must not pull the form away or navigate out
+      // from under the operator (D13).
       await page.waitForTimeout(1_500);
       await expect(page).toHaveURL('/admin/login?redirect=/admin');
       await expect(page.locator('input[name="username"]')).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Continue' })).toHaveCount(0);
     });
   });
 });
