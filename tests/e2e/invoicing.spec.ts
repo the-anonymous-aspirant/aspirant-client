@@ -94,9 +94,15 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
       if (fake.expenseConfirmFailure) return json(route, fake.expenseConfirmFailure.status, fake.expenseConfirmFailure.body);
       fake.expenses = fake.expenses || [];
       const rows: Json[] = JSON.parse(req.postData() || '{}').rows;
-      fake.expenses.push(...rows);
+      const base = fake.expenses.length;
+      fake.expenses.push(...rows.map((row, i) => ({
+        ...row, id: 900 + base + i, source: 'paypal', entry: 'import', client_id: null,
+        reference: row.payee_name, paid_on: `${row.paid_on}T00:00:00Z`,
+      })));
       return json(route, 200, { summary: { confirmed: rows.length, duplicates: 0 } });
     }
+    // #10432: the Book tab reads the stored expenses.
+    if (path === '/invoicing/expenses' && method === 'GET') return json(route, 200, { expenses: fake.expenses || [] });
     if (path === '/invoicing/payments/import' && method === 'POST') {
       const next = fake.importResponses.shift() || { status: 200, body: { summary: { rows_read: 0, imported: 0, duplicates: 0, skipped: 0, skipped_reasons: {}, withdrawals: 0 } } };
       return json(route, next.status, next.body);
@@ -675,6 +681,25 @@ test.describe('#10438 PayPal import — outgoing payments reviewed as work expen
     for (let i = 0; i < 2; i++) await expect(ppxRows(page).nth(i).locator('input[type="checkbox"]')).not.toBeChecked();
     await expect(page.locator('[data-test="import-summary"]')).toContainText('PayPal CSV: read 4 rows: 0 imported, 2 already imported, 2 skipped.');
     expect(ppxConfirms(fake)).toHaveLength(0);
+  });
+
+  // #10432: the page refetches the expenses after the review adds one, so the
+  // Book tab shows it without a reload.
+  test('an added expense is on the Book tab straight away', async ({ page }) => {
+    const fake = importWithOutgoing([paypalOutgoing(1), paypalOutgoing(2)]);
+    await importPayPal(page, fake);
+    await ppxRows(page).nth(0).locator('input[type="checkbox"]').check();
+    await page.locator('[data-test="paypal-expenses-confirm"]').click();
+    await expect(page.locator('[data-test="paypal-summary-expenses"]')).toHaveText('1 expense added to your book.');
+    const confirmAt = fake.requests.findIndex((r) => r.method === 'POST' && r.path === '/invoicing/expenses/import-paypal/confirm');
+    await expect.poll(() => fake.requests.slice(confirmAt + 1).some((r) => r.method === 'GET' && r.path === '/invoicing/expenses')).toBe(true);
+
+    await page.getByRole('tab', { name: 'Book' }).click();
+    const rows = page.locator('[data-test="book-row"]');
+    await expect(rows.filter({ hasText: 'Leinwand' })).toHaveCount(1);
+    // Only the ticked payment became an expense: one expense row (only
+    // expense rows carry a delete), the unticked one is not in the book.
+    await expect(page.locator('[data-test="book-panel"] [data-test="book-expense-delete"]:visible')).toHaveCount(1);
   });
 
   test('a file whose outgoing payments are all in the book already, or that has none, opens no review', async ({ page }) => {

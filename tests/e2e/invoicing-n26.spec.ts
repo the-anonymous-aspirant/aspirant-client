@@ -123,6 +123,8 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
       const names = fake.expenseCategories || ['materials and supplies', 'travel', 'other'];
       return json(route, 200, { categories: names.map((name, i) => ({ id: i + 1, name, counts_as: name })) });
     }
+    // #10432: the Book tab reads the stored expenses.
+    if (path === '/invoicing/expenses' && method === 'GET') return json(route, 200, { expenses: fake.expenses || [] });
     if (path === '/invoicing/expenses/import-n26/confirm' && method === 'POST') {
       if (fake.expenseConfirmFailure) return json(route, fake.expenseConfirmFailure.status, fake.expenseConfirmFailure.body);
       fake.expenses = fake.expenses || [];
@@ -133,7 +135,10 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
           duplicates++;
           continue;
         }
-        fake.expenses.push({ ...row, source: 'n26', entry: 'import' });
+        fake.expenses.push({
+          ...row, id: 700 + fake.expenses.length, source: 'n26', entry: 'import', client_id: null,
+          reference: row.payee_name, paid_on: `${row.paid_on}T00:00:00Z`,
+        });
         confirmed++;
       }
       return json(route, 200, { summary: { confirmed, duplicates } });
@@ -574,6 +579,23 @@ test.describe('#10432-A1 N26 import — outgoing rows as work expenses', () => {
     expect(JSON.parse(expenseConfirms(fake)[0].body).rows[0].category).toBe('other');
     await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
     await expectSummaryAddsUp(page);
+  });
+
+  // #10432: an expenses-only confirm imports no payment, and must still make
+  // the page refetch, so the Book tab shows the expense without a reload.
+  test('expenses alone: the added expense is on the Book tab straight away', async ({ page }) => {
+    const fake = withOutgoing([outgoingRow(1)]);
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+    for (let i = 0; i < 2; i++) await checkbox(page, i).uncheck();
+    await expenseCheck(page, 0).check();
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
+    const confirmAt = fake.requests.findIndex((r) => r.method === 'POST' && r.path === '/invoicing/expenses/import-n26/confirm');
+    await expect.poll(() => fake.requests.slice(confirmAt + 1).some((r) => r.method === 'GET' && r.path === '/invoicing/expenses')).toBe(true);
+
+    await page.getByRole('tab', { name: 'Book' }).click();
+    await expect(page.locator('[data-test="book-row"]').filter({ hasText: 'Pigmenti e tele' })).toHaveCount(1);
   });
 
   test('an expense already in the book has no checkbox or picker; a look-alike is flagged and starts unticked', async ({ page }) => {
