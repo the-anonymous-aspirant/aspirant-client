@@ -45,7 +45,12 @@
                   {{ row.type === 'in' ? formatMoney(row.amount_cents) : formatSignedMoney(-row.amount_cents) }}
                 </strong>
               </div>
-              <span class="description">{{ row.description }}</span>
+              <span class="description" data-test="book-row-description">
+                <template v-if="row.who">{{ row.who }}</template>
+                <template v-if="row.who && row.what"> · </template>
+                <span v-if="row.what" :class="{ muted: !!row.who }">{{ row.what }}</span>
+                <template v-if="!row.who && !row.what">—</template>
+              </span>
               <span class="muted">{{ row.categoryLabel }}</span>
               <AspButton
                 v-if="row.type === 'out'"
@@ -71,7 +76,14 @@
           :row-attrs="() => ({ 'data-test': 'book-row' })"
         >
           <template #cell-paid_on="{ row }"><span class="nowrap">{{ formatDay(row.paid_on) }}</span></template>
-          <template #cell-description="{ row }"><span class="description">{{ row.description }}</span></template>
+          <template #cell-description="{ row }">
+            <span class="description" data-test="book-row-description">
+              <template v-if="row.who">{{ row.who }}</template>
+              <template v-if="row.who && row.what"> · </template>
+              <span v-if="row.what" :class="{ muted: !!row.who }">{{ row.what }}</span>
+              <template v-if="!row.who && !row.what">—</template>
+            </span>
+          </template>
           <template #cell-category="{ row }"><span class="muted">{{ row.categoryLabel }}</span></template>
           <template #cell-in="{ row }">
             <span v-if="row.type === 'in'" class="nowrap in-amount">{{ formatMoney(row.amount_cents) }}</span>
@@ -120,13 +132,33 @@
     listExpenseCategories,
   } from './api.js';
 
+  // "What it was for" as two parts (design_agent's Design ack c64353 on system_3
+  // #10459): `who`, the counterparty in body ink, then `what`, the note, muted
+  // only when it follows a counterparty. A part that already contains the other
+  // (trimmed, case-insensitive; a booking text often names the payee) is shown
+  // once, the longer one, in body ink.
+  const describeRow = (counterparty, note) => {
+    const who = String(counterparty || '').trim();
+    const what = String(note || '').trim();
+    if (who && what) {
+      const w = who.toLowerCase();
+      const n = what.toLowerCase();
+      if (n.includes(w)) return { who: '', what };
+      if (w.includes(n)) return { who, what: '' };
+    }
+    return { who, what };
+  };
+
   // The income-and-expenses book (system_3 #10414-C): payments and
   // hand-entered expenses merged into one dated list, grouped by month, with
   // a per-month In/Out/Result head line (design_agent ruling, report 886 §2,
   // c63777 on #10415 — no running total). "What it was for" is the note, the
   // same field the operator already reads that way on the Payments tab
-  // (#9656 c63755); income in the default ink, expenses in red with a minus
-  // sign, so colour is never the only signal (c63777).
+  // (#9656 c63755), led by the counterparty where one is known (system_3
+  // #10459): an imported row's note is the bank's booking text ("Pagamento
+  // con carta"), which says nothing about who was paid. Income in the default
+  // ink, expenses in red with a minus sign, so colour is never the only
+  // signal (c63777).
   export default {
     name: 'BookPanel',
     components: { AspButton, AspDataTable, AspEmptyState, BookChart, ManualExpenseDialog },
@@ -162,7 +194,7 @@
             id: p.id,
             type: 'in',
             paid_on: p.paid_on,
-            description: p.note || p.sender_name || '—',
+            ...describeRow(p.sender_name, p.note),
             categoryLabel: CATEGORY_LABELS[p.category] || p.category,
             amount_cents: p.gross_cents,
           }));
@@ -171,7 +203,12 @@
           id: e.id,
           type: 'out',
           paid_on: e.paid_on,
-          description: e.note || e.reference || '—',
+          // An import stores the payee in `reference` (aspirant-server
+          // invoicing_n26.go / invoicing_payments.go). A hand-entered
+          // expense's `reference` is the dialog's free-text "Reference
+          // (optional)", which nothing says names a payee, so it stays the
+          // note's fallback and is never shown as a counterparty.
+          ...(e.entry === 'import' ? describeRow(e.reference, e.note) : { who: '', what: String(e.note || e.reference || '').trim() }),
           categoryLabel: e.category,
           amount_cents: e.amount_cents,
         }));
