@@ -300,3 +300,89 @@ test.describe('#10414-E Invoices app — the bookkeeping report export', () => {
     await expect(page.locator('[data-test="book-error"]')).toContainText('could not build the report');
   });
 });
+
+// system_3 #10459 (Design ack c64353): an imported row's note is the bank's
+// booking text, which does not say who was paid. The counterparty leads the
+// "What it was for" cell in body ink; the booking text follows, muted. A part
+// that already contains the other is shown once. A hand-entered expense's
+// free-text `reference` is never shown as a counterparty.
+test.describe('#10459 Invoices app — the Book shows who was paid', () => {
+  const descriptions = (page: Page) => page.locator('[data-test="book-row-description"]');
+
+  // The computed colour of the cell's own text and of its muted note, next to
+  // the resolved tokens they must equal.
+  const inks = (page: Page, n: number) =>
+    descriptions(page).nth(n).evaluate((el) => {
+      const probe = (v: string) => {
+        const s = document.createElement('span');
+        s.style.color = v;
+        document.body.appendChild(s);
+        const c = getComputedStyle(s).color;
+        s.remove();
+        return c;
+      };
+      const root = getComputedStyle(document.documentElement);
+      const note = el.querySelector('span');
+      return {
+        cell: getComputedStyle(el).color,
+        note: note ? getComputedStyle(note).color : null,
+        body: probe(root.getPropertyValue('--text-body').trim()),
+        muted: probe(root.getPropertyValue('--text-muted').trim()),
+      };
+    });
+
+  test('an imported expense shows its payee in body ink, then the booking text muted', async ({ page }) => {
+    await open(page, newFake({
+      expenses: [expenseRow(101, { source: 'n26', entry: 'import', reference: 'Colorificio Esempio', note: 'Pagamento con carta' })],
+    }));
+    await expect(descriptions(page)).toHaveText(['Colorificio Esempio · Pagamento con carta']);
+    const c = await inks(page, 0);
+    expect(c.body).not.toBe(c.muted);
+    expect(c.cell).toBe(c.body);
+    expect(c.note).toBe(c.muted);
+  });
+
+  test('an imported expense with no booking text shows the payee alone', async ({ page }) => {
+    await open(page, newFake({
+      expenses: [expenseRow(101, { source: 'paypal', entry: 'import', reference: 'Print Shop', note: '' })],
+    }));
+    await expect(descriptions(page)).toHaveText(['Print Shop']);
+  });
+
+  test('a part that already contains the other is shown once, the longer one, in body ink', async ({ page }) => {
+    await open(page, newFake({
+      expenses: [
+        expenseRow(101, { source: 'paypal', entry: 'import', reference: 'print shop', note: 'Payment to Print Shop GmbH' }),
+        expenseRow(102, { source: 'n26', entry: 'import', paid_on: '2026-07-21T00:00:00Z', reference: 'Tipografia Esempio SRL', note: ' tipografia esempio ' }),
+      ],
+    }));
+    await expect(descriptions(page)).toHaveText(['Payment to Print Shop GmbH', 'Tipografia Esempio SRL']);
+    const c = await inks(page, 0);
+    expect(c.note).toBe(c.body);
+  });
+
+  test('a hand-entered expense never shows its reference as a counterparty', async ({ page }) => {
+    await open(page, newFake({
+      expenses: [
+        expenseRow(101, { reference: 'RE-2026-17', note: 'Guitar strings' }),
+        expenseRow(102, { paid_on: '2026-07-21T00:00:00Z', reference: 'RE-2026-18', note: '' }),
+      ],
+    }));
+    // With a note, the note alone; with none, the reference stands in, as before.
+    await expect(descriptions(page)).toHaveText(['Guitar strings', 'RE-2026-18']);
+    const c = await inks(page, 0);
+    expect(c.note).toBe(c.body);
+  });
+
+  test('income shows who paid before the note, or either alone', async ({ page }) => {
+    await open(page, newFake({
+      payments: [
+        incomeRow(),
+        incomeRow({ id: 11, paid_on: '2026-07-15T00:00:00Z', sender_name: '', note: 'Cash at the market' }),
+        incomeRow({ id: 12, paid_on: '2026-07-16T00:00:00Z', sender_name: 'Mara Esempio', note: '' }),
+        incomeRow({ id: 13, paid_on: '2026-07-17T00:00:00Z', sender_name: '', note: '' }),
+      ],
+    }));
+    await expect(descriptions(page)).toHaveText(['Galerie Nord · Wandbild Juli', 'Cash at the market', 'Mara Esempio', '—']);
+  });
+});
