@@ -90,8 +90,9 @@
         N26 PDFs: read {{ n26Summary.rows_read }} row{{ n26Summary.rows_read === 1 ? '' : 's' }} from
         {{ n26Summary.files }} file{{ n26Summary.files === 1 ? '' : 's' }}:
         <strong>{{ n26Summary.imported }}</strong> imported, {{ n26Summary.duplicates }} already imported,
-        {{ n26Summary.skipped }} skipped<template v-if="n26Summary.paypal_transfers">, <span data-test="n26-summary-paypal">{{ n26PayPalClause }}</span></template>.<template v-if="n26Summary.failures.length">
-          {{ ' ' }}<span data-test="n26-summary-failures">{{ n26FailureLine }}</span></template><template v-if="n26Summary.expenses_added">
+        {{ n26Summary.skipped }} skipped<template v-if="n26Summary.paypal_transfers">, <span data-test="n26-summary-paypal">{{ n26PayPalClause }}</span></template><template v-if="n26Summary.space_transfers">, <span data-test="n26-summary-space-transfer">{{ n26SpaceTransferClause }}</span></template>.<template v-if="n26Summary.failures.length">
+          {{ ' ' }}<span data-test="n26-summary-failures">{{ n26FailureLine }}</span></template><template v-if="(n26Summary.unreadable || []).length">
+          {{ ' ' }}<span data-test="n26-summary-unreadable">{{ n26UnreadableLine }}</span></template><template v-if="n26Summary.expenses_added">
           {{ ' ' }}<span data-test="n26-summary-expenses">{{ n26Summary.expenses_added }} expense{{ n26Summary.expenses_added === 1 ? '' : 's' }} added to your book.</span></template>
       </p>
     </AspCard>
@@ -452,6 +453,23 @@
         return n === 1
           ? '1 transfer from PayPal left out (its payments come in through PayPal)'
           : `${n} transfers from PayPal left out (their payments come in through PayPal)`;
+      },
+      // Moves between her own account and a Space that the server left out
+      // of a statement (system_3 #10541): the statement's analogue of the
+      // PayPal clause above, kept short because the review dialog already
+      // gave the full reason (design_agent c65358).
+      n26SpaceTransferClause() {
+        const n = (this.n26Summary && this.n26Summary.space_transfers) || 0;
+        return n === 1
+          ? '1 move between your account and a Space left out (your own money)'
+          : `${n} moves between your account and your Spaces left out (your own money)`;
+      },
+      // A recognised file that read no transaction stays named after the
+      // dialog closes, like a failure (design_agent c65358).
+      n26UnreadableLine() {
+        const files = (this.n26Summary && this.n26Summary.unreadable) || [];
+        const n = files.length;
+        return `${n} file${n === 1 ? '' : 's'} read no transaction: ${files.join(', ')}.`;
       },
       n26FailureLine() {
         const failures = (this.n26Summary && this.n26Summary.failures) || [];

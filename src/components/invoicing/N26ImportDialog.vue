@@ -25,12 +25,35 @@
              c61091). Say so, or the
              file reads as having lost a payment; when it was the file's only
              row, this line replaces the empty-file line. -->
-        <p v-else-if="paypalSkipped(file)" class="n26-file__none n26-file__paypal" data-test="n26-file-paypal">
-          {{ paypalLine(paypalSkipped(file)) }}
-        </p>
-        <p v-else-if="!(file.candidates || []).length" class="n26-file__none" data-test="n26-file-empty">
-          No incoming payments in this file.
-        </p>
+        <template v-else>
+          <!-- Each kind of left-out row is its own line, PayPal first, so a
+               file with both kinds shows both (design_agent c65358, D2). -->
+          <p v-if="paypalSkipped(file)" class="n26-file__none n26-file__paypal" data-test="n26-file-paypal">
+            {{ paypalLine(paypalSkipped(file)) }}
+          </p>
+          <!-- A move between her own account and a Space (a Round-up, a
+               Monthly Rule, a plain transfer to or from a Space) is her own
+               money: the server leaves it out (system_3 #10541), and the
+               dialog says so, so the counts add up to the statement. -->
+          <p v-if="spaceTransferSkipped(file)" class="n26-file__none n26-file__space-transfer" data-test="n26-file-space-transfer">
+            {{ spaceTransferLine(spaceTransferSkipped(file)) }}
+          </p>
+          <!-- A recognised statement that read no row at all. A month with
+               no activity reads zero rows too, so this says what is known
+               and what she can check, in the empty line's muted style, not
+               as an error (design_agent c65358). The kind is already in the
+               heading. -->
+          <p v-if="unreadableStatement(file)" class="n26-file__none n26-file__unreadable" data-test="n26-file-unreadable">
+            No transaction was found in this file. If the statement lists any, the importer does not know this layout yet.
+          </p>
+          <p
+            v-else-if="!(file.candidates || []).length && !paypalSkipped(file) && !spaceTransferSkipped(file)"
+            class="n26-file__none"
+            data-test="n26-file-empty"
+          >
+            No incoming payments in this file.
+          </p>
+        </template>
         <ul v-if="!file.error && (file.candidates || []).length" class="n26-rows">
           <!-- §3.114 card grammar at every width: checkbox first, payer
                top-left, amount top-right, date and reference muted beneath,
@@ -198,9 +221,18 @@
       paypalTotal() {
         return this.files.reduce((n, file) => n + this.paypalSkipped(file), 0);
       },
+      // Rows the server left out as moves between her own account and a
+      // Space (system_3 #10541): her own money, not a payment or expense.
+      spaceTransferTotal() {
+        return this.files.reduce((n, file) => n + this.spaceTransferSkipped(file), 0);
+      },
       nothingLine() {
         if (this.rows.length || this.expenseRows.length) return 'Nothing new to import: every row is already imported.';
+        if (this.paypalTotal && this.spaceTransferTotal) {
+          return 'Nothing to import: every row read is a transfer from PayPal or a move between your account and your Spaces.';
+        }
         if (this.paypalTotal) return 'Nothing to import: every payment read is a transfer from PayPal.';
+        if (this.spaceTransferTotal) return 'Nothing to import: every row read is a move between your account and your Spaces.';
         return 'Nothing to import: no payment could be read from these files.';
       },
     },
@@ -245,6 +277,27 @@
         return n === 1
           ? '1 transfer from PayPal left out: its payments come in through your PayPal import.'
           : `${n} transfers from PayPal left out: their payments come in through your PayPal import.`;
+      },
+      spaceTransferSkipped(file) {
+        return (file.skipped && file.skipped.space_transfer) || 0;
+      },
+      spaceTransferLine(n) {
+        return n === 1
+          ? '1 move between your account and a Space left out: it is your own money, not a payment or an expense.'
+          : `${n} moves between your account and your Spaces left out: they are your own money, not payments or expenses.`;
+      },
+      // A statement/Kontoaktivität file that read cleanly but found nothing
+      // in either direction: distinct from a file that legitimately has
+      // only outgoing rows (then "No incoming payments" already says so
+      // accurately) or whose empty read is already explained by a skip.
+      unreadableStatement(file) {
+        return (
+          file.document_kind === 'n26_account_statement' &&
+          !(file.candidates || []).length &&
+          !(file.expense_candidates || []).length &&
+          !this.paypalSkipped(file) &&
+          !this.spaceTransferSkipped(file)
+        );
       },
       // Name the stored payment a look-alike row matches, when it is loaded.
       duplicateLine(row) {
@@ -297,9 +350,15 @@
           failures: this.files
             .filter((file) => file.error)
             .map((file) => ({ filename: file.filename, reason: n26FileErrorReason(file.error) })),
-          // The PayPal transfers were read too, so the line adds up.
-          rows_read: this.rows.length + this.paypalTotal,
+          // A recognised file that read no transaction stays named after the
+          // dialog closes, like a failure (design_agent c65358, §3.127
+          // Decision 5).
+          unreadable: this.files.filter((file) => !file.error && this.unreadableStatement(file)).map((file) => file.filename),
+          // The PayPal transfers and the Space moves were read too,
+          // so the line adds up.
+          rows_read: this.rows.length + this.paypalTotal + this.spaceTransferTotal,
           paypal_transfers: this.paypalTotal,
+          space_transfers: this.spaceTransferTotal,
           imported: result.confirmed,
           duplicates: result.duplicates + alreadyImported,
           skipped: this.rows.length - alreadyImported - posted.length,

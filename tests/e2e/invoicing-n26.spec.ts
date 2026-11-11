@@ -183,10 +183,12 @@ const summary = (page: Page) => page.locator('[data-test="n26-summary"]');
 // read = imported + already imported + skipped + left out, on every path (design_agent c61091).
 async function expectSummaryAddsUp(page: Page): Promise<void> {
   const text = (await summary(page).innerText()).replace(/\s+/g, ' ');
-  const m = text.match(/read (\d+) rows? .*?: (\d+) imported, (\d+) already imported, (\d+) skipped(?:, (\d+) transfers? from PayPal left out)?/);
+  const m = text.match(
+    /read (\d+) rows? .*?: (\d+) imported, (\d+) already imported, (\d+) skipped(?:, (\d+) transfers? from PayPal left out(?: \([^)]*\))?)?(?:, (\d+) moves? between your account and (?:a Space|your Spaces) left out)?/,
+  );
   expect(m, text).not.toBeNull();
-  const [read, imported, already, skipped, leftOut] = m!.slice(1).map((v) => Number(v || 0));
-  expect(read, text).toBe(imported + already + skipped + leftOut);
+  const [read, imported, already, skipped, paypalLeftOut, spaceLeftOut] = m!.slice(1).map((v) => Number(v || 0));
+  expect(read, text).toBe(imported + already + skipped + paypalLeftOut + spaceLeftOut);
 }
 const checkbox = (page: Page, i: number) => page.locator('[data-test="n26-row"]').nth(i).locator('input[type="checkbox"]');
 
@@ -380,6 +382,77 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
       'N26 PDFs: read 5 rows from 2 files: 3 imported, 0 already imported, 0 skipped, 2 transfers from PayPal left out (their payments come in through PayPal).',
     );
     await expectSummaryAddsUp(page);
+  });
+
+  // A move between her own account and a Space (a Round-up, a Monthly
+  // Rule, a plain transfer to or from a Space) is her own money: the server
+  // leaves it out (system_3 #10541) and the dialog says so, the same way it
+  // does for a transfer from PayPal (design_agent c65358).
+  test('a move between her account and a Space is named as left out, and the summary counts it', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['statement.pdf'].skipped = { space_transfer: 1 };
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+
+    const file = page.locator('[data-test="n26-file"]').nth(0);
+    await expect(file.locator('[data-test="n26-file-space-transfer"]')).toHaveText(
+      '1 move between your account and a Space left out: it is your own money, not a payment or an expense.',
+    );
+    await expect(file.locator('[data-test="n26-file-empty"]')).toHaveCount(0);
+    await expect(file.locator('[data-test="n26-file-unreadable"]')).toHaveCount(0);
+
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+    await expect(summary(page)).toHaveText(
+      'N26 PDFs: read 3 rows from 1 file: 2 imported, 0 already imported, 0 skipped, 1 move between your account and a Space left out (your own money).',
+    );
+    await expectSummaryAddsUp(page);
+  });
+
+  // Each kind of left-out row is its own line, PayPal first: a file with
+  // both kinds shows both (design_agent c65358, D2).
+  test('a statement with transfers from PayPal and moves to Spaces names both kinds, and the summary adds up', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['statement.pdf'].skipped = { paypal_transfer: 1, space_transfer: 3 };
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+
+    const file = page.locator('[data-test="n26-file"]').nth(0);
+    await expect(file.locator('.n26-file__none')).toHaveText([
+      '1 transfer from PayPal left out: its payments come in through your PayPal import.',
+      '3 moves between your account and your Spaces left out: they are your own money, not payments or expenses.',
+    ]);
+    await expect(file.locator('[data-test="n26-file-empty"]')).toHaveCount(0);
+
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+    await expect(summary(page)).toHaveText(
+      'N26 PDFs: read 6 rows from 1 file: 2 imported, 0 already imported, 0 skipped, 1 transfer from PayPal left out (its payments come in through PayPal), 3 moves between your account and your Spaces left out (your own money).',
+    );
+    await expectSummaryAddsUp(page);
+  });
+
+  // A recognised statement that read no transaction says what is known and
+  // what she can check, not a quiet empty and not a claimed failure, and it
+  // stays named after the dialog closes (design_agent c65358).
+  test('a recognised statement that reads no transaction says so, and the summary still names it after close', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['statement.pdf'].candidates = [];
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+
+    const file = page.locator('[data-test="n26-file"]').nth(0);
+    await expect(file.locator('[data-test="n26-file-unreadable"]')).toHaveText(
+      'No transaction was found in this file. If the statement lists any, the importer does not know this layout yet.',
+    );
+    await expect(file.locator('[data-test="n26-file-unreadable"]')).not.toHaveAttribute('role', 'alert');
+    await expect(file.locator('[data-test="n26-file-empty"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="n26-row"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="n26-confirm"]')).toHaveCount(0);
+    await page.locator('[data-test="n26-close"]').click();
+    await expect(summary(page)).toHaveText(
+      'N26 PDFs: read 0 rows from 1 file: 0 imported, 0 already imported, 0 skipped. 1 file read no transaction: statement.pdf.',
+    );
   });
 
   // Dismissing without importing (close(false)) still adds up (c61091 item 3).
