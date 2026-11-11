@@ -44,7 +44,7 @@
                as an error (design_agent c65358). The kind is already in the
                heading. -->
           <p v-if="unreadableStatement(file)" class="n26-file__none n26-file__unreadable" data-test="n26-file-unreadable">
-            No transaction was found in this file. If the statement lists any, the importer does not know this layout yet.
+            No transaction was found in this file. If the statement lists any, the importer does not know this layout yet: try N26's CSV export of the same month instead.
           </p>
           <p
             v-else-if="!(file.candidates || []).length && !paypalSkipped(file) && !spaceTransferSkipped(file)"
