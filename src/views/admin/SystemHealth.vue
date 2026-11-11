@@ -150,7 +150,7 @@
       <div class="health-card wide">
         <h3>Volumes</h3>
         <div class="info-rows">
-          <div v-for="v in volumes" :key="v.name" class="info-row">
+          <div v-for="v in volumes" :key="v.name" class="info-row info-row--volume">
             <span class="info-label mono">{{ v.name }}</span>
             <!-- A directory monitor cannot enter has no honest size; say so
                  rather than print a dash or a 0 (system_3 #10568, c65612). -->
@@ -653,8 +653,29 @@ export default {
   text-align: right;
 }
 
+/* Muted ink drawn from the card's own ink: --text-muted is the page's muted
+   ink and renders as the card's own colour in light theme (measured on this
+   card, #10572). */
 .info-value--unreadable {
-  color: var(--text-muted);
+  color: color-mix(in srgb, var(--text-on-dark) 70%, transparent);
+  white-space: nowrap;
+}
+
+/* A volume row that cannot fit its path and its value on one line puts the
+   value on the next line, right-aligned, so neither breaks mid-word (390px,
+   c65622). */
+.info-row--volume {
+  flex-wrap: wrap;
+  column-gap: var(--space-sm);
+}
+
+.info-row--volume .info-value {
+  margin-left: auto;
+}
+
+.info-row--volume .info-label {
+  color: color-mix(in srgb, var(--text-on-dark) 70%, transparent);
+  overflow-wrap: anywhere;
 }
 
 .mono {

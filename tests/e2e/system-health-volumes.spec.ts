@@ -14,6 +14,7 @@ const disk = {
   disks: [{ mount: '/', label: 'Root', total_gb: 100, used_gb: 40, free_gb: 60, percent: 40 }],
   volumes: [
     { name: '/data/aspirant/files', size_mb: null, ref_count: -1, unreadable: true },
+    { name: '/data/aspirant/import-failures', size_mb: null, ref_count: -1, unreadable: true },
     { name: '/data/aspirant/models', size_mb: 2048, ref_count: -1 },
     // A null size without the flag is not "unreadable": it keeps formatMB's dash (design_agent c65622).
     { name: '/data/aspirant/legacy', size_mb: null, ref_count: -1 },
@@ -39,5 +40,16 @@ test('a volume monitor cannot read says so instead of a size; the others keep th
   await expect(rows.filter({ hasText: '/data/aspirant/models' })).toContainText('2.0 GB');
   await expect(rows.filter({ hasText: 'aspirant_pgdata' })).toContainText('512.5 MB');
   await expect(rows.filter({ hasText: '/data/aspirant/legacy' }).locator('.info-value')).toHaveText('—');
-  await expect(page.locator('[data-test="volume-unreadable"]')).toHaveCount(1);
+  await expect(page.locator('[data-test="volume-unreadable"]')).toHaveCount(2);
+  // The words stay on one line at every width; when the row is too narrow the
+  // value moves to its own line under the path.
+  const value = files.locator('[data-test="volume-unreadable"]');
+  const box = await value.boundingBox();
+  const fontSize = await value.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(box!.height, 'one line, not two').toBeLessThan(fontSize * 2);
+  // ...and the path is not broken mid-word to make room for it.
+  const label = files.locator('.info-label');
+  const labelBox = await label.boundingBox();
+  const labelFont = await label.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(labelBox!.height, 'path on one line').toBeLessThan(labelFont * 2);
 });
