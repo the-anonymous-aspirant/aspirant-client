@@ -56,6 +56,16 @@
       </div>
       </div>
     </div>
+    <!-- Said before upload, not only after a failure (security ruling c65222
+         §5); wording ruled by design_agent in c65231 on system_3 #10536,
+         built verbatim (c65576 on #10564). The 7 is a literal on purpose: it
+         is aspirant-server's importFailureMaxWindowHours (168h), which an env
+         value can only narrow, so "up to 7 days" holds at every setting.
+         "May": a file over the size limit, or one arriving while the copies
+         directory is at its cap, keeps no copy at all. -->
+    <p class="ways-in__retention" data-test="import-retention-note">
+      A file that fails to import may be kept for up to 7 days so the import can be fixed, then it is deleted. Only the administrator can open it.
+    </p>
 
     <div v-if="needsDateOrder" class="date-order" role="group" aria-labelledby="date-order-label" data-test="date-order">
       <p id="date-order-label">
@@ -784,6 +794,12 @@
 </script>
 
 <style scoped>
+  .ways-in__retention {
+    margin: var(--space-2xs) 0 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+
   /* Layout per the #8399 spec (§3.114): on a phone the panel reads actions →
      filters → list, every control full width at the page edge; wide, the
      actions sit right and the filter left on one row. */

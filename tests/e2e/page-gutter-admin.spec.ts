@@ -19,6 +19,7 @@ const ADMIN = [
   '/admin/voice-commander',
   '/admin/tools/kvitto',
   '/admin/cardgen',
+  '/admin/import-failures',
 ];
 
 for (const theme of ['light', 'dark'] as const) {
