@@ -97,6 +97,15 @@
       </p>
     </AspCard>
 
+    <!-- §3.142 Decision 1: the import-state region's third line, one shows
+         at a time with the other two. -->
+    <AspCard v-if="manualSummary" class="summary" padding="sm" data-test="manual-summary">
+      <p class="summary__line">
+        By hand: saved {{ formatMoney(manualSummary.gross_cents, manualSummary.currency) }}<template v-if="manualSummary.sender_name"> from {{ manualSummary.sender_name }}</template>.<template v-if="manualSummary.client_name">
+          {{ ' ' }}<span data-test="manual-summary-client-added">Added {{ manualSummary.client_name }} to your client book.</span></template>
+      </p>
+    </AspCard>
+
     <!-- Nothing to filter or select before the first payment. -->
     <div v-if="incoming.length" class="toolbar">
       <div class="filter full-select">
@@ -330,7 +339,7 @@
       v-model:open="manualOpen"
       :clients="clients"
       @changed="$emit('changed')"
-      @created="(id) => $emit('open-invoice', id)"
+      @saved="onManualSaved"
     />
     <N26ImportDialog v-model:open="n26Open" :files="n26Files" :payments="payments" @imported="onN26Imported" />
     <PayPalExpensesDialog v-model:open="paypalExpensesOpen" :candidates="paypalExpenseCandidates" @done="onPayPalExpensesDone" />
@@ -401,6 +410,7 @@
         creating: false,
         createError: '',
         manualOpen: false,
+        manualSummary: null,
         n26Parsing: false,
         n26Open: false,
         n26Files: [],
@@ -610,6 +620,7 @@
         if (!/\.(csv|xlsx)$/i.test(file.name || '')) {
           this.summary = null;
           this.n26Summary = null;
+          this.manualSummary = null;
           this.needsDateOrder = false;
           this.importError = PAYPAL_WRONG_FILE;
           if (this.$refs.fileInput) this.$refs.fileInput.value = '';
@@ -630,6 +641,7 @@
         this.importError = '';
         this.summary = null;
         this.n26Summary = null;
+        this.manualSummary = null;
         if (files.length > N26_MAX_FILES) {
           this.importError = `N26 PDFs: choose at most ${N26_MAX_FILES} PDFs at a time.`;
           return;
@@ -653,13 +665,29 @@
       },
       onN26Imported(summary) {
         this.n26Summary = summary;
+        this.manualSummary = null;
         if (summary.imported || summary.expenses_added) this.$emit('changed');
+      },
+      // §3.142 Decision 1: one line in the shared import-state region, same
+      // "one summary shows at a time" rule as the two imports (§3.127
+      // Decision 4). `client` is only present when the save also added a
+      // payer (Decision 3).
+      onManualSaved({ payment, client }) {
+        this.summary = null;
+        this.n26Summary = null;
+        this.manualSummary = {
+          gross_cents: payment.gross_cents,
+          currency: payment.currency,
+          sender_name: payment.sender_name,
+          client_name: client ? client.name : '',
+        };
       },
       async runImport(dateOrder) {
         this.importing = true;
         this.importError = '';
         this.summary = null;
         this.n26Summary = null;
+        this.manualSummary = null;
         this.paypalExpensesAdded = 0;
         try {
           const { summary, expenseCandidates } = await importPayPalCSV(this.pendingFile, dateOrder);

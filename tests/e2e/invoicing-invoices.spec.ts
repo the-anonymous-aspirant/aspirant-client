@@ -447,19 +447,20 @@ test.describe('#10032 the invoicing fields explain themselves', () => {
     await expect(page.locator('[data-test="draft-from"]')).toBeFocused();
   });
 
-  test('Enter payment by hand: Client, Reference, Payer and What it was for; Amount and Method have none', async ({ page }) => {
+  // §3.142 Decision 2 (design_agent c65348 on #10539): "Paid by" replaces
+  // Client and "Payer (optional)", and carries no "?" hint of its own —
+  // Decision 3's own line under the field says what Save will do with it.
+  test('Enter payment by hand: Reference and What it was for; Amount, Method and Paid by have none', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
     const fake = newFake();
     await open(page, fake);
     await page.locator('[data-test="manual-new"]').click();
     const form = page.locator('[data-test="manual-form"]');
     await tapEach(page, form, {
-      Client: 'Who the invoice is for. Their name and address are printed on it.',
       'Reference (optional)': 'A number from the bank or the payer, if there is one.',
-      'Payer (optional)': 'Who sent the money, if not the client.',
-      'What it was for': 'It becomes the line on the invoice.',
+      'What it was for (optional)': 'Becomes the invoice line if you invoice this payment.',
     });
-    for (const label of ['Amount (€)', 'Method']) await expect(form.getByRole('button', { name: `More about ${label}`, exact: true })).toHaveCount(0);
+    for (const label of ['Amount (€)', 'Method', 'Paid by']) await expect(form.getByRole('button', { name: `More about ${label}`, exact: true })).toHaveCount(0);
   });
 
   test('the issued view: Issue date and Service', async ({ page }) => {
