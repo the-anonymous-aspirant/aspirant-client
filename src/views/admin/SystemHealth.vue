@@ -152,7 +152,10 @@
         <div class="info-rows">
           <div v-for="v in volumes" :key="v.name" class="info-row">
             <span class="info-label mono">{{ v.name }}</span>
-            <span class="info-value">{{ formatMB(v.size_mb) }}</span>
+            <!-- A directory monitor cannot enter has no honest size; say so
+                 rather than print a dash or a 0 (system_3 #10568, c65612). -->
+            <span v-if="v.unreadable" class="info-value info-value--unreadable" data-test="volume-unreadable">monitor can't read it</span>
+            <span v-else class="info-value">{{ formatMB(v.size_mb) }}</span>
           </div>
         </div>
       </div>
@@ -648,6 +651,10 @@ export default {
   color: var(--text-on-dark);
   font-size: var(--text-sm);
   text-align: right;
+}
+
+.info-value--unreadable {
+  color: var(--text-muted);
 }
 
 .mono {
