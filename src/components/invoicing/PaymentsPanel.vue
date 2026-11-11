@@ -87,7 +87,8 @@
              "3 imported , 0 already imported"). -->
         PayPal {{ paypalNoun }}: read {{ summary.rows_read }} rows: <strong>{{ summary.imported }}</strong> imported<template v-if="summary.withdrawals"> (including {{ summary.withdrawals }} bank withdrawals)</template>,
         <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ summary.duplicates }} already imported, {{ summary.skipped }} skipped.<template v-if="paypalExpensesAdded">
-          {{ ' ' }}<span data-test="paypal-summary-expenses">{{ paypalExpensesAdded }} expense{{ paypalExpensesAdded === 1 ? '' : 's' }} added to your book.</span></template>
+          {{ ' ' }}<span data-test="paypal-summary-expenses">{{ paypalExpensesAdded }} expense{{ paypalExpensesAdded === 1 ? '' : 's' }} added to your book.</span></template><template v-if="paypalCopyKept">
+          {{ ' ' }}<span data-test="paypal-summary-copy-kept">{{ paypalCopyKept }}</span></template>
       </p>
       <ul v-if="skippedReasons.length" class="summary__reasons">
         <li v-for="r in skippedReasons" :key="r.key">{{ r.count }} × {{ r.label }}</li>
@@ -368,6 +369,7 @@
     N26_MAX_FILES,
     deletePayment,
     SKIP_REASON_LABELS,
+    copyKeptSentence,
     errorOf,
     formatDay,
     formatMoney,
@@ -487,6 +489,11 @@
       },
       // A recognised file that read no transaction stays named after the
       // dialog closes, like a failure (design_agent c65358).
+      // A file that read no rows is a recorded failure; the server says when
+      // its kept copy goes, if one was kept (#10567).
+      paypalCopyKept() {
+        return copyKeptSentence(this.summary && this.summary.copy_expires_at);
+      },
       n26UnreadableLine() {
         const files = (this.n26Summary && this.n26Summary.unreadable) || [];
         const n = files.length;
@@ -715,7 +722,11 @@
           if (failure.code === 'date_order_ambiguous') {
             this.needsDateOrder = true;
           } else {
-            this.importError = `PayPal ${this.paypalNoun}: ${failure.message}`;
+            // The server's messages mostly end unpunctuated; the sentence
+            // that follows needs its own full stop before it (#10567).
+            const kept = copyKeptSentence(failure.copyExpiresAt);
+            const line = `PayPal ${this.paypalNoun}: ${failure.message}`;
+            this.importError = kept ? `${line}${/[.!?]$/.test(line) ? '' : '.'} ${kept}` : line;
           }
         } finally {
           this.importing = false;

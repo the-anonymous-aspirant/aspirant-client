@@ -250,6 +250,39 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     expect(upload.body).not.toContain('name="date_order"');
   });
 
+  // #10567: a failed PayPal file the server kept a copy of says until when,
+  // in her calendar day (23:30Z on the 18th is the 19th in Berlin); one it
+  // kept no copy of says nothing more (design_agent c65231 on #10536).
+  test('a failed file with a kept copy says until when; without one, the error alone', async ({ page }) => {
+    const fake = newFake({
+      importResponses: [
+        { status: 400, body: { error: { code: 'invalid_csv', message: 'not a PayPal activity export' }, copy_expires_at: '2026-11-18T23:30:00Z' } },
+        { status: 413, body: { error: { code: 'payload_too_large', message: 'The file is larger than 5 MB' } } },
+        { status: 200, body: { summary: { rows_read: 0, imported: 0, duplicates: 0, skipped: 0, withdrawals: 0, skipped_reasons: {}, format: 'csv' } } },
+        { status: 200, body: { summary: { rows_read: 0, imported: 0, duplicates: 0, skipped: 0, withdrawals: 0, skipped_reasons: {}, format: 'csv', copy_expires_at: '2026-11-18T10:00:00Z' } } },
+      ],
+    });
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+
+    const input = page.locator('[data-test="payments-file"]');
+    const error = page.locator('[data-test="import-error"]');
+    await input.setInputFiles(csvFile);
+    await expect(error).toHaveText('PayPal CSV: not a PayPal activity export. A copy is kept until 2026-11-19 so this can be fixed.');
+
+    await input.setInputFiles(csvFile);
+    await expect(error).toHaveText('PayPal CSV: The file is larger than 5 MB');
+
+    const copyLine = page.locator('[data-test="paypal-summary-copy-kept"]');
+    await input.setInputFiles(csvFile);
+    await expect(page.locator('[data-test="import-summary"]')).toContainText('read 0 rows');
+    await expect(copyLine).toHaveCount(0);
+
+    await input.setInputFiles(csvFile);
+    await expect(copyLine).toHaveText('A copy is kept until 2026-11-18 so this can be fixed.');
+  });
+
   test('an ambiguous-date file asks which order, then re-uploads with date_order', async ({ page }) => {
     const fake = newFake({
       importResponses: [

@@ -139,12 +139,24 @@ export const SOURCE_LABELS = {
 // The server's error envelope is { error: { code, message } }; fall back to
 // a generic line so a network failure still reads as a sentence.
 export function errorOf(err) {
-  const envelope = (err && err.response && err.response.data && err.response.data.error) || {};
+  const data = (err && err.response && err.response.data) || {};
+  const envelope = data.error || {};
   return {
     status: err && err.response ? err.response.status : 0,
     code: envelope.code || '',
     message: envelope.message || 'The server could not be reached. Try again.',
+    // Set by a failed import only when the server kept a copy (#10567).
+    copyExpiresAt: data.copy_expires_at || '',
   };
+}
+
+// The sentence after a failed import file's message, only when the server
+// kept a copy of it and says until when (design_agent c65231 on system_3
+// #10536, #10567). The date is her calendar day in the payments list's
+// spelling. No date, no sentence: it never claims a copy that doesn't exist.
+export function copyKeptSentence(copyExpiresAt) {
+  const day = formatBerlinDay(copyExpiresAt);
+  return day ? `A copy is kept until ${day} so this can be fixed.` : '';
 }
 
 // Money arrives as integer cents; it is shown, never computed, here.
