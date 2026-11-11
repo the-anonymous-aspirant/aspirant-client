@@ -141,6 +141,11 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     const payer = page.locator('[data-test="manual-payer"]');
     const line = page.locator('[data-test="manual-payer-line"]');
 
+    // Matches the server's own one-line-of-200-runes rule (security review
+    // on #10549, c65494): a pasted multi-kilobyte string must not run the
+    // Decision 4 matcher against every client on each keystroke.
+    await expect(payer).toHaveAttribute('maxlength', '200');
+
     // Empty: no line.
     await expect(line).toHaveCount(0);
 

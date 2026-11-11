@@ -26,6 +26,7 @@
         label="Paid by"
         placeholder="Choose or type a name"
         :options="payerOptions"
+        maxlength="200"
         data-test="manual-payer"
         @update:model-value="onPayerInput"
       >
