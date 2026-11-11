@@ -64,6 +64,20 @@ export const confirmN26Rows = (rows) =>
 export const confirmN26Expenses = (rows) =>
   axios.post(`${base}/expenses/import-n26/confirm`, { rows }).then((r) => r.data.summary);
 
+// Payers of unlinked incoming payments, grouped one row per sender, and the
+// counts of payments left out by rule (system_3 #10548, §3.142 Decision 5):
+// { payers: [...], left_out: { paypal_to_n26, other_category, no_name } }.
+export const listPayerCandidates = () =>
+  axios.get(`${base}/payers/candidates`).then((r) => ({ payers: r.data.payers || [], leftOut: r.data.left_out || {} }));
+// All or nothing: each row is { payment_ids, client_id } or
+// { payment_ids, new_client_name }; returns { clients_added, payments_linked }.
+export const addPayers = (payers) => axios.post(`${base}/payers`, { payers }).then((r) => r.data);
+// The one confirmation of a payers save, on either surface it is reached
+// from (§3.142 Decision 5; design_agent c65575 point 5, §3.49).
+export function payersSavedLine({ clients_added: added = 0, payments_linked: linked = 0 }) {
+  return `Client book: added ${added} client${added === 1 ? '' : 's'}, linked ${linked} payment${linked === 1 ? '' : 's'}.`;
+}
+
 // The server's limit per parse request (maxN26FilesPerRequest).
 export const N26_MAX_FILES = 10;
 
