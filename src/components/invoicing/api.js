@@ -43,10 +43,12 @@ export function importPayPalCSV(file, dateOrder) {
 export const confirmPayPalExpenses = (rows) =>
   axios.post(`${base}/expenses/import-paypal/confirm`, { rows }).then((r) => r.data.summary);
 
-// N26 PDF import (system_3 #9760, server #9812). Two steps, unlike the
-// PayPal CSV: parse stores nothing and returns candidate rows per file; the
-// owner confirms or skips each row, and only the confirmed rows are posted
-// back to be stored (source "n26", uncategorised, deduped by transaction id).
+// N26 import: PDFs (system_3 #9760, server #9812) and N26's own CSV export
+// (system_3 #10534/#10543), sniffed by content server-side, through the same
+// button. Two steps, unlike the PayPal CSV: parse stores nothing and returns
+// candidate rows per file; the owner confirms or skips each row, and only the
+// confirmed rows are posted back to be stored (source "n26", uncategorised,
+// deduped by transaction id).
 export function parseN26PDFs(files) {
   const form = new FormData();
   for (const file of files) form.append('files', file);
@@ -68,6 +70,7 @@ export const N26_MAX_FILES = 10;
 export const N26_KIND_LABELS = {
   n26_transfer_confirmation: 'Transfer confirmation',
   n26_account_statement: 'Account statement',
+  n26_csv_export: 'CSV export',
 };
 
 // Why a file could not be read, short enough to follow its name in the
@@ -75,10 +78,16 @@ export const N26_KIND_LABELS = {
 // message is the fallback for a code this list does not know.
 export const N26_FILE_ERROR_LABELS = {
   too_large: 'larger than 5 MB',
-  not_a_pdf: 'not a PDF',
+  // The code name predates the CSV export (it still means "did not sniff as
+  // either accepted format"); the label is kept in sync with the server's
+  // own widened message (aspirant-server invoicing_n26.go, system_3 #10543).
+  not_a_pdf: 'neither a PDF nor an N26 CSV export',
   extract_failed: 'its text could not be read',
   not_n26_document: 'not an N26 document',
   parse_failed: 'an N26 document with a missing or unreadable field',
+  // The CSV's header row matched no known language table (system_3 #10543);
+  // never guessed by column position (design_agent c65204 on #10534).
+  csv_headers_unrecognised: 'column names not recognised',
 };
 // `fileError` is the parse response's per-file `{ code, message }`: the
 // server's own prose, never an axios error.

@@ -154,6 +154,14 @@ const pdf = (name: string) => ({
   buffer: Buffer.from(`%PDF-1.4\n% look-alike N26 document for tests: ${name}\n%%EOF\n`),
 });
 
+// A look-alike CSV stand-in (system_3 #10534-C2): the fake answers the parse,
+// so the bytes never need to be a real export; only the filename matters.
+const csv = (name: string) => ({
+  name,
+  mimeType: 'text/csv',
+  buffer: Buffer.from('Booking Date,Partner Name,Amount (EUR)\n2026-10-03,Look-alike,10.00\n'),
+});
+
 async function open(page: Page, fake: Fake): Promise<void> {
   await mockInvoicing(page, fake);
   await seedTrustedSessionAs(page, 'vinoly');
@@ -230,7 +238,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     expect(posted[0]).toMatchObject({ document_kind: 'n26_transfer_confirmation', paid_on: '2026-07-14', gross_cents: 25000, currency: 'EUR' });
 
     // The line names its source (c60358 item 1).
-    await expect(summary(page)).toHaveText('N26 PDFs: read 3 rows from 2 files: 3 imported, 0 already imported, 0 skipped.');
+    await expect(summary(page)).toHaveText('N26: read 3 rows from 2 files: 3 imported, 0 already imported, 0 skipped.');
     for (const txn of ['a1b2c3d4-0e15-4a6f-9bd0-000000000001', statementRow(1).transaction_id, statementRow(2).transaction_id]) {
       const row = page.locator(`[data-test="payment-row"][data-txn="${txn}"]`);
       await expect(row).toBeVisible();
@@ -257,7 +265,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
 
     const posted = JSON.parse(confirmRequests(fake)[0].body).rows;
     expect(posted.map((r: Json) => r.transaction_id)).toEqual([statementRow(1).transaction_id]);
-    await expect(summary(page)).toHaveText('N26 PDFs: read 2 rows from 1 file: 1 imported, 0 already imported, 1 skipped.');
+    await expect(summary(page)).toHaveText('N26: read 2 rows from 1 file: 1 imported, 0 already imported, 1 skipped.');
     await expect(page.locator(`[data-test="payment-row"][data-txn="${statementRow(2).transaction_id}"]`)).toHaveCount(0);
   });
 
@@ -293,7 +301,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await page.locator('[data-test="n26-confirm"]').click();
     const posted = JSON.parse(confirmRequests(fake)[0].body).rows;
     expect(posted.map((r: Json) => r.transaction_id)).toEqual([statementRow(4).transaction_id]);
-    await expect(summary(page)).toHaveText('N26 PDFs: read 4 rows from 1 file: 1 imported, 1 already imported, 2 skipped.');
+    await expect(summary(page)).toHaveText('N26: read 4 rows from 1 file: 1 imported, 1 already imported, 2 skipped.');
   });
 
   test('a file the server cannot read shows its error, and stays named in the summary after the dialog closes', async ({ page }) => {
@@ -306,7 +314,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     );
     await page.locator('[data-test="n26-confirm"]').click();
     await expect(summary(page)).toHaveText(
-      'N26 PDFs: read 1 row from 2 files: 1 imported, 0 already imported, 0 skipped. 1 file could not be read: holiday-photo.pdf (not an N26 document).',
+      'N26: read 1 row from 2 files: 1 imported, 0 already imported, 0 skipped. 1 file could not be read: holiday-photo.pdf (not an N26 document).',
     );
   });
 
@@ -321,7 +329,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
     expect(confirmRequests(fake)).toHaveLength(0);
     await expect(summary(page)).toHaveText(
-      'N26 PDFs: read 0 rows from 1 file: 0 imported, 0 already imported, 0 skipped. 1 file could not be read: holiday-photo.pdf (not an N26 document).',
+      'N26: read 0 rows from 1 file: 0 imported, 0 already imported, 0 skipped. 1 file could not be read: holiday-photo.pdf (not an N26 document).',
     );
   });
 
@@ -334,7 +342,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await expect(page.locator('[data-test="n26-confirm"]')).toHaveCount(0);
     await expect(page.locator('[data-test="n26-nothing"]')).toHaveText('Nothing new to import: every row is already imported.');
     await page.locator('[data-test="n26-close"]').click();
-    await expect(summary(page)).toHaveText('N26 PDFs: read 1 row from 1 file: 0 imported, 1 already imported, 0 skipped.');
+    await expect(summary(page)).toHaveText('N26: read 1 row from 1 file: 0 imported, 1 already imported, 0 skipped.');
   });
 
   // #9881: a credit whose payer is PayPal is her own transfer, already counted
@@ -356,7 +364,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await page.locator('[data-test="n26-close"]').click();
     expect(confirmRequests(fake)).toHaveLength(0);
     await expect(summary(page)).toHaveText(
-      'N26 PDFs: read 1 row from 1 file: 0 imported, 0 already imported, 0 skipped, 1 transfer from PayPal left out (its payments come in through PayPal).',
+      'N26: read 1 row from 1 file: 0 imported, 0 already imported, 0 skipped, 1 transfer from PayPal left out (its payments come in through PayPal).',
     );
     await expectSummaryAddsUp(page);
   });
@@ -379,7 +387,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
     expect(JSON.parse(confirmRequests(fake)[0].body).rows).toHaveLength(3);
     await expect(summary(page)).toHaveText(
-      'N26 PDFs: read 5 rows from 2 files: 3 imported, 0 already imported, 0 skipped, 2 transfers from PayPal left out (their payments come in through PayPal).',
+      'N26: read 5 rows from 2 files: 3 imported, 0 already imported, 0 skipped, 2 transfers from PayPal left out (their payments come in through PayPal).',
     );
     await expectSummaryAddsUp(page);
   });
@@ -404,7 +412,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await page.locator('[data-test="n26-confirm"]').click();
     await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
     await expect(summary(page)).toHaveText(
-      'N26 PDFs: read 3 rows from 1 file: 2 imported, 0 already imported, 0 skipped, 1 move between your account and a Space left out (your own money).',
+      'N26: read 3 rows from 1 file: 2 imported, 0 already imported, 0 skipped, 1 move between your account and a Space left out (your own money).',
     );
     await expectSummaryAddsUp(page);
   });
@@ -427,7 +435,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await page.locator('[data-test="n26-confirm"]').click();
     await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
     await expect(summary(page)).toHaveText(
-      'N26 PDFs: read 6 rows from 1 file: 2 imported, 0 already imported, 0 skipped, 1 transfer from PayPal left out (its payments come in through PayPal), 3 moves between your account and your Spaces left out (your own money).',
+      'N26: read 6 rows from 1 file: 2 imported, 0 already imported, 0 skipped, 1 transfer from PayPal left out (its payments come in through PayPal), 3 moves between your account and your Spaces left out (your own money).',
     );
     await expectSummaryAddsUp(page);
   });
@@ -443,7 +451,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
 
     const file = page.locator('[data-test="n26-file"]').nth(0);
     await expect(file.locator('[data-test="n26-file-unreadable"]')).toHaveText(
-      'No transaction was found in this file. If the statement lists any, the importer does not know this layout yet.',
+      "No transaction was found in this file. If the statement lists any, the importer does not know this layout yet: try N26's CSV export of the same month instead.",
     );
     await expect(file.locator('[data-test="n26-file-unreadable"]')).not.toHaveAttribute('role', 'alert');
     await expect(file.locator('[data-test="n26-file-empty"]')).toHaveCount(0);
@@ -451,7 +459,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await expect(page.locator('[data-test="n26-confirm"]')).toHaveCount(0);
     await page.locator('[data-test="n26-close"]').click();
     await expect(summary(page)).toHaveText(
-      'N26 PDFs: read 0 rows from 1 file: 0 imported, 0 already imported, 0 skipped. 1 file read no transaction: statement.pdf.',
+      'N26: read 0 rows from 1 file: 0 imported, 0 already imported, 0 skipped. 1 file read no transaction: statement.pdf.',
     );
   });
 
@@ -466,7 +474,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
     expect(confirmRequests(fake)).toHaveLength(0);
     await expect(summary(page)).toHaveText(
-      'N26 PDFs: read 5 rows from 2 files: 0 imported, 1 already imported, 2 skipped, 2 transfers from PayPal left out (their payments come in through PayPal).',
+      'N26: read 5 rows from 2 files: 0 imported, 1 already imported, 2 skipped, 2 transfers from PayPal left out (their payments come in through PayPal).',
     );
     await expectSummaryAddsUp(page);
   });
@@ -478,7 +486,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await page.locator('[data-test="n26-cancel"]').click();
     await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
     expect(confirmRequests(fake)).toHaveLength(0);
-    await expect(summary(page)).toHaveText('N26 PDFs: read 2 rows from 1 file: 0 imported, 0 already imported, 2 skipped.');
+    await expect(summary(page)).toHaveText('N26: read 2 rows from 1 file: 0 imported, 0 already imported, 2 skipped.');
   });
 
   test('a server refusal on confirm stays in the dialog and stores nothing', async ({ page }) => {
@@ -497,7 +505,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     const fake = newFake();
     await open(page, fake);
     await page.locator('[data-test="n26-file-input"]').setInputFiles(Array.from({ length: 11 }, (_, i) => pdf(`f${i}.pdf`)));
-    await expect(page.locator('[data-test="import-error"]')).toHaveText('N26 PDFs: choose at most 10 PDFs at a time.');
+    await expect(page.locator('[data-test="import-error"]')).toHaveText('N26: choose at most 10 files at a time.');
     expect(fake.requests.filter((r) => r.path.includes('import-n26'))).toHaveLength(0);
   });
 
@@ -523,6 +531,85 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await expect(row).toContainText('<img src=x onerror="window.__xss=1">');
     await expect(row.locator('b, img')).toHaveCount(0);
     expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
+  });
+});
+
+// #10534-C2: the N26 CSV export joins the existing N26 button rather than
+// opening a fourth way in (design_agent c65276, §3.127 Decision 8).
+test.describe('#10534-C2 N26 button takes the CSV export too', () => {
+  test('the button and picker name both formats', async ({ page }) => {
+    await open(page, newFake());
+    await expect(page.locator('[data-test="n26-import"]')).toHaveText('Import N26 files');
+    const input = page.locator('[data-test="n26-file-input"]');
+    await expect(input).toHaveAttribute('aria-label', 'N26 CSV export or PDFs');
+    await expect(input).toHaveAttribute('accept', '.csv,.pdf,text/csv,application/pdf');
+  });
+
+  test('a CSV file reads rows and carries the CSV export kind label, grouped with a PDF in the same review', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['export.csv'] = {
+      filename: 'export.csv', document_kind: 'n26_csv_export',
+      candidates: [confirmation({ transaction_id: 'csv-0000000000000000000000001', note: '' })],
+    };
+    await open(page, fake);
+    await page.locator('[data-test="n26-file-input"]').setInputFiles([csv('export.csv'), pdf('conferma.pdf')]);
+    await expect(page.locator('[data-test="n26-review"]')).toBeVisible();
+
+    const headings = page.locator('[data-test="n26-file-heading"]');
+    await expect(headings.nth(0)).toHaveText('export.csv · CSV export');
+    await expect(headings.nth(1)).toHaveText('conferma.pdf · Transfer confirmation');
+    await expect(page.locator('[data-test="n26-row"]')).toHaveCount(2);
+
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(summary(page)).toHaveText('N26: read 2 rows from 2 files: 2 imported, 0 already imported, 0 skipped.');
+  });
+
+  test('a CSV with unrecognised headers fails by name, never by guessing columns', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['esportazione.csv'] = {
+      filename: 'esportazione.csv',
+      error: { code: 'csv_headers_unrecognised', message: 'column names not recognised: "Data contabile", "Importo"' },
+    };
+    await open(page, fake);
+    await page.locator('[data-test="n26-file-input"]').setInputFiles([csv('esportazione.csv')]);
+    await expect(page.locator('[data-test="n26-review"]')).toBeVisible();
+
+    await expect(page.locator('[data-test="n26-file-error"]')).toHaveText(
+      'This file could not be read: column names not recognised.',
+    );
+    await page.locator('[data-test="n26-close"]').click();
+    await expect(summary(page)).toHaveText(
+      'N26: read 0 rows from 1 file: 0 imported, 0 already imported, 0 skipped. 1 file could not be read: esportazione.csv (column names not recognised).',
+    );
+  });
+
+  // The hint is statement-only (design_agent c65548): a CSV export that reads
+  // zero rows must never be told to try the CSV export.
+  test('a zero-row statement points at the CSV export; a zero-row CSV export does not', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['statement.pdf'].candidates = [];
+    fake.parsed['empty.csv'] = { filename: 'empty.csv', document_kind: 'n26_csv_export', candidates: [] };
+    await open(page, fake);
+    await page.locator('[data-test="n26-file-input"]').setInputFiles([pdf('statement.pdf'), csv('empty.csv')]);
+    await expect(page.locator('[data-test="n26-review"]')).toBeVisible();
+
+    const files = page.locator('[data-test="n26-file"]');
+    await expect(files.nth(0).locator('[data-test="n26-file-unreadable"]')).toHaveText(
+      "No transaction was found in this file. If the statement lists any, the importer does not know this layout yet: try N26's CSV export of the same month instead.",
+    );
+    await expect(files.nth(1).locator('[data-test="n26-file-unreadable"]')).toHaveCount(0);
+    await expect(files.nth(1).locator('[data-test="n26-file-empty"]')).toHaveText('No incoming payments in this file.');
+  });
+
+  test('a file that sniffs as neither a PDF nor a CSV says so by name', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['notes.txt'] = { filename: 'notes.txt', error: { code: 'not_a_pdf', message: 'the file is neither a PDF nor an N26 CSV export' } };
+    await open(page, fake);
+    await page.locator('[data-test="n26-file-input"]').setInputFiles([{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') }]);
+    await expect(page.locator('[data-test="n26-review"]')).toBeVisible();
+    await expect(page.locator('[data-test="n26-file-error"]')).toHaveText(
+      'This file could not be read: neither a PDF nor an N26 CSV export.',
+    );
   });
 });
 
@@ -630,7 +717,7 @@ test.describe('#10432-A1 N26 import — outgoing rows as work expenses', () => {
 
     // The payment line still adds up; the expenses get their own sentence.
     await expectSummaryAddsUp(page);
-    await expect(summary(page)).toContainText('N26 PDFs: read 3 rows from 2 files: 3 imported, 0 already imported, 0 skipped.');
+    await expect(summary(page)).toContainText('N26: read 3 rows from 2 files: 3 imported, 0 already imported, 0 skipped.');
     await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
   });
 

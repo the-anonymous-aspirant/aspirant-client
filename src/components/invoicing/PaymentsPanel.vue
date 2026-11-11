@@ -3,8 +3,9 @@
     <div class="panel-head">
       <h2 class="visually-hidden">Payments</h2>
       <!-- The ways a payment gets in, equal (design_agent, #8409): entered
-           by hand, imported from PayPal, or imported from N26 PDFs (#9760).
-           All stay secondary; Create invoice holds the one primary slot. -->
+           by hand, imported from PayPal, or imported from N26 (its CSV
+           export or its PDFs, #9760, #10534). All stay secondary; Create
+           invoice holds the one primary slot. -->
       <div class="ways-in">
         <AspButton variant="secondary" class="block-on-phone" data-test="manual-new" @click="manualOpen = true">
           Enter payment by hand
@@ -37,8 +38,8 @@
           class="upload__input"
           type="file"
           multiple
-          accept=".pdf,application/pdf"
-          aria-label="N26 PDFs"
+          accept=".csv,.pdf,text/csv,application/pdf"
+          aria-label="N26 CSV export or PDFs"
           data-test="n26-file-input"
           :disabled="n26Parsing || importing"
           @change="onN26Chosen"
@@ -51,7 +52,7 @@
           data-test="n26-import"
           @click="$refs.n26Input.click()"
         >
-          Import N26 PDFs
+          Import N26 files
         </AspButton>
       </div>
       </div>
@@ -87,7 +88,7 @@
          source, and one summary shows at a time (design_agent c60358). -->
     <AspCard v-if="n26Summary" class="summary" padding="sm" data-test="n26-summary">
       <p class="summary__line">
-        N26 PDFs: read {{ n26Summary.rows_read }} row{{ n26Summary.rows_read === 1 ? '' : 's' }} from
+        N26: read {{ n26Summary.rows_read }} row{{ n26Summary.rows_read === 1 ? '' : 's' }} from
         {{ n26Summary.files }} file{{ n26Summary.files === 1 ? '' : 's' }}:
         <strong>{{ n26Summary.imported }}</strong> imported, {{ n26Summary.duplicates }} already imported,
         {{ n26Summary.skipped }} skipped<template v-if="n26Summary.paypal_transfers">, <span data-test="n26-summary-paypal">{{ n26PayPalClause }}</span></template><template v-if="n26Summary.space_transfers">, <span data-test="n26-summary-space-transfer">{{ n26SpaceTransferClause }}</span></template>.<template v-if="n26Summary.failures.length">
@@ -155,7 +156,7 @@
     <AspEmptyState
       v-if="incoming.length === 0"
       heading="No payments yet"
-      message="Enter a payment by hand, or import a PayPal CSV or Excel file, or N26 PDFs."
+      message="Enter a payment by hand, or import a PayPal CSV or Excel file, or an N26 CSV export or PDFs."
       data-test="payments-empty"
     />
     <AspEmptyState
@@ -643,7 +644,9 @@
         this.n26Summary = null;
         this.manualSummary = null;
         if (files.length > N26_MAX_FILES) {
-          this.importError = `N26 PDFs: choose at most ${N26_MAX_FILES} PDFs at a time.`;
+          // The server's per-request cap counts CSVs the same as PDFs
+          // (aspirant-server invoicing_n26.go maxN26FilesPerRequest).
+          this.importError = `N26: choose at most ${N26_MAX_FILES} files at a time.`;
           return;
         }
         this.n26Parsing = true;
@@ -651,7 +654,7 @@
           this.n26Files = await parseN26PDFs(files);
           this.n26Open = true;
         } catch (err) {
-          this.importError = `N26 PDFs: ${errorOf(err).message}`;
+          this.importError = `N26: ${errorOf(err).message}`;
         } finally {
           this.n26Parsing = false;
         }
@@ -815,11 +818,12 @@
   }
 
   /* One row or three, never two and one (§3.127): when the three buttons
-     cannot share a line, all three stack full width, as on a phone. 35rem is
-     their widths plus the two gaps (202 + 178 + 154 + 2 × 12 = 558px at a
-     16px root), so it moves with her text size; the spec sweeps the widths
-     and fails if a label change outgrows it. */
-  @container ways-in (width < 35rem) {
+     cannot share a line, all three stack full width, as on a phone. 35.375rem
+     is their widths plus the two gaps (202 + 178 + 162 + 2 × 12 = 566px at a
+     16px root; "Import N26 files" widened the N26 button from 154 to 162px,
+     system_3 #10559), so it moves with her text size; the spec sweeps the
+     widths and fails if a label change outgrows it. */
+  @container ways-in (width < 35.375rem) {
     .ways-in {
       flex-direction: column;
       align-items: stretch;
