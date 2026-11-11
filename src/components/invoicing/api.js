@@ -101,8 +101,11 @@ export const createExpenseCategory = (category) =>
   axios.post(`${base}/expense-categories`, category).then((r) => r.data.category);
 export const patchPayment = (id, patch) => axios.patch(`${base}/payments/${id}`, patch).then((r) => r.data.payment);
 // A payment entered by hand (#8409): always incoming paid work, audited.
+// Returns { payment, client }: `client` is present only when `new_client_name`
+// added a payer to the book in the same transaction (system_3 #10539, design
+// §3.142 Decision 3), so the caller can say so.
 export const createManualPayment = (payment) =>
-  axios.post(`${base}/payments/manual`, payment).then((r) => r.data.payment);
+  axios.post(`${base}/payments/manual`, payment).then((r) => r.data);
 // Only a hand-entered payment that no invoice covers; the server refuses others.
 // Any payment not on an issued invoice, imported or entered by hand (#10009).
 export const deletePayment = (id) => axios.delete(`${base}/payments/${id}`);

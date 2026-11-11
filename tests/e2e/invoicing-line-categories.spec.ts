@@ -141,7 +141,7 @@ test.describe('#9928 Invoices app — "What it was for" suggests categories and 
     expect(await shown(page, note(page))).toEqual([...DEFAULTS, 'Cover-up', 'Nachstechen', 'Walk-in']);
   });
 
-  test('free text is sent exactly as typed, and the draft line offers the same list', async ({ page }) => {
+  test('free text is sent exactly as typed, not narrowed to a listed category', async ({ page }) => {
     const fake: Fake = { posts: [] };
     await openDialog(page, fake);
     await note(page).fill('Cover-up');
@@ -149,21 +149,11 @@ test.describe('#9928 Invoices app — "What it was for" suggests categories and 
     await note(page).fill('Tattoo (small), Unterarm');
     // Nothing matches, so the list is already closed (an Escape now would close the dialog).
     await expect(note(page)).toHaveAttribute('aria-expanded', 'false');
-    await page.getByRole('combobox', { name: 'Client' }).click();
-    await page.getByRole('option', { name: 'Galerie Nord' }).click();
     await page.locator('[data-test="manual-date"]').fill('2026-07-14');
     await page.locator('[data-test="manual-amount"]').fill('90');
     await page.locator('[data-test="manual-save"]').click();
     const manual = fake.posts.find((p) => p.path === '/invoicing/payments/manual');
     expect(manual?.body.note).toBe('Tattoo (small), Unterarm');
-
-    const editor = page.locator('[data-test="invoice-editor"][data-status="draft"]');
-    await expect(editor).toBeVisible();
-    const line = editor.getByRole('combobox', { name: 'Description, line 1' });
-    await expect(line).toHaveValue('Tattoo (small)');
-    await line.fill('');
-    await line.click();
-    expect(await shown(page, line)).toEqual([...DEFAULTS, 'Cover-up']);
   });
 
   test('with browser storage blocked the field still works: defaults offered, nothing to save, no error', async ({ page }) => {

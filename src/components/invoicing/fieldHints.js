@@ -14,7 +14,7 @@ export const FIELD_HINTS = {
   unitPrice: 'The price for one, before tax.',
   reference: 'A number from the bank or the payer, if there is one.',
   payer: 'Who sent the money, if not the client.',
-  whatFor: 'It becomes the line on the invoice.',
+  whatFor: 'Becomes the invoice line if you invoice this payment.',
   steuernummer: 'Your tax number from the Finanzamt. Printed on every invoice.',
   prefix: 'The start of every invoice number.',
   nextNumber: 'The number your next invoice gets.',
