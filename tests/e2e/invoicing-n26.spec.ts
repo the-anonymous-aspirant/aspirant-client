@@ -817,3 +817,42 @@ test.describe('#10432-A1 N26 import — outgoing rows as work expenses', () => {
     await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveCount(0);
   });
 });
+
+// #10567: after a failed file, the owner is told when the server's kept copy
+// goes (design_agent c65231 on #10536), only when the server says one was
+// kept. 23:30Z on the 18th is 00:30 on the 19th in Berlin: her calendar day.
+test.describe('#10567 N26 import — a kept copy of a failed file is named', () => {
+  const KEPT = '2026-11-18T23:30:00Z';
+
+  test('a failed file with a kept copy says until when; one without says nothing more', async ({ page }) => {
+    const fake = newFake({
+      parsed: {
+        'kept.pdf': { filename: 'kept.pdf', error: { code: 'parse_failed', message: 'unused' }, copy_expires_at: KEPT },
+        'big.pdf': { filename: 'big.pdf', error: { code: 'too_large', message: 'unused' } },
+        'conferma.pdf': { filename: 'conferma.pdf', document_kind: 'n26_transfer_confirmation', candidates: [confirmation()] },
+      },
+    });
+    await open(page, fake);
+    await upload(page, ['kept.pdf', 'big.pdf', 'conferma.pdf']);
+    const errors = page.locator('[data-test="n26-file-error"]');
+    await expect(errors).toHaveCount(2);
+    await expect(errors.nth(0)).toContainText('A copy is kept until 2026-11-19 so this can be fixed.');
+    await expect(errors.nth(0).locator('[data-test="n26-file-copy-kept"]')).toHaveText('A copy is kept until 2026-11-19 so this can be fixed.');
+    await expect(errors.nth(1).locator('[data-test="n26-file-copy-kept"]')).toHaveCount(0);
+    await expect(errors.nth(1)).not.toContainText('copy');
+    await expect(page.locator('[data-test="n26-file-copy-kept"]')).toHaveCount(1);
+  });
+
+  test('a file that read nothing, with a kept copy, says so after its line', async ({ page }) => {
+    const fake = newFake({
+      parsed: {
+        'empty.pdf': { filename: 'empty.pdf', document_kind: 'n26_account_statement', copy_expires_at: KEPT },
+        'conferma.pdf': { filename: 'conferma.pdf', document_kind: 'n26_transfer_confirmation', candidates: [confirmation()] },
+      },
+    });
+    await open(page, fake);
+    await upload(page, ['empty.pdf', 'conferma.pdf']);
+    await expect(page.locator('[data-test="n26-file-unreadable"]')).toContainText(
+      'try N26\'s CSV export of the same month instead. A copy is kept until 2026-11-19 so this can be fixed.');
+  });
+});

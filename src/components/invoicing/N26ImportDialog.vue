@@ -18,7 +18,8 @@
             <span class="n26-file__kind"> · {{ kindLabel(file.document_kind) }}</span></template>
         </h3>
         <p v-if="file.error" class="n26-file__error" role="alert" data-test="n26-file-error">
-          This file could not be read: {{ fileErrorReason(file.error) }}.
+          This file could not be read: {{ fileErrorReason(file.error) }}.<template v-if="copyKept(file)">
+            {{ ' ' }}<span data-test="n26-file-copy-kept">{{ copyKept(file) }}</span></template>
         </p>
         <!-- A transfer from PayPal is her own money; its payments come in through the
              PayPal import, so the server leaves it out (#9881, design_agent
@@ -44,14 +45,16 @@
                as an error (design_agent c65358). The kind is already in the
                heading. -->
           <p v-if="unreadableStatement(file)" class="n26-file__none n26-file__unreadable" data-test="n26-file-unreadable">
-            No transaction was found in this file. If the statement lists any, the importer does not know this layout yet: try N26's CSV export of the same month instead.
+            No transaction was found in this file. If the statement lists any, the importer does not know this layout yet: try N26's CSV export of the same month instead.<template v-if="copyKept(file)">
+              {{ ' ' }}<span data-test="n26-file-copy-kept">{{ copyKept(file) }}</span></template>
           </p>
           <p
             v-else-if="!(file.candidates || []).length && !paypalSkipped(file) && !spaceTransferSkipped(file)"
             class="n26-file__none"
             data-test="n26-file-empty"
           >
-            No incoming payments in this file.
+            No incoming payments in this file.<template v-if="copyKept(file)">
+              {{ ' ' }}<span data-test="n26-file-copy-kept">{{ copyKept(file) }}</span></template>
           </p>
         </template>
         <ul v-if="!file.error && (file.candidates || []).length" class="n26-rows">
@@ -132,6 +135,7 @@
     N26_KIND_LABELS,
     confirmN26Expenses,
     confirmN26Rows,
+    copyKeptSentence,
     errorOf,
     formatDay,
     formatMoney,
@@ -155,7 +159,7 @@
     props: {
       open: { type: Boolean, default: false },
       // The parse response: [{ filename, document_kind, candidates,
-      // expense_candidates, skipped, error }].
+      // expense_candidates, skipped, error, copy_expires_at }].
       files: { type: Array, default: () => [] },
       // The stored payments, to name the one a look-alike row matches.
       payments: { type: Array, default: () => [] },
@@ -267,6 +271,10 @@
       },
       fileErrorReason(fileError) {
         return n26FileErrorReason(fileError);
+      },
+      // Present only on a file the server failed and kept a copy of (#10567).
+      copyKept(file) {
+        return copyKeptSentence(file.copy_expires_at);
       },
       paypalSkipped(file) {
         return (file.skipped && file.skipped.paypal_transfer) || 0;
