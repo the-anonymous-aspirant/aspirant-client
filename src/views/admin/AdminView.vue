@@ -135,6 +135,12 @@
       route: '/admin/tools/kvitto',
       icon: 'default',
     },
+    {
+      title: 'Failed imports',
+      description: 'Uploads that could not be imported, kept for checking',
+      route: '/admin/import-failures',
+      icon: 'default',
+    },
   ];
 
   export default {
