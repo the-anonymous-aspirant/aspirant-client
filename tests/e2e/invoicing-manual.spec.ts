@@ -1,10 +1,13 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 
-/** Invoices app (system_3 #8409): an invoice without a PayPal import. "New
- *  invoice" enters a received payment by hand, then makes a draft from it.
- *  Every call is answered by an in-memory fake; a catch-all /api/ → 404 is
- *  registered FIRST so nothing reaches the live server. */
+/** Invoices app (system_3 #8409, #10539): a payment entered by hand, saved on
+ *  its own (§3.142 Decision 1 — no draft is made here; an invoice is made
+ *  later from the list). "Paid by" (Decision 2) can add the payer to the
+ *  client book in the same save (Decision 3), matched against it by Decision
+ *  4's "same"/"close" rule. Every call is answered by an in-memory fake; a
+ *  catch-all /api/ → 404 is registered FIRST so nothing reaches the live
+ *  server. */
 
 type Json = Record<string, any>;
 
@@ -12,7 +15,6 @@ interface Fake {
   clients: Json[];
   payments: Json[];
   requests: Array<{ method: string; path: string; body: string }>;
-  draftFailure?: { status: number; body: Json };
   deleteFailure?: { status: number; body: Json };
 }
 
@@ -46,9 +48,15 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/clients') return json(route, 200, { clients: fake.clients });
     if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: fake.payments });
     if (path === '/invoicing/payments/manual' && method === 'POST') {
-      const payment = manualRow({ ...JSON.parse(req.postData() || '{}'), id: 41 });
+      const posted = JSON.parse(req.postData() || '{}');
+      const payment = manualRow({ ...posted, id: 41 });
       fake.payments.push(payment);
-      return json(route, 201, { payment });
+      const body: Json = { payment };
+      // Mirrors the server's one-transaction add (system_3 #10539, design
+      // §3.142 Decision 3): a new_client_name in the request gets a client
+      // back alongside the payment.
+      if (posted.new_client_name) body.client = { id: 9, name: posted.new_client_name };
+      return json(route, 201, body);
     }
     const del = path.match(/^\/invoicing\/payments\/(\d+)$/);
     if (del && method === 'DELETE') {
@@ -57,7 +65,6 @@ async function mock(page: Page, fake: Fake): Promise<void> {
       return route.fulfill({ status: 204, body: '' });
     }
     if (path === '/invoicing/invoices' && method === 'POST') {
-      if (fake.draftFailure) return json(route, fake.draftFailure.status, fake.draftFailure.body);
       return json(route, 201, { invoice: { id: 300, status: 'draft', client_id: 1, currency: 'EUR', service_date_from: '2026-07-14T00:00:00Z' }, line_items: [], payments: [], warnings: [] });
     }
     if (path === '/invoicing/invoices' && method === 'GET') return json(route, 200, { invoices: [] });
@@ -90,97 +97,133 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     );
   });
 
-  test('Enter payment by hand stores the payment, makes a draft from it and opens the editor', async ({ page }) => {
-    const fake = newFake();
+  // §3.142 Decision 1 (design_agent c65348 on #10539): Save records the
+  // payment and nothing else; no draft is made.
+  test('Enter payment by hand saves the payment only, with no client chosen, and the region says so', async ({ page }) => {
+    const fake = newFake({ clients: [] });
     await open(page, fake);
-    // system_3 #9942 (operator c61387): the button and the dialog say what
-    // they do, enter a payment; the invoice comes after.
     await expect(page.locator('[data-test="manual-new"]')).toHaveText('Enter payment by hand');
     await page.locator('[data-test="manual-new"]').click();
     await expect(page.locator('[data-test="manual-form"]')).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Enter payment by hand' })).toBeVisible();
-    await expect(page.getByText('New invoice', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Enter a payment you received. It is saved as paid work. To invoice it, select it in the list and use Create invoice.')).toBeVisible();
 
-    // Nothing is sent until the required fields are filled.
+    // Nothing is sent until the required fields are filled; an empty client
+    // book is no longer one of them (Decision 1: saving can add the client).
     await page.locator('[data-test="manual-save"]').click();
-    await expect(page.locator('[data-test="manual-error"]')).toHaveText('Choose the client who paid.');
+    await expect(page.locator('[data-test="manual-error"]')).toHaveText('Enter the date the money was received.');
     expect(fake.requests.some((r) => r.method === 'POST')).toBe(false);
 
-    await page.getByRole('combobox', { name: 'Client' }).click();
-    await page.getByRole('option', { name: 'Galerie Nord' }).click();
     await page.locator('[data-test="manual-date"]').fill('2026-07-14');
     await page.locator('[data-test="manual-amount"]').fill('350,00');
     await page.locator('[data-test="manual-reference"]').fill('RE-17');
-    await page.locator('[data-test="manual-payer"]').fill('Galerie Nord');
+    // "Paid by" left empty: saved with no client, like an imported payment.
     await page.locator('[data-test="manual-note"]').fill('Wandbild Juli');
     await page.locator('[data-test="manual-save"]').click();
 
-    await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
+    await expect(page.locator('[data-test="manual-form"]')).toHaveCount(0); // the dialog closed
     const posts = fake.requests.filter((r) => r.method === 'POST');
-    expect(posts.map((r) => r.path)).toEqual(['/invoicing/payments/manual', '/invoicing/invoices']);
+    expect(posts.map((r) => r.path)).toEqual(['/invoicing/payments/manual']);
     expect(JSON.parse(posts[0].body)).toEqual({
-      client_id: 1, paid_on: '2026-07-14', gross_cents: 35000, method: 'bank_transfer',
-      reference: 'RE-17', sender_name: 'Galerie Nord', note: 'Wandbild Juli',
+      paid_on: '2026-07-14', gross_cents: 35000, method: 'bank_transfer',
+      reference: 'RE-17', sender_name: '', note: 'Wandbild Juli',
     });
-    expect(JSON.parse(posts[1].body)).toEqual({ payment_ids: [41] });
+    // §3.142 Decision 1's import-state line, same region the imports use.
+    await expect(page.locator('[data-test="manual-summary"]')).toContainText('By hand: saved €350.00.');
   });
 
-  // system_3 #9949 (design_agent c61924): where the draft is made, a muted hint
-  // says an amount over €250.00 needs the client's address to be issued.
-  test('the amount hint names a client without an address above €250.00, and only then', async ({ page }) => {
-    await open(page, newFake({ clients: [{ id: 1, name: 'Galerie Nord', address: 'Nordweg 2' }, { id: 2, name: 'Anna Ohne', address: '' }] }));
-    await page.locator('[data-test="manual-new"]').click();
-    const hint = 'Anna Ohne has no address: an invoice above €250.00 needs one before it can be issued.';
-    const dialog = page.getByRole('dialog');
-    const pick = async (name: string) => {
-      await page.getByRole('combobox', { name: 'Client' }).click();
-      await page.getByRole('option', { name }).click();
-    };
-    await pick('Anna Ohne');
-    const amount = page.locator('[data-test="manual-amount"]');
-    await amount.fill('250,00');
-    await expect(dialog.getByText(hint)).toHaveCount(0);
-    await amount.fill('400');
-    await expect(dialog.getByText(hint)).toBeVisible();
-    // Side by side, the hint hangs under Amount without pushing Date down
-    // (the two labels' own spacing differs by under 2px; the drop was ~50px).
-    const [d, m] = [await page.locator('[data-test="manual-date"]').boundingBox(), await amount.boundingBox()];
-    // Side by side means Amount starts past Date's right edge; stacked on a
-    // phone, AspInput's own padding still puts its <input> a little right of
-    // the bare date input, so an x offset alone is not the test.
-    if (m!.x >= d!.x + d!.width) expect(Math.abs(m!.y - d!.y), 'date and amount inputs stay level').toBeLessThanOrEqual(3);
-    else expect(m!.y, 'stacked: Amount below Date').toBeGreaterThan(d!.y + d!.height);
-    await amount.fill('120');
-    await expect(dialog.getByText(hint)).toHaveCount(0);
-    await amount.fill('400');
-    await pick('Galerie Nord');
-    await expect(dialog.getByText('has no address')).toHaveCount(0);
-  });
-
-  test('a refused draft keeps the stored payment and says so', async ({ page }) => {
-    const fake = newFake({ draftFailure: { status: 422, body: { error: { code: 'payment_not_paid_work', message: 'payment M-1 is not paid work' } } } });
+  // §3.142 Decision 3: before Save, the "Paid by" field says what Save will
+  // do with the typed name, against Decision 4's "same"/"close"/neither.
+  test('Paid by: same, close (Use or Add as new), and new all read correctly, and Save refuses an open close choice', async ({ page }) => {
+    const fake = newFake({ clients: [{ id: 1, name: 'Mara Esempio' }] });
     await open(page, fake);
     await page.locator('[data-test="manual-new"]').click();
-    await page.getByRole('combobox', { name: 'Client' }).click();
-    await page.getByRole('option', { name: 'Galerie Nord' }).click();
+    const payer = page.locator('[data-test="manual-payer"]');
+    const line = page.locator('[data-test="manual-payer-line"]');
+
+    // Empty: no line.
+    await expect(line).toHaveCount(0);
+
+    // The same as a client in the book: nothing is asked.
+    await payer.fill('Mara Esempio');
+    await expect(line).toHaveText('In your client book.');
+
+    // No client close to it: Save will add it.
+    await payer.fill('Totally Different Person');
+    await expect(line).toHaveText('Not in your client book yet: Save adds it.');
+
+    // Close to one: the Use/Add choice, and Save refuses while it stands open.
+    await payer.fill('Mara E.');
+    await expect(line).toHaveText('Close to a client in your book:');
+    await expect(page.locator('[data-test="manual-payer-use-1"]')).toHaveText('Use Mara Esempio');
+    await expect(page.locator('[data-test="manual-payer-add-new"]')).toHaveText('Add “Mara E.” as a new client');
     await page.locator('[data-test="manual-date"]').fill('2026-07-14');
-    await page.locator('[data-test="manual-amount"]').fill('50');
-    await page.locator('[data-test="manual-note"]').fill('Skizze');
+    await page.locator('[data-test="manual-amount"]').fill('90');
     await page.locator('[data-test="manual-save"]').click();
-    await expect(page.locator('[data-test="manual-error"]')).toContainText('The payment was saved, but no draft was made: payment M-1 is not paid work');
-    await expect(page.locator('[data-test="invoice-editor"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="manual-error"]')).toHaveText('Choose a client from your book, or add “Mara E.” as a new client.');
+    expect(fake.requests.some((r) => r.method === 'POST')).toBe(false);
+
+    // Picking "Use" resolves it to the existing client.
+    await page.locator('[data-test="manual-payer-use-1"]').click();
+    await expect(line).toHaveText('In your client book.');
+    await payer.fill('Mara E.'); // back to close, to exercise "Add as new" next
+    await page.locator('[data-test="manual-payer-add-new"]').click();
+    await page.locator('[data-test="manual-save"]').click();
+    const posts = fake.requests.filter((r) => r.method === 'POST' && r.path === '/invoicing/payments/manual');
+    expect(JSON.parse(posts[0].body)).toMatchObject({ sender_name: 'Mara E.', new_client_name: 'Mara E.' });
   });
 
-  test('without any client the dialog points to the Clients tab and cannot submit', async ({ page }) => {
-    await open(page, newFake({ clients: [] }));
+  // §3.142 Decision 3: adding a close choice edits the field, so typing again
+  // re-opens Decision 4 from scratch rather than keeping a stale resolution.
+  test('typing again after "Add as new" re-opens the close choice', async ({ page }) => {
+    await open(page, newFake({ clients: [{ id: 1, name: 'Mara Esempio' }] }));
     await page.locator('[data-test="manual-new"]').click();
-    await expect(page.locator('[data-test="manual-no-clients"]')).toHaveText('Add the client on the Clients tab first.');
-    const save = page.locator('[data-test="manual-save"]');
-    await expect(save).toBeDisabled();
-    // The reason reads next to the disabled button too (#9926-A4), not only
-    // up by the field it names, and the button points screen readers at it.
-    await expect(page.locator('[data-test="manual-save-hint"]')).toHaveText('Add a client first.');
-    await expect(save).toHaveAttribute('aria-describedby', 'manual-save-hint');
+    const payer = page.locator('[data-test="manual-payer"]');
+    await payer.fill('Mara E.');
+    await page.locator('[data-test="manual-payer-add-new"]').click();
+    // Still close (b) to "Mara Esempio" — "es" prefixes "esempio" — but a
+    // different string, so this proves re-evaluation happened rather than
+    // the close state merely persisting unchanged.
+    await payer.fill('Mara Es');
+    await expect(page.locator('[data-test="manual-payer-line"]')).toHaveText('Close to a client in your book:');
+  });
+
+  // §3.142 Decision 3: adding a new payer and saving are one transaction; the
+  // server's own refusal (a name already in the book, raced in) surfaces as
+  // the save error, never a silent duplicate.
+  test('a client_exists refusal from the server surfaces as the save error', async ({ page }) => {
+    const fake = newFake({ clients: [] });
+    await mock(page, fake);
+    await page.route(/\/api\/invoicing\/payments\/manual$/, (route) =>
+      json(route, 409, { error: { code: 'client_exists', message: 'Mara Esempio is already in your client book' }, client: { id: 9, name: 'Mara Esempio' } }));
+    await seedTrustedSessionAs(page, 'vinoly');
+    await page.goto('/member/personal/invoicing');
+    await dismissMobileSidebarIfPresent(page);
+    await page.locator('[data-test="manual-new"]').click();
+    await page.locator('[data-test="manual-payer"]').fill('Mara Esempio');
+    await page.locator('[data-test="manual-date"]').fill('2026-07-14');
+    await page.locator('[data-test="manual-amount"]').fill('90');
+    await page.locator('[data-test="manual-save"]').click();
+    await expect(page.locator('[data-test="manual-error"]')).toHaveText('Mara Esempio is already in your client book');
+  });
+
+  // §3.142 Decision 1: when the save also added a client, the region's line
+  // continues with that fact.
+  test('a new payer saved by hand is named in the region, with the added-client clause', async ({ page }) => {
+    const fake = newFake({ clients: [] });
+    await open(page, fake);
+    await page.locator('[data-test="manual-new"]').click();
+    await page.locator('[data-test="manual-payer"]').fill('Mara Esempio');
+    await expect(page.locator('[data-test="manual-payer-line"]')).toHaveText('Not in your client book yet: Save adds it.');
+    await page.locator('[data-test="manual-date"]').fill('2026-07-14');
+    await page.locator('[data-test="manual-amount"]').fill('350,00');
+    await page.locator('[data-test="manual-save"]').click();
+    const posts = fake.requests.filter((r) => r.method === 'POST' && r.path === '/invoicing/payments/manual');
+    expect(JSON.parse(posts[0].body)).toEqual({
+      paid_on: '2026-07-14', gross_cents: 35000, method: 'bank_transfer',
+      reference: '', sender_name: 'Mara Esempio', note: '', new_client_name: 'Mara Esempio',
+    });
+    await expect(page.locator('[data-test="manual-summary"]')).toHaveText('By hand: saved €350.00 from Mara Esempio. Added Mara Esempio to your client book.');
   });
 
   test('a hand-entered payment says so; Delete takes two presses and is offered only while no issued invoice covers it', async ({ page }) => {
@@ -339,7 +382,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     }
   });
 
-  test('the dialog footer: Create draft first on a phone, Cancel then Create draft at the right when wide', async ({ page }) => {
+  test('the dialog footer: Save payment first on a phone, Cancel then Save payment at the right when wide', async ({ page }) => {
     await open(page, newFake());
     await page.locator('[data-test="manual-new"]').click();
     const save = await page.locator('[data-test="manual-save"]').boundingBox();
@@ -348,7 +391,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     if (narrow) {
       expect(save!.y, 'phone: primary on top').toBeLessThan(cancel!.y);
     } else {
-      expect(cancel!.x + cancel!.width, 'wide: Cancel before Create draft').toBeLessThanOrEqual(save!.x);
+      expect(cancel!.x + cancel!.width, 'wide: Cancel before Save payment').toBeLessThanOrEqual(save!.x);
     }
   });
 
