@@ -203,7 +203,9 @@ export function countPrior(rows) {
 // spelling. No date, no sentence: it never claims a copy that doesn't exist.
 export function copyKeptSentence(copyExpiresAt) {
   const day = formatBerlinDay(copyExpiresAt);
-  return day ? `A copy is kept until ${day} so this can be fixed.` : '';
+  // The clause on who can open it was the operator's yes (c66369 on system_3
+  // #9656) to security's optional point (c66341), #10672.
+  return day ? `A copy is kept until ${day} so this can be fixed; only the administrator can open it.` : '';
 }
 
 // Money arrives as integer cents; it is shown, never computed, here.
