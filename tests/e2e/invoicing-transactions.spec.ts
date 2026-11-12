@@ -157,34 +157,49 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
     await expect(page.getByRole('button', { name: 'Enter expense by hand' })).toHaveCount(0);
   });
 
-  // §3.127's rule, carried to four (system_3 #9942, design_agent c61923):
-  // the ways in are one row, or all stacked full width; never a partial row.
-  // Swept, so a longer label fails here instead of shipping a 3+1. The 641
-  // and 768px measurements are logged for design_agent's break ruling.
-  test('the head row is one line or four stacked full width, never a partial row', async ({ page }) => {
-    test.setTimeout(180_000);
+  // design_agent c66159 (refining c61923 for four, §3.135 Decisions 1-2):
+  // the ways in are one row of four, a 2×2 of equal columns (by hand, then
+  // from a file), or four stacked full width; never 3+1 or 2+1+1. Keyed on
+  // the row's width, so it is swept, and 641 and 768 are pinned to the 2×2.
+  test('the head row is one row, a 2×2 or four stacked, never a partial row', async ({ page }) => {
+    test.setTimeout(240_000);
     await page.setViewportSize({ width: 1100, height: 900 });
     await open(page, newFake());
     const sweep = [641];
-    for (let w = 600; w <= 1100; w += 4) sweep.push(w);
+    for (let w = 360; w <= 1100; w += 4) sweep.push(w);
+    const seen = new Set<string>();
     for (const w of sweep) {
       await page.setViewportSize({ width: w, height: 900 });
       const m = await page.evaluate((ids) => {
         const row = document.querySelector('.ways-in') as HTMLElement;
         const bs = ids.map((id) => document.querySelector(`[data-test="${id}"]`) as HTMLElement);
         const rects = bs.map((b) => b.getBoundingClientRect());
+        const tops = [...new Set(rects.map((r) => Math.round(r.top)))];
+        const lineHeight = (b: HTMLElement) => parseFloat(getComputedStyle(b).lineHeight) || 0;
         return {
-          rows: new Set(rects.map((r) => Math.round(r.top))).size,
+          perRow: tops.map((t) => rects.filter((r) => Math.round(r.top) === t).length),
           rowWidth: Math.round(row.getBoundingClientRect().width),
-          head: Math.round((row.parentElement as HTMLElement).getBoundingClientRect().width),
           widths: rects.map((r) => Math.round(r.width)),
+          lefts: rects.map((r) => Math.round(r.left)),
           overflow: bs.map((b) => b.scrollWidth - b.clientWidth),
+          oneLine: bs.every((b) => { const span = b.querySelector('span') || b; return span.getBoundingClientRect().height < 2 * lineHeight(b); }),
         };
       }, WAYS_IN.map(([id]) => id));
+      const shape = m.perRow.join('+');
+      seen.add(shape);
       if (w === 641 || w === 768) console.log(`ways-in @${w}: ${JSON.stringify(m)}`);
-      expect([1, 4], `rows at ${w}px`).toContain(m.rows);
+      expect(['4', '2+2', '1+1+1+1'], `layout at ${w}px`).toContain(shape);
+      expect(m.oneLine, `a label wraps at ${w}px`).toBe(true);
       for (const o of m.overflow) expect(o, `a label is clipped at ${w}px`).toBeLessThanOrEqual(0);
-      if (m.rows === 4) for (const bw of m.widths) expect(Math.abs(bw - m.rowWidth), `stacked full width at ${w}px`).toBeLessThanOrEqual(1);
+      if (shape === '2+2') {
+        expect(Math.abs(m.widths[0] - m.widths[1]), `equal columns at ${w}px`).toBeLessThanOrEqual(1);
+        expect(m.lefts[0], `columns align at ${w}px`).toBe(m.lefts[2]);
+        expect(m.lefts[1], `columns align at ${w}px`).toBe(m.lefts[3]);
+      }
+      if (shape === '1+1+1+1') for (const bw of m.widths) expect(Math.abs(bw - m.rowWidth), `stacked full width at ${w}px`).toBeLessThanOrEqual(1);
+      if (w === 641 || w === 768) expect(shape, `the 2×2 at ${w}px`).toBe('2+2');
     }
+    // The sweep reached all three states, so none of the asserts above is vacuous.
+    expect([...seen].sort()).toEqual(['1+1+1+1', '2+2', '4']);
   });
 });

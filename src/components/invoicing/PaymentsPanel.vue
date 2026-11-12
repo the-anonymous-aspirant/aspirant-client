@@ -943,21 +943,29 @@
     gap: var(--space-sm);
   }
 
-  /* One row or all stacked, never a partial row (§3.127, carried to four by
-     system_3 #10627): when the four buttons cannot share a line, all four
-     stack full width, as on a phone. 48.75rem is their widths plus the three
-     gaps (202 + 202 + 178 + 162 + 3 × 12 = 780px at a 16px root, measured
-     with "Enter expense by hand" added), so it moves with her text size; the
-     spec sweeps the widths and fails if a label change outgrows it. */
+  /* Three states, keyed on the head row's width, never the viewport (design_agent
+     c66159 on system_3 #10627, refining c61923 for four buttons; §3.135
+     Decisions 1 and 2). One row when the four fit: 202 + 202 + 178 + 162 +
+     3 × 12 = 780px = 48.75rem. Below that, a 2×2 of equal columns, the pairs
+     by hand then from a file, in DOM order: two columns as wide as the widest
+     button plus the gap, 202 + 12 + 202 = 416px = 26rem. Below 26rem all four
+     stack full width, as on a phone. In rem, so it moves with her text size;
+     the spec sweeps it and fails on any partial row. */
   @container ways-in (width < 48.75rem) {
     .ways-in {
-      flex-direction: column;
-      align-items: stretch;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       width: 100%;
     }
 
     .ways-in .block-on-phone {
       width: 100%;
+    }
+  }
+
+  @container ways-in (width < 26rem) {
+    .ways-in {
+      grid-template-columns: 1fr;
     }
   }
 
