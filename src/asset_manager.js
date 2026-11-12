@@ -54,6 +54,8 @@ const assetMap = {
   // The operator's "ecosiax" figure (system_3 #9735), same pipeline. Registered
   // ahead of any surface: no app entry uses it until the operator names one.
   ecosiax_icon: { hash: '1bc71ecb56b2110eab1ab6b4fa30178a', type: AssetType.IMAGE },
+  // The operator's MLEMVOICES cat (system_3 #10618), same pipeline: the Invoices card.
+  invoices_icon: { hash: 'fd60cb092af2fef20b113266c506c68b', type: AssetType.IMAGE },
   // Hand-drawn admin-tile icons (#4840): the three sketched glyphs that are not
   // member apps — they belong to AdminView tiles (operator ruling). Same pipeline
   // as the member icons: black-ink-on-transparent PNG, rendered white via the card
