@@ -417,8 +417,13 @@ export default {
 }
 
 /* Shared card styles */
+/* The card is dark in both themes, so it owns its own ink (§3.18) instead of
+   inheriting the page's: --text-muted derives from currentColor, and with no
+   color set here that was the page ink, #424242, which is the card's own
+   colour in light theme (system_3 #10578). */
 .health-card {
   background-color: var(--surface-card);
+  color: var(--text-on-dark);
   border: 2px solid var(--border-card);
   border-radius: var(--radius-xl);
   padding: var(--space-xl);
@@ -518,6 +523,7 @@ export default {
 
 .container-card {
   background-color: var(--surface-card);
+  color: var(--text-on-dark);
   border: 2px solid var(--border-card);
   border-radius: var(--radius-xl);
   padding: var(--space-lg);
@@ -653,11 +659,8 @@ export default {
   text-align: right;
 }
 
-/* Muted ink drawn from the card's own ink: --text-muted is the page's muted
-   ink and renders as the card's own colour in light theme (measured on this
-   card, #10572). */
 .info-value--unreadable {
-  color: color-mix(in srgb, var(--text-on-dark) 70%, transparent);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -674,7 +677,7 @@ export default {
 }
 
 .info-row--volume .info-label {
-  color: color-mix(in srgb, var(--text-on-dark) 70%, transparent);
+  color: var(--text-muted);
   overflow-wrap: anywhere;
 }
 
