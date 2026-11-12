@@ -529,10 +529,6 @@ export default {
   padding: var(--space-lg);
 }
 
-.container-card.stopped {
-  opacity: 0.5;
-}
-
 .container-header {
   display: flex;
   align-items: center;
