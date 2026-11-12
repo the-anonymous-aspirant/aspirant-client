@@ -1,14 +1,18 @@
 <template>
   <section class="payments-panel" data-test="payments-panel">
     <div class="panel-head">
-      <h2 class="visually-hidden">Payments</h2>
-      <!-- The ways a payment gets in, equal (design_agent, #8409): entered
-           by hand, imported from PayPal, or imported from N26 (its CSV
-           export or its PDFs, #9760, #10534). All stay secondary; Create
-           invoice holds the one primary slot. -->
+      <h2 class="visually-hidden">Transactions</h2>
+      <!-- The four ways in, equal (§3.143 Decision 2, system_3 #10555): a
+           payment by hand, an expense by hand (moved here from the Book, so
+           a movement has one place to be recorded), then the PayPal and N26
+           imports (#9760, #10534). All stay secondary; Create invoice holds
+           the one primary slot. -->
       <div class="ways-in">
         <AspButton variant="secondary" class="block-on-phone" data-test="manual-new" @click="manualOpen = true">
           Enter payment by hand
+        </AspButton>
+        <AspButton variant="secondary" class="block-on-phone" data-test="expense-new" @click="openExpense">
+          Enter expense by hand
         </AspButton>
       <div class="upload">
         <input
@@ -114,7 +118,13 @@
     <!-- §3.142 Decision 1: the import-state region's third line, one shows
          at a time with the other two. -->
     <AspCard v-if="manualSummary" class="summary" padding="sm" data-test="manual-summary">
-      <p class="summary__line">
+      <!-- An expense lands in the Book, not in this list yet (§3.143
+           Decision 3's one list is system_3 #10630), so the line says where
+           it went, in the imports' own words for it. -->
+      <p v-if="manualSummary.expense" class="summary__line" data-test="manual-summary-expense">
+        By hand: 1 expense added to your book.
+      </p>
+      <p v-else class="summary__line">
         By hand: saved {{ formatMoney(manualSummary.gross_cents, manualSummary.currency) }}<template v-if="manualSummary.sender_name"> from {{ manualSummary.sender_name }}</template>.<template v-if="manualSummary.client_name">
           {{ ' ' }}<span data-test="manual-summary-client-added">Added {{ manualSummary.client_name }} to your client book.</span></template>
       </p>
@@ -363,6 +373,12 @@
       @changed="$emit('changed')"
       @saved="onManualSaved"
     />
+    <ManualExpenseDialog
+      v-model:open="expenseOpen"
+      :categories="expenseCategories"
+      @changed="onExpenseSaved"
+      @category-added="expenseCategories = [...expenseCategories, $event]"
+    />
     <N26ImportDialog v-model:open="n26Open" :files="n26Files" :payments="payments" @imported="onN26Imported" />
     <PayPalExpensesDialog v-model:open="paypalExpensesOpen" :candidates="paypalExpenseCandidates" @done="onPayPalExpensesDone" />
     <PayersDialog
@@ -377,6 +393,7 @@
 
 <script>
   import { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect } from '@aspirant/design-system';
+  import ManualExpenseDialog from './ManualExpenseDialog.vue';
   import ManualPaymentDialog from './ManualPaymentDialog.vue';
   import N26ImportDialog from './N26ImportDialog.vue';
   import PayPalExpensesDialog from './PayPalExpensesDialog.vue';
@@ -392,6 +409,7 @@
     formatDay,
     formatMoney,
     importPayPalCSV,
+    listExpenseCategories,
     listPayerCandidates,
     payersSavedLine,
     parseN26PDFs,
@@ -420,7 +438,7 @@
   // payers, so they are only ever rendered as text interpolation.
   export default {
     name: 'PaymentsPanel',
-    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect, ManualPaymentDialog, N26ImportDialog, PayPalExpensesDialog, PayersDialog },
+    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect, ManualExpenseDialog, ManualPaymentDialog, N26ImportDialog, PayPalExpensesDialog, PayersDialog },
     props: {
       payments: { type: Array, required: true },
       clients: { type: Array, required: true },
@@ -443,6 +461,8 @@
         creating: false,
         createError: '',
         manualOpen: false,
+        expenseOpen: false,
+        expenseCategories: [],
         manualSummary: null,
         n26Parsing: false,
         n26Open: false,
@@ -748,6 +768,25 @@
       // "one summary shows at a time" rule as the two imports (§3.127
       // Decision 4). `client` is only present when the save also added a
       // payer (Decision 3).
+      // Categories load when the expense dialog opens, never with the panel:
+      // an import must make no categories request (invoicing.spec,
+      // invoicing-n26.spec), and most visits never open this dialog.
+      async openExpense() {
+        this.expenseOpen = true;
+        try {
+          this.expenseCategories = await listExpenseCategories();
+        } catch {
+          // The dialog's category select is empty; the server still refuses
+          // a save with no category, so nothing wrong can be stored.
+        }
+      },
+      onExpenseSaved() {
+        this.summary = null;
+        this.n26Summary = null;
+        this.payersSummary = null;
+        this.manualSummary = { expense: true };
+        this.$emit('changed');
+      },
       onManualSaved({ payment, client }) {
         this.summary = null;
         this.n26Summary = null;
@@ -897,28 +936,44 @@
     container: ways-in / inline-size;
   }
 
+  /* The one-row state never wraps: the container query below guarantees its
+     780px, and WebKit's subpixel sum wraps the fourth button at exactly
+     780px if wrapping is allowed (measured on system_3 #10627). */
   .ways-in {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
     gap: var(--space-sm);
   }
 
-  /* One row or three, never two and one (§3.127): when the three buttons
-     cannot share a line, all three stack full width, as on a phone. 35.375rem
-     is their widths plus the two gaps (202 + 178 + 162 + 2 × 12 = 566px at a
-     16px root; "Import N26 files" widened the N26 button from 154 to 162px,
-     system_3 #10559), so it moves with her text size; the spec sweeps the
-     widths and fails if a label change outgrows it. */
-  @container ways-in (width < 35.375rem) {
+  /* Three states, keyed on the head row's width, never the viewport (design_agent
+     c66159 on system_3 #10627, refining c61923 for four buttons; §3.135
+     Decisions 1 and 2). One row when the four fit: 202 + 202 + 178 + 162 +
+     3 × 12 = 780px = 48.75rem. Below that, a 2×2 of equal columns, the pairs
+     by hand then from a file, in DOM order: two columns as wide as the widest
+     button plus the gap, 202 + 12 + 202 = 416px = 26rem. Below 26rem all four
+     stack full width, as on a phone. In rem, so it moves with her text size;
+     the spec sweeps it and fails on any partial row. */
+  @container ways-in (width < 48.75rem) {
     .ways-in {
-      flex-direction: column;
-      align-items: stretch;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       width: 100%;
     }
 
     .ways-in .block-on-phone {
       width: 100%;
+    }
+  }
+
+  @container ways-in (width < 26rem) {
+    .ways-in {
+      grid-template-columns: 1fr;
+      /* The stacked state alone takes an 8px gap, so the first payment card
+         stays on a 390×844 phone's first screen with four ways in
+         (design_agent c66182 on system_3 #10627). One row and the 2×2 keep
+         12px. */
+      gap: var(--space-xs);
     }
   }
 

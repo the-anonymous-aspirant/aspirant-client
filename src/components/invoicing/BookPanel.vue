@@ -2,9 +2,8 @@
   <section class="book-panel" data-test="book-panel">
     <div class="panel-head">
       <h2 class="visually-hidden">Book</h2>
-      <AspButton variant="secondary" class="block-on-phone" data-test="expense-new" @click="expenseOpen = true">
-        Enter expense by hand
-      </AspButton>
+      <!-- "Enter expense by hand" moved to Transactions (§3.143 Decision 2,
+           system_3 #10555): a movement has one place to be recorded. -->
       <AspButton
         variant="secondary"
         class="block-on-phone"
@@ -116,12 +115,6 @@
       <BookChart :payments="payments" :expenses="expenses" />
     </template>
 
-    <ManualExpenseDialog
-      v-model:open="expenseOpen"
-      :categories="categories"
-      @changed="onExpenseChanged"
-      @category-added="onCategoryAdded"
-    />
     <ExpenseReceiptDialog
       v-model:open="receiptOpen"
       :expense-id="receiptExpenseId"
@@ -135,7 +128,6 @@
   import { AspButton, AspDataTable, AspEmptyState } from '@aspirant/design-system';
   import BookChart from './BookChart.vue';
   import ExpenseReceiptDialog from './ExpenseReceiptDialog.vue';
-  import ManualExpenseDialog from './ManualExpenseDialog.vue';
   import {
     CATEGORY_LABELS,
     bookReportCsvUrl,
@@ -144,7 +136,6 @@
     errorOf,
     formatDay,
     formatMoney,
-    listExpenseCategories,
   } from './api.js';
 
   // "What it was for" as two parts (design_agent's Design ack c64353 on system_3
@@ -176,7 +167,7 @@
   // signal (c63777).
   export default {
     name: 'BookPanel',
-    components: { AspButton, AspDataTable, AspEmptyState, BookChart, ExpenseReceiptDialog, ManualExpenseDialog },
+    components: { AspButton, AspDataTable, AspEmptyState, BookChart, ExpenseReceiptDialog },
     props: {
       payments: { type: Array, required: true },
       expenses: { type: Array, required: true },
@@ -185,8 +176,6 @@
     data() {
       return {
         narrow: false,
-        expenseOpen: false,
-        categories: [],
         rowError: '',
         confirmingDelete: null,
         deleting: null,
@@ -254,7 +243,6 @@
         this.narrow = e.matches;
       };
       this.narrowQuery.addEventListener('change', this.onNarrowChange);
-      this.fetchCategories();
     },
     beforeUnmount() {
       if (this.narrowQuery) this.narrowQuery.removeEventListener('change', this.onNarrowChange);
@@ -265,14 +253,6 @@
       formatSignedMoney(cents) {
         const sign = cents < 0 ? '-' : '';
         return `${sign}${formatMoney(Math.abs(cents))}`;
-      },
-      async fetchCategories() {
-        try {
-          this.categories = await listExpenseCategories();
-        } catch {
-          // The dialog's own AspSelect is simply empty; saving still refuses
-          // server-side if she somehow submits with no category chosen.
-        }
       },
       async downloadBookReport() {
         if (this.reportDownloading) return;
@@ -285,9 +265,6 @@
         } finally {
           this.reportDownloading = false;
         }
-      },
-      onCategoryAdded(category) {
-        this.categories = [...this.categories, category];
       },
       onExpenseChanged() {
         this.$emit('changed');

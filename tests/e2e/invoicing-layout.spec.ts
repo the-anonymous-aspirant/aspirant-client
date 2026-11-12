@@ -69,7 +69,7 @@ const noSideScroll = (page: Page) =>
 // Payments and Invoices; on Clients, wide puts Add client at the right, so
 // the list carries the edge there.
 const PANEL_EDGE: Record<string, (narrow: boolean) => string> = {
-  Payments: () => '[data-test="category-filter"]',
+  Transactions: () => '[data-test="category-filter"]',
   // The search box's own border box (AspInput's icon sits inside it).
   Invoices: () => '.filter-field--search',
   Clients: (narrow) => (narrow ? '[data-test="client-add"]' : '[data-test="client-row"]'),
@@ -87,7 +87,7 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
         Math.round(card.querySelector('h2')!.getBoundingClientRect().left - card.getBoundingClientRect().left));
       expect(inset, 'card text at card.left + 2px border + 16px').toBe(18);
 
-      for (const tab of ['Payments', 'Invoices', 'Clients']) {
+      for (const tab of ['Transactions', 'Invoices', 'Clients']) {
         await page.getByRole('tab', { name: tab }).click();
         const sel = PANEL_EDGE[tab](narrow);
         await expect(page.locator(sel).first()).toBeVisible();

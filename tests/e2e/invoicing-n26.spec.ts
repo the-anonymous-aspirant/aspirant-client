@@ -619,13 +619,16 @@ test.describe('#10534-C2 N26 button takes the CSV export too', () => {
 // Since "Enter payment by hand" (system_3 #9942) the three no longer fit one
 // row at 768 with the sidebar open, and design_agent ruled the break
 // (c61923, superseding c60358 there): one row or three stacked full width,
-// never two and one. 641 (sidebar hidden) still holds one row.
-test.describe('#9760-B1 the head row holds three ways in', () => {
-  for (const [width, rows] of [[641, 1], [768, 3]] as const) {
-    test(`at ${width}px the three ways in take ${rows === 1 ? 'one row' : 'three rows, full width'}, no label clipped`, async ({ page }) => {
+// never two and one. 641 (sidebar hidden) still held one row of three.
+// "Enter expense by hand" made four (system_3 #10627, §3.143 Decision 2):
+// they need 780px, so at both widths they take design_agent's 2×2 (c66159):
+// by hand on the first row, the imports on the second, equal columns.
+test.describe('#9760-B1 the head row holds the ways in', () => {
+  for (const width of [641, 768] as const) {
+    test(`at ${width}px the four ways in take a 2×2, no label clipped`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await open(page, newFake());
-      const ids = ['manual-new', 'payments-import', 'n26-import'];
+      const ids = ['manual-new', 'expense-new', 'payments-import', 'n26-import'];
       const m = await page.evaluate((ids) => {
         const els = ids.map((id) => document.querySelector(`[data-test="${id}"]`) as HTMLElement);
         return {
@@ -636,8 +639,9 @@ test.describe('#9760-B1 the head row holds three ways in', () => {
         };
       }, ids);
       console.log(`ways-in @${width}: ${JSON.stringify(m)}`);
-      expect(new Set(m.tops).size, `rows: tops ${m.tops}`).toBe(rows);
-      if (rows === 3) for (const w of m.widths) expect(Math.abs(w - m.row), 'stacked full width').toBeLessThanOrEqual(1);
+      expect(new Set(m.tops).size, `rows: tops ${m.tops}`).toBe(2);
+      expect([m.tops[0] === m.tops[1], m.tops[2] === m.tops[3]], 'by hand on row 1, imports on row 2').toEqual([true, true]);
+      expect(Math.abs(m.widths[0] - m.widths[1]), 'equal columns').toBeLessThanOrEqual(1);
       for (const o of m.overflow) expect(o).toBeLessThanOrEqual(0);
     });
   }
