@@ -966,6 +966,11 @@
   @container ways-in (width < 26rem) {
     .ways-in {
       grid-template-columns: 1fr;
+      /* The stacked state alone takes an 8px gap, so the first payment card
+         stays on a 390×844 phone's first screen with four ways in
+         (design_agent c66182 on system_3 #10627). One row and the 2×2 keep
+         12px. */
+      gap: var(--space-xs);
     }
   }
 

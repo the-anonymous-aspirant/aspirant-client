@@ -182,6 +182,8 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
           widths: rects.map((r) => Math.round(r.width)),
           lefts: rects.map((r) => Math.round(r.left)),
           overflow: bs.map((b) => b.scrollWidth - b.clientWidth),
+          rowGap: getComputedStyle(row).rowGap,
+          columnGap: getComputedStyle(row).columnGap,
           oneLine: bs.every((b) => { const span = b.querySelector('span') || b; return span.getBoundingClientRect().height < 2 * lineHeight(b); }),
         };
       }, WAYS_IN.map(([id]) => id));
@@ -196,6 +198,9 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
         expect(m.lefts[0], `columns align at ${w}px`).toBe(m.lefts[2]);
         expect(m.lefts[1], `columns align at ${w}px`).toBe(m.lefts[3]);
       }
+      // c66182: the stack takes an 8px gap; one row and the 2×2 keep 12px.
+      if (shape === '1+1+1+1') expect(m.rowGap, `stacked gap at ${w}px`).toBe('8px');
+      else expect([m.rowGap, m.columnGap], `gap at ${w}px`).toEqual(['12px', '12px']);
       if (shape === '1+1+1+1') for (const bw of m.widths) expect(Math.abs(bw - m.rowWidth), `stacked full width at ${w}px`).toBeLessThanOrEqual(1);
       if (w === 641 || w === 768) expect(shape, `the 2×2 at ${w}px`).toBe('2+2');
     }
