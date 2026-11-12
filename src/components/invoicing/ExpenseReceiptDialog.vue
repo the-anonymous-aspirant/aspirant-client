@@ -7,14 +7,15 @@
 
       <template v-else>
         <div v-if="state === 'set'" class="receipt-preview" data-test="receipt-preview">
-          <img v-if="isImage" :src="previewUrl" alt="The attached receipt" data-test="receipt-preview-image" />
+          <img v-if="previewKind === 'image'" :src="previewUrl" alt="The attached receipt" data-test="receipt-preview-image" />
           <!-- A PDF iframe needs a blob: URL, never the API URL directly: that
                route answers Content-Disposition attachment, which makes an
                <iframe src> download instead of preview (memory slug
                pdf-attachment-iframe-preview-needs-blob-url). Headless
                Chromium has no built-in PDF viewer, so this screenshots blank
                there -- that is expected, not a bug. -->
-          <iframe v-else-if="previewUrl" :src="previewUrl" title="The attached receipt" class="receipt-preview__pdf" data-test="receipt-preview-pdf" />
+          <iframe v-else-if="previewKind === 'pdf'" :src="previewUrl" title="The attached receipt" class="receipt-preview__pdf" data-test="receipt-preview-pdf" />
+          <p v-else class="muted receipt-preview__none" data-test="receipt-preview-unavailable">Preview not available. Use Download to open it.</p>
         </div>
         <p v-else-if="state === 'none'" class="muted" data-test="receipt-none">No receipt attached.</p>
 
@@ -78,6 +79,13 @@
   import ModalActions from './ModalActions.vue';
   import { deleteExpenseReceipt, downloadBlob, errorOf, expenseReceiptUrl, getExpenseReceiptBlob, uploadExpenseReceipt } from './api.js';
 
+  // Only these exact types are ever previewed, and the blob is rebuilt with
+  // that type (security review c65957 on #10623): a blob: document runs in
+  // the app's own origin, and the server's sandbox CSP stays on the HTTP
+  // response, so a 200 of any other type -- a proxy page, an SPA fallback --
+  // must never become an iframe here. Anything else is Download only.
+  const PREVIEW_KINDS = { 'image/png': 'image', 'image/jpeg': 'image', 'application/pdf': 'pdf' };
+
   // Attach, view and remove the one receipt a work expense can carry
   // (system_3 #10602/#10603), mirroring ProfileEditor's logo upload affordance
   // (same file-input + AspButton pattern), but applied at once rather than
@@ -96,7 +104,7 @@
       return {
         state: 'loading', // 'loading' | 'none' | 'set' | 'error'
         previewUrl: '',
-        isImage: false,
+        previewKind: '', // 'image' | 'pdf' | '' (no preview, Download only)
         attaching: false,
         removing: false,
         confirmingRemove: false,
@@ -120,8 +128,9 @@
         this.clearPreview();
         try {
           const { blob, contentType } = await getExpenseReceiptBlob(this.expenseId);
-          this.isImage = contentType.startsWith('image/');
-          this.previewUrl = URL.createObjectURL(blob);
+          const type = String(contentType || '').split(';')[0].trim().toLowerCase();
+          this.previewKind = PREVIEW_KINDS[type] || '';
+          if (this.previewKind) this.previewUrl = URL.createObjectURL(new Blob([blob], { type }));
           this.state = 'set';
         } catch (err) {
           if (err && err.response && err.response.status === 404) {
@@ -135,6 +144,7 @@
       clearPreview() {
         if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
         this.previewUrl = '';
+        this.previewKind = '';
       },
       onOpenChange(isOpen) {
         this.$emit('update:open', isOpen);
@@ -213,6 +223,11 @@
     max-width: 100%;
     max-height: 320px;
     object-fit: contain;
+  }
+
+  .receipt-preview__none {
+    align-self: center;
+    padding: var(--space-md);
   }
 
   .receipt-preview__pdf {

@@ -217,6 +217,22 @@ test.describe('#10603 Invoices: a receipt on a work expense', () => {
     await expect(page.locator('[data-test="receipt-preview-image"]')).toHaveCount(0);
   });
 
+  // Security review c65957 on #10623: a blob: document runs in the app's own
+  // origin and the server's sandbox CSP does not carry over to it, so a 200
+  // of any type other than PDF/PNG/JPEG (a proxy page, an SPA fallback) must
+  // never become an iframe or image. Download stays offered.
+  test('a receipt answered with any other type is not previewed: Download only', async ({ page }) => {
+    const html = Buffer.from('<!doctype html><script>window.__pwned = 1</script><p>not a receipt</p>');
+    const fake = newFake({ receipts: new Map([[101, { content: html, contentType: 'text/html; charset=utf-8' }]]) });
+    await open(page, fake);
+    await openReceiptFor(page);
+    await expect(page.locator('[data-test="receipt-preview-unavailable"]')).toHaveText('Preview not available. Use Download to open it.');
+    await expect(page.locator('[data-test="receipt-preview-pdf"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="receipt-preview-image"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="receipt-download"]')).toBeVisible();
+    expect(await page.evaluate(() => (window as any).__pwned)).toBeUndefined();
+  });
+
   test('Replace swaps the preview and Remove clears it (two-step confirm)', async ({ page }) => {
     const original = blackPng(60, 30);
     const replacement = blackPng(500, 10);
