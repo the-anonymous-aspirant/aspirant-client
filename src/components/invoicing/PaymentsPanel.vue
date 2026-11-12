@@ -249,9 +249,11 @@
         v-for="row in shown"
         :key="row.key"
         class="payment-card"
+        :class="{ 'payment-card--tap': !!row.payment }"
         :data-test="row.direction === 'in' ? 'payment-row' : 'expense-row'"
         :data-txn="row.transaction_id"
         :data-direction="row.direction"
+        @click="onCardTap(row, $event)"
       >
         <div class="payment-card__top">
           <span class="payment-card__who">
@@ -275,23 +277,6 @@
         <span v-if="row.who && row.what" class="note" data-test="row-what">{{ row.what }}</span>
         <template v-if="row.payment">
           <span v-if="row.payment.entry === 'manual'" class="muted manual-line" data-test="payment-manual">{{ manualLine(row.payment) }}</span>
-          <!-- Any payment can be deleted while no ISSUED invoice covers it,
-               imported or entered by hand (operator c61868, system_3 #10009,
-               #10010). Armed, the row says what a delete does. -->
-          <template v-if="!row.payment.on_issued_invoice">
-            <AspButton
-              :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
-              size="sm"
-              class="manual-delete"
-              :loading="deleting === row.id"
-              data-test="payment-delete"
-              @click="removePayment(row.payment)"
-            >
-              {{ confirmingDelete === row.id ? 'Delete this payment' : 'Delete' }}
-            </AspButton>
-            <span v-if="confirmingDelete === row.id && deleteConsequence(row.payment)" class="muted delete-reason" data-test="payment-delete-consequence">{{ deleteConsequence(row.payment) }}</span>
-          </template>
-          <span v-else class="muted delete-reason" data-test="payment-no-delete-reason">On an issued invoice — cancel that invoice first</span>
           <div class="payment-card__fields full-select">
             <div class="payment-card__field">
               <span class="payment-card__caption" aria-hidden="true">Category</span>
@@ -370,20 +355,10 @@
           <!-- A hand-entered payment's method and reference; no extra column
                for Delete (the table fills 968px). -->
           <span v-if="row.payment.entry === 'manual'" class="muted manual-line" data-test="payment-manual">{{ manualLine(row.payment) }}</span>
-          <template v-if="!row.payment.on_issued_invoice">
-            <AspButton
-              :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
-              size="sm"
-              class="manual-delete"
-              :loading="deleting === row.id"
-              data-test="payment-delete"
-              @click="removePayment(row.payment)"
-            >
-              {{ confirmingDelete === row.id ? 'Delete this payment' : 'Delete' }}
-            </AspButton>
-            <span v-if="confirmingDelete === row.id && deleteConsequence(row.payment)" class="muted delete-reason" data-test="payment-delete-consequence">{{ deleteConsequence(row.payment) }}</span>
-          </template>
-          <span v-else class="muted delete-reason" data-test="payment-no-delete-reason">On an issued invoice — cancel that invoice first</span>
+          <!-- §3.143 Decision 5 (D12): the row's Edit replaces its Delete;
+               removing moves into the dialog. An issued invoice's payment
+               opens read-only. -->
+          <AspButton variant="ghost" size="sm" class="manual-delete" data-test="payment-edit" @click="openEdit(row.payment)">Edit</AspButton>
         </template>
       </template>
       <template #cell-category="{ row }">
@@ -433,6 +408,8 @@
       @changed="$emit('changed')"
       @saved="onManualSaved"
     />
+    <!-- The same dialog edits a payment (§3.143 Decision 5, system_3 #10694). -->
+    <ManualPaymentDialog v-model:open="editOpen" :payment="editPayment" :clients="clients" @changed="$emit('changed')" />
     <ManualExpenseDialog
       v-model:open="expenseOpen"
       :categories="expenseCategories"
@@ -463,7 +440,6 @@
     CATEGORY_LABELS,
     METHOD_LABELS,
     N26_MAX_FILES,
-    deletePayment,
     SKIP_REASON_LABELS,
     copyKeptSentence,
     countPrior,
@@ -544,6 +520,8 @@
         creating: false,
         createError: '',
         manualOpen: false,
+        editOpen: false,
+        editPayment: null,
         expenseOpen: false,
         expenseCategories: [],
         manualSummary: null,
@@ -570,8 +548,6 @@
         // What the PayPal expense confirm counted as removed or deleted
         // earlier: { removed, deleted } (server PR 196).
         paypalExpensePrior: { removed: 0, deleted: 0 },
-        confirmingDelete: null,
-        deleting: null,
         columns: [
           { key: 'select', label: '', sortable: false, width: '2.5rem' },
           { key: 'paid_on', label: 'Date' },
@@ -908,15 +884,6 @@
       selectable(row) {
         return row.direction === 'out' || !row.payment.on_issued_invoice;
       },
-      // What a delete does, said while it is armed (#10010): an imported
-      // payment leaves a tombstone, so the same file will not bring it back
-      // (#10009); one on a draft or cancelled invoice comes off that invoice.
-      deleteConsequence(row) {
-        const parts = [];
-        if (row.entry !== 'manual') parts.push('Gone for good: importing the same file again will not bring it back.');
-        if (row.on_invoice && !row.on_issued_invoice) parts.push('It also comes off the draft or cancelled invoice that lists it. A draft keeps its lines, so check its total.');
-        return parts.join(' ');
-      },
       // Mirrors the server's isPayPalTransferIntoN26 (invoicing_n26.go):
       // an N26 row whose payer is PayPal. The PayPal payments it sums are
       // the paid work, so the transfer itself can never be (#9940-A1,
@@ -928,25 +895,16 @@
         if (!this.isPayPalTransferIntoN26(row)) return this.categoryOptions;
         return this.categoryOptions.map((o) => (o.value === 'paid_work' ? { ...o, disabled: true } : o));
       },
-      // Two steps: the first press turns the button into "Delete this
-      // payment"; the server still refuses one that an issued invoice covers.
-      async removePayment(row) {
-        if (this.confirmingDelete !== row.id) {
-          this.confirmingDelete = row.id;
-          return;
-        }
-        this.rowError = '';
-        this.deleting = row.id;
-        try {
-          await deletePayment(row.id);
-          this.selected = this.selected.filter((x) => x !== `p${row.id}`);
-        } catch (err) {
-          this.rowError = errorOf(err).message;
-        } finally {
-          this.deleting = null;
-          this.confirmingDelete = null;
-          this.$emit('changed');
-        }
+      openEdit(payment) {
+        this.editPayment = payment;
+        this.editOpen = true;
+      },
+      // A phone card's body opens its payment's dialog (§3.143 Decision 5);
+      // its own controls (checkbox, selects, buttons) keep their own job.
+      onCardTap(row, event) {
+        if (!row.payment) return;
+        if (event.target.closest('button, input, select, label, a, [role="combobox"], [role="listbox"], [role="option"], .select')) return;
+        this.openEdit(row.payment);
       },
       // The whole label, as a tooltip on a table-cell select whose value may
       // end in an ellipsis.
@@ -1569,6 +1527,11 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
+  }
+
+  /* A payment card's body opens its edit dialog (§3.143 Decision 5). */
+  .payment-card--tap {
+    cursor: pointer;
   }
 
   .payment-card__top {
