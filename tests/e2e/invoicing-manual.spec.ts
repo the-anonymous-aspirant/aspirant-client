@@ -93,7 +93,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await expect(page.locator('[data-test="category-filter"]')).toHaveCount(0);
     await expect(page.locator('[data-test="create-invoice"]')).toHaveCount(0);
     await expect(page.locator('[data-test="payments-empty"]')).toContainText(
-      'Enter a payment by hand, or import a PayPal CSV or Excel file, or an N26 CSV export or PDFs.',
+      'Enter a payment or an expense by hand, or import a PayPal CSV or Excel file, or an N26 CSV export or PDFs.',
     );
   });
 
@@ -235,8 +235,12 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     const fake = newFake({ payments: [manualRow(), manualRow({ id: 42, reference: '', method: 'cash', on_invoice: true, on_issued_invoice: true })] });
     await open(page, fake);
     const lines = page.locator('[data-test="payment-manual"]');
-    await expect(lines.first()).toHaveText('Entered by hand · Banküberweisung (Bank transfer) · RE-17');
-    await expect(lines.nth(1)).toHaveText('Entered by hand · Bar (Cash)');
+    // "By hand" is on the date line (§3.143 Decision 3, system_3 #10630);
+    // this line adds how it was paid and the reference. Both rows share a
+    // day, so the later one (id 42) comes first, newest first.
+    await expect(lines.first()).toHaveText('Bar (Cash)');
+    await expect(lines.nth(1)).toHaveText('Banküberweisung (Bank transfer) · RE-17');
+    await expect(page.locator('[data-test="payment-row"] [data-test="row-source"]')).toHaveText(['By hand', 'By hand']);
     const del = page.locator('[data-test="payment-delete"]');
     await expect(del).toHaveCount(1);
     // #9934-B2 (operator c61373): the row without Delete says why, in the

@@ -62,7 +62,7 @@
       <BookPanel v-else-if="tab === 'book'" :payments="payments" :expenses="expenses" @changed="fetchAll" />
       <!-- Transactions is the Payments panel in its place (§3.143 Decision 1,
            system_3 #10555): where money is recorded, checked and corrected. -->
-      <PaymentsPanel v-else :payments="payments" :clients="clients" @changed="fetchAll" @open-invoice="openInvoice" />
+      <PaymentsPanel v-else :payments="payments" :expenses="expenses" :clients="clients" @changed="fetchAll" @open-invoice="openInvoice" />
 
       <InvoiceEditor
         v-model:open="editorOpen"

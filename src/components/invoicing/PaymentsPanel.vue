@@ -118,9 +118,8 @@
     <!-- §3.142 Decision 1: the import-state region's third line, one shows
          at a time with the other two. -->
     <AspCard v-if="manualSummary" class="summary" padding="sm" data-test="manual-summary">
-      <!-- An expense lands in the Book, not in this list yet (§3.143
-           Decision 3's one list is system_3 #10630), so the line says where
-           it went, in the imports' own words for it. -->
+      <!-- The expense is in this list now (§3.143 Decision 3, system_3
+           #10630); the line keeps the imports' own words for it. -->
       <p v-if="manualSummary.expense" class="summary__line" data-test="manual-summary-expense">
         By hand: 1 expense added to your book.
       </p>
@@ -138,15 +137,26 @@
       </p>
     </AspCard>
 
-    <!-- Nothing to filter or select before the first payment. -->
-    <div v-if="incoming.length" class="toolbar">
-      <div class="filter full-select">
-        <AspSelect
-          v-model="categoryFilter"
-          :options="filterOptions"
-          aria-label="Show payments of category"
-          data-test="category-filter"
+    <!-- Nothing to filter or select before the first movement of money. -->
+    <div v-if="rows.length" class="toolbar">
+      <!-- §3.143 Decision 3: the direction, then a category select whose
+           options follow it. -->
+      <div class="filters">
+        <AspSegmented
+          v-model="direction"
+          :options="directionOptions"
+          aria-label="Show money in, out or both"
+          class="direction"
+          data-test="direction-filter"
         />
+        <div class="filter full-select">
+          <AspSelect
+            v-model="categoryFilter"
+            :options="filterOptions"
+            aria-label="Show transactions of category"
+            data-test="category-filter"
+          />
+        </div>
       </div>
       <!-- One selection, two actions on it (design_agent c60951 on system_3
            #9873): Set category for any rows, Create invoice for Paid work
@@ -185,15 +195,15 @@
     <p v-if="createError" class="error" role="alert" data-test="create-error">{{ createError }}</p>
 
     <AspEmptyState
-      v-if="incoming.length === 0"
-      heading="No payments yet"
-      message="Enter a payment by hand, or import a PayPal CSV or Excel file, or an N26 CSV export or PDFs."
+      v-if="rows.length === 0"
+      heading="Nothing recorded yet"
+      message="Enter a payment or an expense by hand, or import a PayPal CSV or Excel file, or an N26 CSV export or PDFs."
       data-test="payments-empty"
     />
     <AspEmptyState
       v-else-if="shown.length === 0"
       variant="filtered"
-      heading="No payments in this category"
+      heading="Nothing matches this filter"
       data-test="payments-filtered-empty"
     />
     <template v-else-if="narrow">
@@ -205,78 +215,88 @@
         @update:model-value="selectAllShown"
       />
     </div>
-    <ul class="payment-cards" aria-label="Incoming payments">
+    <!-- §3.114 card in §3.143 Decision 3's order: the checkbox, who top-left,
+         the amount top-right, then the date and source muted, then what it
+         was for, then the controls. -->
+    <ul class="payment-cards" aria-label="Money in and out">
       <li
         v-for="row in shown"
-        :key="row.id"
+        :key="row.key"
         class="payment-card"
-        data-test="payment-row"
+        :data-test="row.direction === 'in' ? 'payment-row' : 'expense-row'"
         :data-txn="row.transaction_id"
+        :data-direction="row.direction"
       >
         <div class="payment-card__top">
-          <span class="payment-card__when">
+          <span class="payment-card__who">
             <AspCheckbox
-              v-if="!row.on_issued_invoice"
+              v-if="selectable(row)"
               :model-value="selected.includes(row.id)"
               :aria-label="`Select ${row.transaction_id}`"
               data-test="payment-select"
               @update:model-value="toggle(row.id, $event)"
             />
-            <!-- An issued invoice's payment can be neither recategorised,
-                 invoiced again nor deleted, so it has no checkbox (§3.129
-                 Decision 6, design_agent c62100); an invisible copy keeps
-                 the gutter, so every date starts on one edge. -->
+            <!-- A row no checkbox can act on keeps an invisible copy, so every
+                 name starts on one edge: an issued invoice's payment
+                 (§3.129 Decision 6, design_agent c62100), and an expense until
+                 the selection takes both directions (system_3 #10631). -->
             <AspCheckbox v-else :model-value="false" class="select-gutter" aria-hidden="true" tabindex="-1" data-test="payment-select-gutter" />
-            <span class="nowrap">{{ formatDay(row.paid_on) }}</span>
+            <span class="sender" data-test="row-who">{{ row.who || row.what || '—' }}</span>
           </span>
-          <strong class="nowrap amount">{{ formatMoney(row.gross_cents, row.currency) }}</strong>
+          <strong class="nowrap amount" :class="row.direction === 'in' ? 'in-amount' : 'out-amount'" data-test="row-amount">{{ signedAmount(row) }}</strong>
         </div>
-        <span class="sender">{{ row.sender_name }}</span>
-        <span v-if="row.sender_email" class="muted">{{ row.sender_email }}</span>
-        <span v-if="row.note" class="note">{{ row.note }}</span>
-        <span v-if="row.entry === 'manual'" class="muted manual-line" data-test="payment-manual">Entered by hand <span class="nowrap">· {{ methodLabel(row) }}</span><template v-if="row.reference">{{ ' ' }}<span class="nowrap">· {{ row.reference }}</span></template></span>
-        <!-- Any payment can be deleted while no ISSUED invoice covers it,
-             imported or entered by hand (operator c61868, system_3 #10009,
-             #10010). Armed, the row says what a delete does. -->
-        <template v-if="!row.on_issued_invoice">
-          <AspButton
-            :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
-            size="sm"
-            class="manual-delete"
-            :loading="deleting === row.id"
-            data-test="payment-delete"
-            @click="removePayment(row)"
-          >
-            {{ confirmingDelete === row.id ? 'Delete this payment' : 'Delete' }}
-          </AspButton>
-          <span v-if="confirmingDelete === row.id && deleteConsequence(row)" class="muted delete-reason" data-test="payment-delete-consequence">{{ deleteConsequence(row) }}</span>
+        <span class="muted" data-test="row-date-line"><span class="nowrap">{{ formatDay(row.paid_on) }}</span> · <span data-test="row-source">{{ row.source }}</span></span>
+        <span v-if="row.payment && row.payment.sender_email" class="muted">{{ row.payment.sender_email }}</span>
+        <span v-if="row.who && row.what" class="note" data-test="row-what">{{ row.what }}</span>
+        <template v-if="row.payment">
+          <span v-if="row.payment.entry === 'manual'" class="muted manual-line" data-test="payment-manual">{{ manualLine(row.payment) }}</span>
+          <!-- Any payment can be deleted while no ISSUED invoice covers it,
+               imported or entered by hand (operator c61868, system_3 #10009,
+               #10010). Armed, the row says what a delete does. -->
+          <template v-if="!row.payment.on_issued_invoice">
+            <AspButton
+              :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
+              size="sm"
+              class="manual-delete"
+              :loading="deleting === row.id"
+              data-test="payment-delete"
+              @click="removePayment(row.payment)"
+            >
+              {{ confirmingDelete === row.id ? 'Delete this payment' : 'Delete' }}
+            </AspButton>
+            <span v-if="confirmingDelete === row.id && deleteConsequence(row.payment)" class="muted delete-reason" data-test="payment-delete-consequence">{{ deleteConsequence(row.payment) }}</span>
+          </template>
+          <span v-else class="muted delete-reason" data-test="payment-no-delete-reason">On an issued invoice — cancel that invoice first</span>
+          <div class="payment-card__fields full-select">
+            <div class="payment-card__field">
+              <span class="payment-card__caption" aria-hidden="true">Category</span>
+              <AspSelect
+                :model-value="row.payment.category"
+                :options="categoryOptionsFor(row.payment)"
+                :aria-label="`Category for ${row.transaction_id}`"
+                :disabled="saving.has(row.id)"
+                data-test="payment-category"
+                @update:model-value="patch(row.payment, { category: $event })"
+              />
+              <span v-if="isPayPalTransferIntoN26(row.payment)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
+            </div>
+            <div class="payment-card__field">
+              <span class="payment-card__caption" aria-hidden="true">Client</span>
+              <AspSelect
+                :model-value="row.payment.client_id ?? 0"
+                :options="clientOptions"
+                :aria-label="`Client for ${row.transaction_id}`"
+                :disabled="saving.has(row.id)"
+                data-test="payment-client"
+                @update:model-value="patch(row.payment, { client_id: $event || null })"
+              />
+              <span v-if="row.invoice" class="muted invoice-line" data-test="row-invoice">{{ row.invoice }}</span>
+            </div>
+          </div>
         </template>
-        <span v-else class="muted delete-reason" data-test="payment-no-delete-reason">On an issued invoice — cancel that invoice first</span>
-        <div class="payment-card__fields full-select">
-          <div class="payment-card__field">
-            <span class="payment-card__caption" aria-hidden="true">Category</span>
-            <AspSelect
-              :model-value="row.category"
-              :options="categoryOptionsFor(row)"
-              :aria-label="`Category for ${row.transaction_id}`"
-              :disabled="saving.has(row.id)"
-              data-test="payment-category"
-              @update:model-value="patch(row, { category: $event })"
-            />
-            <span v-if="isPayPalTransferIntoN26(row)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
-          </div>
-          <div class="payment-card__field">
-            <span class="payment-card__caption" aria-hidden="true">Client</span>
-            <AspSelect
-              :model-value="row.client_id ?? 0"
-              :options="clientOptions"
-              :aria-label="`Client for ${row.transaction_id}`"
-              :disabled="saving.has(row.id)"
-              data-test="payment-client"
-              @update:model-value="patch(row, { client_id: $event || null })"
-            />
-          </div>
-        </div>
+        <!-- An expense's category reads as text here; it is set from the
+             selection and the edit dialog (system_3 #10631, #10632). -->
+        <span v-else class="muted" data-test="row-category">{{ row.categoryLabel }}</span>
       </li>
     </ul>
     </template>
@@ -284,10 +304,10 @@
       v-else
       :columns="columns"
       :rows="shown"
-      row-key="id"
+      row-key="key"
       density="compact"
-      caption="Incoming payments"
-      :row-attrs="(row) => ({ 'data-test': 'payment-row', 'data-txn': row.transaction_id })"
+      caption="Money in and out"
+      :row-attrs="(row) => ({ 'data-test': row.direction === 'in' ? 'payment-row' : 'expense-row', 'data-txn': row.transaction_id, 'data-direction': row.direction })"
     >
       <template #header-select>
         <AspCheckbox
@@ -300,7 +320,7 @@
       </template>
       <template #cell-select="{ row }">
         <AspCheckbox
-          v-if="!row.on_issued_invoice"
+          v-if="selectable(row)"
           :model-value="selected.includes(row.id)"
           :aria-label="`Select ${row.transaction_id}`"
           data-test="payment-select"
@@ -308,61 +328,71 @@
         />
         <AspCheckbox v-else :model-value="false" class="select-gutter" aria-hidden="true" tabindex="-1" data-test="payment-select-gutter" />
       </template>
-      <template #cell-paid_on="{ row }"><span class="nowrap">{{ formatDay(row.paid_on) }}</span></template>
-      <!-- The payer's note reads under the sender, as on the phone cards: a
-           column of its own left too little width for the three selects
-           at 1280 with the sidebar open (#8407). -->
-      <template #cell-sender="{ row }">
-        <span class="sender">{{ row.sender_name }}</span>
-        <span v-if="row.sender_email" class="muted">{{ row.sender_email }}</span>
-        <span v-if="row.note" class="note note--cell">{{ row.note }}</span>
-        <!-- A hand-entered payment says so; no extra column for Delete (the
-             table fills 968px). -->
-        <span v-if="row.entry === 'manual'" class="muted manual-line" data-test="payment-manual">Entered by hand <span class="nowrap">· {{ methodLabel(row) }}</span><template v-if="row.reference">{{ ' ' }}<span class="nowrap">· {{ row.reference }}</span></template></span>
-        <!-- Any payment can be deleted while no ISSUED invoice covers it,
-             imported or entered by hand (operator c61868, system_3 #10009,
-             #10010). Armed, the row says what a delete does. -->
-        <template v-if="!row.on_issued_invoice">
-          <AspButton
-            :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
-            size="sm"
-            class="manual-delete"
-            :loading="deleting === row.id"
-            data-test="payment-delete"
-            @click="removePayment(row)"
-          >
-            {{ confirmingDelete === row.id ? 'Delete this payment' : 'Delete' }}
-          </AspButton>
-          <span v-if="confirmingDelete === row.id && deleteConsequence(row)" class="muted delete-reason" data-test="payment-delete-consequence">{{ deleteConsequence(row) }}</span>
-        </template>
-        <span v-else class="muted delete-reason" data-test="payment-no-delete-reason">On an issued invoice — cancel that invoice first</span>
+      <!-- The source is a fact about the row, on its muted date line
+           (§3.143 Decision 3). -->
+      <template #cell-paid_on="{ row }">
+        <span class="nowrap">{{ formatDay(row.paid_on) }}</span>
+        <span class="muted" data-test="row-source">{{ row.source }}</span>
       </template>
-      <template #cell-gross_cents="{ row }"><span class="nowrap">{{ formatMoney(row.gross_cents, row.currency) }}</span></template>
+      <!-- Who, then what it was for under it, as on the phone card: a column
+           of its own left too little width for the selects at 1280 with the
+           sidebar open (#8407). -->
+      <template #cell-who="{ row }">
+        <span class="sender" data-test="row-who">{{ row.who || row.what || '—' }}</span>
+        <span v-if="row.payment && row.payment.sender_email" class="muted">{{ row.payment.sender_email }}</span>
+        <span v-if="row.who && row.what" class="note note--cell" data-test="row-what">{{ row.what }}</span>
+        <template v-if="row.payment">
+          <!-- A hand-entered payment's method and reference; no extra column
+               for Delete (the table fills 968px). -->
+          <span v-if="row.payment.entry === 'manual'" class="muted manual-line" data-test="payment-manual">{{ manualLine(row.payment) }}</span>
+          <template v-if="!row.payment.on_issued_invoice">
+            <AspButton
+              :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
+              size="sm"
+              class="manual-delete"
+              :loading="deleting === row.id"
+              data-test="payment-delete"
+              @click="removePayment(row.payment)"
+            >
+              {{ confirmingDelete === row.id ? 'Delete this payment' : 'Delete' }}
+            </AspButton>
+            <span v-if="confirmingDelete === row.id && deleteConsequence(row.payment)" class="muted delete-reason" data-test="payment-delete-consequence">{{ deleteConsequence(row.payment) }}</span>
+          </template>
+          <span v-else class="muted delete-reason" data-test="payment-no-delete-reason">On an issued invoice — cancel that invoice first</span>
+        </template>
+      </template>
       <template #cell-category="{ row }">
-        <div class="cell-select">
+        <div v-if="row.payment" class="cell-select">
           <AspSelect
-            :model-value="row.category"
-            :options="categoryOptionsFor(row)"
+            :model-value="row.payment.category"
+            :options="categoryOptionsFor(row.payment)"
             :aria-label="`Category for ${row.transaction_id}`"
             :disabled="saving.has(row.id)"
             data-test="payment-category"
-            @update:model-value="patch(row, { category: $event })"
+            @update:model-value="patch(row.payment, { category: $event })"
           />
-          <span v-if="isPayPalTransferIntoN26(row)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
+          <span v-if="isPayPalTransferIntoN26(row.payment)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
         </div>
+        <span v-else data-test="row-category">{{ row.categoryLabel }}</span>
       </template>
       <template #cell-client_id="{ row }">
-        <div class="cell-select">
+        <div v-if="row.payment" class="cell-select">
           <AspSelect
-            :model-value="row.client_id ?? 0"
+            :model-value="row.payment.client_id ?? 0"
             :options="clientOptions"
             :aria-label="`Client for ${row.transaction_id}`"
-            :title="optionLabel(clientOptions, row.client_id ?? 0)"
+            :title="optionLabel(clientOptions, row.payment.client_id ?? 0)"
             :disabled="saving.has(row.id)"
             data-test="payment-client"
-            @update:model-value="patch(row, { client_id: $event || null })"
+            @update:model-value="patch(row.payment, { client_id: $event || null })"
           />
+          <span v-if="row.invoice" class="muted invoice-line" data-test="row-invoice">{{ row.invoice }}</span>
         </div>
+      </template>
+      <!-- §3.140 Decision 2: money in in body ink, money out in red with a
+           minus sign, so colour is never the only signal. -->
+      <template #cell-amount="{ row }">
+        <span class="nowrap amount" :class="row.direction === 'in' ? 'in-amount' : 'out-amount'" data-test="row-amount">{{ signedAmount(row) }}</span>
       </template>
     </AspDataTable>
     <p v-if="rowError" class="error" role="alert" data-test="payment-error">{{ rowError }}</p>
@@ -392,7 +422,7 @@
 </template>
 
 <script>
-  import { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect } from '@aspirant/design-system';
+  import { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSegmented, AspSelect } from '@aspirant/design-system';
   import ManualExpenseDialog from './ManualExpenseDialog.vue';
   import ManualPaymentDialog from './ManualPaymentDialog.vue';
   import N26ImportDialog from './N26ImportDialog.vue';
@@ -417,6 +447,7 @@
     patchPayment,
     createDraft,
   } from './api.js';
+  import { transactionRows } from './ledgerRows.js';
 
   // "2 of 5 kept their category: 2026-08-12 €40.00, 2026-08-14 €25.00 (on an
   // issued invoice; cancel it first)." One shared reason closes the line;
@@ -439,9 +470,11 @@
   // payers, so they are only ever rendered as text interpolation.
   export default {
     name: 'PaymentsPanel',
-    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect, ManualExpenseDialog, ManualPaymentDialog, N26ImportDialog, PayPalExpensesDialog, PayersDialog },
+    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSegmented, AspSelect, ManualExpenseDialog, ManualPaymentDialog, N26ImportDialog, PayPalExpensesDialog, PayersDialog },
     props: {
       payments: { type: Array, required: true },
+      // Money out, in the same list (§3.143 Decision 3, system_3 #10630).
+      expenses: { type: Array, default: () => [] },
       clients: { type: Array, required: true },
     },
     emits: ['changed', 'open-invoice'],
@@ -452,6 +485,12 @@
         summary: null,
         pendingFile: null,
         needsDateOrder: false,
+        direction: 'all',
+        directionOptions: [
+          { value: 'all', label: 'All' },
+          { value: 'in', label: 'In' },
+          { value: 'out', label: 'Out' },
+        ],
         categoryFilter: 'all',
         saving: new Set(),
         rowError: '',
@@ -488,8 +527,7 @@
         columns: [
           { key: 'select', label: '', sortable: false, width: '2.5rem' },
           { key: 'paid_on', label: 'Date' },
-          { key: 'sender', label: 'From', sortable: false },
-          { key: 'gross_cents', label: 'Amount', align: 'right' },
+          { key: 'who', label: 'Who and what for', sortable: false },
           // Width measured at 1280 with the sidebar open, where the table has
           // 968px (#8407): the cell pads 12px a side and a table-cell trigger
           // ~32px, so 10.25rem shows "Uncategorised" (106px of text) whole.
@@ -497,6 +535,8 @@
           // trigger's title.
           { key: 'category', label: 'Category', sortable: false, width: '10.25rem' },
           { key: 'client_id', label: 'Client', sortable: false, width: '10.25rem' },
+          // Last, as the row reads (§3.143 Decision 3).
+          { key: 'amount', label: 'Amount', align: 'right', sortable: false },
         ],
       };
     },
@@ -518,68 +558,40 @@
       incoming() {
         return this.payments.filter((p) => p.kind === 'incoming');
       },
+      // Both directions in one list, newest first (§3.143 Decision 3).
+      rows() {
+        return transactionRows(this.incoming, this.expenses);
+      },
       shown() {
-        if (this.categoryFilter === 'all') return this.incoming;
-        return this.incoming.filter((p) => p.category === this.categoryFilter);
+        return this.rows.filter(
+          (r) =>
+            (this.direction === 'all' || r.direction === this.direction) &&
+            (this.categoryFilter === 'all' || r.category === this.categoryFilter),
+        );
       },
       categoryOptions() {
         return Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }));
       },
+      // The category select's options follow the direction: income
+      // categories, expense categories, or both (§3.143 Decision 3). Under
+      // All, each option names its direction in the filter's own words, "In ·
+      // Paid work" … "Out · travel", income first: "Other" is both an income
+      // and an expense category, and AspSelect has no option groups yet
+      // (design_agent c66290 on system_3 #10630). When it gets them, the
+      // prefix below becomes a group. Expense categories are the ones her rows
+      // carry: the panel makes no categories request until the expense
+      // dialog opens (invoicing.spec, invoicing-n26.spec). Values carry the
+      // direction too, so a filter never matches the other side.
       filterOptions() {
-        return [{ value: 'all', label: 'All categories' }, ...this.categoryOptions];
-      },
-      clientOptions() {
-        return [{ value: 0, label: 'No client' }, ...this.clients.map((c) => ({ value: c.id, label: c.name }))];
-      },
-      // A file that could not be read stays named after the dialog closes
-      // (D2: a fold may hide detail, never a failure).
-      // Transfers from PayPal the server left out of the N26 files (#9881).
-      // "left out" is the rule; "skipped" stays her own unticking (c61091).
-      n26PayPalClause() {
-        const n = (this.n26Summary && this.n26Summary.paypal_transfers) || 0;
-        return n === 1
-          ? '1 transfer from PayPal left out (its payments come in through PayPal)'
-          : `${n} transfers from PayPal left out (their payments come in through PayPal)`;
-      },
-      // Moves between her own account and a Space that the server left out
-      // of a statement (system_3 #10541): the statement's analogue of the
-      // PayPal clause above, kept short because the review dialog already
-      // gave the full reason (design_agent c65358).
-      n26SpaceTransferClause() {
-        const n = (this.n26Summary && this.n26Summary.space_transfers) || 0;
-        return n === 1
-          ? '1 move between your account and a Space left out (your own money)'
-          : `${n} moves between your account and your Spaces left out (your own money)`;
-      },
-      // A recognised file that read no transaction stays named after the
-      // dialog closes, like a failure (design_agent c65358).
-      // A file that read no rows is a recorded failure; the server says when
-      // its kept copy goes, if one was kept (#10567).
-      paypalCopyKept() {
-        return copyKeptSentence(this.summary && this.summary.copy_expires_at);
-      },
-      n26UnreadableLine() {
-        const files = (this.n26Summary && this.n26Summary.unreadable) || [];
-        const n = files.length;
-        return `${n} file${n === 1 ? '' : 's'} read no transaction: ${files.join(', ')}.`;
-      },
-      payersClause() {
-        const n = this.payerCandidates.length;
-        return n === 1 ? '1 payer is not in your client book.' : `${n} payers are not in your client book.`;
-      },
-      n26FailureLine() {
-        const failures = (this.n26Summary && this.n26Summary.failures) || [];
-        const n = failures.length;
-        const list = failures.map((f) => `${f.filename} (${f.reason})`).join(', ');
-        return `${n} file${n === 1 ? '' : 's'} could not be read: ${list}.`;
-      },
-      // The PayPal file type, named on every PayPal line (§3.127 D4): what the
-      // server read once it answered, otherwise the file the owner chose.
-      paypalNoun() {
-        if (this.summary && this.summary.format) return this.summary.format === 'xlsx' ? 'Excel file' : 'CSV';
-        const f = this.pendingFile;
-        const xlsx = f && (/\.xlsx$/i.test(f.name || '') || f.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        return xlsx ? 'Excel file' : 'CSV';
+        const prefix = this.direction === 'all';
+        const label = (side, text) => (prefix ? `${side} · ${text}` : text);
+        const income = this.categoryOptions.map((o) => ({ value: `in:${o.value}`, label: label('In', o.label) }));
+        const names = [...new Set(this.expenses.map((e) => e.category))].sort((x, y) => x.localeCompare(y));
+        const expense = names.map((n) => ({ value: `out:${n}`, label: label('Out', n) }));
+        const all = { value: 'all', label: 'All categories' };
+        if (this.direction === 'in') return [all, ...income];
+        if (this.direction === 'out') return [all, ...expense];
+        return [all, ...income, ...expense];
       },
       selectedRows() {
         return this.incoming.filter((p) => this.selected.includes(p.id));
@@ -608,7 +620,7 @@
       // The shown rows a checkbox can act on: not on an issued invoice
       // (§3.129 Decisions 4 and 6, design_agent c62100 on #10010).
       selectableShown() {
-        return this.shown.filter((p) => !p.on_issued_invoice);
+        return this.shown.filter((r) => this.selectable(r));
       },
       allShownSelected() {
         return this.selectableShown.length > 0 && this.selectableShown.every((p) => this.selected.includes(p.id));
@@ -625,9 +637,13 @@
       // The selection never holds a row the owner cannot see (§3.25): a
       // filter change or a reload unselects rows that left the view.
       shown(rows) {
-        const visible = new Set(rows.filter((p) => !p.on_issued_invoice).map((p) => p.id));
+        const visible = new Set(rows.filter((r) => this.selectable(r)).map((r) => r.id));
         const kept = this.selected.filter((id) => visible.has(id));
         if (kept.length !== this.selected.length) this.selected = kept;
+      },
+      // A category the new direction does not offer falls back to all.
+      filterOptions(options) {
+        if (!options.some((o) => o.value === this.categoryFilter && !o.disabled)) this.categoryFilter = 'all';
       },
     },
     mounted() {
@@ -661,6 +677,21 @@
       },
       methodLabel(row) {
         return METHOD_LABELS[row.method] || row.method;
+      },
+      // "By hand" is on the date line; this line adds how and the reference.
+      manualLine(p) {
+        return p.reference ? `${this.methodLabel(p)} · ${p.reference}` : this.methodLabel(p);
+      },
+      // §3.140 Decision 2: money out carries a minus sign as well as its ink.
+      signedAmount(row) {
+        const amount = formatMoney(row.amount_cents, row.currency);
+        return row.direction === 'out' ? `-${amount}` : amount;
+      },
+      // A checkbox acts on a payment no issued invoice covers (§3.129
+      // Decisions 4 and 6). Expenses join the selection with C1 (system_3
+      // #10631), whose Set category acts on one direction at a time.
+      selectable(row) {
+        return row.direction === 'in' && !row.payment.on_issued_invoice;
       },
       // What a delete does, said while it is armed (#10010): an imported
       // payment leaves a tombstone, so the same file will not bring it back
@@ -870,7 +901,7 @@
         this.selected = on ? [...new Set([...this.selected, id])] : this.selected.filter((x) => x !== id);
       },
       selectAllShown(on) {
-        const ids = this.selectableShown.map((p) => p.id);
+        const ids = this.selectableShown.map((r) => r.id);
         this.selected = on ? [...new Set([...this.selected, ...ids])] : this.selected.filter((id) => !ids.includes(id));
       },
       // Set one category on every selected row: one PATCH per row, in list
@@ -879,7 +910,7 @@
       // bulk action (design_agent c60951 rule 5, D2).
       async setCategory(category) {
         if (!category || this.selected.length === 0 || this.bulkSaving) return;
-        const rows = this.shown.filter((p) => this.selected.includes(p.id));
+        const rows = this.selectableShown.filter((r) => this.selected.includes(r.id)).map((r) => r.payment);
         this.bulkSaving = true;
         this.bulkError = '';
         const failed = [];
@@ -1091,6 +1122,14 @@
     margin-bottom: var(--space-sm);
   }
 
+  /* The direction strip, then the category select (§3.143 Decision 3). */
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
   .filter {
     width: 16rem;
   }
@@ -1225,14 +1264,29 @@
     gap: var(--space-sm);
   }
 
-  .payment-card__when {
+  .payment-card__who {
     display: inline-flex;
     align-items: center;
     gap: var(--space-xs);
+    min-width: 0;
   }
 
   .amount {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* §3.140 Decision 2: money in in body ink, money out in the error text red
+     with a minus sign, the bookkeeping convention, not an alarm. */
+  .in-amount {
+    color: var(--text-body);
+  }
+
+  .out-amount {
+    color: var(--feedback-error-text);
+  }
+
+  .invoice-line {
+    margin-top: var(--space-2xs);
   }
 
   .payment-card__field {
@@ -1257,6 +1311,11 @@
     .panel-head,
     .toolbar,
     .ways-in {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .filters {
       flex-direction: column;
       align-items: stretch;
     }
