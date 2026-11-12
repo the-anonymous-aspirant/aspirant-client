@@ -25,6 +25,9 @@ interface Fake {
   expenseCategories?: string[];
   categoriesFailure?: boolean;
   expenseConfirmFailure?: { status: number; body: Json };
+  // #10634: payments she removed or deleted for good, by transaction id; the
+  // confirm skips them and counts them (server PR 196).
+  priorPayments?: Record<string, 'removed' | 'deleted'>;
   requests: Array<{ method: string; path: string; body: string; contentType: string }>;
 }
 
@@ -103,7 +106,16 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
       const rows: Json[] = JSON.parse(body).rows;
       let confirmed = 0;
       let duplicates = 0;
+      let removedEarlier = 0;
+      let deletedEarlier = 0;
       for (const row of rows) {
+        const prior = fake.priorPayments && fake.priorPayments[row.transaction_id];
+        if (prior) {
+          duplicates++;
+          if (prior === 'removed') removedEarlier++;
+          else deletedEarlier++;
+          continue;
+        }
         if (fake.payments.some((p) => p.source === 'n26' && p.transaction_id === row.transaction_id)) {
           duplicates++;
           continue;
@@ -116,7 +128,7 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
         });
         confirmed++;
       }
-      return json(route, 200, { summary: { confirmed, duplicates } });
+      return json(route, 200, { summary: { confirmed, duplicates, removed_earlier: removedEarlier, deleted_earlier: deletedEarlier } });
     }
     if (path === '/invoicing/expense-categories' && method === 'GET') {
       if (fake.categoriesFailure) return json(route, 500, { error: { code: 'internal_error', message: 'Error listing categories' } });
@@ -188,15 +200,17 @@ const noSideScroll = (page: Page) =>
 
 const summary = (page: Page) => page.locator('[data-test="n26-summary"]');
 
-// read = imported + already imported + skipped + left out, on every path (design_agent c61091).
+// read = imported + already imported + skipped + left out, on every path
+// (design_agent c61091), + removed and deleted earlier when only payments
+// carry those flags (#10634, design_agent c66252).
 async function expectSummaryAddsUp(page: Page): Promise<void> {
   const text = (await summary(page).innerText()).replace(/\s+/g, ' ');
   const m = text.match(
-    /read (\d+) rows? .*?: (\d+) imported, (\d+) already imported, (\d+) skipped(?:, (\d+) transfers? from PayPal left out(?: \([^)]*\))?)?(?:, (\d+) moves? between your account and (?:a Space|your Spaces) left out)?/,
+    /read (\d+) rows? .*?: (\d+) imported, (\d+) already imported, (\d+) skipped(?:, (\d+) transfers? from PayPal left out(?: \([^)]*\))?)?(?:, (\d+) moves? between your account and (?:a Space|your Spaces) left out)?(?:[^·]*? · (\d+) removed earlier: restore it on Transactions)?(?:[^·]*? · (\d+) deleted earlier)?/,
   );
   expect(m, text).not.toBeNull();
-  const [read, imported, already, skipped, paypalLeftOut, spaceLeftOut] = m!.slice(1).map((v) => Number(v || 0));
-  expect(read, text).toBe(imported + already + skipped + paypalLeftOut + spaceLeftOut);
+  const [read, imported, already, skipped, paypalLeftOut, spaceLeftOut, removed, deleted] = m!.slice(1).map((v) => Number(v || 0));
+  expect(read, text).toBe(imported + already + skipped + paypalLeftOut + spaceLeftOut + removed + deleted);
 }
 const checkbox = (page: Page, i: number) => page.locator('[data-test="n26-row"]').nth(i).locator('input[type="checkbox"]');
 
@@ -858,5 +872,104 @@ test.describe('#10567 N26 import — a kept copy of a failed file is named', () 
     await upload(page, ['empty.pdf', 'conferma.pdf']);
     await expect(page.locator('[data-test="n26-file-unreadable"]')).toContainText(
       'try N26\'s CSV export of the same month instead. A copy is kept until 2026-11-19 so this can be fixed.');
+  });
+});
+
+// #10634: a re-import meets rows she removed, or deleted for good, honestly
+// (§3.143 Decision 6, design_agent c66225 and c66252). A removed row says it
+// can be restored on Transactions; a deleted one says so; neither has a
+// checkbox. The summary counts both apart from "already imported", and never
+// prints a zero count.
+test.describe('#10634 N26 import — removed and deleted rows are named and counted', () => {
+  const REMOVED = 'Removed earlier: restore it on Transactions';
+
+  test('a removed and a deleted payment are flagged with no checkbox, and the summary counts them apart from already imported', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['statement.pdf'].candidates = [
+      statementRow(1, { already_imported: true, removed: true }),
+      statementRow(2, { already_imported: true, deleted_earlier: true }),
+      statementRow(3, { already_imported: true }),
+      statementRow(4),
+    ];
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+
+    const rows = page.locator('[data-test="n26-row"]');
+    await expect(rows.nth(0).locator('[data-test="n26-row-prior"]')).toHaveText(REMOVED);
+    await expect(rows.nth(1).locator('[data-test="n26-row-prior"]')).toHaveText('Deleted earlier');
+    // Neither is in her book, so neither says "Already imported".
+    for (const i of [0, 1]) await expect(rows.nth(i).locator('[data-test="n26-row-imported"]')).toHaveCount(0);
+    await expect(rows.nth(2).locator('[data-test="n26-row-imported"]')).toHaveText('Already imported');
+    await expect(rows.nth(2).locator('[data-test="n26-row-prior"]')).toHaveCount(0);
+    for (const i of [0, 1, 2]) await expect(checkbox(page, i)).toHaveCount(0);
+    await expect(checkbox(page, 3)).toBeChecked();
+
+    await page.locator('[data-test="n26-confirm"]').click();
+    const posted = JSON.parse(confirmRequests(fake)[0].body).rows;
+    expect(posted.map((r: Json) => r.transaction_id)).toEqual([statementRow(4).transaction_id]);
+    await expect(summary(page)).toHaveText(
+      `N26: read 4 rows from 1 file: 1 imported, 1 already imported, 0 skipped · 1 removed earlier: restore it on Transactions · 1 deleted earlier.`,
+    );
+    await expect(page.locator('[data-test="n26-summary-removed"]')).toHaveText('1 removed earlier: restore it on Transactions');
+    await expect(page.locator('[data-test="n26-summary-deleted"]')).toHaveText('1 deleted earlier');
+    await expectSummaryAddsUp(page);
+  });
+
+  test('outgoing rows matching a removed or deleted expense are flagged with no checkbox or picker, and counted with the payments', async ({ page }) => {
+    const fake = withOutgoing([
+      outgoingRow(1, { already_imported: true, removed: true }),
+      outgoingRow(2, { already_imported: true, deleted_earlier: true }),
+    ]);
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+
+    await expect(expenseRows(page).nth(0).locator('[data-test="expense-row-prior"]')).toHaveText(REMOVED);
+    await expect(expenseRows(page).nth(1).locator('[data-test="expense-row-prior"]')).toHaveText('Deleted earlier');
+    for (const i of [0, 1]) {
+      await expect(expenseRows(page).nth(i).locator('input[type="checkbox"]')).toHaveCount(0);
+      await expect(expenseRows(page).nth(i).locator('[data-test="expense-row-category"]')).toHaveCount(0);
+      await expect(expenseRows(page).nth(i).locator('[data-test="expense-row-imported"]')).toHaveCount(0);
+    }
+
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+    expect(expenseConfirms(fake)).toHaveLength(0);
+    // "already imported" stays the payments' count; the two new clauses count
+    // both directions, because the review showed both (c66252 item 1).
+    await expect(summary(page)).toHaveText(
+      'N26: read 2 rows from 1 file: 2 imported, 0 already imported, 0 skipped · 1 removed earlier: restore it on Transactions · 1 deleted earlier.',
+    );
+  });
+
+  test('a row the confirm meets as removed is counted as removed earlier, not already imported', async ({ page }) => {
+    const fake = newFake({ priorPayments: { [statementRow(2).transaction_id]: 'removed' } });
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+    await page.locator('[data-test="n26-confirm"]').click();
+
+    await expect(summary(page)).toHaveText(
+      'N26: read 2 rows from 1 file: 1 imported, 0 already imported, 0 skipped · 1 removed earlier: restore it on Transactions.',
+    );
+    // A zero count is never printed.
+    await expect(page.locator('[data-test="n26-summary-deleted"]')).toHaveCount(0);
+    await expectSummaryAddsUp(page);
+  });
+
+  test('Cancel still counts the removed and deleted rows the file carried', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['statement.pdf'].candidates = [
+      statementRow(1, { already_imported: true, removed: true }),
+      statementRow(2, { already_imported: true, deleted_earlier: true }),
+      statementRow(3),
+    ];
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+    await page.locator('[data-test="n26-cancel"]').click();
+
+    expect(confirmRequests(fake)).toHaveLength(0);
+    await expect(summary(page)).toHaveText(
+      'N26: read 3 rows from 1 file: 0 imported, 0 already imported, 1 skipped · 1 removed earlier: restore it on Transactions · 1 deleted earlier.',
+    );
+    await expectSummaryAddsUp(page);
   });
 });

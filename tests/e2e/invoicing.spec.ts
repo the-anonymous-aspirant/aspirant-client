@@ -753,3 +753,73 @@ test.describe('#10438 PayPal import — outgoing payments reviewed as work expen
     await expect(ppxReview(page)).toBeVisible();
   });
 });
+
+// #10634: the PayPal payment import has no review, so its import line names
+// the payments that matched a record she removed or deleted for good, apart
+// from "already imported" (design_agent c66225, c66252). Its expense review
+// flags such rows, with no checkbox, as the N26 review does (§3.143
+// Decision 6). A zero count is never printed.
+test.describe('#10634 PayPal import — removed and deleted rows are named and counted', () => {
+  const REMOVED = 'Removed earlier: restore it on Transactions';
+  const reimport = (removed: number, deleted: number) => ({
+    status: 200,
+    body: {
+      summary: {
+        rows_read: 9, imported: 0, duplicates: 3, skipped: 6, withdrawals: 0,
+        skipped_reasons: { fee: 1, currency_conversion: 2, bank_topup: 1, not_completed: 1, outgoing: 1 },
+        removed_earlier: removed, deleted_earlier: deleted,
+      },
+    },
+  });
+
+  test('the import line counts removed and deleted payments apart from already imported, and never prints a zero count', async ({ page }) => {
+    const fake = newFake({ importResponses: [reimport(1, 1), reimport(0, 2)] });
+    await importPayPal(page, fake);
+    const line = page.locator('[data-test="import-summary"] .summary__line');
+    await expect(line).toHaveText(
+      'PayPal CSV: read 9 rows: 0 imported, 1 already imported, 6 skipped · 1 removed earlier: restore it on Transactions · 1 deleted earlier.',
+    );
+    await expect(page.locator('[data-test="paypal-summary-removed"]')).toHaveText('1 removed earlier: restore it on Transactions');
+    await expect(page.locator('[data-test="paypal-summary-deleted"]')).toHaveText('1 deleted earlier');
+
+    await page.locator('[data-test="payments-file"]').setInputFiles(paypalCsv);
+    await expect(line).toHaveText('PayPal CSV: read 9 rows: 0 imported, 1 already imported, 6 skipped · 2 deleted earlier.');
+    await expect(page.locator('[data-test="paypal-summary-removed"]')).toHaveCount(0);
+  });
+
+  test('the expense review flags removed and deleted rows with no checkbox or picker, and the line counts them', async ({ page }) => {
+    const fake = importWithOutgoing([
+      paypalOutgoing(1, { already_imported: true, removed: true }),
+      paypalOutgoing(2, { already_imported: true, deleted_earlier: true }),
+      paypalOutgoing(3),
+    ]);
+    await importPayPal(page, fake);
+
+    await expect(ppxReview(page)).toBeVisible();
+    await expect(ppxRows(page).nth(0).locator('[data-test="expense-row-prior"]')).toHaveText(REMOVED);
+    await expect(ppxRows(page).nth(1).locator('[data-test="expense-row-prior"]')).toHaveText('Deleted earlier');
+    for (const i of [0, 1]) {
+      await expect(ppxRows(page).nth(i).locator('input[type="checkbox"]')).toHaveCount(0);
+      await expect(ppxRows(page).nth(i).locator('[data-test="expense-row-category"]')).toHaveCount(0);
+      await expect(ppxRows(page).nth(i).locator('[data-test="expense-row-imported"]')).toHaveCount(0);
+    }
+    await expect(ppxRows(page).nth(2).locator('input[type="checkbox"]')).toHaveCount(1);
+
+    await ppxRows(page).nth(2).locator('input[type="checkbox"]').check();
+    await page.locator('[data-test="paypal-expenses-confirm"]').click();
+    await expect(ppxReview(page)).toBeHidden();
+    expect(JSON.parse(ppxConfirms(fake)[0].body).rows.map((r: Json) => r.transaction_id)).toEqual(['8HH88883HH8888888']);
+    await expect(page.locator('[data-test="import-summary"] .summary__line')).toHaveText(
+      'PayPal CSV: read 4 rows: 2 imported, 0 already imported, 2 skipped · 1 removed earlier: restore it on Transactions · 1 deleted earlier. 1 expense added to your book.',
+    );
+  });
+
+  test('a file whose only outgoing payment was removed opens no review, and the line still names it', async ({ page }) => {
+    const fake = importWithOutgoing([paypalOutgoing(1, { already_imported: true, removed: true })]);
+    await importPayPal(page, fake);
+    await expect(ppxReview(page)).toHaveCount(0);
+    await expect(page.locator('[data-test="import-summary"] .summary__line')).toHaveText(
+      'PayPal CSV: read 4 rows: 2 imported, 0 already imported, 2 skipped · 1 removed earlier: restore it on Transactions.',
+    );
+  });
+});
