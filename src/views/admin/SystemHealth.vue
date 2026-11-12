@@ -95,22 +95,29 @@
       </div>
     </template>
 
-    <!-- Containers -->
+    <!-- Containers. Each card also carries the nightly usage rollup's line and,
+         where the server says it can act, a Stop or Start control (system_3
+         #10558; design c65900, security c65887, design_conventions §3.144).
+         The control is absent, not disabled, where `controllable` is not true:
+         the allowlist lives on the monitor and is never copied here. -->
     <template v-if="containers.length > 0">
       <div class="section-header">
         <h3>Containers</h3>
         <span class="container-count">{{ runningCount }} / {{ containers.length }} running</span>
+        <span class="usage-as-of" data-test="usage-as-of">{{ usageHeader }}</span>
       </div>
+      <p class="section-note">Services without a Stop button keep the cell running and can't be stopped from here.</p>
       <div class="container-grid">
         <div
           v-for="c in containers"
           :key="c.name"
           class="container-card"
           :class="{ stopped: c.status !== 'running' }"
+          :data-test="`container-${c.name}`"
         >
           <div class="container-header">
             <span class="container-dot" :class="c.status === 'running' ? 'healthy' : 'unhealthy'"></span>
-            <span class="container-name">{{ c.name }}</span>
+            <span class="container-name">{{ serviceName(c.name) }}</span>
             <span class="container-status">{{ c.status }}</span>
           </div>
 
@@ -141,9 +148,66 @@
 
             <div class="container-uptime">{{ c.uptime }}</div>
           </template>
+
+          <!-- The image's size, not the container's disk: volumes keep their
+               own section (D2), so this says IMAGE. -->
+          <div v-if="c.disk_mb != null" class="metric-row image" data-test="container-image">
+            <span class="metric-label">IMAGE</span>
+            <span class="metric-value">{{ formatMB(c.disk_mb) }}</span>
+          </div>
+
+          <p v-if="usageLine(c)" class="usage-line" data-test="usage-line">{{ usageLine(c) }}</p>
+
+          <div v-if="c.controllable === true" class="container-control">
+            <AspButton
+              v-if="c.status === 'running'"
+              variant="secondary"
+              :disabled="Boolean(busy(c).action)"
+              data-test="container-stop"
+              @click="askStop(c)"
+            >
+              {{ busy(c).action === 'stop' ? 'Stopping…' : 'Stop' }}
+            </AspButton>
+            <AspButton
+              v-else
+              variant="secondary"
+              :disabled="Boolean(busy(c).action)"
+              data-test="container-start"
+              @click="control(c, 'start')"
+            >
+              {{ busy(c).action === 'start' ? 'Starting…' : 'Start' }}
+            </AspButton>
+            <p v-if="busy(c).caption" class="control-caption" data-test="control-caption">{{ busy(c).caption }}</p>
+            <p v-if="busy(c).error" class="control-error" role="alert" data-test="control-error">{{ busy(c).error }}</p>
+          </div>
         </div>
       </div>
     </template>
+
+    <!-- Stop asks first, naming the service and what stops working; Start is
+         the undo and asks nothing (security c65887). The usage line is in the
+         dialog so the evidence is in front of her when she decides. -->
+    <AspModal
+      :open="Boolean(stopTarget)"
+      :title="stopTarget ? `Stop ${serviceName(stopTarget.name)}?` : 'Stop?'"
+      size="sm"
+      @update:open="(open) => (open ? null : (stopTarget = null))"
+    >
+      <!-- Test hook on the body: AspModal's root is a <Teleport>. -->
+      <div v-if="stopTarget" data-test="stop-confirm">
+        <p>
+          {{ serviceName(stopTarget.name) }} will be unreachable until you start it again. It stays stopped
+          until you start it here or until the next deploy.
+        </p>
+        <p v-if="usageLine(stopTarget)" class="confirm-usage">{{ usageLine(stopTarget) }}</p>
+      </div>
+      <template #footer>
+        <AspButton variant="secondary" data-test="stop-cancel" @click="stopTarget = null">Cancel</AspButton>
+        <AspButton variant="destructive" data-test="stop-confirm-button" @click="confirmStop">
+          {{ stopTarget ? `Stop ${serviceName(stopTarget.name)}` : 'Stop' }}
+        </AspButton>
+      </template>
+    </AspModal>
 
     <!-- Volumes -->
     <template v-if="volumes.length > 0">
@@ -186,11 +250,31 @@
 <script>
 import axios from 'axios';
 import ReadState from '../../components/ReadState.vue';
-import { AspButton } from '@aspirant/design-system';
+import { AspButton, AspModal } from '@aspirant/design-system';
+
+// The rollup's readable service name for a container, by the same rule as
+// aspirant-server's serviceNameFromContainer (handlers/service_usage_rollup.go):
+// this cell's compose project prefix and instance suffix come off, and a name
+// that does not match keeps its raw form rather than being mangled. Calls
+// still use the raw container name.
+const CONTAINER_NAME = /^aspirant-online-(.+)-\d+$/;
+export function serviceNameFromContainer(name) {
+  const m = CONTAINER_NAME.exec(name || '');
+  return m ? m[1] : name;
+}
+
+// After a 202, the status word comes only from a re-read of /containers, never
+// from the click (D2): every 2 s, for up to 30 s.
+const POLL_EVERY_MS = 2000;
+const POLL_FOR_MS = 30000;
+
+const DAY = { day: 'numeric', month: 'short', timeZone: 'UTC' };
+const formatDay = (iso) => new Date(iso).toLocaleDateString('en-GB', DAY);
 
 export default {
   components: {
     AspButton,
+    AspModal,
     ReadState,
   },
   data() {
@@ -205,14 +289,33 @@ export default {
       images: { total_count: 0, total_size_mb: 0 },
       dbStats: null,
       refreshInterval: null,
+      // The latest nightly rollup run (GET /system/service-usage). `read` is
+      // false until a read answers, so a failed read says nothing rather than
+      // "no requests".
+      usage: { read: false, asOf: null, services: [] },
+      // Per container name: { action: 'stop'|'start'|null, caption, error }.
+      controls: {},
+      stopTarget: null,
     };
   },
   computed: {
+    // One computed block. There were two, and an object literal keeps only
+    // the last key of a name, so runningCount was silently dropped and the
+    // header read " / 14 running" (system_3 #10558).
     runningCount() {
       return this.containers.filter(c => c.status === 'running').length;
     },
-  },
-  computed: {
+    usageByService() {
+      const by = {};
+      for (const row of this.usage.services) {
+        if (row.kind === 'container') by[row.service_name] = row;
+      }
+      return by;
+    },
+    usageHeader() {
+      if (!this.usage.read) return '';
+      return this.usage.asOf ? `Usage as of ${formatDay(this.usage.asOf)}` : 'No usage read yet';
+    },
     // Four-way, and the order matters: a page that is refreshing on its 30s
     // timer already has data, so `loading` only wins on the first read. `empty`
     // is reachable in principle (every endpoint answers, none has anything to
@@ -230,15 +333,98 @@ export default {
       if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
       return mb.toFixed(1) + ' MB';
     },
+    serviceName(name) {
+      return serviceNameFromContainer(name);
+    },
+    // One line, dates only (security c64843). Null is "no signal", never a
+    // false "never used" (D2). Feature rows have no container and are not shown.
+    usageLine(c) {
+      if (!this.usage.read || !this.usage.asOf) return '';
+      const row = this.usageByService[serviceNameFromContainer(c.name)];
+      if (!row || row.request_count == null) return 'No usage signal for this service';
+      if (row.request_count === 0 || !row.last_used_at) return 'No requests in the last 30 days';
+      const n = row.request_count;
+      let line = `Last used ${formatDay(row.last_used_at)} · ${n.toLocaleString('en-GB')} ${n === 1 ? 'request' : 'requests'} in 30 days`;
+      if (row.request_count_member != null) line += `, ${row.request_count_member.toLocaleString('en-GB')} by members`;
+      return line;
+    },
+    busy(c) {
+      return this.controls[c.name] || { action: null, caption: '', error: '' };
+    },
+    askStop(c) {
+      this.stopTarget = c;
+    },
+    confirmStop() {
+      const c = this.stopTarget;
+      this.stopTarget = null;
+      if (c) this.control(c, 'stop');
+    },
+    // Words keyed on the server's error code, never err.message (c65900).
+    controlError(err, action) {
+      const res = err && err.response;
+      const code = res && res.data && res.data.error && res.data.error.code;
+      const didnt = `The ${action} didn't go through`;
+      if (!res) return `${didnt}: the monitor didn't answer.`;
+      if (code === 'control_disabled') return "Start and stop aren't set up on this cell yet.";
+      if (code === 'not_controllable') return "This service can't be started or stopped from here.";
+      // monitor_auth_failed is #10641's mapping of the monitor's 401; a bare
+      // 401 is the same fault before that lands.
+      if (code === 'monitor_auth_failed' || res.status === 401) return "The monitor refused the server's credentials.";
+      if (res.status === 404) return 'No container by that name now. Refresh the page.';
+      if (code === 'docker_error') return `${didnt}: Docker refused it.`;
+      if (res.status === 502 || res.status === 503 || res.status === 504) return `${didnt}: the monitor didn't answer.`;
+      return `${didnt}. Refresh to check.`;
+    },
+    async readContainers() {
+      try {
+        const res = await axios.get('/api/system/containers');
+        this.containers = res.data.containers || [];
+      } catch (err) {
+        console.error('Container re-read failed:', err);
+      }
+    },
+    async control(c, action) {
+      const name = c.name;
+      if (this.busy(c).action) return;
+      const before = c.status;
+      this.controls[name] = { action, caption: '', error: '' };
+      try {
+        await axios.post(`/api/system/containers/${encodeURIComponent(name)}/${action}`);
+      } catch (err) {
+        this.controls[name] = { action: null, caption: '', error: this.controlError(err, action) };
+        await this.readContainers();
+        return;
+      }
+      const deadline = Date.now() + POLL_FOR_MS;
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_EVERY_MS));
+        await this.readContainers();
+        const now = this.containers.find((x) => x.name === name);
+        if (!now || now.status !== before) {
+          this.controls[name] = { action: null, caption: '', error: '' };
+          return;
+        }
+        if (Date.now() >= deadline) {
+          const verb = action === 'stop' ? 'Stop' : 'Start';
+          this.controls[name] = {
+            action: null,
+            caption: `${verb} sent; the monitor still reports ${now.status}. Refresh to check.`,
+            error: '',
+          };
+          return;
+        }
+      }
+    },
     async fetchAll() {
       this.loading = this.disks.length === 0;
       this.error = null;
       try {
-        const [healthRes, containersRes, diskRes, dbRes] = await Promise.allSettled([
+        const [healthRes, containersRes, diskRes, dbRes, usageRes] = await Promise.allSettled([
           axios.get('/api/health'),
           axios.get('/api/system/containers'),
           axios.get('/api/system/disk'),
           axios.get('/api/system/db-stats'),
+          axios.get('/api/system/service-usage'),
         ]);
 
         if (healthRes.status === 'fulfilled') {
@@ -270,7 +456,16 @@ export default {
           this.dbStats = dbRes.value.data.data;
         }
 
-        // Show error only if all requests failed
+        // `{status, data: {as_of, services}}`; `as_of: null` before the first
+        // nightly run. A failed read leaves the last good one in place.
+        if (usageRes.status === 'fulfilled') {
+          const d = (usageRes.value.data && usageRes.value.data.data) || {};
+          this.usage = { read: true, asOf: d.as_of || null, services: d.services || [] };
+        }
+
+        // Show error only if all requests failed. The usage read is an
+        // addition to the containers, not a page of its own, so it does not
+        // count toward "nothing answered".
         const allFailed = [healthRes, containersRes, diskRes, dbRes].every(r => r.status === 'rejected');
         if (allFailed) {
           this.error = 'all-endpoints-failed';
@@ -512,6 +707,48 @@ export default {
   font-size: var(--text-sm);
 }
 
+.usage-as-of {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin-left: auto;
+}
+
+.section-note {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-md) 0;
+}
+
+.usage-line {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  margin: var(--space-xs) 0 0 0;
+}
+
+/* The control sits at the card foot, on the card's own content gutter. */
+.container-control {
+  margin-top: var(--space-md);
+}
+
+.control-caption,
+.control-error {
+  font-size: var(--text-xs);
+  margin: var(--space-xs) 0 0 0;
+}
+
+.control-caption {
+  color: var(--text-muted);
+}
+
+/* The card is dark in both themes (§3.18). */
+.control-error {
+  color: var(--feedback-error-text-on-dark, var(--feedback-error));
+}
+
+.confirm-usage {
+  color: var(--text-muted);
+}
+
 /* Container grid */
 .container-grid {
   display: grid;
@@ -717,6 +954,17 @@ export default {
   .db-summary {
     flex-direction: column;
     gap: var(--space-xs);
+  }
+}
+
+/* Below 640px the control takes the card's full width (§3.114). */
+@media (max-width: 639px) {
+  .container-control :deep(button) {
+    width: 100%;
+  }
+
+  .section-header {
+    flex-wrap: wrap;
   }
 }
 </style>
