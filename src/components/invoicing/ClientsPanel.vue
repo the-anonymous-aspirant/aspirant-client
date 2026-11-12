@@ -2,8 +2,24 @@
   <section class="clients-panel" data-test="clients-panel">
     <div class="panel-head">
       <h2 class="visually-hidden">Clients</h2>
+      <!-- §3.142 Decision 5: the payers dialog's second way in, present only
+           while a payment's payer is not yet in the book (§3.133 Decision 5).
+           The primary stays rightmost. -->
+      <AspButton
+        v-if="payerCandidates.length"
+        variant="secondary"
+        class="block-on-phone"
+        data-test="clients-add-from-payments"
+        @click="openPayers"
+      >
+        Add from payments
+      </AspButton>
       <AspButton class="block-on-phone" data-test="client-add" @click="startAdd">Add client</AspButton>
     </div>
+    <!-- A payers save confirmed here too: the linked payments are not on
+         this tab, so the line says what happened (design_agent c65575). It
+         clears on the tab's next action. -->
+    <p v-if="payersSummary" class="payers-status" role="status" data-test="clients-payers-summary">{{ payersSavedLine(payersSummary) }}</p>
 
     <AspEmptyState
       v-if="clients.length === 0"
@@ -201,13 +217,21 @@
         </ModalActions>
       </template>
     </AspModal>
+    <PayersDialog
+      v-model:open="payersOpen"
+      :candidates="payerCandidates"
+      :left-out="payerLeftOut"
+      :clients="clients"
+      @saved="onPayersSaved"
+    />
   </section>
 </template>
 
 <script>
   import { AspButton, AspDataTable, AspEmptyState, AspInput, AspModal, AspTextarea } from '@aspirant/design-system';
   import ModalActions from './ModalActions.vue';
-  import { FIELD_REFUSALS, clientsCsvUrl, createClient, downloadBlob, errorOf, formatBerlinDay, formatDay, formatMoney, listInvoices, safeSocialUrl, socialHandle, updateClient } from './api.js';
+  import PayersDialog from './PayersDialog.vue';
+  import { FIELD_REFUSALS, clientsCsvUrl, createClient, downloadBlob, errorOf, formatBerlinDay, formatDay, formatMoney, listInvoices, listPayerCandidates, payersSavedLine, safeSocialUrl, socialHandle, updateClient } from './api.js';
 
   const blank = () => ({ name: '', address: '', email: '', paypal_email: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
   const noErrors = () => ({ phone: '', instagram_url: '', telegram_url: '' });
@@ -218,7 +242,7 @@
   // that without it (system_3 #9835). The server is still the gate.
   export default {
     name: 'ClientsPanel',
-    components: { AspButton, AspDataTable, AspEmptyState, AspInput, AspModal, AspTextarea, ModalActions },
+    components: { AspButton, AspDataTable, AspEmptyState, AspInput, AspModal, AspTextarea, ModalActions, PayersDialog },
     props: {
       clients: { type: Array, required: true },
     },
@@ -237,6 +261,10 @@
         statsState: 'loading',
         csvDownloading: false,
         csvError: '',
+        payerCandidates: [],
+        payerLeftOut: {},
+        payersOpen: false,
+        payersSummary: null,
         columns: [
           { key: 'name', label: 'Name' },
           { key: 'address', label: 'Address', sortable: false },
@@ -275,11 +303,16 @@
         this.narrow = e.matches;
       };
       this.narrowQuery.addEventListener('change', this.onNarrowChange);
+      this.refreshPayerCandidates();
     },
     beforeUnmount() {
       if (this.narrowQuery) this.narrowQuery.removeEventListener('change', this.onNarrowChange);
     },
     watch: {
+      // A client added here or elsewhere can take payers off the list.
+      clients() {
+        this.refreshPayerCandidates();
+      },
       // Editing a refused field clears its refusal.
       'form.phone'() {
         this.fieldErrors.phone = '';
@@ -292,10 +325,32 @@
       },
     },
     methods: {
+      // The offer is optional: a failed read shows no button.
+      async refreshPayerCandidates() {
+        try {
+          const { payers, leftOut } = await listPayerCandidates();
+          this.payerCandidates = payers;
+          this.payerLeftOut = leftOut;
+        } catch (err) {
+          this.payerCandidates = [];
+          this.payerLeftOut = {};
+        }
+      },
+      payersSavedLine,
+      openPayers() {
+        this.payersSummary = null;
+        this.payersOpen = true;
+      },
+      // The new clients appear in the list on the parent's refetch.
+      onPayersSaved(result) {
+        this.payersSummary = result;
+        this.$emit('changed');
+      },
       safeSocialUrl,
       socialHandle,
       // The file holds every client, one row each, notes never (#10012).
       async downloadClientsCsv() {
+        this.payersSummary = null;
         if (this.csvDownloading || this.clients.length === 0) return;
         this.csvDownloading = true;
         this.csvError = '';
@@ -308,6 +363,7 @@
         }
       },
       startAdd() {
+        this.payersSummary = null;
         this.editing = null;
         this.form = blank();
         this.error = '';
@@ -336,6 +392,7 @@
         }
       },
       startEdit(row) {
+        this.payersSummary = null;
         this.editing = row;
         // A copy, so Cancel discards an edit to any field, the notes included.
         this.form = {
@@ -395,8 +452,16 @@
 
   .panel-head {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
+    gap: var(--space-sm);
     margin-bottom: var(--space-md);
+  }
+
+  .payers-status {
+    margin: 0 0 var(--space-md);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
   }
 
   .multiline {

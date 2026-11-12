@@ -31,22 +31,13 @@
         @update:model-value="onPayerInput"
       >
         <!-- Decision 3: before Save, the field says what Save will do. -->
-        <p v-if="payerLine" class="hint payer-line" data-test="manual-payer-line">{{ payerLine }}</p>
-        <div v-if="payerMatch.state === 'close'" class="payer-choices" data-test="manual-payer-choices">
-          <AspButton
-            v-for="c in payerMatch.candidates"
-            :key="c.id"
-            variant="ghost"
-            size="sm"
-            :data-test="`manual-payer-use-${c.id}`"
-            @click="useClient(c)"
-          >
-            Use {{ c.name }}
-          </AspButton>
-          <AspButton variant="ghost" size="sm" data-test="manual-payer-add-new" @click="resolveAsNew">
-            Add “{{ form.sender_name.trim() }}” as a new client
-          </AspButton>
-        </div>
+        <PayerBookLine
+          :match="payerMatch"
+          :name="form.sender_name"
+          test-prefix="manual-payer"
+          @use="useClient"
+          @add-new="resolveAsNew"
+        />
       </SuggestField>
       <!-- The invoice line's description: issuing refuses an empty one, but
            this dialog makes no draft, so leaving it blank loses nothing here
@@ -68,6 +59,7 @@
 <script>
   import { AspButton, AspInput, AspModal, AspSelect } from '@aspirant/design-system';
   import LineDescriptionInput from './LineDescriptionInput.vue';
+  import PayerBookLine from './PayerBookLine.vue';
   import SuggestField from './SuggestField.vue';
   import ModalActions from './ModalActions.vue';
   import { FIELD_HINTS } from './fieldHints.js';
@@ -82,7 +74,7 @@
   // #10539 — this dialog used to make a draft itself; it no longer does).
   export default {
     name: 'ManualPaymentDialog',
-    components: { AspButton, AspInput, AspModal, AspSelect, LineDescriptionInput, SuggestField, ModalActions },
+    components: { AspButton, AspInput, AspModal, AspSelect, LineDescriptionInput, PayerBookLine, SuggestField, ModalActions },
     props: {
       open: { type: Boolean, default: false },
       clients: { type: Array, default: () => [] },
@@ -110,19 +102,6 @@
       // §3.142 Decision 4, against the client book as loaded.
       payerMatch() {
         return matchPayer(this.form.sender_name, this.clients);
-      },
-      // §3.142 Decision 3: one muted line under the field, by state.
-      payerLine() {
-        switch (this.payerMatch.state) {
-          case 'same':
-            return 'In your client book.';
-          case 'new':
-            return 'Not in your client book yet: Save adds it.';
-          case 'close':
-            return 'Close to a client in your book:';
-          default:
-            return '';
-        }
       },
     },
     watch: {
@@ -203,17 +182,6 @@
     margin: 0;
     font-size: var(--text-sm);
     color: var(--text-muted);
-  }
-
-  .payer-line {
-    margin-top: var(--space-2xs);
-  }
-
-  .payer-choices {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2xs);
-    margin-top: var(--space-2xs);
   }
 
   /* Wide: date + amount, method + reference side by side (design_agent's
