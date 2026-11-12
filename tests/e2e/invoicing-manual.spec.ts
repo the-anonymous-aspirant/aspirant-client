@@ -359,33 +359,8 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     });
   }
 
-  // system_3 #9942 (design_agent c61923, §3.127): the ways in are one row or
-  // three, never two and one, at every width, and no label wraps within its
-  // button. Swept, so a longer label fails here instead of shipping a 2+1.
-  test('the head row is one line or three stacked full width, never two and one', async ({ page }) => {
-    test.setTimeout(180_000);
-    await page.setViewportSize({ width: 1100, height: 900 });
-    await open(page, newFake({ payments: [manualRow()] }));
-    for (let w = 600; w <= 1100; w += 4) {
-      await page.setViewportSize({ width: w, height: 900 });
-      const m = await page.evaluate(() => {
-        const row = document.querySelector('.ways-in') as HTMLElement;
-        const bs = ['manual-new', 'payments-import', 'n26-import'].map((id) => document.querySelector(`[data-test="${id}"]`) as HTMLElement);
-        const rects = bs.map((b) => b.getBoundingClientRect());
-        const lineHeight = (b: HTMLElement) => parseFloat(getComputedStyle(b).lineHeight) || 0;
-        return {
-          rows: new Set(rects.map((r) => Math.round(r.top))).size,
-          rowWidth: Math.round(row.getBoundingClientRect().width),
-          widths: rects.map((r) => Math.round(r.width)),
-          // One line of text: the label's height is under two line heights.
-          oneLine: bs.every((b) => { const span = b.querySelector('span') || b; return span.getBoundingClientRect().height < 2 * lineHeight(b) || b.getBoundingClientRect().height < 48; }),
-        };
-      });
-      expect([1, 3], `rows at ${w}px`).toContain(m.rows);
-      expect(m.oneLine, `a label wraps at ${w}px`).toBe(true);
-      if (m.rows === 3) for (const bw of m.widths) expect(Math.abs(bw - m.rowWidth), `stacked full width at ${w}px`).toBeLessThanOrEqual(1);
-    }
-  });
+  // The ways-in sweep (one row or all stacked, never a partial row) lives in
+  // invoicing-transactions.spec.ts since the fourth button (system_3 #10627).
 
   test('the dialog footer: Save payment first on a phone, Cancel then Save payment at the right when wide', async ({ page }) => {
     await open(page, newFake());
