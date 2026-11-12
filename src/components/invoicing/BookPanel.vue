@@ -52,17 +52,21 @@
                 <template v-if="!row.who && !row.what">—</template>
               </span>
               <span class="muted">{{ row.categoryLabel }}</span>
-              <AspButton
-                v-if="row.type === 'out'"
-                :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
-                size="sm"
-                class="manual-delete"
-                :loading="deleting === row.id"
-                data-test="book-expense-delete"
-                @click="removeExpense(row)"
-              >
-                {{ confirmingDelete === row.id ? 'Delete this expense' : 'Delete' }}
-              </AspButton>
+              <div v-if="row.type === 'out'" class="book-card__expense-actions">
+                <AspButton variant="ghost" size="sm" data-test="book-expense-receipt" @click="openReceipt(row)">
+                  Receipt
+                </AspButton>
+                <AspButton
+                  :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
+                  size="sm"
+                  class="manual-delete"
+                  :loading="deleting === row.id"
+                  data-test="book-expense-delete"
+                  @click="removeExpense(row)"
+                >
+                  {{ confirmingDelete === row.id ? 'Delete this expense' : 'Delete' }}
+                </AspButton>
+              </div>
             </li>
           </ul>
         </template>
@@ -90,17 +94,21 @@
           </template>
           <template #cell-out="{ row }">
             <span v-if="row.type === 'out'" class="nowrap out-amount">{{ formatSignedMoney(-row.amount_cents) }}</span>
-            <AspButton
-              v-if="row.type === 'out'"
-              :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
-              size="sm"
-              class="manual-delete"
-              :loading="deleting === row.id"
-              data-test="book-expense-delete"
-              @click="removeExpense(row)"
-            >
-              {{ confirmingDelete === row.id ? 'Delete this expense' : 'Delete' }}
-            </AspButton>
+            <template v-if="row.type === 'out'">
+              <AspButton variant="ghost" size="sm" class="manual-delete" data-test="book-expense-receipt" @click="openReceipt(row)">
+                Receipt
+              </AspButton>
+              <AspButton
+                :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
+                size="sm"
+                class="manual-delete"
+                :loading="deleting === row.id"
+                data-test="book-expense-delete"
+                @click="removeExpense(row)"
+              >
+                {{ confirmingDelete === row.id ? 'Delete this expense' : 'Delete' }}
+              </AspButton>
+            </template>
           </template>
         </AspDataTable>
       </section>
@@ -114,12 +122,19 @@
       @changed="onExpenseChanged"
       @category-added="onCategoryAdded"
     />
+    <ExpenseReceiptDialog
+      v-model:open="receiptOpen"
+      :expense-id="receiptExpenseId"
+      :expense-label="receiptExpenseLabel"
+      @changed="onExpenseChanged"
+    />
   </section>
 </template>
 
 <script>
   import { AspButton, AspDataTable, AspEmptyState } from '@aspirant/design-system';
   import BookChart from './BookChart.vue';
+  import ExpenseReceiptDialog from './ExpenseReceiptDialog.vue';
   import ManualExpenseDialog from './ManualExpenseDialog.vue';
   import {
     CATEGORY_LABELS,
@@ -161,7 +176,7 @@
   // signal (c63777).
   export default {
     name: 'BookPanel',
-    components: { AspButton, AspDataTable, AspEmptyState, BookChart, ManualExpenseDialog },
+    components: { AspButton, AspDataTable, AspEmptyState, BookChart, ExpenseReceiptDialog, ManualExpenseDialog },
     props: {
       payments: { type: Array, required: true },
       expenses: { type: Array, required: true },
@@ -176,6 +191,9 @@
         confirmingDelete: null,
         deleting: null,
         reportDownloading: false,
+        receiptOpen: false,
+        receiptExpenseId: null,
+        receiptExpenseLabel: '',
         columns: [
           { key: 'paid_on', label: 'Date paid' },
           { key: 'description', label: 'What it was for', sortable: false },
@@ -273,6 +291,11 @@
       },
       onExpenseChanged() {
         this.$emit('changed');
+      },
+      openReceipt(row) {
+        this.receiptExpenseId = row.id;
+        this.receiptExpenseLabel = `${this.formatDay(row.paid_on)} · ${this.formatMoney(row.amount_cents)}${row.who ? ` · ${row.who}` : ''}`;
+        this.receiptOpen = true;
       },
       async removeExpense(row) {
         if (this.confirmingDelete !== row.id) {
@@ -390,6 +413,12 @@
 
   .manual-delete {
     margin-left: var(--space-xs);
+  }
+
+  .book-card__expense-actions {
+    display: flex;
+    gap: var(--space-xs);
+    align-self: flex-start;
   }
 
   .book-cards {
