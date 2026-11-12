@@ -35,7 +35,10 @@
             <strong class="nowrap exp-row__amount">{{ formatMoney(item.row.amount_cents, item.row.currency) }}</strong>
           </div>
           <span class="exp-row__muted" data-test="expense-row-meta"><span class="nowrap">{{ formatDay(item.row.paid_on) }}</span><template v-if="item.row.note"> · <span class="exp-row__note">{{ item.row.note }}</span></template></span>
-          <span v-if="item.row.already_imported" class="exp-row__muted" data-test="expense-row-imported">Already in your expenses</span>
+          <!-- A match to an expense she removed, or deleted for good, says
+               so: it is not in her book (§3.143 Decision 6). -->
+          <span v-if="priorFlag(item.row)" class="exp-row__muted" data-test="expense-row-prior">{{ priorFlag(item.row) }}</span>
+          <span v-else-if="item.row.already_imported" class="exp-row__muted" data-test="expense-row-imported">Already in your expenses</span>
           <template v-else>
             <span v-if="item.row.possible_duplicate_of" class="exp-row__muted" data-test="expense-row-duplicate">
               Same date and amount as an expense already in your book. Tick it only if it is a different expense.
@@ -58,7 +61,7 @@
 
 <script>
   import { AspCheckbox, AspSelect } from '@aspirant/design-system';
-  import { formatDay, formatMoney } from './api.js';
+  import { formatDay, formatMoney, priorFlag } from './api.js';
 
   export default {
     name: 'ExpenseCandidatesSection',
@@ -66,7 +69,7 @@
     props: {
       // [{ key, row, checked, category }]: row is the server's candidate
       // (transaction_id, paid_on, currency, amount_cents, payee_name, note,
-      // already_imported, possible_duplicate_of).
+      // already_imported, removed, deleted_earlier, possible_duplicate_of).
       items: { type: Array, default: () => [] },
       // The owner's expense category names, in her book's order.
       categories: { type: Array, default: () => [] },
@@ -81,6 +84,7 @@
     methods: {
       formatDay,
       formatMoney,
+      priorFlag,
       // A PayPal row may name no payee (server PR 178).
       payee(row) {
         return row.payee_name || 'Unnamed payee';

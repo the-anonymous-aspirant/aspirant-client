@@ -179,6 +179,24 @@ export function errorOf(err) {
   };
 }
 
+// A review row the server matched to a record she removed, or deleted for
+// good (server PR 196, §3.143 Decision 6). Both come with already_imported,
+// so the row has no checkbox; this is the flag that says why. A removed row
+// can be restored on Transactions; a deleted one is gone, and only counted.
+export function priorFlag(row) {
+  if (row.removed) return 'Removed earlier: restore it on Transactions';
+  if (row.deleted_earlier) return 'Deleted earlier';
+  return '';
+}
+
+// How many review rows carry each flag: { removed, deleted }.
+export function countPrior(rows) {
+  return rows.reduce(
+    (n, row) => ({ removed: n.removed + (row.removed ? 1 : 0), deleted: n.deleted + (row.deleted_earlier ? 1 : 0) }),
+    { removed: 0, deleted: 0 },
+  );
+}
+
 // The sentence after a failed import file's message, only when the server
 // kept a copy of it and says until when (design_agent c65231 on system_3
 // #10536, #10567). The date is her calendar day in the payments list's
