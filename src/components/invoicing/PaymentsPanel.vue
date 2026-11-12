@@ -90,8 +90,8 @@
              comma follows directly (system_3 #10040: a break here rendered
              "3 imported , 0 already imported"). -->
         PayPal {{ paypalNoun }}: read {{ summary.rows_read }} rows: <strong>{{ summary.imported }}</strong> imported<template v-if="summary.withdrawals"> (including {{ summary.withdrawals }} bank withdrawals)</template>,
-        <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ paypalPrior.already }} already imported, {{ summary.skipped }} skipped<template v-if="paypalPrior.removed"> ·&nbsp;<span data-test="paypal-summary-removed">{{ removedClause(paypalPrior.removed) }}</span></template><template v-if="paypalPrior.deleted"> ·&nbsp;<span data-test="paypal-summary-deleted">{{ deletedClause(paypalPrior.deleted) }}</span></template>.<template v-if="paypalExpensesAdded">
-          {{ ' ' }}<span data-test="paypal-summary-expenses">{{ paypalExpensesAdded }} expense{{ paypalExpensesAdded === 1 ? '' : 's' }} added to your book.</span></template><template v-if="paypalCopyKept">
+        <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ paypalPrior.already }} already imported, {{ summary.skipped }} skipped<template v-if="paypalPrior.removed"> ·&nbsp;<span data-test="paypal-summary-removed">{{ removedClause(paypalPrior.removed) }}</span></template><template v-if="paypalPrior.deleted"> ·&nbsp;<span data-test="paypal-summary-deleted">{{ deletedClause(paypalPrior.deleted) }}</span></template>.<template v-if="expenseParts(paypalExpenses).length">
+          {{ ' ' }}<span data-test="paypal-summary-expenses"><template v-if="!paypalExpenses.added">Expenses: </template><template v-for="(part, i) in expenseParts(paypalExpenses)" :key="part.key"><template v-if="i"> ·&nbsp;</template><span :data-test="`paypal-summary-expenses-${part.key}`">{{ part.text }}</span></template>.</span></template><template v-if="paypalCopyKept">
           {{ ' ' }}<span data-test="paypal-summary-copy-kept">{{ paypalCopyKept }}</span></template><template v-if="payerCandidates.length">
           {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span>{{ ' ' }}<AspButton variant="ghost" size="sm" class="summary__action" data-test="payers-open" @click="payersOpen = true">Add payers…</AspButton></template>
       </p>
@@ -109,8 +109,8 @@
         <strong>{{ n26Summary.imported }}</strong> imported, {{ n26Summary.duplicates }} already imported,
         {{ n26Summary.skipped }} skipped<template v-if="n26Summary.paypal_transfers">, <span data-test="n26-summary-paypal">{{ n26PayPalClause }}</span></template><template v-if="n26Summary.space_transfers">, <span data-test="n26-summary-space-transfer">{{ n26SpaceTransferClause }}</span></template><template v-if="n26Summary.removed_earlier"> ·&nbsp;<span data-test="n26-summary-removed">{{ removedClause(n26Summary.removed_earlier) }}</span></template><template v-if="n26Summary.deleted_earlier"> ·&nbsp;<span data-test="n26-summary-deleted">{{ deletedClause(n26Summary.deleted_earlier) }}</span></template>.<template v-if="n26Summary.failures.length">
           {{ ' ' }}<span data-test="n26-summary-failures">{{ n26FailureLine }}</span></template><template v-if="(n26Summary.unreadable || []).length">
-          {{ ' ' }}<span data-test="n26-summary-unreadable">{{ n26UnreadableLine }}</span></template><template v-if="n26Summary.expenses_added">
-          {{ ' ' }}<span data-test="n26-summary-expenses">{{ n26Summary.expenses_added }} expense{{ n26Summary.expenses_added === 1 ? '' : 's' }} added to your book.</span></template><template v-if="payerCandidates.length">
+          {{ ' ' }}<span data-test="n26-summary-unreadable">{{ n26UnreadableLine }}</span></template><template v-if="expenseParts(n26Expenses).length">
+          {{ ' ' }}<span data-test="n26-summary-expenses"><template v-if="!n26Expenses.added">Expenses: </template><template v-for="(part, i) in expenseParts(n26Expenses)" :key="part.key"><template v-if="i"> ·&nbsp;</template><span :data-test="`n26-summary-expenses-${part.key}`">{{ part.text }}</span></template>.</span></template><template v-if="payerCandidates.length">
           {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span>{{ ' ' }}<AspButton variant="ghost" size="sm" class="summary__action" data-test="payers-open" @click="payersOpen = true">Add payers…</AspButton></template>
       </p>
     </AspCard>
@@ -501,18 +501,38 @@
       };
     },
     computed: {
-      // The PayPal line's counts of rows matching a record she removed or
-      // deleted for good (§3.143 Decision 6, design_agent c66225): the
-      // payments the import skipped, the outgoing rows its review flagged,
-      // and any its expense confirm met. Server `duplicates` includes the
-      // skipped payments, so "already imported" leaves them out.
+      // The PayPal line's counts of payments matching a record she removed or
+      // deleted for good (§3.143 Decision 6, design_agent c66225). Server
+      // `duplicates` includes them, so "already imported" leaves them out.
+      // Payments only: the file's outgoing rows are already counted as
+      // skipped, so counting them here too would break the line's sum
+      // (§3.130; #10634 dogfood, c66307). They are counted on the expense
+      // sentence instead (paypalExpenses).
       paypalPrior() {
         const s = this.summary || {};
-        const exp = countPrior(this.paypalExpenseCandidates);
         return {
           already: Math.max(0, (s.duplicates || 0) - (s.removed_earlier || 0) - (s.deleted_earlier || 0)),
-          removed: (s.removed_earlier || 0) + exp.removed + this.paypalExpensePrior.removed,
-          deleted: (s.deleted_earlier || 0) + exp.deleted + this.paypalExpensePrior.deleted,
+          removed: s.removed_earlier || 0,
+          deleted: s.deleted_earlier || 0,
+        };
+      },
+      // The expense sentence's counts: expenses added, and outgoing rows
+      // matching an expense she removed or deleted for good, from the
+      // review's flags plus any its confirm met (c66307).
+      paypalExpenses() {
+        const exp = countPrior(this.paypalExpenseCandidates);
+        return {
+          added: this.paypalExpensesAdded,
+          removed: exp.removed + this.paypalExpensePrior.removed,
+          deleted: exp.deleted + this.paypalExpensePrior.deleted,
+        };
+      },
+      n26Expenses() {
+        const s = this.n26Summary || {};
+        return {
+          added: s.expenses_added || 0,
+          removed: s.expenses_removed_earlier || 0,
+          deleted: s.expenses_deleted_earlier || 0,
         };
       },
       incoming() {
@@ -658,6 +678,17 @@
       },
       deletedClause(n) {
         return `${n} deleted earlier`;
+      },
+      // The expense sentence, zero parts left out: "1 expense added to your
+      // book · 1 removed earlier: restore it on Transactions · 1 deleted
+      // earlier". With none added it opens "Expenses:" instead, so no zero
+      // is printed (c66307).
+      expenseParts({ added, removed, deleted }) {
+        const parts = [];
+        if (added) parts.push({ key: 'added', text: `${added} expense${added === 1 ? '' : 's'} added to your book` });
+        if (removed) parts.push({ key: 'removed', text: this.removedClause(removed) });
+        if (deleted) parts.push({ key: 'deleted', text: this.deletedClause(deleted) });
+        return parts;
       },
       methodLabel(row) {
         return METHOD_LABELS[row.method] || row.method;
