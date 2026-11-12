@@ -936,9 +936,12 @@
     container: ways-in / inline-size;
   }
 
+  /* The one-row state never wraps: the container query below guarantees its
+     780px, and WebKit's subpixel sum wraps the fourth button at exactly
+     780px if wrapping is allowed (measured on system_3 #10627). */
   .ways-in {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
     gap: var(--space-sm);
   }

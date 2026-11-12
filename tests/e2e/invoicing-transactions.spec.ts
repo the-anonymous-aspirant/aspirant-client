@@ -160,7 +160,9 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
   // design_agent c66159 (refining c61923 for four, §3.135 Decisions 1-2):
   // the ways in are one row of four, a 2×2 of equal columns (by hand, then
   // from a file), or four stacked full width; never 3+1 or 2+1+1. Keyed on
-  // the row's width, so it is swept, and 641 and 768 are pinned to the 2×2.
+  // the row's width, so it is swept. Resizing leaves the sidebar in whatever
+  // state the last width put it, so 641 and 768 in their default sidebar
+  // state are pinned to the 2×2 on a fresh load in invoicing-n26.spec.ts.
   test('the head row is one row, a 2×2 or four stacked, never a partial row', async ({ page }) => {
     test.setTimeout(240_000);
     await page.setViewportSize({ width: 1100, height: 900 });
@@ -202,7 +204,6 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
       if (shape === '1+1+1+1') expect(m.rowGap, `stacked gap at ${w}px`).toBe('8px');
       else expect([m.rowGap, m.columnGap], `gap at ${w}px`).toEqual(['12px', '12px']);
       if (shape === '1+1+1+1') for (const bw of m.widths) expect(Math.abs(bw - m.rowWidth), `stacked full width at ${w}px`).toBeLessThanOrEqual(1);
-      if (w === 641 || w === 768) expect(shape, `the 2×2 at ${w}px`).toBe('2+2');
     }
     // The sweep reached all three states, so none of the asserts above is vacuous.
     expect([...seen].sort()).toEqual(['1+1+1+1', '2+2', '4']);
