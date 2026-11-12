@@ -368,8 +368,11 @@
         const payPrior = countPrior(this.rows.map(({ row }) => row));
         const expPrior = countPrior(this.expenseRows.map(({ row }) => row));
         const ex = expenses || {};
-        const removedEarlier = payPrior.removed + expPrior.removed + (result.removed_earlier || 0) + (ex.removed_earlier || 0);
-        const deletedEarlier = payPrior.deleted + expPrior.deleted + (result.deleted_earlier || 0) + (ex.deleted_earlier || 0);
+        // Payment rows on the payment sentence, expense rows on the expense
+        // sentence: "rows read" counts payment rows only, so mixing them
+        // broke the line's sum (§3.130; #10634 dogfood, c66307).
+        const removedEarlier = payPrior.removed + (result.removed_earlier || 0);
+        const deletedEarlier = payPrior.deleted + (result.deleted_earlier || 0);
         const paymentDuplicates = result.duplicates + alreadyImported
           - payPrior.removed - payPrior.deleted
           - (result.removed_earlier || 0) - (result.deleted_earlier || 0);
@@ -394,6 +397,8 @@
           skipped: this.rows.length - alreadyImported - posted.length,
           // Outgoing rows added to the expense book (system_3 #10432).
           expenses_added: expenses ? expenses.confirmed : 0,
+          expenses_removed_earlier: expPrior.removed + (ex.removed_earlier || 0),
+          expenses_deleted_earlier: expPrior.deleted + (ex.deleted_earlier || 0),
         });
         this.$emit('update:open', false);
       },

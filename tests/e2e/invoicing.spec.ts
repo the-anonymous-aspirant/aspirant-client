@@ -787,7 +787,7 @@ test.describe('#10634 PayPal import — removed and deleted rows are named and c
     await expect(page.locator('[data-test="paypal-summary-removed"]')).toHaveCount(0);
   });
 
-  test('the expense review flags removed and deleted rows with no checkbox or picker, and the line counts them', async ({ page }) => {
+  test('the expense review flags removed and deleted rows with no checkbox or picker, and the expense sentence counts them', async ({ page }) => {
     const fake = importWithOutgoing([
       paypalOutgoing(1, { already_imported: true, removed: true }),
       paypalOutgoing(2, { already_imported: true, deleted_earlier: true }),
@@ -810,7 +810,61 @@ test.describe('#10634 PayPal import — removed and deleted rows are named and c
     await expect(ppxReview(page)).toBeHidden();
     expect(JSON.parse(ppxConfirms(fake)[0].body).rows.map((r: Json) => r.transaction_id)).toEqual(['8HH88883HH8888888']);
     await expect(page.locator('[data-test="import-summary"] .summary__line')).toHaveText(
-      'PayPal CSV: read 4 rows: 2 imported, 0 already imported, 2 skipped · 1 removed earlier: restore it on Transactions · 1 deleted earlier. 1 expense added to your book.',
+      'PayPal CSV: read 4 rows: 2 imported, 0 already imported, 2 skipped. 1 expense added to your book · 1 removed earlier: restore it on Transactions · 1 deleted earlier.',
+    );
+    // The outgoing rows are already in "skipped": counting them on the payment
+    // sentence too broke its sum (§3.130; #10634 dogfood, c66307).
+    await expect(page.locator('[data-test="paypal-summary-removed"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="paypal-summary-expenses-removed"]')).toHaveText('1 removed earlier: restore it on Transactions');
+    await expect(page.locator('[data-test="paypal-summary-expenses-deleted"]')).toHaveText('1 deleted earlier');
+  });
+
+  // design_agent c66309: after a mixed import, the payment sentence's clauses
+  // sum to "read N rows", and the expense sentence's counts equal the flagged
+  // expense rows in the response. The live #10634 dogfood shape: before the
+  // fix this line read "read 7 rows: … 4 skipped · 2 removed earlier … · 2
+  // deleted earlier", 9 accounted of 7.
+  test('a mixed re-import: the payment sentence adds up to the rows read, and the expense sentence counts the flagged expenses', async ({ page }) => {
+    const outgoing = [
+      paypalOutgoing(1, { already_imported: true }),
+      paypalOutgoing(2, { already_imported: true, removed: true }),
+      paypalOutgoing(3, { already_imported: true, deleted_earlier: true }),
+      paypalOutgoing(4),
+    ];
+    const fake = newFake({
+      importResponses: [{
+        status: 200,
+        body: {
+          summary: {
+            rows_read: 7, imported: 0, duplicates: 3, skipped: 4, withdrawals: 0,
+            skipped_reasons: { outgoing: 4 }, removed_earlier: 1, deleted_earlier: 1,
+          },
+          expense_candidates: outgoing,
+        },
+      }],
+    });
+    await importPayPal(page, fake);
+    await ppxRows(page).nth(3).locator('input[type="checkbox"]').check();
+    await page.locator('[data-test="paypal-expenses-confirm"]').click();
+    await expect(ppxReview(page)).toBeHidden();
+
+    const line = page.locator('[data-test="import-summary"] .summary__line');
+    await expect(line).toHaveText(
+      'PayPal CSV: read 7 rows: 0 imported, 1 already imported, 4 skipped · 1 removed earlier: restore it on Transactions · 1 deleted earlier. ' +
+        '1 expense added to your book · 1 removed earlier: restore it on Transactions · 1 deleted earlier.',
+    );
+    // The payment sentence adds up: imported + already + skipped + removed + deleted = rows read.
+    const text = (await line.innerText()).replace(/\s+/g, ' ');
+    const m = text.match(/read (\d+) rows: (\d+) imported, (\d+) already imported, (\d+) skipped(?: · (\d+) removed earlier: restore it on Transactions)?(?: · (\d+) deleted earlier)?\./);
+    expect(m, text).not.toBeNull();
+    const [read, imported, already, skipped, removed, deleted] = m!.slice(1).map((v) => Number(v || 0));
+    expect(read, text).toBe(imported + already + skipped + removed + deleted);
+    // The expense sentence's counts are the response's flagged expense rows.
+    await expect(page.locator('[data-test="paypal-summary-expenses-removed"]')).toHaveText(
+      `${outgoing.filter((r) => r.removed).length} removed earlier: restore it on Transactions`,
+    );
+    await expect(page.locator('[data-test="paypal-summary-expenses-deleted"]')).toHaveText(
+      `${outgoing.filter((r) => r.deleted_earlier).length} deleted earlier`,
     );
   });
 
@@ -819,7 +873,7 @@ test.describe('#10634 PayPal import — removed and deleted rows are named and c
     await importPayPal(page, fake);
     await expect(ppxReview(page)).toHaveCount(0);
     await expect(page.locator('[data-test="import-summary"] .summary__line')).toHaveText(
-      'PayPal CSV: read 4 rows: 2 imported, 0 already imported, 2 skipped · 1 removed earlier: restore it on Transactions.',
+      'PayPal CSV: read 4 rows: 2 imported, 0 already imported, 2 skipped. Expenses: 1 removed earlier: restore it on Transactions.',
     );
   });
 });
