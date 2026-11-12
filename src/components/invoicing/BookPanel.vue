@@ -137,23 +137,7 @@
     formatDay,
     formatMoney,
   } from './api.js';
-
-  // "What it was for" as two parts (design_agent's Design ack c64353 on system_3
-  // #10459): `who`, the counterparty in body ink, then `what`, the note, muted
-  // only when it follows a counterparty. A part that already contains the other
-  // (trimmed, case-insensitive; a booking text often names the payee) is shown
-  // once, the longer one, in body ink.
-  const describeRow = (counterparty, note) => {
-    const who = String(counterparty || '').trim();
-    const what = String(note || '').trim();
-    if (who && what) {
-      const w = who.toLowerCase();
-      const n = what.toLowerCase();
-      if (n.includes(w)) return { who: '', what };
-      if (w.includes(n)) return { who, what: '' };
-    }
-    return { who, what };
-  };
+  import { expenseParts, paymentParts } from './ledgerRows.js';
 
   // The income-and-expenses book (system_3 #10414-C): payments and
   // hand-entered expenses merged into one dated list, grouped by month, with
@@ -201,7 +185,7 @@
             id: p.id,
             type: 'in',
             paid_on: p.paid_on,
-            ...describeRow(p.sender_name, p.note),
+            ...paymentParts(p),
             categoryLabel: CATEGORY_LABELS[p.category] || p.category,
             amount_cents: p.gross_cents,
           }));
@@ -210,12 +194,8 @@
           id: e.id,
           type: 'out',
           paid_on: e.paid_on,
-          // An import stores the payee in `reference` (aspirant-server
-          // invoicing_n26.go / invoicing_payments.go). A hand-entered
-          // expense's `reference` is the dialog's free-text "Reference
-          // (optional)", which nothing says names a payee, so it stays the
-          // note's fallback and is never shown as a counterparty.
-          ...(e.entry === 'import' ? describeRow(e.reference, e.note) : { who: '', what: String(e.note || e.reference || '').trim() }),
+          // Who and what, named as on Transactions (ledgerRows.js).
+          ...expenseParts(e),
           categoryLabel: e.category,
           amount_cents: e.amount_cents,
         }));

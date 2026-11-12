@@ -512,7 +512,8 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
     // The writes go one after another; wait for the third before reading them.
     await expect.poll(() => fake.requests.filter((r) => r.method === 'PATCH').length).toBe(3);
     const patches = fake.requests.filter((r) => r.method === 'PATCH');
-    expect(patches.map((r) => r.path)).toEqual(['/invoicing/payments/10', '/invoicing/payments/11', '/invoicing/payments/13']);
+    // In list order, which is newest first (system_3 #10630).
+    expect(patches.map((r) => r.path)).toEqual(['/invoicing/payments/13', '/invoicing/payments/11', '/invoicing/payments/10']);
     for (const r of patches) expect(JSON.parse(r.body)).toEqual({ category: 'other' });
     for (const txn of ['TX1', 'TX2', 'TX3']) {
       await expect(page.getByRole('combobox', { name: `Category for ${txn}` })).toContainText('Other');

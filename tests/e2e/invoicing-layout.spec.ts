@@ -69,7 +69,8 @@ const noSideScroll = (page: Page) =>
 // Payments and Invoices; on Clients, wide puts Add client at the right, so
 // the list carries the edge there.
 const PANEL_EDGE: Record<string, (narrow: boolean) => string> = {
-  Transactions: () => '[data-test="category-filter"]',
+  // The direction strip leads the toolbar (§3.143 Decision 3, system_3 #10630).
+  Transactions: () => '[data-test="direction-filter"]',
   // The search box's own border box (AspInput's icon sits inside it).
   Invoices: () => '.filter-field--search',
   Clients: (narrow) => (narrow ? '[data-test="client-add"]' : '[data-test="client-row"]'),
@@ -103,7 +104,8 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
     await expect(page.locator('[data-test="create-invoice-hint"]')).toHaveText('Select payments to set their category, or Paid work payments to create an invoice.');
     await expect(page.locator('[data-test="create-invoice"]')).toHaveAttribute('aria-describedby', 'create-invoice-hint');
 
-    await page.locator('[data-test="payment-select"]').first().click();
+    // TX1 is Paid work; the list runs newest first, so it is named, not taken by position.
+    await page.getByRole('checkbox', { name: 'Select TX1' }).click();
     await expect(page.locator('[data-test="create-invoice-hint"]')).toHaveCount(0);
 
     await page.getByRole('tab', { name: 'Invoices' }).click();
