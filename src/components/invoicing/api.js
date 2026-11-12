@@ -116,6 +116,21 @@ export const listExpenses = () => axios.get(`${base}/expenses`).then((r) => r.da
 export const createManualExpense = (expense) =>
   axios.post(`${base}/expenses/manual`, expense).then((r) => r.data.expense);
 export const deleteExpense = (id) => axios.delete(`${base}/expenses/${id}`);
+
+// One receipt per work expense (system_3 #10602/#10603), the same shape as
+// the profile logo: a PUT replaces whatever is there, GET serves the stored
+// bytes (as an attachment, per security review c65885 point 4 -- preview it
+// through a blob: URL, never by pointing a tag at this URL directly), DELETE
+// removes it. 404 means none is attached yet, not an error to surface.
+export const expenseReceiptUrl = (expenseId) => `${base}/expenses/${expenseId}/receipt`;
+export const getExpenseReceiptBlob = (expenseId) =>
+  axios.get(expenseReceiptUrl(expenseId), { responseType: 'blob' }).then((r) => ({ blob: r.data, contentType: r.headers['content-type'] }));
+export function uploadExpenseReceipt(expenseId, file) {
+  const form = new FormData();
+  form.append('receipt', file);
+  return axios.put(expenseReceiptUrl(expenseId), form).then((r) => r.data.receipt);
+}
+export const deleteExpenseReceipt = (expenseId) => axios.delete(expenseReceiptUrl(expenseId));
 // Seeded with ten starter types on first touch; the owner can add her own on
 // top (operator's own ask, #10424).
 export const listExpenseCategories = () =>
