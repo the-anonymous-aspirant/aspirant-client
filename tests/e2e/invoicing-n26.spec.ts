@@ -854,8 +854,8 @@ test.describe('#10567 N26 import — a kept copy of a failed file is named', () 
     await upload(page, ['kept.pdf', 'big.pdf', 'conferma.pdf']);
     const errors = page.locator('[data-test="n26-file-error"]');
     await expect(errors).toHaveCount(2);
-    await expect(errors.nth(0)).toContainText('A copy is kept until 2026-11-19 so this can be fixed.');
-    await expect(errors.nth(0).locator('[data-test="n26-file-copy-kept"]')).toHaveText('A copy is kept until 2026-11-19 so this can be fixed.');
+    await expect(errors.nth(0)).toContainText('A copy is kept until 2026-11-19 so this can be fixed; only the administrator can open it.');
+    await expect(errors.nth(0).locator('[data-test="n26-file-copy-kept"]')).toHaveText('A copy is kept until 2026-11-19 so this can be fixed; only the administrator can open it.');
     await expect(errors.nth(1).locator('[data-test="n26-file-copy-kept"]')).toHaveCount(0);
     await expect(errors.nth(1)).not.toContainText('copy');
     await expect(page.locator('[data-test="n26-file-copy-kept"]')).toHaveCount(1);
@@ -871,7 +871,7 @@ test.describe('#10567 N26 import — a kept copy of a failed file is named', () 
     await open(page, fake);
     await upload(page, ['empty.pdf', 'conferma.pdf']);
     await expect(page.locator('[data-test="n26-file-unreadable"]')).toContainText(
-      'try N26\'s CSV export of the same month instead. A copy is kept until 2026-11-19 so this can be fixed.');
+      'try N26\'s CSV export of the same month instead. A copy is kept until 2026-11-19 so this can be fixed; only the administrator can open it.');
   });
 });
 

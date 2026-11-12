@@ -269,7 +269,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     const input = page.locator('[data-test="payments-file"]');
     const error = page.locator('[data-test="import-error"]');
     await input.setInputFiles(csvFile);
-    await expect(error).toHaveText('PayPal CSV: not a PayPal activity export. A copy is kept until 2026-11-19 so this can be fixed.');
+    await expect(error).toHaveText('PayPal CSV: not a PayPal activity export. A copy is kept until 2026-11-19 so this can be fixed; only the administrator can open it.');
 
     await input.setInputFiles(csvFile);
     await expect(error).toHaveText('PayPal CSV: The file is larger than 5 MB');
@@ -280,7 +280,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await expect(copyLine).toHaveCount(0);
 
     await input.setInputFiles(csvFile);
-    await expect(copyLine).toHaveText('A copy is kept until 2026-11-18 so this can be fixed.');
+    await expect(copyLine).toHaveText('A copy is kept until 2026-11-18 so this can be fixed; only the administrator can open it.');
   });
 
   test('an ambiguous-date file asks which order, then re-uploads with date_order', async ({ page }) => {
