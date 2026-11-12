@@ -206,7 +206,7 @@ const summary = (page: Page) => page.locator('[data-test="n26-summary"]');
 async function expectSummaryAddsUp(page: Page): Promise<void> {
   const text = (await summary(page).innerText()).replace(/\s+/g, ' ');
   const m = text.match(
-    /read (\d+) rows? .*?: (\d+) imported, (\d+) already imported, (\d+) skipped(?:, (\d+) transfers? from PayPal left out(?: \([^)]*\))?)?(?:, (\d+) moves? between your account and (?:a Space|your Spaces) left out)?(?:[^·]*? · (\d+) removed earlier: restore it on Transactions)?(?:[^·]*? · (\d+) deleted earlier)?/,
+    /read (\d+) rows? .*?: (\d+) imported, (\d+) already imported, (\d+) skipped(?:, (\d+) transfers? from PayPal left out(?: \([^)]*\))?)?(?:, (\d+) moves? between your account and (?:a Space|your Spaces) left out)?(?:[^·.]*? · (\d+) removed earlier: restore it on Transactions)?(?:[^·.]*? · (\d+) deleted earlier)?/,
   );
   expect(m, text).not.toBeNull();
   const [read, imported, already, skipped, paypalLeftOut, spaceLeftOut, removed, deleted] = m!.slice(1).map((v) => Number(v || 0));
@@ -915,7 +915,7 @@ test.describe('#10634 N26 import — removed and deleted rows are named and coun
     await expectSummaryAddsUp(page);
   });
 
-  test('outgoing rows matching a removed or deleted expense are flagged with no checkbox or picker, and counted with the payments', async ({ page }) => {
+  test('outgoing rows matching a removed or deleted expense are flagged with no checkbox or picker, and counted on the expense sentence', async ({ page }) => {
     const fake = withOutgoing([
       outgoingRow(1, { already_imported: true, removed: true }),
       outgoingRow(2, { already_imported: true, deleted_earlier: true }),
@@ -934,10 +934,52 @@ test.describe('#10634 N26 import — removed and deleted rows are named and coun
     await page.locator('[data-test="n26-confirm"]').click();
     await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
     expect(expenseConfirms(fake)).toHaveLength(0);
-    // "already imported" stays the payments' count; the two new clauses count
-    // both directions, because the review showed both (c66252 item 1).
+    // "rows read" counts payment rows only, so expense rows are counted on
+    // the expense sentence, never on the payment one: the payment sentence
+    // must add up (§3.130; the #10634 dogfood found the mixed count, c66307).
+    // With no expense added, the sentence opens "Expenses:" so no zero shows.
     await expect(summary(page)).toHaveText(
-      'N26: read 2 rows from 1 file: 2 imported, 0 already imported, 0 skipped · 1 removed earlier: restore it on Transactions · 1 deleted earlier.',
+      'N26: read 2 rows from 1 file: 2 imported, 0 already imported, 0 skipped. Expenses: 1 removed earlier: restore it on Transactions · 1 deleted earlier.',
+    );
+    await expect(page.locator('[data-test="n26-summary-removed"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="n26-summary-deleted"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="n26-summary-expenses-removed"]')).toHaveText('1 removed earlier: restore it on Transactions');
+    await expect(page.locator('[data-test="n26-summary-expenses-deleted"]')).toHaveText('1 deleted earlier');
+    await expectSummaryAddsUp(page);
+  });
+
+  test('payments and expenses flagged in one file: each sentence counts its own rows, and the payment one adds up', async ({ page }) => {
+    const fake = withOutgoing([
+      outgoingRow(1, { already_imported: true, removed: true }),
+      outgoingRow(2, { already_imported: true, deleted_earlier: true }),
+      outgoingRow(3),
+    ]);
+    fake.parsed['statement.pdf'].candidates = [
+      statementRow(1, { already_imported: true, removed: true }),
+      statementRow(2, { already_imported: true, deleted_earlier: true }),
+      statementRow(3, { already_imported: true }),
+      statementRow(4),
+    ];
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+    await expenseCheck(page, 2).check();
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+
+    // The live dogfood shape: before the fix this read "· 2 removed earlier
+    // … · 2 deleted earlier" on the payment sentence, 6 accounted of 4 read.
+    await expect(summary(page)).toHaveText(
+      'N26: read 4 rows from 1 file: 1 imported, 1 already imported, 0 skipped · 1 removed earlier: restore it on Transactions · 1 deleted earlier. ' +
+        '1 expense added to your book · 1 removed earlier: restore it on Transactions · 1 deleted earlier.',
+    );
+    await expectSummaryAddsUp(page);
+    // The expense sentence's counts are the response's flagged expense rows (c66309).
+    const outgoing = fake.parsed['statement.pdf'].expense_candidates as Json[];
+    await expect(page.locator('[data-test="n26-summary-expenses-removed"]')).toHaveText(
+      `${outgoing.filter((r) => r.removed).length} removed earlier: restore it on Transactions`,
+    );
+    await expect(page.locator('[data-test="n26-summary-expenses-deleted"]')).toHaveText(
+      `${outgoing.filter((r) => r.deleted_earlier).length} deleted earlier`,
     );
   });
 
