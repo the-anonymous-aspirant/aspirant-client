@@ -17,6 +17,8 @@ interface Fake {
   expenses: Json[];
   categories: Json[];
   requests: Array<{ method: string; path: string; body: string }>;
+  // A table whose bulk remove the server refuses, with the error it sends.
+  refuseRemove?: Record<string, Json>;
 }
 
 const newFake = (over: Partial<Fake> = {}): Fake => ({
@@ -39,9 +41,28 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     fake.requests.push({ method, path, body: req.postData() || '' });
     if (path === '/invoicing/profile') return json(route, 200, { saved: true, profile: { full_name: 'Flower Example', address: 'A', steuernummer: '12/345/67890', is_kleinunternehmer: true, invoice_number_prefix: '2026', next_invoice_number: 1 } });
     if (path === '/invoicing/clients') return json(route, 200, { clients: [{ id: 1, name: 'Galerie Nord', address: 'Nordweg 2' }] });
-    if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: fake.payments });
+    // The lists leave removed rows out, as the server does (#10555-A2).
+    if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: fake.payments.filter((p) => !p.removed_at) });
     if (path === '/invoicing/invoices' && method === 'GET') return json(route, 200, { invoices: [] });
-    if (path === '/invoicing/expenses' && method === 'GET') return json(route, 200, { expenses: fake.expenses });
+    if (path === '/invoicing/expenses' && method === 'GET') return json(route, 200, { expenses: fake.expenses.filter((e) => !e.removed_at) });
+    // Bulk remove, all or nothing per table (aspirant-server invoicing_remove.go).
+    const remove = path.match(/^\/invoicing\/(payments|expenses)\/remove$/);
+    if (remove && method === 'POST') {
+      const table = remove[1];
+      const refusal = fake.refuseRemove && fake.refuseRemove[table];
+      if (refusal) return json(route, 409, { error: refusal });
+      const { ids } = JSON.parse(req.postData() || '{}');
+      for (const r of table === 'payments' ? fake.payments : fake.expenses) if (ids.includes(r.id)) r.removed_at = '2026-11-12T22:00:00Z';
+      return json(route, 200, { action: 'remove', ids });
+    }
+    const patch = path.match(/^\/invoicing\/(payments|expenses)\/(\d+)$/);
+    if (patch && method === 'PATCH') {
+      const list = patch[1] === 'payments' ? fake.payments : fake.expenses;
+      const record = list.find((r) => r.id === Number(patch[2]));
+      if (!record) return json(route, 404, { error: { code: 'not_found', message: 'not found' } });
+      Object.assign(record, JSON.parse(req.postData() || '{}'));
+      return json(route, 200, patch[1] === 'payments' ? { payment: record } : { expense: record });
+    }
     if (path === '/invoicing/expense-categories' && method === 'GET') return json(route, 200, { categories: fake.categories });
     if (path === '/invoicing/expenses/manual' && method === 'POST') {
       const body = JSON.parse(req.postData() || '{}');
@@ -400,15 +421,15 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     await expect.poll(() => txns(page)).toEqual(NEWEST_FIRST);
   });
 
-  test('an expense has no checkbox yet; Select all counts the payments it can act on', async ({ page }) => {
+  test('an expense has a checkbox; Select all counts every row but the issued invoice\'s payment', async ({ page }) => {
     await open(page, mixedFake());
-    await expect(row(page, 'N26-E1').locator('[data-test="payment-select"]')).toHaveCount(0);
-    await expect(row(page, 'N26-E1').locator('[data-test="payment-select-gutter"]')).toHaveCount(1);
-    // PP-P2, M-p3 and PP-P4: N26-P1 is on an issued invoice.
+    await expect(row(page, 'N26-E1').locator('[data-test="payment-select"]')).toHaveCount(1);
+    await expect(row(page, 'N26-E1').locator('[data-test="payment-select-gutter"]')).toHaveCount(0);
+    // Six rows: N26-P1 is on an issued invoice.
     const viewport = page.viewportSize();
-    if (viewport && viewport.width < 640) await expect(page.locator('[data-test="select-all-shown"]')).toContainText('Select all 3 shown');
+    if (viewport && viewport.width < 640) await expect(page.locator('[data-test="select-all-shown"]')).toContainText('Select all 6 shown');
     await page.locator('[data-test="select-all-shown"]').getByRole('checkbox').check();
-    await expect(page.locator('[data-test="bulk-category"]')).toContainText('Set category of 3 selected');
+    await expect(page.locator('[data-test="bulk-category"]')).toContainText('Set category of 6 selected');
   });
 
   // §3.114 card, in §3.143 Decision 3's order: the checkbox first, who
@@ -423,7 +444,7 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
       const card = page.locator(`.payment-card[data-txn="${txn}"]`);
       const box = async (sel: string) => (await card.locator(sel).first().boundingBox())!;
       const cardBox = (await card.boundingBox())!;
-      const check = await box(txn === 'PP-P2' ? '[data-test="payment-select"]' : '[data-test="payment-select-gutter"]');
+      const check = await box('[data-test="payment-select"]');
       const who = await box('[data-test="row-who"]');
       const amount = await box('[data-test="row-amount"]');
       const dateLine = await box('[data-test="row-date-line"]');
@@ -441,5 +462,174 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     await expect(page.locator('.payment-card[data-txn="M-e2"] [data-test="row-date-line"]')).toHaveText('2026-09-28 · By hand');
     // No sideways scroll at 390.
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
+
+/** #10631 (§3.143 Decision 4): one selection feeds every action, each
+ *  enabled by its own condition. Set category acts on one direction at a
+ *  time; "Remove (N)" arms to "Remove N rows" before it acts; a row on an
+ *  issued invoice cannot be selected. The selection is keyed by row
+ *  (`p<id>` / `e<id>`), because payment and expense ids share one number
+ *  space (security c66333 on system_3 #10630, carried in c66336). */
+
+const bulkCategory = (page: Page) => page.locator('[data-test="bulk-category"]');
+const bulkRemove = (page: Page) => page.locator('[data-test="bulk-remove"]');
+const select = (page: Page, txn: string) => row(page, txn).locator('[data-test="payment-select"]').getByRole('checkbox');
+const sent = (fake: Fake, method: string, pattern: RegExp) => fake.requests.filter((r) => r.method === method && pattern.test(r.path));
+
+async function bulkOptions(page: Page): Promise<string[]> {
+  await bulkCategory(page).click();
+  const labels = await page.getByRole('option').allTextContents();
+  await page.keyboard.press('Escape');
+  return labels.map((l) => l.trim());
+}
+
+test.describe('#10631 Transactions: selection actions for both directions', () => {
+  test('a selection of money in and money out cannot set a category, and says why', async ({ page }) => {
+    const fake = mixedFake();
+    await open(page, fake);
+    await select(page, 'M-e2').check();
+    await select(page, 'PP-P4').check();
+
+    await expect(bulkCategory(page)).toBeDisabled();
+    const hint = page.locator('[data-test="set-category-hint"]');
+    await expect(hint).toHaveText('Choose only money in or only money out to set a category');
+    await expect(bulkCategory(page)).toHaveAttribute('aria-describedby', 'set-category-hint');
+    // Remove still acts on both; Create invoice stays the one primary.
+    await expect(bulkRemove(page)).toBeEnabled();
+    await expect(bulkRemove(page)).toHaveText('Remove (2)');
+
+    // Money in alone: income categories, written to the payment.
+    await select(page, 'M-e2').uncheck();
+    await expect(hint).toHaveCount(0);
+    await expect(bulkCategory(page)).toBeEnabled();
+    expect(await bulkOptions(page)).toEqual(['Uncategorised', 'Paid work', 'Gift', 'Loan', 'Refund', 'Other']);
+
+    // Money out alone: her expense categories, written to the expense.
+    await select(page, 'PP-P4').uncheck();
+    await select(page, 'M-e2').check();
+    await expect(bulkCategory(page)).toBeEnabled();
+    await expect.poll(() => bulkOptions(page)).toEqual(['materials and supplies', 'other', 'travel']);
+    await bulkCategory(page).click();
+    await page.getByRole('option', { name: 'other', exact: true }).click();
+    await expect.poll(() => sent(fake, 'PATCH', /^\/invoicing\/(payments|expenses)\//).length).toBe(1);
+    const [write] = sent(fake, 'PATCH', /^\/invoicing\/(payments|expenses)\//);
+    expect(write.path).toBe('/invoicing/expenses/102');
+    expect(JSON.parse(write.body)).toEqual({ category: 'other' });
+    await expect(select(page, 'M-e2')).not.toBeChecked();
+  });
+
+  test('Remove (N) arms to "Remove N rows", then removes both directions in one go', async ({ page }) => {
+    const fake = mixedFake();
+    await open(page, fake);
+    await expect(bulkRemove(page)).toHaveText('Remove');
+    await expect(bulkRemove(page)).toBeDisabled();
+
+    // PP-P2 is on a draft: the armed button says it comes off.
+    await select(page, 'PP-P2').check();
+    await select(page, 'M-e2').check();
+    await expect(bulkRemove(page)).toHaveText('Remove (2)');
+    await bulkRemove(page).click();
+    await expect(bulkRemove(page)).toHaveText('Remove 2 rows');
+    await expect(page.locator('[data-test="bulk-remove-consequence"]')).toHaveText('1 of them is also taken off its draft invoice.');
+    expect(sent(fake, 'POST', /\/remove$/)).toHaveLength(0);
+
+    // A change to the selection disarms it: the count it names is the count it removes.
+    await select(page, 'M-p3').check();
+    await expect(bulkRemove(page)).toHaveText('Remove (3)');
+    await select(page, 'M-p3').uncheck();
+    await bulkRemove(page).click();
+    await expect(bulkRemove(page)).toHaveText('Remove 2 rows');
+    await bulkRemove(page).click();
+
+    await expect.poll(() => sent(fake, 'POST', /\/remove$/).length).toBe(2);
+    const [payments, expenses] = sent(fake, 'POST', /\/remove$/);
+    expect(payments.path).toBe('/invoicing/payments/remove');
+    expect(JSON.parse(payments.body)).toEqual({ ids: [2] });
+    expect(expenses.path).toBe('/invoicing/expenses/remove');
+    expect(JSON.parse(expenses.body)).toEqual({ ids: [102] });
+    await expect.poll(() => txns(page)).toEqual(['N26-E1', 'N26-P1', 'M-p3', 'PP-P4', 'N26-E3']);
+    await expect(bulkRemove(page)).toHaveText('Remove');
+    await expect(page.locator('[data-test="bulk-error"]')).toHaveCount(0);
+  });
+
+  test('a row on an issued invoice cannot be selected, so Select all and Remove leave it', async ({ page }) => {
+    const fake = mixedFake();
+    await open(page, fake);
+    await expect(row(page, 'N26-P1').locator('[data-test="payment-select"]')).toHaveCount(0);
+    await expect(row(page, 'N26-P1').locator('[data-test="payment-select-gutter"]')).toHaveCount(1);
+
+    await page.locator('[data-test="select-all-shown"]').getByRole('checkbox').check();
+    await expect(bulkRemove(page)).toHaveText('Remove (6)');
+    await bulkRemove(page).click();
+    await expect(bulkRemove(page)).toHaveText('Remove 6 rows');
+    await bulkRemove(page).click();
+
+    await expect.poll(() => sent(fake, 'POST', /\/remove$/).length).toBe(2);
+    const [payments, expenses] = sent(fake, 'POST', /\/remove$/);
+    expect(JSON.parse(payments.body)).toEqual({ ids: [2, 3, 4] });
+    expect(JSON.parse(expenses.body)).toEqual({ ids: [101, 102, 103] });
+    await expect.poll(() => txns(page)).toEqual(['N26-P1']);
+  });
+
+  test('a refused remove removes nothing and says why', async ({ page }) => {
+    const fake = mixedFake();
+    fake.refuseRemove = {
+      payments: { code: 'payment_on_invoice', message: 'payment PP-P2 is on issued invoice 2026-015; cancel that invoice first' },
+    };
+    await open(page, fake);
+    await select(page, 'PP-P2').check();
+    await select(page, 'N26-E1').check();
+    await bulkRemove(page).click();
+    await bulkRemove(page).click();
+
+    await expect(page.locator('[data-test="bulk-error"]')).toHaveText(
+      'Nothing was removed: payment PP-P2 is on issued invoice 2026-015; cancel that invoice first',
+    );
+    // The expenses were never sent: nothing half-removed.
+    expect(sent(fake, 'POST', /\/expenses\/remove$/)).toHaveLength(0);
+    await expect.poll(() => txns(page)).toEqual(NEWEST_FIRST);
+    await expect(select(page, 'PP-P2')).toBeChecked();
+    await expect(select(page, 'N26-E1')).toBeChecked();
+    await expect(bulkRemove(page)).toHaveText('Remove (2)');
+  });
+
+  test('a payment and an expense that share an id never select or write each other', async ({ page }) => {
+    const fake = newFake({
+      payments: [
+        pay({
+          id: 5, transaction_id: 'PP-P5', source: 'paypal', entry: 'import', paid_on: '2026-10-02T00:00:00Z',
+          created_at: '2026-10-02T09:00:00Z', sender_name: 'Mara Esempio', note: 'Portrait', category: 'uncategorised', gross_cents: 30000,
+        }),
+      ],
+      expenses: [
+        spend({
+          id: 5, transaction_id: 'N26-E5', source: 'n26', entry: 'import', paid_on: '2026-10-01T00:00:00Z',
+          created_at: '2026-10-01T09:00:00Z', reference: 'Colorificio Esempio', note: 'Brushes', category: 'travel', amount_cents: 2500,
+        }),
+      ],
+    });
+    await open(page, fake);
+
+    await select(page, 'N26-E5').check();
+    await expect(select(page, 'PP-P5')).not.toBeChecked();
+    await expect(bulkCategory(page)).toContainText('Set category of 1 selected');
+    await expect(page.locator('[data-test="set-category-hint"]')).toHaveCount(0);
+    await bulkCategory(page).click();
+    await page.getByRole('option', { name: 'materials and supplies', exact: true }).click();
+    await expect.poll(() => sent(fake, 'PATCH', /^\/invoicing\//).length).toBe(1);
+    expect(sent(fake, 'PATCH', /^\/invoicing\//)[0].path).toBe('/invoicing/expenses/5');
+    expect(fake.payments[0].category).toBe('uncategorised');
+
+    await select(page, 'N26-E5').check();
+    await expect(select(page, 'PP-P5')).not.toBeChecked();
+    await bulkRemove(page).click();
+    await bulkRemove(page).click();
+    await expect.poll(() => sent(fake, 'POST', /\/remove$/).length).toBe(1);
+    const [removal] = sent(fake, 'POST', /\/remove$/);
+    expect(removal.path).toBe('/invoicing/expenses/remove');
+    expect(JSON.parse(removal.body)).toEqual({ ids: [5] });
+    await expect.poll(() => txns(page)).toEqual(['PP-P5']);
+    expect(fake.payments[0].removed_at).toBeNull();
   });
 });

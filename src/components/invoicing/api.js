@@ -116,6 +116,15 @@ export const listExpenses = () => axios.get(`${base}/expenses`).then((r) => r.da
 export const createManualExpense = (expense) =>
   axios.post(`${base}/expenses/manual`, expense).then((r) => r.data.expense);
 export const deleteExpense = (id) => axios.delete(`${base}/expenses/${id}`);
+// An expense's own notes on it (server #10555-A1): a hand-entered one may
+// change more, an imported one only its category and note.
+export const patchExpense = (id, patch) => axios.patch(`${base}/expenses/${id}`, patch).then((r) => r.data.expense);
+// Remove many rows of one table in one all-or-nothing request (§3.143
+// Decisions 4 and 6, server #10555-A2). Removed rows leave the lists, the
+// Book and the CSV until restored. The server refuses a payment on an issued
+// invoice, and then removes nothing.
+export const removePayments = (ids) => axios.post(`${base}/payments/remove`, { ids }).then((r) => r.data);
+export const removeExpenses = (ids) => axios.post(`${base}/expenses/remove`, { ids }).then((r) => r.data);
 
 // One receipt per work expense (system_3 #10602/#10603), the same shape as
 // the profile logo: a PUT replaces whatever is there, GET serves the stored
