@@ -93,8 +93,11 @@ test.describe('#10564 Admin — failed imports', () => {
   });
 });
 
-test.describe('#10564 Payments — said before upload', () => {
-  test('the ways-in row carries c65231\'s caption, verbatim', async ({ page }) => {
+// The before-upload caption (#10564) was removed at the operator's ask
+// (c66326 on system_3 #9656, #10672); the after-failure sentence stays and is
+// asserted in invoicing.spec and invoicing-n26.spec.
+test.describe('#10672 Transactions — no before-upload caption', () => {
+  test('the ways-in row carries no retention caption', async ({ page }) => {
     await page.route(/\/api\//, (r) => json(r, 404, { error: { code: 'not_found', message: 'not stubbed' } }));
     await page.route(/\/api\/invoicing\//, (r) => {
       const path = new URL(r.request().url()).pathname.replace(/^\/api/, '');
@@ -108,8 +111,9 @@ test.describe('#10564 Payments — said before upload', () => {
     await seedTrustedSessionAs(page, 'vinoly');
     await page.goto('/member/personal/invoicing');
     await dismissMobileSidebarIfPresent(page);
-    await expect(page.locator('[data-test="import-retention-note"]')).toHaveText(
-      'A file that fails to import may be kept for up to 7 days so the import can be fixed, then it is deleted. Only the administrator can open it.',
-    );
+    // Positive control: the ways-in row rendered, so the absences below are real.
+    await expect(page.locator('[data-test="n26-import"]')).toBeVisible();
+    await expect(page.locator('[data-test="import-retention-note"]')).toHaveCount(0);
+    await expect(page.getByText('may be kept for up to 7 days')).toHaveCount(0);
   });
 });
