@@ -343,7 +343,7 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
 
   test('the source sits on the muted date line', async ({ page }) => {
     await open(page, mixedFake());
-    const sources = await page.locator(`${ROWS} [data-test="row-source"]`).allTextContents();
+    const sources = await page.locator(ROWS).locator('[data-test="row-source"]').allTextContents();
     expect(sources.map((s) => s.trim())).toEqual(['N26', 'N26', 'PayPal', 'By hand', 'By hand', 'PayPal', 'N26']);
     const muted = await page.locator('[data-txn="N26-E1"] [data-test="row-source"]').evaluate((el) => {
       const probe = document.createElement('span');

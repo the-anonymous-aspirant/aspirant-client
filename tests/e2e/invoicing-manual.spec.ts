@@ -284,10 +284,11 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await open(page, fake);
     const dels = page.locator('[data-test="payment-delete"]');
     await expect(dels).toHaveCount(2);
-    await dels.first().click();
+    // Newest first, the later id leads on a shared day: 61 (imported), then 60 (by hand).
+    await dels.nth(1).click();
     await expect(page.locator('[data-test="payment-delete-consequence"]')).toHaveText('It also comes off the draft or cancelled invoice that lists it. A draft keeps its lines, so check its total.');
     // Arming another row disarms the first; both sentences when both apply.
-    await dels.nth(1).click();
+    await dels.first().click();
     await expect(page.locator('[data-test="payment-delete-consequence"]')).toHaveText('Gone for good: importing the same file again will not bring it back. It also comes off the draft or cancelled invoice that lists it. A draft keeps its lines, so check its total.');
     await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveCount(1);
     await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveText('On an issued invoice — cancel that invoice first');

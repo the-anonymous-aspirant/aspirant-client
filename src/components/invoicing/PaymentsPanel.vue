@@ -1187,6 +1187,19 @@
     width: 16rem;
   }
 
+  /* A long category ("Out · materials and supplies") ends in an ellipsis in
+     the trigger; the open panel shows it whole. */
+  .filter :deep(.select__trigger) {
+    min-width: 0;
+  }
+
+  .filter :deep(.select__value) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   /* AspSelect forwards a class to its trigger, not its root, so a wrapper
      makes it fill the row. */
   .full-select :deep(.select) {
@@ -1368,15 +1381,23 @@
       align-items: stretch;
     }
 
-    .filters {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
     .filter,
     .create,
     .set-category {
       width: 100%;
+    }
+
+    /* On a phone the direction strip and the category select share one row,
+       so the first card stays on a 390×844 first screen (design_agent c66182
+       on system_3 #10627). */
+    .filters {
+      flex-wrap: nowrap;
+    }
+
+    .filters .filter {
+      flex: 1 1 auto;
+      width: auto;
+      min-width: 0;
     }
 
     .create {
