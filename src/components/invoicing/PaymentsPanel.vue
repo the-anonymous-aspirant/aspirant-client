@@ -88,7 +88,8 @@
         PayPal {{ paypalNoun }}: read {{ summary.rows_read }} rows: <strong>{{ summary.imported }}</strong> imported<template v-if="summary.withdrawals"> (including {{ summary.withdrawals }} bank withdrawals)</template>,
         <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ summary.duplicates }} already imported, {{ summary.skipped }} skipped.<template v-if="paypalExpensesAdded">
           {{ ' ' }}<span data-test="paypal-summary-expenses">{{ paypalExpensesAdded }} expense{{ paypalExpensesAdded === 1 ? '' : 's' }} added to your book.</span></template><template v-if="paypalCopyKept">
-          {{ ' ' }}<span data-test="paypal-summary-copy-kept">{{ paypalCopyKept }}</span></template>
+          {{ ' ' }}<span data-test="paypal-summary-copy-kept">{{ paypalCopyKept }}</span></template><template v-if="payerCandidates.length">
+          {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span>{{ ' ' }}<AspButton variant="ghost" size="sm" class="summary__action" data-test="payers-open" @click="payersOpen = true">Add payers…</AspButton></template>
       </p>
       <ul v-if="skippedReasons.length" class="summary__reasons">
         <li v-for="r in skippedReasons" :key="r.key">{{ r.count }} × {{ r.label }}</li>
@@ -105,7 +106,8 @@
         {{ n26Summary.skipped }} skipped<template v-if="n26Summary.paypal_transfers">, <span data-test="n26-summary-paypal">{{ n26PayPalClause }}</span></template><template v-if="n26Summary.space_transfers">, <span data-test="n26-summary-space-transfer">{{ n26SpaceTransferClause }}</span></template>.<template v-if="n26Summary.failures.length">
           {{ ' ' }}<span data-test="n26-summary-failures">{{ n26FailureLine }}</span></template><template v-if="(n26Summary.unreadable || []).length">
           {{ ' ' }}<span data-test="n26-summary-unreadable">{{ n26UnreadableLine }}</span></template><template v-if="n26Summary.expenses_added">
-          {{ ' ' }}<span data-test="n26-summary-expenses">{{ n26Summary.expenses_added }} expense{{ n26Summary.expenses_added === 1 ? '' : 's' }} added to your book.</span></template>
+          {{ ' ' }}<span data-test="n26-summary-expenses">{{ n26Summary.expenses_added }} expense{{ n26Summary.expenses_added === 1 ? '' : 's' }} added to your book.</span></template><template v-if="payerCandidates.length">
+          {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span>{{ ' ' }}<AspButton variant="ghost" size="sm" class="summary__action" data-test="payers-open" @click="payersOpen = true">Add payers…</AspButton></template>
       </p>
     </AspCard>
 
@@ -115,6 +117,14 @@
       <p class="summary__line">
         By hand: saved {{ formatMoney(manualSummary.gross_cents, manualSummary.currency) }}<template v-if="manualSummary.sender_name"> from {{ manualSummary.sender_name }}</template>.<template v-if="manualSummary.client_name">
           {{ ' ' }}<span data-test="manual-summary-client-added">Added {{ manualSummary.client_name }} to your client book.</span></template>
+      </p>
+    </AspCard>
+
+    <!-- §3.142 Decision 5: the payers dialog's result, the region's fourth
+         line; one shows at a time with the other three. -->
+    <AspCard v-if="payersSummary" class="summary" padding="sm" data-test="payers-summary">
+      <p class="summary__line">
+        {{ payersSavedLine(payersSummary) }}
       </p>
     </AspCard>
 
@@ -355,6 +365,13 @@
     />
     <N26ImportDialog v-model:open="n26Open" :files="n26Files" :payments="payments" @imported="onN26Imported" />
     <PayPalExpensesDialog v-model:open="paypalExpensesOpen" :candidates="paypalExpenseCandidates" @done="onPayPalExpensesDone" />
+    <PayersDialog
+      v-model:open="payersOpen"
+      :candidates="payerCandidates"
+      :left-out="payerLeftOut"
+      :clients="clients"
+      @saved="onPayersSaved"
+    />
   </section>
 </template>
 
@@ -363,6 +380,7 @@
   import ManualPaymentDialog from './ManualPaymentDialog.vue';
   import N26ImportDialog from './N26ImportDialog.vue';
   import PayPalExpensesDialog from './PayPalExpensesDialog.vue';
+  import PayersDialog from './PayersDialog.vue';
   import {
     CATEGORY_LABELS,
     METHOD_LABELS,
@@ -374,6 +392,8 @@
     formatDay,
     formatMoney,
     importPayPalCSV,
+    listPayerCandidates,
+    payersSavedLine,
     parseN26PDFs,
     patchPayment,
     createDraft,
@@ -400,7 +420,7 @@
   // payers, so they are only ever rendered as text interpolation.
   export default {
     name: 'PaymentsPanel',
-    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect, ManualPaymentDialog, N26ImportDialog, PayPalExpensesDialog },
+    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSelect, ManualPaymentDialog, N26ImportDialog, PayPalExpensesDialog, PayersDialog },
     props: {
       payments: { type: Array, required: true },
       clients: { type: Array, required: true },
@@ -428,6 +448,12 @@
         n26Open: false,
         n26Files: [],
         n26Summary: null,
+        // §3.142 Decision 5: unlinked payers after an import, offered in the
+        // payers dialog, and that dialog's result line.
+        payerCandidates: [],
+        payerLeftOut: {},
+        payersOpen: false,
+        payersSummary: null,
         // The last PayPal file's outgoing payments, offered as expenses
         // (system_3 #10438), and how many the owner added.
         paypalExpenseCandidates: [],
@@ -498,6 +524,10 @@
         const files = (this.n26Summary && this.n26Summary.unreadable) || [];
         const n = files.length;
         return `${n} file${n === 1 ? '' : 's'} read no transaction: ${files.join(', ')}.`;
+      },
+      payersClause() {
+        const n = this.payerCandidates.length;
+        return n === 1 ? '1 payer is not in your client book.' : `${n} payers are not in your client book.`;
       },
       n26FailureLine() {
         const failures = (this.n26Summary && this.n26Summary.failures) || [];
@@ -579,6 +609,7 @@
     methods: {
       formatDay,
       formatMoney,
+      payersSavedLine,
       methodLabel(row) {
         return METHOD_LABELS[row.method] || row.method;
       },
@@ -639,6 +670,7 @@
           this.summary = null;
           this.n26Summary = null;
           this.manualSummary = null;
+          this.payersSummary = null;
           this.needsDateOrder = false;
           this.importError = PAYPAL_WRONG_FILE;
           if (this.$refs.fileInput) this.$refs.fileInput.value = '';
@@ -660,6 +692,8 @@
         this.summary = null;
         this.n26Summary = null;
         this.manualSummary = null;
+        this.payersSummary = null;
+        this.payerCandidates = [];
         if (files.length > N26_MAX_FILES) {
           // The server's per-request cap counts CSVs the same as PDFs
           // (aspirant-server invoicing_n26.go maxN26FilesPerRequest).
@@ -686,7 +720,29 @@
       onN26Imported(summary) {
         this.n26Summary = summary;
         this.manualSummary = null;
+        this.payersSummary = null;
+        this.refreshPayerCandidates();
         if (summary.imported || summary.expenses_added) this.$emit('changed');
+      },
+      // The offer is optional: a failed read shows no clause and no button,
+      // and the list itself is unaffected.
+      async refreshPayerCandidates() {
+        try {
+          const { payers, leftOut } = await listPayerCandidates();
+          this.payerCandidates = payers;
+          this.payerLeftOut = leftOut;
+        } catch (err) {
+          this.payerCandidates = [];
+          this.payerLeftOut = {};
+        }
+      },
+      onPayersSaved(result) {
+        this.summary = null;
+        this.n26Summary = null;
+        this.manualSummary = null;
+        this.payersSummary = { clients_added: result.clients_added || 0, payments_linked: result.payments_linked || 0 };
+        this.payerCandidates = [];
+        this.$emit('changed');
       },
       // §3.142 Decision 1: one line in the shared import-state region, same
       // "one summary shows at a time" rule as the two imports (§3.127
@@ -695,6 +751,7 @@
       onManualSaved({ payment, client }) {
         this.summary = null;
         this.n26Summary = null;
+        this.payersSummary = null;
         this.manualSummary = {
           gross_cents: payment.gross_cents,
           currency: payment.currency,
@@ -708,11 +765,14 @@
         this.summary = null;
         this.n26Summary = null;
         this.manualSummary = null;
+        this.payersSummary = null;
+        this.payerCandidates = [];
         this.paypalExpensesAdded = 0;
         try {
           const { summary, expenseCandidates } = await importPayPalCSV(this.pendingFile, dateOrder);
           this.summary = summary;
           this.needsDateOrder = false;
+          this.refreshPayerCandidates();
           this.$emit('changed');
           // Offer the outgoing payments only when one is new to the book.
           this.paypalExpenseCandidates = expenseCandidates;
@@ -916,6 +976,13 @@
 
   .summary__line {
     margin: 0;
+  }
+
+  /* The card is dark in both themes, so its one action takes the card's ink
+     (§3.18), not the page's ghost ink. */
+  .summary .summary__action {
+    color: var(--text-on-dark);
+    vertical-align: baseline;
   }
 
   .summary__reasons {
