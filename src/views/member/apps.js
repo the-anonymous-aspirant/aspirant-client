@@ -54,7 +54,7 @@ export const PERSONAL_APPS = [
   { title: 'Pappas pushups', description: '60 dagars utmaning — 1000 armhävningar', route: 'pappas-pushups', icon: 'pushups_icon', person: 'father', owner: 'robert' },
   { title: 'Pappas sit-ups', description: '57 dagar — 60 situps om dagen', route: 'pappas-sit-ups', icon: 'situps_icon', person: 'father', owner: 'robert' },
   { title: 'Jobs', description: 'Berlin part-time English-job feed across scraped boards', route: 'jobs', icon: 'jobs_icon', person: 'Viktor', owner: 'vinoly' },
-  { title: 'Invoices', description: 'Import PayPal payments and issue invoices for paid work', route: 'invoicing', icon: 'home_icon', person: 'Flower (freelance invoices)', owner: 'vinoly' },
+  { title: 'Invoices', description: 'Import PayPal payments and issue invoices for paid work', route: 'invoicing', icon: 'invoices_icon', person: 'Flower (freelance invoices)', owner: 'vinoly' },
 ];
 
 // The personal cards one identity may see. Admin sees the whole estate, which
