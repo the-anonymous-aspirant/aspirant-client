@@ -93,7 +93,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await expect(page.locator('[data-test="category-filter"]')).toHaveCount(0);
     await expect(page.locator('[data-test="create-invoice"]')).toHaveCount(0);
     await expect(page.locator('[data-test="payments-empty"]')).toContainText(
-      'Enter a payment by hand, or import a PayPal CSV or Excel file, or an N26 CSV export or PDFs.',
+      'Enter a payment or an expense by hand, or import a PayPal CSV or Excel file, or an N26 CSV export or PDFs.',
     );
   });
 
@@ -235,8 +235,12 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     const fake = newFake({ payments: [manualRow(), manualRow({ id: 42, reference: '', method: 'cash', on_invoice: true, on_issued_invoice: true })] });
     await open(page, fake);
     const lines = page.locator('[data-test="payment-manual"]');
-    await expect(lines.first()).toHaveText('Entered by hand · Banküberweisung (Bank transfer) · RE-17');
-    await expect(lines.nth(1)).toHaveText('Entered by hand · Bar (Cash)');
+    // "By hand" is on the date line (§3.143 Decision 3, system_3 #10630);
+    // this line adds how it was paid and the reference. Both rows share a
+    // day, so the later one (id 42) comes first, newest first.
+    await expect(lines.first()).toHaveText('Bar (Cash)');
+    await expect(lines.nth(1)).toHaveText('Banküberweisung (Bank transfer) · RE-17');
+    await expect(page.locator('[data-test="payment-row"] [data-test="row-source"]')).toHaveText(['By hand', 'By hand']);
     const del = page.locator('[data-test="payment-delete"]');
     await expect(del).toHaveCount(1);
     // #9934-B2 (operator c61373): the row without Delete says why, in the
@@ -280,10 +284,11 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await open(page, fake);
     const dels = page.locator('[data-test="payment-delete"]');
     await expect(dels).toHaveCount(2);
-    await dels.first().click();
+    // Newest first, the later id leads on a shared day: 61 (imported), then 60 (by hand).
+    await dels.nth(1).click();
     await expect(page.locator('[data-test="payment-delete-consequence"]')).toHaveText('It also comes off the draft or cancelled invoice that lists it. A draft keeps its lines, so check its total.');
     // Arming another row disarms the first; both sentences when both apply.
-    await dels.nth(1).click();
+    await dels.first().click();
     await expect(page.locator('[data-test="payment-delete-consequence"]')).toHaveText('Gone for good: importing the same file again will not bring it back. It also comes off the draft or cancelled invoice that lists it. A draft keeps its lines, so check its total.');
     await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveCount(1);
     await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveText('On an issued invoice — cancel that invoice first');

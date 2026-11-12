@@ -13,15 +13,18 @@ type Json = Record<string, any>;
 const CATEGORIES = ['materials and supplies', 'travel', 'other'];
 
 interface Fake {
+  payments: Json[];
   expenses: Json[];
   categories: Json[];
   requests: Array<{ method: string; path: string; body: string }>;
 }
 
-const newFake = (): Fake => ({
+const newFake = (over: Partial<Fake> = {}): Fake => ({
+  payments: [],
   expenses: [],
   categories: CATEGORIES.map((name, i) => ({ id: i + 1, name, counts_as: name, created_at: '2026-01-01T00:00:00Z' })),
   requests: [],
+  ...over,
 });
 
 const json = (route: Route, status: number, body: Json) =>
@@ -36,7 +39,7 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     fake.requests.push({ method, path, body: req.postData() || '' });
     if (path === '/invoicing/profile') return json(route, 200, { saved: true, profile: { full_name: 'Flower Example', address: 'A', steuernummer: '12/345/67890', is_kleinunternehmer: true, invoice_number_prefix: '2026', next_invoice_number: 1 } });
     if (path === '/invoicing/clients') return json(route, 200, { clients: [{ id: 1, name: 'Galerie Nord', address: 'Nordweg 2' }] });
-    if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: [] });
+    if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: fake.payments });
     if (path === '/invoicing/invoices' && method === 'GET') return json(route, 200, { invoices: [] });
     if (path === '/invoicing/expenses' && method === 'GET') return json(route, 200, { expenses: fake.expenses });
     if (path === '/invoicing/expense-categories' && method === 'GET') return json(route, 200, { categories: fake.categories });
@@ -207,5 +210,236 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
     }
     // The sweep reached all three states, so none of the asserts above is vacuous.
     expect([...seen].sort()).toEqual(['1+1+1+1', '2+2', '4']);
+  });
+});
+
+/** #10630 (design §3.143 Decision 3): one list of money in and out, newest
+ *  first, in one row format, with the source on the date line, a §3.114
+ *  phone card, and a direction filter whose category options follow it.
+ *  Invented records only. */
+
+const pay = (over: Json): Json => ({
+  kind: 'incoming', currency: 'EUR', fee_cents: 0, net_cents: 0, sender_email: '', reference: '', method: '',
+  client_id: null, on_invoice: false, on_issued_invoice: false, invoice: null, removed_at: null, ...over,
+});
+
+const spend = (over: Json): Json => ({ currency: 'EUR', client_id: null, reference: '', payee: '', removed_at: null, ...over });
+
+const mixedFake = () =>
+  newFake({
+    payments: [
+      // Out of order on purpose: the list sorts, not the server.
+      pay({
+        id: 3, transaction_id: 'M-p3', source: 'manual', entry: 'manual', method: 'cash', paid_on: '2026-09-20T00:00:00Z',
+        created_at: '2026-09-20T10:00:00Z', sender_name: 'Oma Esempio', note: 'Birthday', category: 'gift', gross_cents: 5000,
+        // Only a cancelled invoice lists it: the server names none.
+        on_invoice: true,
+      }),
+      pay({
+        id: 1, transaction_id: 'N26-P1', source: 'n26', entry: 'import', paid_on: '2026-10-14T00:00:00Z',
+        created_at: '2026-10-15T09:00:00Z', sender_name: 'Galerie Nord', note: 'Mural, October', category: 'paid_work', client_id: 1,
+        gross_cents: 120000, on_invoice: true, on_issued_invoice: true, invoice: { id: 7, status: 'issued', invoice_number: '2026-014' },
+      }),
+      pay({
+        id: 2, transaction_id: 'PP-P2', source: 'paypal', entry: 'import', paid_on: '2026-10-03T00:00:00Z',
+        created_at: '2026-10-04T09:00:00Z', sender_name: 'Mara Esempio', sender_email: 'mara@example.test', note: 'Portrait',
+        category: 'paid_work', client_id: 1, gross_cents: 45000, on_invoice: true, invoice: { id: 12, status: 'draft', invoice_number: null },
+      }),
+      // "Other" is an income category and an expense category: the filter
+      // must keep them apart (design_agent c66290).
+      pay({
+        id: 4, transaction_id: 'PP-P4', source: 'paypal', entry: 'import', paid_on: '2026-08-10T00:00:00Z',
+        created_at: '2026-08-11T09:00:00Z', sender_name: 'Kiosk Esempio', note: 'Refund of a deposit', category: 'other', gross_cents: 2000,
+      }),
+    ],
+    expenses: [
+      spend({
+        id: 102, transaction_id: 'M-e2', source: 'manual', entry: 'manual', paid_on: '2026-09-28T00:00:00Z',
+        created_at: '2026-09-28T18:00:00Z', payee: 'Deutsche Bahn', note: 'Train to Leipzig', category: 'travel', amount_cents: 8900,
+      }),
+      // Same day as N26-P1, entered later, so it comes first.
+      spend({
+        id: 101, transaction_id: 'N26-E1', source: 'n26', entry: 'import', paid_on: '2026-10-14T00:00:00Z',
+        created_at: '2026-10-16T08:00:00Z', reference: 'Colorificio Esempio', note: 'Pagamento con carta',
+        category: 'materials and supplies', amount_cents: 3499,
+      }),
+      spend({
+        id: 103, transaction_id: 'N26-E3', source: 'n26', entry: 'import', paid_on: '2026-08-05T00:00:00Z',
+        created_at: '2026-08-06T08:00:00Z', reference: 'Copyshop Esempio', note: 'Prints', category: 'other', amount_cents: 1250,
+      }),
+    ],
+  });
+
+const ROWS = '[data-test="payment-row"], [data-test="expense-row"]';
+const NEWEST_FIRST = ['N26-E1', 'N26-P1', 'PP-P2', 'M-e2', 'M-p3', 'PP-P4', 'N26-E3'];
+
+const txns = (page: Page) => page.locator(ROWS).evaluateAll((els) => els.map((el) => el.getAttribute('data-txn')));
+const row = (page: Page, txn: string) => page.locator(`${ROWS}`).and(page.locator(`[data-txn="${txn}"]`));
+
+async function categoryOptions(page: Page): Promise<string[]> {
+  await page.locator('[data-test="category-filter"]').click();
+  const labels = await page.getByRole('option').allTextContents();
+  await page.keyboard.press('Escape');
+  return labels.map((l) => l.trim());
+}
+
+async function pickCategory(page: Page, name: string): Promise<void> {
+  await page.locator('[data-test="category-filter"]').click();
+  await page.getByRole('option', { name, exact: true }).click();
+}
+
+test.describe('#10630 Transactions: one list of money in and out', () => {
+  test('both directions in one list, newest first, the same day ordered by entry', async ({ page }) => {
+    await open(page, mixedFake());
+    await expect.poll(() => txns(page)).toEqual(NEWEST_FIRST);
+    const directions = await page.locator(ROWS).evaluateAll((els) => els.map((el) => el.getAttribute('data-direction')));
+    expect(directions).toEqual(['out', 'in', 'in', 'out', 'in', 'in', 'out']);
+  });
+
+  test('each row reads who, what it was for, category, client and invoice, and the signed amount', async ({ page }) => {
+    await open(page, mixedFake());
+    const expect1 = async (txn: string, who: string, what: string | null, amount: string) => {
+      const r = row(page, txn);
+      await expect(r.locator('[data-test="row-who"]')).toHaveText(who);
+      if (what === null) await expect(r.locator('[data-test="row-what"]')).toHaveCount(0);
+      else await expect(r.locator('[data-test="row-what"]')).toHaveText(what);
+      await expect(r.locator('[data-test="row-amount"]')).toHaveText(amount);
+    };
+    await expect1('N26-P1', 'Galerie Nord', 'Mural, October', '€1,200.00');
+    await expect1('PP-P2', 'Mara Esempio', 'Portrait', '€450.00');
+    await expect1('M-p3', 'Oma Esempio', 'Birthday', '€50.00');
+    // §3.140 Decision 3: an import's payee is its reference; a hand entry's
+    // is "Paid to" (the payee field), never its free-text reference.
+    await expect1('N26-E1', 'Colorificio Esempio', 'Pagamento con carta', '-€34.99');
+    await expect1('M-e2', 'Deutsche Bahn', 'Train to Leipzig', '-€89.00');
+
+    // Money in names its invoice: issued by number, a draft as Draft, and
+    // nothing when only a cancelled invoice lists it.
+    await expect(row(page, 'N26-P1').locator('[data-test="row-invoice"]')).toHaveText('Invoice 2026-014');
+    await expect(row(page, 'PP-P2').locator('[data-test="row-invoice"]')).toHaveText('Draft');
+    await expect(row(page, 'M-p3').locator('[data-test="row-invoice"]')).toHaveCount(0);
+    await expect(row(page, 'N26-P1').locator('[data-test="payment-client"]')).toContainText('Galerie Nord');
+    await expect(row(page, 'N26-P1').locator('[data-test="payment-category"]')).toContainText('Paid work');
+    // Money out has its category, and no client or invoice.
+    await expect(row(page, 'N26-E1').locator('[data-test="row-category"]')).toHaveText('materials and supplies');
+    await expect(row(page, 'N26-E1').locator('[data-test="payment-client"], [data-test="row-invoice"]')).toHaveCount(0);
+
+    // §3.140 Decision 2: in in body ink, out in the error text red.
+    const ink = (sel: string, token: string) =>
+      page.locator(sel).first().evaluate((el, t) => {
+        const probe = document.createElement('span');
+        probe.style.color = `var(${t})`;
+        el.parentElement!.appendChild(probe);
+        const want = getComputedStyle(probe).color;
+        probe.remove();
+        return { got: getComputedStyle(el).color, want };
+      }, token);
+    const inInk = await ink('[data-txn="N26-P1"] [data-test="row-amount"]', '--text-body');
+    expect(inInk.got).toBe(inInk.want);
+    const outInk = await ink('[data-txn="N26-E1"] [data-test="row-amount"]', '--feedback-error-text');
+    expect(outInk.got).toBe(outInk.want);
+    expect(outInk.got).not.toBe(inInk.got);
+  });
+
+  test('the source sits on the muted date line', async ({ page }) => {
+    await open(page, mixedFake());
+    const sources = await page.locator(ROWS).locator('[data-test="row-source"]').allTextContents();
+    expect(sources.map((s) => s.trim())).toEqual(['N26', 'N26', 'PayPal', 'By hand', 'By hand', 'PayPal', 'N26']);
+    const muted = await page.locator('[data-txn="N26-E1"] [data-test="row-source"]').evaluate((el) => {
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--text-muted)';
+      document.body.appendChild(probe);
+      const want = getComputedStyle(probe).color;
+      probe.remove();
+      return getComputedStyle(el).color === want;
+    });
+    expect(muted, 'the source is in muted ink').toBe(true);
+  });
+
+  test('the filter is All · In · Out, and the category options follow the direction', async ({ page }) => {
+    await open(page, mixedFake());
+    const direction = page.locator('[data-test="direction-filter"]');
+    await expect(direction.getByRole('radio')).toHaveText(['All', 'In', 'Out']);
+    await expect(direction.getByRole('radio', { name: 'All' })).toBeChecked();
+
+    // Both directions (design_agent c66290): each option names its
+    // direction in the filter's own words, income first, and no two labels
+    // are the same, though "Other" is a category on both sides.
+    const both = await categoryOptions(page);
+    expect(both).toEqual([
+      'All categories', 'In · Uncategorised', 'In · Paid work', 'In · Gift', 'In · Loan', 'In · Refund', 'In · Other',
+      'Out · materials and supplies', 'Out · other', 'Out · travel',
+    ]);
+    expect(new Set(both).size, 'no duplicate labels under All').toBe(both.length);
+    await pickCategory(page, 'Out · other');
+    await expect.poll(() => txns(page)).toEqual(['N26-E3']);
+    await pickCategory(page, 'In · Other');
+    await expect.poll(() => txns(page)).toEqual(['PP-P4']);
+    await pickCategory(page, 'All categories');
+
+    // Under In or Out the labels are bare: the direction is already chosen.
+    await direction.getByRole('radio', { name: 'Out' }).click();
+    await expect.poll(() => txns(page)).toEqual(['N26-E1', 'M-e2', 'N26-E3']);
+    expect(await categoryOptions(page)).toEqual(['All categories', 'materials and supplies', 'other', 'travel']);
+    await pickCategory(page, 'travel');
+    await expect.poll(() => txns(page)).toEqual(['M-e2']);
+
+    // In does not offer travel, so the category falls back to all.
+    await direction.getByRole('radio', { name: 'In' }).click();
+    await expect.poll(() => txns(page)).toEqual(['N26-P1', 'PP-P2', 'M-p3', 'PP-P4']);
+    await expect(page.locator('[data-test="category-filter"]')).toContainText('All categories');
+    expect(await categoryOptions(page)).toEqual(['All categories', 'Uncategorised', 'Paid work', 'Gift', 'Loan', 'Refund', 'Other']);
+    await pickCategory(page, 'Gift');
+    await expect.poll(() => txns(page)).toEqual(['M-p3']);
+
+    // All keeps a category it offers, now named with its direction.
+    await direction.getByRole('radio', { name: 'All' }).click();
+    await expect.poll(() => txns(page)).toEqual(['M-p3']);
+    await expect(page.locator('[data-test="category-filter"]')).toContainText('In · Gift');
+    await pickCategory(page, 'All categories');
+    await expect.poll(() => txns(page)).toEqual(NEWEST_FIRST);
+  });
+
+  test('an expense has no checkbox yet; Select all counts the payments it can act on', async ({ page }) => {
+    await open(page, mixedFake());
+    await expect(row(page, 'N26-E1').locator('[data-test="payment-select"]')).toHaveCount(0);
+    await expect(row(page, 'N26-E1').locator('[data-test="payment-select-gutter"]')).toHaveCount(1);
+    // PP-P2, M-p3 and PP-P4: N26-P1 is on an issued invoice.
+    const viewport = page.viewportSize();
+    if (viewport && viewport.width < 640) await expect(page.locator('[data-test="select-all-shown"]')).toContainText('Select all 3 shown');
+    await page.locator('[data-test="select-all-shown"]').getByRole('checkbox').check();
+    await expect(page.locator('[data-test="bulk-category"]')).toContainText('Set category of 3 selected');
+  });
+
+  // §3.114 card, in §3.143 Decision 3's order: the checkbox first, who
+  // top-left, the amount top-right, then the date and source muted, then
+  // what it was for, then the controls.
+  test('on a phone each row is a card: checkbox, who and amount, date and source, what, controls', async ({ page }) => {
+    const viewport = page.viewportSize();
+    test.skip(!viewport || viewport.width >= 640, 'phone layout only');
+    await open(page, mixedFake());
+    await expect(page.locator('.payment-card')).toHaveCount(7);
+    for (const txn of ['PP-P2', 'N26-E1']) {
+      const card = page.locator(`.payment-card[data-txn="${txn}"]`);
+      const box = async (sel: string) => (await card.locator(sel).first().boundingBox())!;
+      const cardBox = (await card.boundingBox())!;
+      const check = await box(txn === 'PP-P2' ? '[data-test="payment-select"]' : '[data-test="payment-select-gutter"]');
+      const who = await box('[data-test="row-who"]');
+      const amount = await box('[data-test="row-amount"]');
+      const dateLine = await box('[data-test="row-date-line"]');
+      const what = await box('[data-test="row-what"]');
+      const control = await box(txn === 'PP-P2' ? '[data-test="payment-category"]' : '[data-test="row-category"]');
+      expect(check.x, `${txn}: checkbox first`).toBeLessThan(who.x);
+      expect(Math.abs(check.y + check.height / 2 - (who.y + who.height / 2)), `${txn}: checkbox beside who`).toBeLessThan(8);
+      expect(amount.x + amount.width, `${txn}: amount at the right edge`).toBeGreaterThan(cardBox.x + cardBox.width - 40);
+      expect(Math.abs(amount.y + amount.height / 2 - (who.y + who.height / 2)), `${txn}: amount on who's line`).toBeLessThan(8);
+      expect(dateLine.y, `${txn}: date line under who`).toBeGreaterThanOrEqual(who.y + who.height - 1);
+      expect(what.y, `${txn}: what under the date line`).toBeGreaterThanOrEqual(dateLine.y + dateLine.height - 1);
+      expect(control.y, `${txn}: controls under what`).toBeGreaterThanOrEqual(what.y + what.height - 1);
+    }
+    await expect(page.locator('.payment-card[data-txn="N26-E1"] [data-test="row-date-line"]')).toHaveText('2026-10-14 · N26');
+    await expect(page.locator('.payment-card[data-txn="M-e2"] [data-test="row-date-line"]')).toHaveText('2026-09-28 · By hand');
+    // No sideways scroll at 390.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
