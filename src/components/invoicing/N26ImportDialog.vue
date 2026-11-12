@@ -88,7 +88,11 @@
                 <strong class="nowrap n26-row__amount">{{ formatMoney(row.gross_cents, row.currency) }}</strong>
               </div>
               <span class="n26-row__muted" data-test="n26-row-meta"><span class="nowrap">{{ formatDay(row.paid_on) }}</span><template v-if="row.note"> · <span class="n26-row__note">{{ row.note }}</span></template></span>
-              <span v-if="row.already_imported" class="n26-row__muted" data-test="n26-row-imported">Already imported</span>
+              <!-- A match to a payment she removed, or deleted for good, is
+                   not in her book, so it does not say "Already imported"
+                   (§3.143 Decision 6). -->
+              <span v-if="priorFlag(row)" class="n26-row__muted" data-test="n26-row-prior">{{ priorFlag(row) }}</span>
+              <span v-else-if="row.already_imported" class="n26-row__muted" data-test="n26-row-imported">Already imported</span>
               <span v-else-if="row.possible_duplicate_of" class="n26-row__muted" data-test="n26-row-duplicate">{{ duplicateLine(row) }}</span>
             </div>
           </li>
@@ -136,11 +140,13 @@
     confirmN26Expenses,
     confirmN26Rows,
     copyKeptSentence,
+    countPrior,
     errorOf,
     formatDay,
     formatMoney,
     listExpenseCategories,
     n26FileErrorReason,
+    priorFlag,
   } from './api.js';
 
   // Every book has this category (the server seeds it), so it is the
@@ -266,6 +272,7 @@
     methods: {
       formatDay,
       formatMoney,
+      priorFlag,
       kindLabel(kind) {
         return N26_KIND_LABELS[kind] || kind;
       },
@@ -353,6 +360,19 @@
       },
       finish(result, posted, expenses) {
         const alreadyImported = this.rows.filter(({ row }) => row.already_imported).length;
+        // Rows matching a record she removed or deleted for good, in either
+        // direction (§3.143 Decision 6, design_agent c66225). The review shows
+        // them without a checkbox, so they are counted from their flags; a
+        // confirm counts any the server met anyway. They are printed apart
+        // from "already imported", so that count leaves them out.
+        const payPrior = countPrior(this.rows.map(({ row }) => row));
+        const expPrior = countPrior(this.expenseRows.map(({ row }) => row));
+        const ex = expenses || {};
+        const removedEarlier = payPrior.removed + expPrior.removed + (result.removed_earlier || 0) + (ex.removed_earlier || 0);
+        const deletedEarlier = payPrior.deleted + expPrior.deleted + (result.deleted_earlier || 0) + (ex.deleted_earlier || 0);
+        const paymentDuplicates = result.duplicates + alreadyImported
+          - payPrior.removed - payPrior.deleted
+          - (result.removed_earlier || 0) - (result.deleted_earlier || 0);
         this.$emit('imported', {
           files: this.files.length,
           failures: this.files
@@ -368,7 +388,9 @@
           paypal_transfers: this.paypalTotal,
           space_transfers: this.spaceTransferTotal,
           imported: result.confirmed,
-          duplicates: result.duplicates + alreadyImported,
+          duplicates: Math.max(0, paymentDuplicates),
+          removed_earlier: removedEarlier,
+          deleted_earlier: deletedEarlier,
           skipped: this.rows.length - alreadyImported - posted.length,
           // Outgoing rows added to the expense book (system_3 #10432).
           expenses_added: expenses ? expenses.confirmed : 0,

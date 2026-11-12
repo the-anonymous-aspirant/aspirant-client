@@ -90,7 +90,7 @@
              comma follows directly (system_3 #10040: a break here rendered
              "3 imported , 0 already imported"). -->
         PayPal {{ paypalNoun }}: read {{ summary.rows_read }} rows: <strong>{{ summary.imported }}</strong> imported<template v-if="summary.withdrawals"> (including {{ summary.withdrawals }} bank withdrawals)</template>,
-        <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ summary.duplicates }} already imported, {{ summary.skipped }} skipped.<template v-if="paypalExpensesAdded">
+        <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ paypalPrior.already }} already imported, {{ summary.skipped }} skipped<template v-if="paypalPrior.removed"> · <span data-test="paypal-summary-removed">{{ removedClause(paypalPrior.removed) }}</span></template><template v-if="paypalPrior.deleted"> · <span data-test="paypal-summary-deleted">{{ deletedClause(paypalPrior.deleted) }}</span></template>.<template v-if="paypalExpensesAdded">
           {{ ' ' }}<span data-test="paypal-summary-expenses">{{ paypalExpensesAdded }} expense{{ paypalExpensesAdded === 1 ? '' : 's' }} added to your book.</span></template><template v-if="paypalCopyKept">
           {{ ' ' }}<span data-test="paypal-summary-copy-kept">{{ paypalCopyKept }}</span></template><template v-if="payerCandidates.length">
           {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span>{{ ' ' }}<AspButton variant="ghost" size="sm" class="summary__action" data-test="payers-open" @click="payersOpen = true">Add payers…</AspButton></template>
@@ -107,7 +107,7 @@
         N26: read {{ n26Summary.rows_read }} row{{ n26Summary.rows_read === 1 ? '' : 's' }} from
         {{ n26Summary.files }} file{{ n26Summary.files === 1 ? '' : 's' }}:
         <strong>{{ n26Summary.imported }}</strong> imported, {{ n26Summary.duplicates }} already imported,
-        {{ n26Summary.skipped }} skipped<template v-if="n26Summary.paypal_transfers">, <span data-test="n26-summary-paypal">{{ n26PayPalClause }}</span></template><template v-if="n26Summary.space_transfers">, <span data-test="n26-summary-space-transfer">{{ n26SpaceTransferClause }}</span></template>.<template v-if="n26Summary.failures.length">
+        {{ n26Summary.skipped }} skipped<template v-if="n26Summary.paypal_transfers">, <span data-test="n26-summary-paypal">{{ n26PayPalClause }}</span></template><template v-if="n26Summary.space_transfers">, <span data-test="n26-summary-space-transfer">{{ n26SpaceTransferClause }}</span></template><template v-if="n26Summary.removed_earlier"> · <span data-test="n26-summary-removed">{{ removedClause(n26Summary.removed_earlier) }}</span></template><template v-if="n26Summary.deleted_earlier"> · <span data-test="n26-summary-deleted">{{ deletedClause(n26Summary.deleted_earlier) }}</span></template>.<template v-if="n26Summary.failures.length">
           {{ ' ' }}<span data-test="n26-summary-failures">{{ n26FailureLine }}</span></template><template v-if="(n26Summary.unreadable || []).length">
           {{ ' ' }}<span data-test="n26-summary-unreadable">{{ n26UnreadableLine }}</span></template><template v-if="n26Summary.expenses_added">
           {{ ' ' }}<span data-test="n26-summary-expenses">{{ n26Summary.expenses_added }} expense{{ n26Summary.expenses_added === 1 ? '' : 's' }} added to your book.</span></template><template v-if="payerCandidates.length">
@@ -405,6 +405,7 @@
     deletePayment,
     SKIP_REASON_LABELS,
     copyKeptSentence,
+    countPrior,
     errorOf,
     formatDay,
     formatMoney,
@@ -479,6 +480,9 @@
         paypalExpenseCandidates: [],
         paypalExpensesOpen: false,
         paypalExpensesAdded: 0,
+        // What the PayPal expense confirm counted as removed or deleted
+        // earlier: { removed, deleted } (server PR 196).
+        paypalExpensePrior: { removed: 0, deleted: 0 },
         confirmingDelete: null,
         deleting: null,
         columns: [
@@ -497,6 +501,20 @@
       };
     },
     computed: {
+      // The PayPal line's counts of rows matching a record she removed or
+      // deleted for good (§3.143 Decision 6, design_agent c66225): the
+      // payments the import skipped, the outgoing rows its review flagged,
+      // and any its expense confirm met. Server `duplicates` includes the
+      // skipped payments, so "already imported" leaves them out.
+      paypalPrior() {
+        const s = this.summary || {};
+        const exp = countPrior(this.paypalExpenseCandidates);
+        return {
+          already: Math.max(0, (s.duplicates || 0) - (s.removed_earlier || 0) - (s.deleted_earlier || 0)),
+          removed: (s.removed_earlier || 0) + exp.removed + this.paypalExpensePrior.removed,
+          deleted: (s.deleted_earlier || 0) + exp.deleted + this.paypalExpensePrior.deleted,
+        };
+      },
       incoming() {
         return this.payments.filter((p) => p.kind === 'incoming');
       },
@@ -630,6 +648,17 @@
       formatDay,
       formatMoney,
       payersSavedLine,
+      // The import line's clauses for rows matching a removed or a deleted
+      // record (design_agent c66225). Printed only when non-zero. "restore it
+      // on Transactions" becomes the link to the removed view when that view
+      // ships (system_3 #10633); a deleted row can never come back, so its
+      // clause has nothing to link to.
+      removedClause(n) {
+        return `${n} removed earlier: restore it on Transactions`;
+      },
+      deletedClause(n) {
+        return `${n} deleted earlier`;
+      },
       methodLabel(row) {
         return METHOD_LABELS[row.method] || row.method;
       },
@@ -735,6 +764,10 @@
       // Book tab shows it only after a reload (system_3 #10432).
       onPayPalExpensesDone(result) {
         this.paypalExpensesAdded = (result && result.confirmed) || 0;
+        this.paypalExpensePrior = {
+          removed: (result && result.removed_earlier) || 0,
+          deleted: (result && result.deleted_earlier) || 0,
+        };
         if (this.paypalExpensesAdded) this.$emit('changed');
       },
       onN26Imported(summary) {
@@ -807,6 +840,7 @@
         this.payersSummary = null;
         this.payerCandidates = [];
         this.paypalExpensesAdded = 0;
+        this.paypalExpensePrior = { removed: 0, deleted: 0 };
         try {
           const { summary, expenseCandidates } = await importPayPalCSV(this.pendingFile, dateOrder);
           this.summary = summary;
