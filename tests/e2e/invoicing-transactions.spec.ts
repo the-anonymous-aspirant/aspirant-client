@@ -172,7 +172,15 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
     const seen = new Set<string>();
     for (const w of sweep) {
       await page.setViewportSize({ width: w, height: 900 });
-      const m = await page.evaluate((ids) => {
+      // Measure only once layout has settled (system_3 #10670). WebKit can
+      // report a button still laid out for the previous container-query
+      // state on the first frame after a large jump, e.g. 641 -> 360, which
+      // read as a 74px-narrow stacked button. Each read waits two frames
+      // inside the same evaluate (one round-trip per width keeps the sweep
+      // inside its timeout on mobile-safari), and a read that breaks a rule
+      // is taken once more before it is asserted.
+      const measure = () => page.evaluate(async (ids) => {
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null))));
         const row = document.querySelector('.ways-in') as HTMLElement;
         const bs = ids.map((id) => document.querySelector(`[data-test="${id}"]`) as HTMLElement);
         const rects = bs.map((b) => b.getBoundingClientRect());
@@ -189,6 +197,15 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
           oneLine: bs.every((b) => { const span = b.querySelector('span') || b; return span.getBoundingClientRect().height < 2 * lineHeight(b); }),
         };
       }, WAYS_IN.map(([id]) => id));
+      const valid = (r: Awaited<ReturnType<typeof measure>>) => {
+        const sh = r.perRow.join('+');
+        if (!['4', '2+2', '1+1+1+1'].includes(sh) || !r.oneLine || r.overflow.some((o) => o > 0)) return false;
+        if (sh === '2+2' && (Math.abs(r.widths[0] - r.widths[1]) > 1 || r.lefts[0] !== r.lefts[2] || r.lefts[1] !== r.lefts[3])) return false;
+        if (sh === '1+1+1+1' && r.widths.some((bw) => Math.abs(bw - r.rowWidth) > 1)) return false;
+        return true;
+      };
+      let m = await measure();
+      if (!valid(m)) m = await measure();
       const shape = m.perRow.join('+');
       seen.add(shape);
       if (w === 641 || w === 768) console.log(`ways-in @${w}: ${JSON.stringify(m)}`);
