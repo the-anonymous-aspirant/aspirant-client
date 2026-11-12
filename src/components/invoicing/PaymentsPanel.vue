@@ -593,6 +593,59 @@
         if (this.direction === 'out') return [all, ...expense];
         return [all, ...income, ...expense];
       },
+      clientOptions() {
+        return [{ value: 0, label: 'No client' }, ...this.clients.map((c) => ({ value: c.id, label: c.name }))];
+      },
+      // A file that could not be read stays named after the dialog closes
+      // (D2: a fold may hide detail, never a failure).
+      // Transfers from PayPal the server left out of the N26 files (#9881).
+      // "left out" is the rule; "skipped" stays her own unticking (c61091).
+      n26PayPalClause() {
+        const n = (this.n26Summary && this.n26Summary.paypal_transfers) || 0;
+        return n === 1
+          ? '1 transfer from PayPal left out (its payments come in through PayPal)'
+          : `${n} transfers from PayPal left out (their payments come in through PayPal)`;
+      },
+      // Moves between her own account and a Space that the server left out
+      // of a statement (system_3 #10541): the statement's analogue of the
+      // PayPal clause above, kept short because the review dialog already
+      // gave the full reason (design_agent c65358).
+      n26SpaceTransferClause() {
+        const n = (this.n26Summary && this.n26Summary.space_transfers) || 0;
+        return n === 1
+          ? '1 move between your account and a Space left out (your own money)'
+          : `${n} moves between your account and your Spaces left out (your own money)`;
+      },
+      // A recognised file that read no transaction stays named after the
+      // dialog closes, like a failure (design_agent c65358).
+      // A file that read no rows is a recorded failure; the server says when
+      // its kept copy goes, if one was kept (#10567).
+      paypalCopyKept() {
+        return copyKeptSentence(this.summary && this.summary.copy_expires_at);
+      },
+      n26UnreadableLine() {
+        const files = (this.n26Summary && this.n26Summary.unreadable) || [];
+        const n = files.length;
+        return `${n} file${n === 1 ? '' : 's'} read no transaction: ${files.join(', ')}.`;
+      },
+      payersClause() {
+        const n = this.payerCandidates.length;
+        return n === 1 ? '1 payer is not in your client book.' : `${n} payers are not in your client book.`;
+      },
+      n26FailureLine() {
+        const failures = (this.n26Summary && this.n26Summary.failures) || [];
+        const n = failures.length;
+        const list = failures.map((f) => `${f.filename} (${f.reason})`).join(', ');
+        return `${n} file${n === 1 ? '' : 's'} could not be read: ${list}.`;
+      },
+      // The PayPal file type, named on every PayPal line (§3.127 D4): what the
+      // server read once it answered, otherwise the file the owner chose.
+      paypalNoun() {
+        if (this.summary && this.summary.format) return this.summary.format === 'xlsx' ? 'Excel file' : 'CSV';
+        const f = this.pendingFile;
+        const xlsx = f && (/\.xlsx$/i.test(f.name || '') || f.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        return xlsx ? 'Excel file' : 'CSV';
+      },
       selectedRows() {
         return this.incoming.filter((p) => this.selected.includes(p.id));
       },
