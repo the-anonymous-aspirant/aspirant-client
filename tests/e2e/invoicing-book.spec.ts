@@ -117,6 +117,21 @@ async function open(page: Page, fake: Fake): Promise<void> {
   await expect(page.locator('[data-test="book-panel"]')).toBeVisible();
 }
 
+// "Enter expense by hand" sits on Transactions since system_3 #10627 (§3.143
+// Decision 2), so a hand entry starts there and is read back on the Book.
+async function openTransactions(page: Page, fake: Fake): Promise<void> {
+  await mock(page, fake);
+  await seedTrustedSessionAs(page, 'vinoly');
+  await page.goto('/member/personal/invoicing');
+  await dismissMobileSidebarIfPresent(page);
+  await expect(page.locator('[data-test="payments-panel"]')).toBeVisible();
+}
+
+const showBook = async (page: Page) => {
+  await page.getByRole('tab', { name: 'Book' }).click();
+  await expect(page.locator('[data-test="book-panel"]')).toBeVisible();
+};
+
 test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
   test('with nothing in the book, the empty state shows', async ({ page }) => {
     await open(page, newFake());
@@ -169,6 +184,7 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
     await open(page, fake);
     await expect(page.locator('[data-test="book-empty"]')).toBeVisible();
 
+    await page.getByRole('tab', { name: 'Transactions' }).click();
     await page.locator('[data-test="expense-new"]').click();
     await expect(page.getByRole('dialog', { name: 'Enter expense by hand' })).toBeVisible();
 
@@ -183,6 +199,7 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
     await page.locator('[data-test="expense-note"]').fill('Guitar strings');
     await page.locator('[data-test="expense-save"]').click();
 
+    await showBook(page);
     await expect(page.locator('[data-test="book-row"]')).toHaveCount(1);
     await expect(page.locator('[data-test="book-row"]')).toContainText('Guitar strings');
     const posts = fake.requests.filter((r) => r.method === 'POST' && r.path === '/invoicing/expenses/manual');
@@ -193,7 +210,7 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
 
   test('adding a category inline makes it usable on the same expense', async ({ page }) => {
     const fake = newFake();
-    await open(page, fake);
+    await openTransactions(page, fake);
     await page.locator('[data-test="expense-new"]').click();
     await page.locator('[data-test="expense-add-category-link"]').click();
     await page.locator('[data-test="expense-new-category-name"]').fill('Guitar strings');
@@ -206,12 +223,13 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
     await page.getByRole('option', { name: 'Guitar strings', exact: true }).click();
     await page.locator('[data-test="expense-save"]').click();
 
+    await showBook(page);
     await expect(page.locator('[data-test="book-row"]')).toContainText('Guitar strings');
   });
 
   test('a duplicate category name is refused', async ({ page }) => {
     const fake = newFake();
-    await open(page, fake);
+    await openTransactions(page, fake);
     await page.locator('[data-test="expense-new"]').click();
     await page.locator('[data-test="expense-add-category-link"]').click();
     await page.locator('[data-test="expense-new-category-name"]').fill('Travel');

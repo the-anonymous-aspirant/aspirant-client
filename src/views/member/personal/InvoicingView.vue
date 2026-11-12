@@ -4,7 +4,7 @@
     <header class="page-head">
       <h1>Invoices</h1>
       <p class="page-subtitle">
-        Import payments from PayPal or N26, mark which were paid work, and issue invoices for that work.
+        Record money in and out from PayPal, N26 or by hand, mark what was for your work, and issue invoices for it.
       </p>
     </header>
 
@@ -60,6 +60,8 @@
       <ClientsPanel v-if="tab === 'clients'" :clients="clients" @changed="fetchAll" />
       <InvoicesPanel v-else-if="tab === 'invoices'" :refresh-key="refreshKey" @open="openInvoice" />
       <BookPanel v-else-if="tab === 'book'" :payments="payments" :expenses="expenses" @changed="fetchAll" />
+      <!-- Transactions is the Payments panel in its place (§3.143 Decision 1,
+           system_3 #10555): where money is recorded, checked and corrected. -->
       <PaymentsPanel v-else :payments="payments" :clients="clients" @changed="fetchAll" @open-invoice="openInvoice" />
 
       <InvoiceEditor
@@ -129,9 +131,9 @@
         profileOpen: false,
         editorOpen: false,
         editorInvoiceId: null,
-        tab: 'payments',
+        tab: 'transactions',
         tabs: [
-          { value: 'payments', label: 'Payments' },
+          { value: 'transactions', label: 'Transactions' },
           { value: 'invoices', label: 'Invoices' },
           { value: 'book', label: 'Book' },
           { value: 'clients', label: 'Clients' },
@@ -254,7 +256,7 @@
   }
 
   /* class="tabs" lands on AspSegmented's own root, so the root is styled
-     directly; three equal segments span the page edge to edge. */
+     directly; four equal segments span the page edge to edge. */
   .invoicing-view .tabs {
     display: flex;
     width: 100%;
