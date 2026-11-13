@@ -647,24 +647,25 @@
       },
       // The category select's options follow the direction: income
       // categories, expense categories, or both (§3.143 Decision 3). Under
-      // All, each option names its direction in the filter's own words, "In ·
-      // Paid work" … "Out · travel", income first: "Other" is both an income
-      // and an expense category, and AspSelect has no option groups yet
-      // (design_agent c66290 on system_3 #10630). When it gets them, the
-      // prefix below becomes a group. Expense categories are the ones her rows
-      // carry: the panel makes no categories request until the expense
-      // dialog opens (invoicing.spec, invoicing-n26.spec). Values carry the
-      // direction too, so a filter never matches the other side.
+      // All they sit in two AspSelect groups, In then Out, with bare labels:
+      // "Other" is both an income and an expense category, and the group
+      // names its side (design_agent c66290 on system_3 #10630). "All
+      // categories" stays a plain option above both groups, so she always has
+      // a way back to every row (c66693 on #10702). Under In or Out the list
+      // is flat. Expense categories are the ones her rows carry: the panel
+      // makes no categories request until the expense dialog opens
+      // (invoicing.spec, invoicing-n26.spec). Values carry the direction too,
+      // so a filter never matches the other side.
       filterOptions() {
-        const prefix = this.direction === 'all';
-        const label = (side, text) => (prefix ? `${side} · ${text}` : text);
-        const income = this.categoryOptions.map((o) => ({ value: `in:${o.value}`, label: label('In', o.label) }));
+        const income = this.categoryOptions.map((o) => ({ value: `in:${o.value}`, label: o.label }));
         const names = [...new Set(this.expenses.map((e) => e.category))].sort((x, y) => x.localeCompare(y));
-        const expense = names.map((n) => ({ value: `out:${n}`, label: label('Out', n) }));
+        const expense = names.map((n) => ({ value: `out:${n}`, label: n }));
         const all = { value: 'all', label: 'All categories' };
         if (this.direction === 'in') return [all, ...income];
         if (this.direction === 'out') return [all, ...expense];
-        return [all, ...income, ...expense];
+        const groups = [{ group: 'In', options: income }];
+        if (expense.length) groups.push({ group: 'Out', options: expense });
+        return [all, ...groups];
       },
       clientOptions() {
         return [{ value: 0, label: 'No client' }, ...this.clients.map((c) => ({ value: c.id, label: c.name }))];
@@ -832,7 +833,8 @@
       },
       // A category the new direction does not offer falls back to all.
       filterOptions(options) {
-        if (!options.some((o) => o.value === this.categoryFilter && !o.disabled)) this.categoryFilter = 'all';
+        const flat = options.flatMap((o) => o.options || [o]);
+        if (!flat.some((o) => o.value === this.categoryFilter && !o.disabled)) this.categoryFilter = 'all';
       },
     },
     mounted() {
