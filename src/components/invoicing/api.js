@@ -111,11 +111,11 @@ export const n26FileErrorReason = (fileError) =>
 export const listPayments = () => axios.get(`${base}/payments`).then((r) => r.data.payments || []);
 
 // Work expenses and their categories (system_3 #10414-A/#10424). An expense
-// is never invoiced, so there is no patch/draft path, only create/list/delete.
+// is never invoiced, so it has no draft path. Deleting one goes through
+// remove, then delete for good (below; system_3 #10647).
 export const listExpenses = () => axios.get(`${base}/expenses`).then((r) => r.data.expenses || []);
 export const createManualExpense = (expense) =>
   axios.post(`${base}/expenses/manual`, expense).then((r) => r.data.expense);
-export const deleteExpense = (id) => axios.delete(`${base}/expenses/${id}`);
 // An expense's own notes on it (server #10555-A1): a hand-entered one may
 // change more, an imported one only its category and note.
 export const patchExpense = (id, patch) => axios.patch(`${base}/expenses/${id}`, patch).then((r) => r.data.expense);
@@ -153,9 +153,6 @@ export const patchPayment = (id, patch) => axios.patch(`${base}/payments/${id}`,
 // §3.142 Decision 3), so the caller can say so.
 export const createManualPayment = (payment) =>
   axios.post(`${base}/payments/manual`, payment).then((r) => r.data);
-// Only a hand-entered payment that no invoice covers; the server refuses others.
-// Any payment not on an issued invoice, imported or entered by hand (#10009).
-export const deletePayment = (id) => axios.delete(`${base}/payments/${id}`);
 // The removed view (§3.143 Decision 6, server #10555-A2): removed rows, kept
 // out of everything that counts until she restores them or deletes them for
 // good. Restore and purge take {ids} and are all or nothing per call.
