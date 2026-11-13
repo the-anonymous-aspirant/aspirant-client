@@ -284,8 +284,8 @@ test.describe('#9993 Invoices: the issuer phone in the profile editor', () => {
   });
 
   // design_agent on #9993: the refusal shows on the Phone field itself, in
-  // place of its hint, the field takes focus, and her text is kept.
-  test('a refused phone says why on the field, takes focus and keeps her text', async ({ page }) => {
+  // place of its hint, the field takes focus, and zir text is kept.
+  test('a refused phone says why on the field, takes focus and keeps zir text', async ({ page }) => {
     const fake = newFake();
     await mockInvoicing(page, fake);
     await seedTrustedSessionAs(page, 'vinoly');

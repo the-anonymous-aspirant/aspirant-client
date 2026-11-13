@@ -1,10 +1,10 @@
 // "What it was for" categories (system_3 #9928, operator c61358): a few
-// defaults plus the ones she saves herself. Hers live in this browser's
+// defaults plus the ones ze saves zirself. Zirs live in this browser's
 // localStorage; the server only ever sees the line's plain description text,
 // so a chosen category and typed text are the same thing to it.
 //
 // Every storage access is guarded: a private window, blocked site data or a
-// full quota must never break the invoice form. Without storage she gets the
+// full quota must never break the invoice form. Without storage ze gets the
 // defaults and no save action.
 
 export const DEFAULT_CATEGORIES = ['Tattoo', 'Tattoo (small)', 'Tattoo (big)'];
@@ -24,7 +24,7 @@ export function storageAvailable() {
   }
 }
 
-// Her own categories, in the order she saved them.
+// Zir own categories, in the order ze saved them.
 export function savedCategories() {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(KEY) || '[]');
@@ -45,7 +45,7 @@ function write(list) {
 
 export function allCategories() {
   const mine = savedCategories().filter((c) => !DEFAULT_CATEGORIES.some((d) => same(d, c)));
-  // Hers follow the defaults alphabetically (design_agent on #9928): she finds
+  // Zirs follow the defaults alphabetically (design_agent on #9928): ze finds
   // one by name, and save order is a history the screen does not show.
   return [...DEFAULT_CATEGORIES, ...mine.sort((a, b) => a.localeCompare(b, 'de', { sensitivity: 'base' }))];
 }

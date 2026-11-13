@@ -8,7 +8,7 @@
       <!-- Optional; printed under the email on new invoices only when set
            (operator c61727, system_3 #9967). The server is the only gate on
            its characters. A refusal shows on this field, in place of its
-           hint, with her text kept (design_agent on #9993). -->
+           hint, with zir text kept (design_agent on #9993). -->
       <AspInput
         ref="phone"
         v-model="form.phone"
@@ -18,7 +18,7 @@
         :error="fieldErrors.phone"
         data-test="profile-phone"
       />
-      <!-- Her own social links (operator c61586, system_3 #10003): stored,
+      <!-- Zir own social links (operator c61586, system_3 #10003): stored,
            never printed. Refusals show on their own field, as the phone's. -->
       <fieldset class="social" data-test="profile-social-group">
         <legend class="social__legend">Social media</legend>
@@ -306,7 +306,7 @@
     gap: var(--space-md);
   }
 
-  /* Her social links as one titled group (system_3 #10003). */
+  /* Zir social links as one titled group (system_3 #10003). */
   .social {
     display: grid;
     gap: var(--space-sm);

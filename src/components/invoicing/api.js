@@ -38,7 +38,7 @@ export function importPayPalCSV(file, dateOrder) {
     .then((r) => ({ summary: r.data.summary, expenseCandidates: r.data.expense_candidates || [] }));
 }
 
-// The outgoing PayPal payments the owner ticked, each with her category:
+// The outgoing PayPal payments the owner ticked, each with zir category:
 // stored as work expenses, { confirmed, duplicates } (system_3 #10425).
 export const confirmPayPalExpenses = (rows) =>
   axios.post(`${base}/expenses/import-paypal/confirm`, { rows }).then((r) => r.data.summary);
@@ -59,7 +59,7 @@ export const confirmN26Rows = (rows) =>
 
 // A statement's outgoing rows come back as each file's `expense_candidates`
 // (system_3 #10417), never among the payment candidates. The ones the owner
-// ticks are posted here, each with her chosen category (empty means
+// ticks are posted here, each with zir chosen category (empty means
 // "other"), and stored as work expenses: { confirmed, duplicates }.
 export const confirmN26Expenses = (rows) =>
   axios.post(`${base}/expenses/import-n26/confirm`, { rows }).then((r) => r.data.summary);
@@ -140,7 +140,7 @@ export function uploadExpenseReceipt(expenseId, file) {
   return axios.put(expenseReceiptUrl(expenseId), form).then((r) => r.data.receipt);
 }
 export const deleteExpenseReceipt = (expenseId) => axios.delete(expenseReceiptUrl(expenseId));
-// Seeded with ten starter types on first touch; the owner can add her own on
+// Seeded with ten starter types on first touch; the owner can add zir own on
 // top (operator's own ask, #10424).
 export const listExpenseCategories = () =>
   axios.get(`${base}/expense-categories`).then((r) => r.data.categories || []);
@@ -154,14 +154,14 @@ export const patchPayment = (id, patch) => axios.patch(`${base}/payments/${id}`,
 export const createManualPayment = (payment) =>
   axios.post(`${base}/payments/manual`, payment).then((r) => r.data);
 // The removed view (§3.143 Decision 6, server #10555-A2): removed rows, kept
-// out of everything that counts until she restores them or deletes them for
+// out of everything that counts until ze restores them or deletes them for
 // good. Restore and purge take {ids} and are all or nothing per call.
 export const listRemovedPayments = () =>
   axios.get(`${base}/payments`, { params: { removed: true } }).then((r) => r.data.payments || []);
 export const listRemovedExpenses = () =>
   axios.get(`${base}/expenses`, { params: { removed: true } }).then((r) => r.data.expenses || []);
 export const rowAction = (kind, action, ids) => axios.post(`${base}/${kind}/${action}`, { ids }).then((r) => r.data);
-// Remove keeps the row, out of everything that counts, until she restores it
+// Remove keeps the row, out of everything that counts, until ze restores it
 // or deletes it for good (§3.143 Decision 6, server #10555-A2). The server
 // refuses a payment on an issued invoice.
 export const removePayment = (id) => axios.post(`${base}/payments/${id}/remove`).then((r) => r.data);
@@ -198,7 +198,7 @@ export function errorOf(err) {
   };
 }
 
-// A review row the server matched to a record she removed, or deleted for
+// A review row the server matched to a record ze removed, or deleted for
 // good (server PR 196, §3.143 Decision 6). Both come with already_imported,
 // so the row has no checkbox; this is the flag that says why. A removed row
 // can be restored on Transactions; a deleted one is gone, and only counted.
@@ -218,7 +218,7 @@ export function countPrior(rows) {
 
 // The sentence after a failed import file's message, only when the server
 // kept a copy of it and says until when (design_agent c65231 on system_3
-// #10536, #10567). The date is her calendar day in the payments list's
+// #10536, #10567). The date is zir calendar day in the payments list's
 // spelling. No date, no sentence: it never claims a copy that doesn't exist.
 export function copyKeptSentence(copyExpiresAt) {
   const day = formatBerlinDay(copyExpiresAt);
@@ -246,7 +246,7 @@ export function formatDay(iso) {
   return String(iso).slice(0, 10);
 }
 
-// The calendar day of a moment in her calendar (Berlin), in the app's ISO
+// The calendar day of a moment in zir calendar (Berlin), in the app's ISO
 // day spelling: "2026-11-06" (system_3 #10003, design_agent c62046). sv-SE is
 // the locale whose date format is exactly YYYY-MM-DD.
 export function formatBerlinDay(iso) {
@@ -277,7 +277,7 @@ export function safeSocialUrl(kind, url) {
   return typeof url === 'string' && url.startsWith(prefix) && url.length > prefix.length ? url : '';
 }
 
-// The server's field refusals for a phone and the two links (#10002), in her words.
+// The server's field refusals for a phone and the two links (#10002), in zir words.
 export const FIELD_REFUSALS = {
   invalid_phone: { field: 'phone', text: 'Use digits, spaces and + - ( ) / . only, at most 40 characters.' },
   invalid_instagram: { field: 'instagram_url', text: 'Use an Instagram name (@name) or a link to an Instagram profile.' },
@@ -359,7 +359,7 @@ export const listAuditEvents = (entityType, entityId) =>
     .get(`${base}/audit-events`, { params: { entity_type: entityType, entity_id: entityId } })
     .then((r) => r.data.events || []);
 export const allInvoicesCsvUrl = () => `${base}/export/invoices.csv`;
-// Her client list as Kunden.csv (system_3 #10012).
+// Zir client list as Kunden.csv (system_3 #10012).
 export const clientsCsvUrl = () => `${base}/export/clients.csv`;
 // The Book tab's income-and-expenses bookkeeping grid (system_3 #10414-E).
 export const bookReportCsvUrl = () => `${base}/export/book-report.csv`;

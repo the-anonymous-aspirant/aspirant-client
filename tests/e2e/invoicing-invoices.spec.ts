@@ -244,7 +244,7 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await expect(page.locator('[data-test="invoice-editor"][data-status="issued"]')).toBeVisible();
   });
 
-  // #9949 (operator c61373): the note follows the draft's own gross as she
+  // #9949 (operator c61373): the note follows the draft's own gross as ze
   // edits, before any save, computed the way the server computes it at issue.
   test('a client without an address: the note turns into a warning as the draft crosses 250 €', async ({ page }) => {
     const fake = newFake();
@@ -266,7 +266,7 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await expect(note).toHaveAttribute('data-level', 'caution');
     await price.fill('100');
     await expect(note).toHaveAttribute('data-level', 'neutral');
-    expect(fake.requests.slice(sent).filter((r) => r.method !== 'GET'), 'nothing is saved while she types').toEqual([]);
+    expect(fake.requests.slice(sent).filter((r) => r.method !== 'GET'), 'nothing is saved while ze types').toEqual([]);
   });
 
   test('with VAT charged, the warning counts the gross, not the net', async ({ page }) => {

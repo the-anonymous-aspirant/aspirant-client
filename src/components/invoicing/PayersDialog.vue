@@ -75,9 +75,9 @@
 
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
-  // §3.142 Decisions 5-6: imported payers join the client book only when she
+  // §3.142 Decisions 5-6: imported payers join the client book only when ze
   // ticks them. The server groups the rows and tidies each name; every row
-  // starts unticked, because no rule can tell a client from a bank or her own
+  // starts unticked, because no rule can tell a client from a bank or zir own
   // other account. One save adds the clients and links their payments, all or
   // nothing.
   export default {
@@ -193,7 +193,7 @@
           this.$emit('saved', result);
           this.$emit('update:open', false);
         } catch (err) {
-          // Every tick and name stays as she left it (D13).
+          // Every tick and name stays as ze left it (D13).
           this.error = `Nothing was saved: ${errorOf(err).message}`;
           this.saving = false;
         }

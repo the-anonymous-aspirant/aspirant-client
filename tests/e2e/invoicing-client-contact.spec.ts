@@ -2,7 +2,7 @@ import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 
 /** Invoices app (system_3 #10003, the client half of #9971): a client's
- *  phone and social links, her own social links on the issuer profile, and
+ *  phone and social links, zir own social links on the issuer profile, and
  *  the client's added/edited times in Berlin time. The fake applies the
  *  server's rules from aspirant-server #10002: a handle or link is stored as
  *  one canonical URL, anything else is refused with its own code.
@@ -149,7 +149,7 @@ test.describe('#10003 Clients — phone and social links', () => {
     const anna = row(page, 'Anna Example');
     await expect(anna.locator('[data-test="client-social"], [data-test="client-instagram"], [data-test="client-telegram"]')).toHaveCount(0);
     expect(await page.locator('a[href^="javascript:"], a[href*="evil.example"]').count()).toBe(0);
-    // The edit form still shows what is stored, so she can correct it.
+    // The edit form still shows what is stored, so ze can correct it.
     await page.locator('[data-test="client-edit-2"]').click();
     await expect(form(page).getByLabel('Instagram', { exact: true })).toHaveValue('javascript:alert(1)');
   });
@@ -199,7 +199,7 @@ test.describe('#10003 Clients — phone and social links', () => {
     });
   }
 
-  test('the edit dialog says the days the client was added and updated, in her calendar', async ({ page }) => {
+  test('the edit dialog says the days the client was added and updated, in zir calendar', async ({ page }) => {
     const fake = newFake();
     // Added 23:30Z on 5 Nov is 00:30 on 6 Nov in Berlin (design_agent c62046).
     fake.clients.push({ id: 3, name: 'Late Example', address: '', email: '', paypal_email: '', notes: '', created_at: '2026-11-05T23:30:00Z', updated_at: '2026-11-05T23:45:00Z' });
@@ -260,14 +260,14 @@ test.describe('#10003 Contact links meet their setter', () => {
   }
 });
 
-test.describe('#10003 Issuer profile — her social links', () => {
+test.describe('#10003 Issuer profile — zir social links', () => {
   const openProfile = async (page: Page, fake: Fake) => {
     await open(page, fake, '');
     await page.getByRole('button', { name: 'Edit profile' }).click();
   };
   const pform = (page: Page) => page.locator('[data-test="profile-form"]');
 
-  test('a save keeps her stored links and stores new ones canonical', async ({ page }) => {
+  test('a save keeps zir stored links and stores new ones canonical', async ({ page }) => {
     const fake = newFake();
     await openProfile(page, fake);
     await expect(pform(page).getByRole('group', { name: 'Social media' })).toBeVisible();
@@ -275,7 +275,7 @@ test.describe('#10003 Issuer profile — her social links', () => {
     await pform(page).getByLabel('Telegram').fill('@flower_studio');
     await page.locator('[data-test="profile-save"]').click();
     await expect(pform(page)).toBeHidden();
-    // The Instagram link she did not touch goes back with the save, so the
+    // The Instagram link ze did not touch goes back with the save, so the
     // server's replace keeps it (it was dropped before #10003).
     expect(lastBody(fake, 'PUT', /^\/invoicing\/profile$/)).toMatchObject({ instagram_url: 'https://www.instagram.com/flower.studio/', telegram_url: '@flower_studio' });
     expect(fake.profile.telegram_url).toBe('https://t.me/flower_studio');

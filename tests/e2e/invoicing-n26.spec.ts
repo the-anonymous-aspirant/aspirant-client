@@ -25,7 +25,7 @@ interface Fake {
   expenseCategories?: string[];
   categoriesFailure?: boolean;
   expenseConfirmFailure?: { status: number; body: Json };
-  // #10634: payments she removed or deleted for good, by transaction id; the
+  // #10634: payments ze removed or deleted for good, by transaction id; the
   // confirm skips them and counts them (server PR 196).
   priorPayments?: Record<string, 'removed' | 'deleted'>;
   requests: Array<{ method: string; path: string; body: string; contentType: string }>;
@@ -361,7 +361,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await expect(summary(page)).toHaveText('N26: read 1 row from 1 file: 0 imported, 1 already imported, 0 skipped.');
   });
 
-  // #9881: a credit whose payer is PayPal is her own transfer, already counted
+  // #9881: a credit whose payer is PayPal is zir own transfer, already counted
   // in the PayPal import; the server leaves it out and counts it per file.
   test('a file whose only row was a transfer from PayPal says so, and the footer and summary name it', async ({ page }) => {
     const fake = newFake();
@@ -408,11 +408,11 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await expectSummaryAddsUp(page);
   });
 
-  // A move between her own account and a Space (a Round-up, a Monthly
-  // Rule, a plain transfer to or from a Space) is her own money: the server
+  // A move between zir own account and a Space (a Round-up, a Monthly
+  // Rule, a plain transfer to or from a Space) is zir own money: the server
   // leaves it out (system_3 #10541) and the dialog says so, the same way it
   // does for a transfer from PayPal (design_agent c65358).
-  test('a move between her account and a Space is named as left out, and the summary counts it', async ({ page }) => {
+  test('a move between zir account and a Space is named as left out, and the summary counts it', async ({ page }) => {
     const fake = newFake();
     fake.parsed['statement.pdf'].skipped = { space_transfer: 1 };
     await open(page, fake);
@@ -457,7 +457,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
   });
 
   // A recognised statement that read no transaction says what is known and
-  // what she can check, not a quiet empty and not a claimed failure, and it
+  // what ze can check, not a quiet empty and not a claimed failure, and it
   // stays named after the dialog closes (design_agent c65358).
   test('a recognised statement that reads no transaction says so, and the summary still names it after close', async ({ page }) => {
     const fake = newFake();
@@ -840,7 +840,7 @@ test.describe('#10432-A1 N26 import — outgoing rows as work expenses', () => {
 
 // #10567: after a failed file, the owner is told when the server's kept copy
 // goes (design_agent c65231 on #10536), only when the server says one was
-// kept. 23:30Z on the 18th is 00:30 on the 19th in Berlin: her calendar day.
+// kept. 23:30Z on the 18th is 00:30 on the 19th in Berlin: zir calendar day.
 test.describe('#10567 N26 import — a kept copy of a failed file is named', () => {
   const KEPT = '2026-11-18T23:30:00Z';
 
@@ -877,7 +877,7 @@ test.describe('#10567 N26 import — a kept copy of a failed file is named', () 
   });
 });
 
-// #10634: a re-import meets rows she removed, or deleted for good, honestly
+// #10634: a re-import meets rows ze removed, or deleted for good, honestly
 // (§3.143 Decision 6, design_agent c66225 and c66252). A removed row says it
 // can be restored on Transactions; a deleted one says so; neither has a
 // checkbox. The summary counts both apart from "already imported", and never
@@ -899,7 +899,7 @@ test.describe('#10634 N26 import — removed and deleted rows are named and coun
     const rows = page.locator('[data-test="n26-row"]');
     await expect(rows.nth(0).locator('[data-test="n26-row-prior"]')).toHaveText(REMOVED);
     await expect(rows.nth(1).locator('[data-test="n26-row-prior"]')).toHaveText('Deleted earlier');
-    // Neither is in her book, so neither says "Already imported".
+    // Neither is in zir book, so neither says "Already imported".
     for (const i of [0, 1]) await expect(rows.nth(i).locator('[data-test="n26-row-imported"]')).toHaveCount(0);
     await expect(rows.nth(2).locator('[data-test="n26-row-imported"]')).toHaveText('Already imported');
     await expect(rows.nth(2).locator('[data-test="n26-row-prior"]')).toHaveCount(0);

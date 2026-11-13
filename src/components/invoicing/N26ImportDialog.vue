@@ -21,7 +21,7 @@
           This file could not be read: {{ fileErrorReason(file.error) }}.<template v-if="copyKept(file)">
             {{ ' ' }}<span data-test="n26-file-copy-kept">{{ copyKept(file) }}</span></template>
         </p>
-        <!-- A transfer from PayPal is her own money; its payments come in through the
+        <!-- A transfer from PayPal is zir own money; its payments come in through the
              PayPal import, so the server leaves it out (#9881, design_agent
              c61091). Say so, or the
              file reads as having lost a payment; when it was the file's only
@@ -32,8 +32,8 @@
           <p v-if="paypalSkipped(file)" class="n26-file__none n26-file__paypal" data-test="n26-file-paypal">
             {{ paypalLine(paypalSkipped(file)) }}
           </p>
-          <!-- A move between her own account and a Space (a Round-up, a
-               Monthly Rule, a plain transfer to or from a Space) is her own
+          <!-- A move between zir own account and a Space (a Round-up, a
+               Monthly Rule, a plain transfer to or from a Space) is zir own
                money: the server leaves it out (system_3 #10541), and the
                dialog says so, so the counts add up to the statement. -->
           <p v-if="spaceTransferSkipped(file)" class="n26-file__none n26-file__space-transfer" data-test="n26-file-space-transfer">
@@ -41,7 +41,7 @@
           </p>
           <!-- A recognised statement that read no row at all. A month with
                no activity reads zero rows too, so this says what is known
-               and what she can check, in the empty line's muted style, not
+               and what ze can check, in the empty line's muted style, not
                as an error (design_agent c65358). The kind is already in the
                heading. -->
           <p v-if="unreadableStatement(file)" class="n26-file__none n26-file__unreadable" data-test="n26-file-unreadable">
@@ -88,8 +88,8 @@
                 <strong class="nowrap n26-row__amount">{{ formatMoney(row.gross_cents, row.currency) }}</strong>
               </div>
               <span class="n26-row__muted" data-test="n26-row-meta"><span class="nowrap">{{ formatDay(row.paid_on) }}</span><template v-if="row.note"> · <span class="n26-row__note">{{ row.note }}</span></template></span>
-              <!-- A match to a payment she removed, or deleted for good, is
-                   not in her book, so it does not say "Already imported"
+              <!-- A match to a payment ze removed, or deleted for good, is
+                   not in zir book, so it does not say "Already imported"
                    (§3.143 Decision 6). -->
               <span v-if="priorFlag(row)" class="n26-row__muted" data-test="n26-row-prior">{{ priorFlag(row) }}</span>
               <span v-else-if="row.already_imported" class="n26-row__muted" data-test="n26-row-imported">Already imported</span>
@@ -231,8 +231,8 @@
       paypalTotal() {
         return this.files.reduce((n, file) => n + this.paypalSkipped(file), 0);
       },
-      // Rows the server left out as moves between her own account and a
-      // Space (system_3 #10541): her own money, not a payment or expense.
+      // Rows the server left out as moves between zir own account and a
+      // Space (system_3 #10541): zir own money, not a payment or expense.
       spaceTransferTotal() {
         return this.files.reduce((n, file) => n + this.spaceTransferSkipped(file), 0);
       },
@@ -287,7 +287,7 @@
         return (file.skipped && file.skipped.paypal_transfer) || 0;
       },
       paypalLine(n) {
-        // States the rule, not that her PayPal file is already in: she may
+        // States the rule, not that zir PayPal file is already in: ze may
         // import N26 first (design_agent c61091, D2).
         return n === 1
           ? '1 transfer from PayPal left out: its payments come in through your PayPal import.'
@@ -360,7 +360,7 @@
       },
       finish(result, posted, expenses) {
         const alreadyImported = this.rows.filter(({ row }) => row.already_imported).length;
-        // Rows matching a record she removed or deleted for good, in either
+        // Rows matching a record ze removed or deleted for good, in either
         // direction (§3.143 Decision 6, design_agent c66225). The review shows
         // them without a checkbox, so they are counted from their flags; a
         // confirm counts any the server met anyway. They are printed apart

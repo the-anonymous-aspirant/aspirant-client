@@ -2,7 +2,7 @@ import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 
 /** Invoices app (system_3 #10550, design §3.142 Decisions 5-6): imported
- *  payers join the client book only when she ticks them, in one dialog
+ *  payers join the client book only when ze ticks them, in one dialog
  *  reached from the import summary and from the Clients tab. Every call is
  *  answered by an in-memory fake of aspirant-server's
  *  /invoicing/payers/{candidates} and /invoicing/payers (#10548); a catch-all

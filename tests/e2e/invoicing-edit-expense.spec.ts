@@ -29,7 +29,7 @@ const newFake = (): Fake => ({
   events: [
     { id: 31, created_at: '2026-11-10T10:00:00Z', action: 'create_manual', entity_type: 'expense', entity_id: 21, details: '{}' },
     { id: 32, created_at: '2026-11-12T09:30:00Z', action: 'edit', entity_type: 'expense', entity_id: 21, details: '{"before":{"payee":""},"after":{"payee":"Copyshop Esempio"}}' },
-    // Her own category names read as given, never through the income labels
+    // Zir own category names read as given, never through the income labels
     // where `other` is "Other" (system_3 #10744).
     { id: 34, created_at: '2026-11-12T10:00:00Z', action: 'edit', entity_type: 'expense', entity_id: 21, details: '{"before":{"category":"travel"},"after":{"category":"other"}}' },
     // Another row's event never shows here.

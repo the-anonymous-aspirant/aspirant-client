@@ -26,7 +26,7 @@
           </label>
           <AspInput v-model="form.amount" label="Amount (€)" inputmode="decimal" placeholder="45,99" data-test="expense-amount" />
         </div>
-        <!-- Who she paid, the row's who (§3.143 Decision 3): stored as the
+        <!-- Who ze paid, the row's who (§3.143 Decision 3): stored as the
              expense's payee, next to when and how much. -->
         <AspInput v-model="form.payee" label="Paid to (optional)" data-test="expense-payee" />
       </template>
@@ -117,7 +117,7 @@
   // draft or invoice step — an expense is never invoiced. The category list
   // is the owner's own (seeded with ten starter types, extendable, #10424).
   // Given an `expense`, the same dialog edits it (§3.143 Decision 5, system_3
-  // #10695): a hand-entered expense is hers to change in full; an imported
+  // #10695): a hand-entered expense is zirs to change in full; an imported
   // one keeps what the bank recorded, and only its category and what it was
   // for change (aspirant-server invoicing_edit.go refuses the rest).
   export default {
@@ -164,7 +164,7 @@
       bankPayee() {
         return this.imported ? this.expense.reference || '' : '';
       },
-      // Her categories, plus the row's own while the list is still loading
+      // Zir categories, plus the row's own while the list is still loading
       // or no longer holds it, so the select always shows what is stored.
       categoryOptions() {
         const options = this.categories.map((c) => ({ value: c.name, label: c.name }));
@@ -238,7 +238,7 @@
         return '';
       },
       // Only what changed: an imported expense may change its category and
-      // what it was for, a hand-entered one every field she typed.
+      // what it was for, a hand-entered one every field ze typed.
       editPatch() {
         const was = formFrom(this.expense);
         const now = this.form;
