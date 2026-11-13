@@ -204,7 +204,8 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
     await expect(page.locator('[data-test="book-row"]')).toContainText('Guitar strings');
     const posts = fake.requests.filter((r) => r.method === 'POST' && r.path === '/invoicing/expenses/manual');
     expect(JSON.parse(posts[0].body)).toEqual({
-      paid_on: '2026-07-20', amount_cents: 4599, category: 'materials and supplies', reference: '', note: 'Guitar strings',
+      // "Paid to (optional)" is sent as payee, empty when left blank (system_3 #10695).
+      paid_on: '2026-07-20', amount_cents: 4599, category: 'materials and supplies', payee: '', reference: '', note: 'Guitar strings',
     });
   });
 
