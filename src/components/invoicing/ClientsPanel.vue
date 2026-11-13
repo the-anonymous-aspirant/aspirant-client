@@ -72,7 +72,7 @@
       caption="Clients"
       :row-attrs="(row) => ({ 'data-test': 'client-row' })"
     >
-      <!-- Her notes read as one muted line under the name, cut with an
+      <!-- Zir notes read as one muted line under the name, cut with an
            ellipsis so a cut shows (design ack c61704 on system_3 #9987); the
            full text is in the editor. A client with no notes shows nothing. -->
       <template #cell-name="{ row }">
@@ -83,7 +83,7 @@
         <span v-if="value" class="multiline">{{ value }}</span>
         <span v-else class="muted" data-test="client-no-address">No postal address</span>
       </template>
-      <!-- Contact: email, phone, then her social links (system_3 #10003). A
+      <!-- Contact: email, phone, then zir social links (system_3 #10003). A
            link's href is the URL as stored, never rebuilt from a handle
            (security, c61900 on #10002); it opens in a new tab. -->
       <template #cell-email="{ row }">
@@ -117,7 +117,7 @@
       </template>
     </AspDataTable>
 
-    <!-- Her client list as a spreadsheet (operator c61628, system_3 #10013;
+    <!-- Zir client list as a spreadsheet (operator c61628, system_3 #10013;
          server #10012). An occasional action, so it follows the list, the
          same place and shape as the Invoices tab's Export group: button and
          caption are one unit (#9948, #9960). No check screen: a client list
@@ -142,10 +142,10 @@
 
     <AspModal v-model:open="editorOpen" :title="editing ? 'Edit client' : 'Add client'" size="md">
       <form class="client-form" data-test="client-form" @submit.prevent="save">
-        <!-- When she added the client and when it was updated, as days in her
+        <!-- When ze added the client and when it was updated, as days in zir
              calendar (operator c61587, design_agent c62046). -->
         <p v-if="editing && editingStamp" class="client-form__stamp muted" data-test="client-stamp">{{ editingStamp }}</p>
-        <!-- What she has done for this client (operator c61586, system_3
+        <!-- What ze has done for this client (operator c61586, system_3
              #10006): issued invoices only, as the Statistics charts count
              them. The block's box is the same in every state (loading, the
              figures, none, failed), so the fields below never move once the
@@ -174,9 +174,9 @@
         />
         <AspInput v-model="form.email" type="email" label="Email" />
         <AspInput v-model="form.paypal_email" type="email" label="PayPal email" hint="Imported payments from this address are linked to the client." />
-        <!-- Phone and her social links are hers, not the invoice's (operator
+        <!-- Phone and zir social links are zirs, not the invoice's (operator
              c61586): never printed. A refusal shows on its own field, in
-             place of its hint, with her text kept (as #9993). -->
+             place of its hint, with zir text kept (as #9993). -->
         <AspInput ref="phone" v-model="form.phone" type="tel" label="Phone" hint="Not printed on invoices." :error="fieldErrors.phone" data-test="client-phone-input" />
         <fieldset class="social" data-test="client-social-group">
           <legend class="social__legend">Social media</legend>
@@ -287,7 +287,7 @@
       editingStamp() {
         const c = this.editing;
         if (!c) return '';
-        // Days in her calendar; "updated" is the operator's word, and true of
+        // Days in zir calendar; "updated" is the operator's word, and true of
         // any write to the row (design_agent c62046).
         const added = formatBerlinDay(c.created_at);
         const updated = formatBerlinDay(c.updated_at);
@@ -524,7 +524,7 @@
     white-space: nowrap;
   }
 
-  /* Her social links as one titled group in the client dialog. */
+  /* Zir social links as one titled group in the client dialog. */
   .social {
     display: grid;
     gap: var(--space-sm);

@@ -37,7 +37,7 @@ export function historyDay(iso) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-// An expense's categories are her own names (system_3 #10424) and read as
+// An expense's categories are zir own names (system_3 #10424) and read as
 // given; the income labels map only a payment's fixed keys, where `other` is
 // the income "Other" (system_3 #10744).
 function valueText(key, value, clients, entityType) {

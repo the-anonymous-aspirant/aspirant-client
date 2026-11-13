@@ -64,7 +64,7 @@
         return q ? this.categories.filter((c) => c.toLowerCase().includes(q)) : this.categories;
       },
       // One small action under the field: save a new text as a category, or
-      // remove one she saved. The defaults are never removable. Stays here,
+      // remove one ze saved. The defaults are never removable. Stays here,
       // not in SuggestField, because it is this field's own capability
       // (§3.142 Decision 2: "the category Save and Remove stay in
       // LineDescriptionInput.vue").

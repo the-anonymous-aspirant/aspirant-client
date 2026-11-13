@@ -272,7 +272,7 @@
       someShownSelected() {
         return !this.allShownSelected && this.shownIssued.some((r) => this.selected.includes(r.id));
       },
-      // What the file will hold, where she clicks (§3.114); the ticks are up
+      // What the file will hold, where ze clicks (§3.114); the ticks are up
       // in the list, so the count is restated here.
       mergeScope() {
         const n = this.selected.length;

@@ -3,7 +3,7 @@ import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/m
 
 /** Invoices app (system_3 #9928, operator c61358): "What it was for" is one
  *  field that suggests categories (Tattoo, Tattoo (small), Tattoo (big), plus
- *  her own) and still accepts free text. Her categories live in this
+ *  zir own) and still accepts free text. Zir categories live in this
  *  browser's localStorage. Catch-all /api/ → 404 is registered first. */
 
 type Json = Record<string, any>;
@@ -107,7 +107,7 @@ test.describe('#9928 Invoices app — "What it was for" suggests categories and 
     await expect(page.locator('[data-test="line-desc-save"]')).toHaveText('Save as a category on this device');
   });
 
-  test('her own category is saved, survives a reload, and can be removed again', async ({ page }) => {
+  test('zir own category is saved, survives a reload, and can be removed again', async ({ page }) => {
     await openDialog(page, { posts: [] });
     const field = note(page);
     await field.fill('Cover-up');
@@ -130,7 +130,7 @@ test.describe('#9928 Invoices app — "What it was for" suggests categories and 
     expect(await shown(page, note(page))).toEqual(DEFAULTS);
   });
 
-  test('her categories follow the defaults alphabetically, not in save order', async ({ page }) => {
+  test('zir categories follow the defaults alphabetically, not in save order', async ({ page }) => {
     await openDialog(page, { posts: [] });
     for (const c of ['Walk-in', 'Cover-up', 'Nachstechen']) {
       await note(page).fill(c);

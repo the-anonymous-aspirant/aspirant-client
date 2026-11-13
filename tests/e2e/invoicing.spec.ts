@@ -253,7 +253,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
   });
 
   // #10567: a failed PayPal file the server kept a copy of says until when,
-  // in her calendar day (23:30Z on the 18th is the 19th in Berlin); one it
+  // in zir calendar day (23:30Z on the 18th is the 19th in Berlin); one it
   // kept no copy of says nothing more (design_agent c65231 on #10536).
   test('a failed file with a kept copy says until when; without one, the error alone', async ({ page }) => {
     const fake = newFake({
@@ -482,7 +482,7 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
     await expect(page.locator('[data-test="import-error"]')).toHaveText('PayPal Excel file: not an Excel workbook (.xlsx)');
   });
 
-  // design_agent c60973: the button says "file", and she holds PayPal's PDF
+  // design_agent c60973: the button says "file", and ze holds PayPal's PDF
   // statement, so a file that is not a CSV or an .xlsx is refused before
   // anything is sent, saying what to bring.
   test('a PDF statement is refused before upload and the line says what to bring', async ({ page }) => {
@@ -758,7 +758,7 @@ test.describe('#10438 PayPal import — outgoing payments reviewed as work expen
 });
 
 // #10634: the PayPal payment import has no review, so its import line names
-// the payments that matched a record she removed or deleted for good, apart
+// the payments that matched a record ze removed or deleted for good, apart
 // from "already imported" (design_agent c66225, c66252). Its expense review
 // flags such rows, with no checkbox, as the N26 review does (§3.143
 // Decision 6). A zero count is never printed.

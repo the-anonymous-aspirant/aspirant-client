@@ -46,7 +46,7 @@
   // The Book tab's monthly bar chart (system_3 #10414-D), on the same month
   // axis as InvoicesChart.vue's own charts — same zero-fill-to-today walk, same
   // y-axis width and money tick format, so a month lines up the same way and
-  // reads the same whether she's looking at Invoices or Book. Two series on
+  // reads the same whether ze is looking at Invoices or Book. Two series on
   // one chart (unlike InvoicesChart's three single-series charts), so the
   // legend is ON here, not hidden.
   //
