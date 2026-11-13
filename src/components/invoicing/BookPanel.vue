@@ -33,7 +33,7 @@
         </template>
       </p>
       <details class="change" data-test="book-change" @toggle="onChangeToggle">
-        <summary>Change what counts</summary>
+        <summary class="fold-summary" data-test="book-change-summary">Change what counts</summary>
         <div class="change__body">
           <div class="change__preset full-select">
             <AspSelect
@@ -602,13 +602,6 @@
 
   .counting__line {
     margin: 0 0 var(--space-xs);
-  }
-
-  .change > summary {
-    cursor: pointer;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
   }
 
   .change__body {

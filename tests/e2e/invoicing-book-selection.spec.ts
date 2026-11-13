@@ -359,3 +359,59 @@ test.describe('#10635 the Book counts what she chose', () => {
     await expect(countingLine(page)).toBeVisible();
   });
 });
+
+// design_agent c67318 on #10635 (§3.17, §3.41): every fold's summary leads
+// with one muted caret that turns down when open, and the native marker is
+// hidden. Read from the computed style, so a lost class or a second marker
+// fails here, not only in a screenshot.
+async function foldMarker(summary: Locator) {
+  return summary.evaluate((el) => {
+    const before = getComputedStyle(el, '::before');
+    return {
+      content: before.content,
+      transform: before.transform,
+      listStyle: getComputedStyle(el).listStyleType,
+      minHeight: el.getBoundingClientRect().height,
+    };
+  });
+}
+
+async function expectFoldMarker(summary: Locator, details: Locator) {
+  const closed = await foldMarker(summary);
+  expect(closed.content).toBe('"▸"');
+  expect(closed.listStyle).toBe('none');
+  expect(closed.transform).toBe('none');
+  expect(closed.minHeight).toBeGreaterThanOrEqual(44);
+  await summary.click();
+  await expect(details).toHaveAttribute('open', '');
+  // Rotated 90°: matrix(0, 1, -1, 0, 0, 0), allowing for float noise.
+  await expect.poll(async () => {
+    const t = (await foldMarker(summary)).transform;
+    const m = t.match(/matrix\(([^)]+)\)/);
+    if (!m) return t;
+    const [a, b] = m[1].split(',').map(Number);
+    return Math.abs(a) < 1e-6 && Math.abs(b - 1) < 1e-6 ? 'down' : t;
+  }).toBe('down');
+}
+
+test.describe('#10635 every fold shows its marker (design_agent c67318)', () => {
+  test('"Change what counts" leads with one caret that turns down when open', async ({ page }) => {
+    const fake = newFake({ payments: [payment(1)] });
+    await load(page, fake);
+    await showBook(page);
+    await expectFoldMarker(page.locator('[data-test="book-change-summary"]'), page.locator('[data-test="book-change"]'));
+  });
+
+  test("an edit dialog's History fold shows the same caret", async ({ page }) => {
+    const fake = newFake({ payments: [payment(1)] });
+    await load(page, fake);
+    await showBook(page);
+    const row = bookRows(page).first();
+    const narrow = await page.evaluate(() => window.matchMedia('(max-width: 640px)').matches);
+    if (narrow) await row.locator('[data-test="book-row-description"]').click();
+    else await row.locator('[data-test="book-row-edit"]').click();
+    const dialog = page.getByRole('dialog', { name: 'Edit payment' });
+    await expect(dialog).toBeVisible();
+    await expectFoldMarker(dialog.locator('[data-test="edit-history-summary"]'), dialog.locator('[data-test="edit-history"]'));
+  });
+});
