@@ -29,6 +29,9 @@ const newFake = (): Fake => ({
   events: [
     { id: 31, created_at: '2026-11-10T10:00:00Z', action: 'create_manual', entity_type: 'expense', entity_id: 21, details: '{}' },
     { id: 32, created_at: '2026-11-12T09:30:00Z', action: 'edit', entity_type: 'expense', entity_id: 21, details: '{"before":{"payee":""},"after":{"payee":"Copyshop Esempio"}}' },
+    // Her own category names read as given, never through the income labels
+    // where `other` is "Other" (system_3 #10744).
+    { id: 34, created_at: '2026-11-12T10:00:00Z', action: 'edit', entity_type: 'expense', entity_id: 21, details: '{"before":{"category":"travel"},"after":{"category":"other"}}' },
     // Another row's event never shows here.
     { id: 33, created_at: '2026-11-12T11:00:00Z', action: 'edit', entity_type: 'payment', entity_id: 21, details: '{"before":{"note":""},"after":{"note":"x"}}' },
   ],
@@ -200,6 +203,7 @@ test.describe('#10695 Edit an expense, and name who was paid', () => {
     await expect(history).not.toHaveAttribute('open', '');
     await history.locator('summary').click();
     await expect(history.locator('[data-test="edit-history-line"]')).toHaveText([
+      '12 Nov 2026 · Category: travel → other',
       '12 Nov 2026 · Paid to: — → Copyshop Esempio',
       '10 Nov 2026 · Entered by hand',
     ]);

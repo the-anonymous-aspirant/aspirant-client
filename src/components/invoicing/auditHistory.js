@@ -37,9 +37,12 @@ export function historyDay(iso) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function valueText(key, value, clients) {
+// An expense's categories are her own names (system_3 #10424) and read as
+// given; the income labels map only a payment's fixed keys, where `other` is
+// the income "Other" (system_3 #10744).
+function valueText(key, value, clients, entityType) {
   if (value === null || value === undefined || value === '') return '—';
-  if (key === 'category') return CATEGORY_LABELS[value] || String(value);
+  if (key === 'category') return entityType === 'expense' ? String(value) : CATEGORY_LABELS[value] || String(value);
   if (key === 'method') return METHOD_LABELS[value] || String(value);
   if (key === 'gross_cents' || key === 'amount_cents') return formatMoney(Number(value));
   if (key === 'paid_on') return String(value).slice(0, 10);
@@ -60,7 +63,7 @@ function parseDetails(raw) {
 }
 
 // One line per event: the day, then what changed or what was done.
-export function historyLines(events, clients = []) {
+export function historyLines(events, clients = [], entityType = 'payment') {
   return [...events]
     .sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : b.id - a.id))
     .map((e) => {
@@ -70,7 +73,7 @@ export function historyLines(events, clients = []) {
       let what;
       if (after && Object.keys(after).length) {
         what = Object.keys(after)
-          .map((k) => `${FIELD_LABELS[k] || k}: ${valueText(k, before[k], clients)} → ${valueText(k, after[k], clients)}`)
+          .map((k) => `${FIELD_LABELS[k] || k}: ${valueText(k, before[k], clients, entityType)} → ${valueText(k, after[k], clients, entityType)}`)
           .join(', ');
       } else {
         const a = String(e.action || '');
