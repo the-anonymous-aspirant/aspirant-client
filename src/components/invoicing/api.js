@@ -164,6 +164,10 @@ export const listRemovedPayments = () =>
 export const listRemovedExpenses = () =>
   axios.get(`${base}/expenses`, { params: { removed: true } }).then((r) => r.data.expenses || []);
 export const rowAction = (kind, action, ids) => axios.post(`${base}/${kind}/${action}`, { ids }).then((r) => r.data);
+// Remove keeps the row, out of everything that counts, until she restores it
+// or deletes it for good (§3.143 Decision 6, server #10555-A2). The server
+// refuses a payment on an issued invoice.
+export const removePayment = (id) => axios.post(`${base}/payments/${id}/remove`).then((r) => r.data);
 
 // How a hand-entered payment was received, in the invoice's German wording.
 export const METHOD_LABELS = {
