@@ -114,7 +114,7 @@
       <!-- §3.143 Decision 5: the correction is one tap away and never in the
            way (S4). Events come newest first. -->
       <details v-if="editing" class="history" data-test="edit-history">
-        <summary>History</summary>
+        <summary class="fold-summary" data-test="edit-history-summary">History</summary>
         <p v-if="historyError" class="manual-form__hint" data-test="edit-history-error">{{ historyError }}</p>
         <ul v-else-if="history.length" class="history__list">
           <li v-for="line in history" :key="line.id" data-test="edit-history-line">{{ line.text }}</li>
@@ -489,13 +489,6 @@
   .facts dd {
     margin: 0;
     overflow-wrap: anywhere;
-  }
-
-  .history summary {
-    cursor: pointer;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
   }
 
   .history__list {

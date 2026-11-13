@@ -120,3 +120,41 @@ button:focus-visible {
 .fade-in {
   animation: fadeIn var(--transition-layout);
 }
+
+/* A fold's summary (§3.17, §3.41, §3.48; design_agent c67318 on system_3
+   #10635): the summary is the click target and looks clickable, so a muted
+   caret leads it and turns to point down when the fold is open. The caret
+   only signals state; the summary text stays the label. Exactly one marker
+   on every engine: the native one is hidden in both its forms, list-style
+   for Chromium and Firefox and ::-webkit-details-marker for WebKit. One
+   class for every fold, as on JobsView's sources panel. */
+.fold-summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  list-style: none;
+}
+
+.fold-summary::-webkit-details-marker {
+  display: none;
+}
+
+.fold-summary::before {
+  content: '▸';
+  display: inline-block;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  transition: transform 120ms ease;
+}
+
+details[open] > .fold-summary::before {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fold-summary::before {
+    transition: none;
+  }
+}

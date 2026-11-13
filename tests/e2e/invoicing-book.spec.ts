@@ -67,6 +67,8 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/invoices' && method === 'GET') return json(route, 200, { invoices: [] });
     if (path === '/invoicing/audit-events') return json(route, 200, { events: [] });
     if (path === '/invoicing/expenses' && method === 'GET') return json(route, 200, { expenses: fake.expenses });
+    // What the Book counts (system_3 #10635): the starting selection, Work only.
+    if (path === '/invoicing/book/selection' && method === 'GET') return json(route, 200, { selection: { preset: 'work_only', changed: false, income: ['paid_work'], expense_all: true, expense: [] }, presets: [{ id: 'work_only', name: 'Work only', builtin: true, income: ['paid_work'], expense_all: true, expense: [] }] });
     if (path === '/invoicing/expense-categories' && method === 'GET') return json(route, 200, { categories: fake.categories });
     if (path === '/invoicing/expense-categories' && method === 'POST') {
       const body = JSON.parse(req.postData() || '{}');
