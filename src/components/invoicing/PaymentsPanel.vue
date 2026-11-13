@@ -80,8 +80,8 @@
              comma follows directly (system_3 #10040: a break here rendered
              "3 imported , 0 already imported"). -->
         PayPal {{ paypalNoun }}: read {{ summary.rows_read }} rows: <strong>{{ summary.imported }}</strong> imported<template v-if="summary.withdrawals"> (including {{ summary.withdrawals }} bank withdrawals)</template>,
-        <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ paypalPrior.already }} already imported, {{ summary.skipped }} skipped<template v-if="paypalPrior.removed"> ·&nbsp;<span data-test="paypal-summary-removed">{{ removedClause(paypalPrior.removed) }}</span></template><template v-if="paypalPrior.deleted"> ·&nbsp;<span data-test="paypal-summary-deleted">{{ deletedClause(paypalPrior.deleted) }}</span></template>.<template v-if="expenseParts(paypalExpenses).length">
-          {{ ' ' }}<span data-test="paypal-summary-expenses"><template v-if="!paypalExpenses.added">Expenses: </template><template v-for="(part, i) in expenseParts(paypalExpenses)" :key="part.key"><template v-if="i"> ·&nbsp;</template><span :data-test="`paypal-summary-expenses-${part.key}`">{{ part.text }}</span></template>.</span></template><template v-if="paypalCopyKept">
+        <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ paypalPrior.already }} already imported, {{ summary.skipped }} skipped<template v-if="paypalPrior.removed"> ·&nbsp;<span data-test="paypal-summary-removed">{{ paypalPrior.removed }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-in" @click="openRemoved('in')">restore it on Transactions</button></span></template><template v-if="paypalPrior.deleted"> ·&nbsp;<span data-test="paypal-summary-deleted">{{ deletedClause(paypalPrior.deleted) }}</span></template>.<template v-if="expenseParts(paypalExpenses).length">
+          {{ ' ' }}<span data-test="paypal-summary-expenses"><template v-if="!paypalExpenses.added">Expenses: </template><template v-for="(part, i) in expenseParts(paypalExpenses)" :key="part.key"><template v-if="i"> ·&nbsp;</template><span :data-test="`paypal-summary-expenses-${part.key}`"><template v-if="part.key === 'removed'">{{ part.count }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-out" @click="openRemoved('out')">restore it on Transactions</button></template><template v-else>{{ part.text }}</template></span></template>.</span></template><template v-if="paypalCopyKept">
           {{ ' ' }}<span data-test="paypal-summary-copy-kept">{{ paypalCopyKept }}</span></template><template v-if="payerCandidates.length">
           {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span>{{ ' ' }}<AspButton variant="ghost" size="sm" class="summary__action" data-test="payers-open" @click="payersOpen = true">Add payers…</AspButton></template>
       </p>
@@ -97,10 +97,10 @@
         N26: read {{ n26Summary.rows_read }} row{{ n26Summary.rows_read === 1 ? '' : 's' }} from
         {{ n26Summary.files }} file{{ n26Summary.files === 1 ? '' : 's' }}:
         <strong>{{ n26Summary.imported }}</strong> imported, {{ n26Summary.duplicates }} already imported,
-        {{ n26Summary.skipped }} skipped<template v-if="n26Summary.paypal_transfers">, <span data-test="n26-summary-paypal">{{ n26PayPalClause }}</span></template><template v-if="n26Summary.space_transfers">, <span data-test="n26-summary-space-transfer">{{ n26SpaceTransferClause }}</span></template><template v-if="n26Summary.removed_earlier"> ·&nbsp;<span data-test="n26-summary-removed">{{ removedClause(n26Summary.removed_earlier) }}</span></template><template v-if="n26Summary.deleted_earlier"> ·&nbsp;<span data-test="n26-summary-deleted">{{ deletedClause(n26Summary.deleted_earlier) }}</span></template>.<template v-if="n26Summary.failures.length">
+        {{ n26Summary.skipped }} skipped<template v-if="n26Summary.paypal_transfers">, <span data-test="n26-summary-paypal">{{ n26PayPalClause }}</span></template><template v-if="n26Summary.space_transfers">, <span data-test="n26-summary-space-transfer">{{ n26SpaceTransferClause }}</span></template><template v-if="n26Summary.removed_earlier"> ·&nbsp;<span data-test="n26-summary-removed">{{ n26Summary.removed_earlier }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-in" @click="openRemoved('in')">restore it on Transactions</button></span></template><template v-if="n26Summary.deleted_earlier"> ·&nbsp;<span data-test="n26-summary-deleted">{{ deletedClause(n26Summary.deleted_earlier) }}</span></template>.<template v-if="n26Summary.failures.length">
           {{ ' ' }}<span data-test="n26-summary-failures">{{ n26FailureLine }}</span></template><template v-if="(n26Summary.unreadable || []).length">
           {{ ' ' }}<span data-test="n26-summary-unreadable">{{ n26UnreadableLine }}</span></template><template v-if="expenseParts(n26Expenses).length">
-          {{ ' ' }}<span data-test="n26-summary-expenses"><template v-if="!n26Expenses.added">Expenses: </template><template v-for="(part, i) in expenseParts(n26Expenses)" :key="part.key"><template v-if="i"> ·&nbsp;</template><span :data-test="`n26-summary-expenses-${part.key}`">{{ part.text }}</span></template>.</span></template><template v-if="payerCandidates.length">
+          {{ ' ' }}<span data-test="n26-summary-expenses"><template v-if="!n26Expenses.added">Expenses: </template><template v-for="(part, i) in expenseParts(n26Expenses)" :key="part.key"><template v-if="i"> ·&nbsp;</template><span :data-test="`n26-summary-expenses-${part.key}`"><template v-if="part.key === 'removed'">{{ part.count }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-out" @click="openRemoved('out')">restore it on Transactions</button></template><template v-else>{{ part.text }}</template></span></template>.</span></template><template v-if="payerCandidates.length">
           {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span>{{ ' ' }}<AspButton variant="ghost" size="sm" class="summary__action" data-test="payers-open" @click="payersOpen = true">Add payers…</AspButton></template>
       </p>
     </AspCard>
@@ -127,6 +127,17 @@
       </p>
     </AspCard>
 
+    <!-- §3.143 Decision 6: the removed rows open in place of the list, with
+         "Back to transactions" (system_3 #10633). -->
+    <RemovedRows
+      v-if="removedOpen"
+      :payments="removedPayments"
+      :expenses="removedExpenses"
+      :direction="removedDirection"
+      @back="removedOpen = false"
+      @changed="$emit('changed')"
+    />
+    <template v-else>
     <!-- Nothing to filter or select before the first movement of money. -->
     <div v-if="rows.length" class="toolbar">
       <!-- §3.143 Decision 3: the direction, then a category select whose
@@ -385,6 +396,11 @@
         <span class="nowrap amount" :class="row.direction === 'in' ? 'in-amount' : 'out-amount'" data-test="row-amount">{{ signedAmount(row) }}</span>
       </template>
     </AspDataTable>
+    <!-- Absent at zero (§3.133 Decision 5). -->
+    <AspButton v-if="removedCount" variant="ghost" class="removed-show" data-test="removed-show" @click="openRemoved('all')">
+      Show {{ removedCount }} removed row{{ removedCount === 1 ? '' : 's' }}
+    </AspButton>
+    </template>
     <p v-if="rowError" class="error" role="alert" data-test="payment-error">{{ rowError }}</p>
 
     <ManualPaymentDialog
@@ -416,6 +432,7 @@
   import ManualExpenseDialog from './ManualExpenseDialog.vue';
   import ManualPaymentDialog from './ManualPaymentDialog.vue';
   import N26ImportDialog from './N26ImportDialog.vue';
+  import RemovedRows from './RemovedRows.vue';
   import PayPalExpensesDialog from './PayPalExpensesDialog.vue';
   import PayersDialog from './PayersDialog.vue';
   import {
@@ -435,6 +452,8 @@
     payersSavedLine,
     parseN26PDFs,
     patchPayment,
+    listRemovedExpenses,
+    listRemovedPayments,
     createDraft,
   } from './api.js';
   import { transactionRows } from './ledgerRows.js';
@@ -460,7 +479,7 @@
   // payers, so they are only ever rendered as text interpolation.
   export default {
     name: 'PaymentsPanel',
-    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSegmented, AspSelect, ManualExpenseDialog, ManualPaymentDialog, N26ImportDialog, PayPalExpensesDialog, PayersDialog },
+    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSegmented, AspSelect, ManualExpenseDialog, ManualPaymentDialog, N26ImportDialog, PayPalExpensesDialog, PayersDialog, RemovedRows },
     props: {
       payments: { type: Array, required: true },
       // Money out, in the same list (§3.143 Decision 3, system_3 #10630).
@@ -496,6 +515,11 @@
         manualSummary: null,
         n26Parsing: false,
         n26Open: false,
+        // The removed view (§3.143 Decision 6, system_3 #10633).
+        removedPayments: [],
+        removedExpenses: [],
+        removedOpen: false,
+        removedDirection: 'all',
         n26Files: [],
         n26Summary: null,
         // §3.142 Decision 5: unlinked payers after an import, offered in the
@@ -531,6 +555,11 @@
       };
     },
     computed: {
+      // Only rows the server marks removed: a list read without the removed
+      // flag counts zero, whatever answered it.
+      removedCount() {
+        return this.removedPayments.length + this.removedExpenses.length;
+      },
       // The PayPal line's counts of payments matching a record she removed or
       // deleted for good (§3.143 Decision 6, design_agent c66225). Server
       // `duplicates` includes them, so "already imported" leaves them out.
@@ -697,6 +726,14 @@
       },
     },
     watch: {
+      // Every refetch of the lists (a save, an import, a restore) re-reads
+      // the removed rows too, so the count and the view stay true.
+      payments() {
+        this.loadRemoved();
+      },
+      expenses() {
+        this.loadRemoved();
+      },
       // The selection never holds a row the owner cannot see (§3.25): a
       // filter change or a reload unselects rows that left the view.
       shown(rows) {
@@ -710,6 +747,7 @@
       },
     },
     mounted() {
+      this.loadRemoved();
       // Seven columns do not fit a phone: below 640px the same rows render
       // as stacked cards, so the selects stay on screen without a sideways
       // scroll.
@@ -724,6 +762,20 @@
       if (this.narrowQuery) this.narrowQuery.removeEventListener('change', this.onNarrowChange);
     },
     methods: {
+      // The removed rows for the count, the ghost and the view. A failed read
+      // shows no ghost and leaves the list as it is.
+      async loadRemoved() {
+        const [p, e] = await Promise.allSettled([listRemovedPayments(), listRemovedExpenses()]);
+        this.removedPayments = p.status === 'fulfilled' ? p.value.filter((r) => r.removed_at) : [];
+        this.removedExpenses = e.status === 'fulfilled' ? e.value.filter((r) => r.removed_at) : [];
+        if (this.removedOpen && !this.removedCount) this.removedOpen = false;
+      },
+      // From the ghost ('all'), a payment clause on an import line ('in') or
+      // an expense clause ('out'; c66316 on system_3 #10633).
+      openRemoved(direction) {
+        this.removedDirection = direction;
+        this.removedOpen = true;
+      },
       formatDay,
       formatMoney,
       payersSavedLine,
@@ -745,7 +797,7 @@
       expenseParts({ added, removed, deleted }) {
         const parts = [];
         if (added) parts.push({ key: 'added', text: `${added} expense${added === 1 ? '' : 's'} added to your book` });
-        if (removed) parts.push({ key: 'removed', text: this.removedClause(removed) });
+        if (removed) parts.push({ key: 'removed', count: removed, text: this.removedClause(removed) });
         if (deleted) parts.push({ key: 'deleted', text: this.deletedClause(deleted) });
         return parts;
       },
@@ -1154,6 +1206,23 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-sm);
+  }
+
+  .removed-show {
+    align-self: flex-start;
+    margin-top: var(--space-sm);
+  }
+
+  /* The import line's "restore it on Transactions": a link in the dark
+     card's own ink (§3.18, §3.121), opening the removed view (D14). */
+  .summary__link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--text-on-dark);
+    text-decoration: underline;
+    cursor: pointer;
   }
 
   /* AspCard is dark in both themes; set the ink here (§3.18). */

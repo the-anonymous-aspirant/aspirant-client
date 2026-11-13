@@ -147,6 +147,14 @@ export const createManualPayment = (payment) =>
 // Only a hand-entered payment that no invoice covers; the server refuses others.
 // Any payment not on an issued invoice, imported or entered by hand (#10009).
 export const deletePayment = (id) => axios.delete(`${base}/payments/${id}`);
+// The removed view (§3.143 Decision 6, server #10555-A2): removed rows, kept
+// out of everything that counts until she restores them or deletes them for
+// good. Restore and purge take {ids} and are all or nothing per call.
+export const listRemovedPayments = () =>
+  axios.get(`${base}/payments`, { params: { removed: true } }).then((r) => r.data.payments || []);
+export const listRemovedExpenses = () =>
+  axios.get(`${base}/expenses`, { params: { removed: true } }).then((r) => r.data.expenses || []);
+export const rowAction = (kind, action, ids) => axios.post(`${base}/${kind}/${action}`, { ids }).then((r) => r.data);
 
 // How a hand-entered payment was received, in the invoice's German wording.
 export const METHOD_LABELS = {

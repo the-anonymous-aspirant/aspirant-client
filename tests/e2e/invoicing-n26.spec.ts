@@ -911,6 +911,9 @@ test.describe('#10634 N26 import — removed and deleted rows are named and coun
       `N26: read 4 rows from 1 file: 1 imported, 1 already imported, 0 skipped · 1 removed earlier: restore it on Transactions · 1 deleted earlier.`,
     );
     await expect(page.locator('[data-test="n26-summary-removed"]')).toHaveText('1 removed earlier: restore it on Transactions');
+    // D14 (system_3 #10633): "restore it on Transactions" opens the removed view.
+    await page.locator('[data-test="n26-summary-removed"] [data-test="removed-link-in"]').click();
+    await expect(page.locator('[data-test="removed-view"]').getByRole('heading', { name: 'Removed payments' })).toBeVisible();
     await expect(page.locator('[data-test="n26-summary-deleted"]')).toHaveText('1 deleted earlier');
     await expectSummaryAddsUp(page);
   });
@@ -944,6 +947,9 @@ test.describe('#10634 N26 import — removed and deleted rows are named and coun
     await expect(page.locator('[data-test="n26-summary-removed"]')).toHaveCount(0);
     await expect(page.locator('[data-test="n26-summary-deleted"]')).toHaveCount(0);
     await expect(page.locator('[data-test="n26-summary-expenses-removed"]')).toHaveText('1 removed earlier: restore it on Transactions');
+    // The expense clause opens the removed view limited to expenses (c66316).
+    await page.locator('[data-test="n26-summary-expenses-removed"] [data-test="removed-link-out"]').click();
+    await expect(page.locator('[data-test="removed-view"]').getByRole('heading', { name: 'Removed expenses' })).toBeVisible();
     await expect(page.locator('[data-test="n26-summary-expenses-deleted"]')).toHaveText('1 deleted earlier');
     await expectSummaryAddsUp(page);
   });
