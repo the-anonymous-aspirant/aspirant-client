@@ -130,6 +130,7 @@
               <label>Domain</label>
               <AspSelect
                 v-model="uploadDomain"
+                searchable
                 :options="domainOptions"
                 placeholder="Select domain"
                 aria-label="Domain"

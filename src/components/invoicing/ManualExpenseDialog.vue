@@ -32,7 +32,7 @@
       </template>
 
       <div v-if="!addingCategory" class="manual-form__full full-select">
-        <AspSelect v-model="form.category" :options="categoryOptions" label="Category" data-test="expense-category" />
+        <AspSelect v-model="form.category" searchable :options="categoryOptions" label="Category" data-test="expense-category" />
         <button type="button" class="add-category-link" data-test="expense-add-category-link" @click="startAddingCategory">
           + Add a category
         </button>

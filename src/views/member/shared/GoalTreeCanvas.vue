@@ -94,6 +94,7 @@
           <AspSelect
             class="form-row-control"
             v-model="newNode.parent_id"
+            searchable
             :options="parentOptions"
             aria-label="Parent"
           />

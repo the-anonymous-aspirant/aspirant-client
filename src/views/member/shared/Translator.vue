@@ -18,6 +18,7 @@
             <label>From</label>
             <AspSelect
               v-model="sourceLang"
+              searchable
               :options="languageOptions"
               placeholder="Select language"
               aria-label="From"
@@ -42,6 +43,7 @@
             <label>To</label>
             <AspSelect
               v-model="targetLang"
+              searchable
               :options="languageOptions"
               placeholder="Select language"
               aria-label="To"
@@ -106,6 +108,7 @@
               <label>Source</label>
               <AspSelect
                 v-model="installSource"
+                searchable
                 :options="languageOptions"
                 placeholder="Select"
                 aria-label="Source"
@@ -116,6 +119,7 @@
               <label>Target</label>
               <AspSelect
                 v-model="installTarget"
+                searchable
                 :options="installTargetOptions"
                 placeholder="Select"
                 aria-label="Target"

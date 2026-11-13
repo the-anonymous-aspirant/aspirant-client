@@ -10,7 +10,7 @@
           <AspButton v-if="nameDraft.trim() !== card.name" variant="secondary" size="sm" type="button" data-test="card-rename" :loading="renaming" @click="rename">Rename</AspButton>
         </div>
         <div class="head-field">
-          <AspSelect :options="templateOptions" :model-value="card.template_id || 0" label="Template" data-test="card-template" @update:model-value="setTemplate" />
+          <AspSelect searchable :options="templateOptions" :model-value="card.template_id || 0" label="Template" data-test="card-template" @update:model-value="setTemplate" />
         </div>
         <span class="muted" data-test="card-version">{{ typeName }} · {{ card.slug }} · v{{ card.current_version_no }}</span>
         <p v-if="metaError" class="load-error" data-test="card-meta-error">{{ metaError }}</p>

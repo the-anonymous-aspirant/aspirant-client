@@ -96,7 +96,7 @@
         <!-- An imported payment's payer is a bank fact; what she can change is
              the client it belongs to. -->
         <div v-if="imported" class="full-select">
-          <AspSelect v-model="form.client_id" :options="clientOptions" label="Client" data-test="edit-client" />
+          <AspSelect v-model="form.client_id" searchable :options="clientOptions" label="Client" data-test="edit-client" />
         </div>
       </template>
 

@@ -153,6 +153,7 @@
         <div class="filter full-select">
           <AspSelect
             v-model="categoryFilter"
+            :searchable="direction !== 'in'"
             :options="filterOptions"
             aria-label="Show transactions of category"
             data-test="category-filter"
@@ -169,6 +170,7 @@
           <div class="set-category full-select">
             <AspSelect
               :model-value="null"
+              :searchable="selectedExpenses.length > 0"
               :options="setCategoryOptions"
               :placeholder="setCategoryPlaceholder"
               :disabled="!canSetCategory || bulkSaving || removing"
@@ -294,6 +296,7 @@
               <span class="payment-card__caption" aria-hidden="true">Client</span>
               <AspSelect
                 :model-value="row.payment.client_id ?? 0"
+                searchable
                 :options="clientOptions"
                 :aria-label="`Client for ${row.transaction_id}`"
                 :disabled="saving.has(row.key)"
@@ -381,6 +384,7 @@
         <div v-if="row.payment" class="cell-select">
           <AspSelect
             :model-value="row.payment.client_id ?? 0"
+            searchable
             :options="clientOptions"
             :aria-label="`Client for ${row.transaction_id}`"
             :title="optionLabel(clientOptions, row.payment.client_id ?? 0)"

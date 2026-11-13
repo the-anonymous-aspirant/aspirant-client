@@ -1,8 +1,8 @@
 <template>
   <div class="export-panel" data-test="export-panel">
     <div class="export-form">
-      <AspSelect :options="profileOptions" :model-value="profileId" label="Export profile" data-test="export-profile" @update:model-value="profileId = $event" />
-      <AspSelect v-if="narrow" :options="typeOptions" :model-value="typeFilter" aria-label="Cards to export" data-test="export-type-select" @update:model-value="typeFilter = $event" />
+      <AspSelect searchable :options="profileOptions" :model-value="profileId" label="Export profile" data-test="export-profile" @update:model-value="profileId = $event" />
+      <AspSelect v-if="narrow" searchable :options="typeOptions" :model-value="typeFilter" aria-label="Cards to export" data-test="export-type-select" @update:model-value="typeFilter = $event" />
       <AspSegmented v-else :options="typeOptions" :model-value="typeFilter" aria-label="Cards to export" @update:model-value="typeFilter = $event" />
       <AspButton variant="primary" type="button" :disabled="!profile" :loading="building" data-test="export-build" @click="build">Build PDF</AspButton>
     </div>

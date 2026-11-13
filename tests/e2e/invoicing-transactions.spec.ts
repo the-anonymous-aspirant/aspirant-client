@@ -472,6 +472,25 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     await expect.poll(() => txns(page)).toEqual(NEWEST_FIRST);
   });
 
+  // §3.149 Decision 2 (design_agent c67094 on system_3 #10750): the filter is
+  // searchable while it lists her own expense categories, and plain under In,
+  // where it holds only the six fixed income labels.
+  test('the category filter is searchable unless the direction is In', async ({ page }) => {
+    await open(page, mixedFake());
+    const direction = page.locator('[data-test="direction-filter"]');
+    const filter = page.locator('[data-test="category-filter"]');
+    await filter.click();
+    await expect(page.locator('.select__search-input:visible')).toHaveCount(1);
+    await page.locator('.select__search-input:visible').fill('trav');
+    await expect(page.getByRole('option')).toHaveText(['travel']);
+    await page.keyboard.press('Escape');
+    await direction.getByRole('radio', { name: 'In' }).click();
+    await filter.click();
+    await expect(page.getByRole('option').first()).toBeVisible();
+    await expect(page.locator('.select__search-input:visible')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+  });
+
   test('an expense has a checkbox; Select all counts every row but the issued invoice\'s payment', async ({ page }) => {
     await open(page, mixedFake());
     await expect(row(page, 'N26-E1').locator('[data-test="payment-select"]')).toHaveCount(1);
