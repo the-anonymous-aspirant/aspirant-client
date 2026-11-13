@@ -45,6 +45,8 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: fake.payments.filter((p) => !p.removed_at) });
     if (path === '/invoicing/invoices' && method === 'GET') return json(route, 200, { invoices: [] });
     if (path === '/invoicing/expenses' && method === 'GET') return json(route, 200, { expenses: fake.expenses.filter((e) => !e.removed_at) });
+    // What the Book counts (system_3 #10635): the starting selection, Work only.
+    if (path === '/invoicing/book/selection' && method === 'GET') return json(route, 200, { selection: { preset: 'work_only', changed: false, income: ['paid_work'], expense_all: true, expense: [] }, presets: [{ id: 'work_only', name: 'Work only', builtin: true, income: ['paid_work'], expense_all: true, expense: [] }] });
     // Bulk remove, all or nothing per table (aspirant-server invoicing_remove.go).
     const remove = path.match(/^\/invoicing\/(payments|expenses)\/remove$/);
     if (remove && method === 'POST') {
