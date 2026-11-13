@@ -193,6 +193,39 @@ test('a status still unchanged after 30 s says so under the button and re-enable
   await expect(browser.locator('[data-test="container-stop"]')).toBeEnabled();
 });
 
+// system_3 #10643: the poll after a Stop or Start is for whoever is on the
+// page. Leaving it mid-action ends the re-reads; before, they ran on for the
+// rest of the 30 s window. The route change is in-app (the Admin tile, then
+// Back), so the page's timers survive it and only the flag can stop them.
+test('leaving the page mid-action stops the status re-reads', async ({ page }) => {
+  const mock: Mock = { containers: fleet(), posts: [], flips: false };
+  await open(page, mock);
+  await page.goto('/admin');
+  await page.getByText('System Health', { exact: true }).click();
+  const browser = card(page, 'aspirant-online-browser-1');
+  await browser.locator('[data-test="container-stop"]').click();
+  await page.locator('[data-test="stop-confirm-button"]').click();
+  await expect(browser.locator('[data-test="container-stop"]')).toHaveText('Stopping…');
+  // Two polls land while the page is open, so the loop is known to be running.
+  const before = mock.reads ?? 0;
+  await page.clock.runFor(4000);
+  await expect.poll(() => mock.reads ?? 0).toBe(before + 2);
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.locator('.container-card')).toHaveCount(0);
+  const left = mock.reads ?? 0;
+  // The rest of the 30 s window and well past it: no further read. A poll's
+  // GET is answered here only after the browser sends it, so each step of the
+  // clock is followed by a request of the test's own: by the time that one is
+  // answered, a GET the poll had sent before it has been counted.
+  for (let i = 0; i < 3; i += 1) {
+    await page.clock.runFor(20000);
+    await page.evaluate(() => fetch('/api/health').then((r) => r.status));
+  }
+  expect(mock.reads ?? 0).toBe(left);
+});
+
 const REFUSALS: { name: string; status: number; body: unknown; words: string }[] = [
   { name: 'control_disabled', status: 503, body: { error: { code: 'control_disabled', message: 'x' } }, words: "Start and stop aren't set up on this cell yet." },
   { name: 'not_controllable', status: 403, body: { error: { code: 'not_controllable', message: 'x' } }, words: "This service can't be started or stopped from here." },

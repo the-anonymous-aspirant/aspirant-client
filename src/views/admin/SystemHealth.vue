@@ -398,6 +398,9 @@ export default {
       const deadline = Date.now() + POLL_FOR_MS;
       for (;;) {
         await new Promise((resolve) => setTimeout(resolve, POLL_EVERY_MS));
+        // The page was left mid-action: nobody is here to read the status,
+        // so the re-reads stop (system_3 #10643).
+        if (this.left) return;
         await this.readContainers();
         const now = this.containers.find((x) => x.name === name);
         if (!now || now.status !== before) {
@@ -485,6 +488,8 @@ export default {
   },
   beforeUnmount() {
     clearInterval(this.refreshInterval);
+    // Not reactive on purpose: only the poll in `control()` reads it.
+    this.left = true;
   },
 };
 </script>
