@@ -37,7 +37,14 @@
 
         <template v-if="narrow">
           <ul class="book-cards" aria-label="Book entries">
-            <li v-for="row in month.rows" :key="row.key" class="book-card" data-test="book-row">
+            <li
+              v-for="row in month.rows"
+              :key="row.key"
+              class="book-card book-card--tap"
+              data-test="book-row"
+              :data-type="row.type"
+              @click="onCardTap(row, $event)"
+            >
               <div class="book-card__top">
                 <span class="nowrap">{{ formatDay(row.paid_on) }}</span>
                 <strong class="nowrap amount" :class="row.type === 'in' ? 'in-amount' : 'out-amount'">
@@ -55,16 +62,6 @@
                 <AspButton variant="ghost" size="sm" data-test="book-expense-receipt" @click="openReceipt(row)">
                   Receipt
                 </AspButton>
-                <AspButton
-                  :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
-                  size="sm"
-                  class="manual-delete"
-                  :loading="deleting === row.id"
-                  data-test="book-expense-delete"
-                  @click="removeExpense(row)"
-                >
-                  {{ confirmingDelete === row.id ? 'Delete this expense' : 'Delete' }}
-                </AspButton>
               </div>
             </li>
           </ul>
@@ -76,7 +73,7 @@
           row-key="key"
           density="compact"
           :caption="`Book entries for ${month.label}`"
-          :row-attrs="() => ({ 'data-test': 'book-row' })"
+          :row-attrs="(row) => ({ 'data-test': 'book-row', 'data-type': row.type })"
         >
           <template #cell-paid_on="{ row }"><span class="nowrap">{{ formatDay(row.paid_on) }}</span></template>
           <template #cell-description="{ row }">
@@ -86,6 +83,9 @@
               <span v-if="row.what" :class="{ muted: !!row.who }">{{ row.what }}</span>
               <template v-if="!row.who && !row.what">—</template>
             </span>
+            <!-- §3.143 Decision 7: a Book row opens the same edit dialog as on
+                 Transactions (system_3 #10729); removing lives in the dialog. -->
+            <AspButton variant="ghost" size="sm" class="manual-delete" data-test="book-row-edit" @click="openEdit(row)">Edit</AspButton>
           </template>
           <template #cell-category="{ row }"><span class="muted">{{ row.categoryLabel }}</span></template>
           <template #cell-in="{ row }">
@@ -96,16 +96,6 @@
             <template v-if="row.type === 'out'">
               <AspButton variant="ghost" size="sm" class="manual-delete" data-test="book-expense-receipt" @click="openReceipt(row)">
                 Receipt
-              </AspButton>
-              <AspButton
-                :variant="confirmingDelete === row.id ? 'destructive' : 'ghost'"
-                size="sm"
-                class="manual-delete"
-                :loading="deleting === row.id"
-                data-test="book-expense-delete"
-                @click="removeExpense(row)"
-              >
-                {{ confirmingDelete === row.id ? 'Delete this expense' : 'Delete' }}
               </AspButton>
             </template>
           </template>
@@ -121,6 +111,16 @@
       :expense-label="receiptExpenseLabel"
       @changed="onExpenseChanged"
     />
+    <!-- The rows' edit dialogs, the same as Transactions' (§3.143 Decisions 5
+         and 7, system_3 #10729). Save or Remove refetches the Book. -->
+    <ManualPaymentDialog v-model:open="paymentEditOpen" :payment="editPayment" :clients="clients" @changed="$emit('changed')" />
+    <ManualExpenseDialog
+      v-model:open="expenseEditOpen"
+      :expense="editExpense"
+      :categories="expenseCategories"
+      @changed="$emit('changed')"
+      @category-added="expenseCategories = [...expenseCategories, $event]"
+    />
   </section>
 </template>
 
@@ -128,14 +128,16 @@
   import { AspButton, AspDataTable, AspEmptyState } from '@aspirant/design-system';
   import BookChart from './BookChart.vue';
   import ExpenseReceiptDialog from './ExpenseReceiptDialog.vue';
+  import ManualExpenseDialog from './ManualExpenseDialog.vue';
+  import ManualPaymentDialog from './ManualPaymentDialog.vue';
   import {
     CATEGORY_LABELS,
     bookReportCsvUrl,
-    deleteExpense,
     downloadBlob,
     errorOf,
     formatDay,
     formatMoney,
+    listExpenseCategories,
   } from './api.js';
   import { expenseParts, paymentParts } from './ledgerRows.js';
 
@@ -151,18 +153,23 @@
   // signal (c63777).
   export default {
     name: 'BookPanel',
-    components: { AspButton, AspDataTable, AspEmptyState, BookChart, ExpenseReceiptDialog },
+    components: { AspButton, AspDataTable, AspEmptyState, BookChart, ExpenseReceiptDialog, ManualExpenseDialog, ManualPaymentDialog },
     props: {
       payments: { type: Array, required: true },
       expenses: { type: Array, required: true },
+      // The client book, for a hand payment's "Paid by" in its edit dialog.
+      clients: { type: Array, default: () => [] },
     },
     emits: ['changed'],
     data() {
       return {
         narrow: false,
         rowError: '',
-        confirmingDelete: null,
-        deleting: null,
+        paymentEditOpen: false,
+        editPayment: null,
+        expenseEditOpen: false,
+        editExpense: null,
+        expenseCategories: [],
         reportDownloading: false,
         receiptOpen: false,
         receiptExpenseId: null,
@@ -188,6 +195,7 @@
             ...paymentParts(p),
             categoryLabel: CATEGORY_LABELS[p.category] || p.category,
             amount_cents: p.gross_cents,
+            payment: p,
           }));
         const outgoing = this.expenses.map((e) => ({
           key: `e${e.id}`,
@@ -198,6 +206,7 @@
           ...expenseParts(e),
           categoryLabel: e.category,
           amount_cents: e.amount_cents,
+          expense: e,
         }));
         return [...income, ...outgoing].sort((a, b) => (a.paid_on < b.paid_on ? -1 : a.paid_on > b.paid_on ? 1 : a.key.localeCompare(b.key)));
       },
@@ -254,22 +263,27 @@
         this.receiptExpenseLabel = `${this.formatDay(row.paid_on)} · ${this.formatMoney(row.amount_cents)}${row.who ? ` · ${row.who}` : ''}`;
         this.receiptOpen = true;
       },
-      async removeExpense(row) {
-        if (this.confirmingDelete !== row.id) {
-          this.confirmingDelete = row.id;
+      // §3.143 Decision 7: the row opens the dialog it opens on Transactions.
+      async openEdit(row) {
+        if (row.type === 'in') {
+          this.editPayment = row.payment;
+          this.paymentEditOpen = true;
           return;
         }
-        this.rowError = '';
-        this.deleting = row.id;
+        this.editExpense = row.expense;
+        this.expenseEditOpen = true;
         try {
-          await deleteExpense(row.id);
-          this.$emit('changed');
-        } catch (err) {
-          this.rowError = errorOf(err).message;
-        } finally {
-          this.deleting = null;
-          this.confirmingDelete = null;
+          this.expenseCategories = await listExpenseCategories();
+        } catch {
+          // The select still shows the row's own category; the server refuses
+          // an unknown one, so nothing wrong can be stored.
         }
+      },
+      // A phone card's body opens its row's dialog; its Receipt button keeps
+      // its own job.
+      onCardTap(row, event) {
+        if (event.target.closest('button, input, select, label, a, [role="combobox"], [role="listbox"], [role="option"]')) return;
+        this.openEdit(row);
       },
     },
   };
@@ -394,6 +408,11 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
+  }
+
+  /* The card's body opens its row's edit dialog (system_3 #10729). */
+  .book-card--tap {
+    cursor: pointer;
   }
 
   .book-card__top {

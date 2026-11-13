@@ -88,6 +88,21 @@ async function mock(page: Page, fake: Fake): Promise<void> {
       fake.expenses.push(expense);
       return json(route, 201, { expense });
     }
+    // The edit dialogs a Book row opens (system_3 #10729): PATCH changes the
+    // row, remove takes it out of the live lists.
+    const edit = path.match(/^\/invoicing\/(payments|expenses)\/(\d+)(\/remove)?$/);
+    if (edit && (method === 'PATCH' || (method === 'POST' && edit[3]))) {
+      const list = edit[1] === 'payments' ? 'payments' : 'expenses';
+      const row = (fake[list] as Json[]).find((x) => x.id === Number(edit[2]));
+      if (!row) return json(route, 404, { error: { code: 'not_found', message: 'no such row' } });
+      if (method === 'PATCH') {
+        Object.assign(row, JSON.parse(req.postData() || '{}'));
+        return json(route, 200, { [list === 'payments' ? 'payment' : 'expense']: row });
+      }
+      if (list === 'payments') fake.payments = fake.payments.filter((x) => x.id !== row.id);
+      else fake.expenses = fake.expenses.filter((x) => x.id !== row.id);
+      return json(route, 200, { removed: 1 });
+    }
     const del = path.match(/^\/invoicing\/expenses\/(\d+)$/);
     if (del && method === 'DELETE') {
       fake.expenses = fake.expenses.filter((e) => e.id !== Number(del[1]));
@@ -238,16 +253,87 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
     await expect(page.locator('[data-test="expense-category-error"]')).toContainText('already exists');
   });
 
-  test('deleting an expense, with a confirm step', async ({ page }) => {
+});
+
+// system_3 #10729, §3.143 Decision 7: a Book row opens the same edit dialog
+// as on Transactions, by its Edit on desktop and a tap on its card on a phone.
+// The row's own Delete is gone; removing lives in the dialog (Decision 5),
+// and Receipt stays on expense rows.
+const narrowOf = (page: Page) => page.evaluate(() => window.matchMedia('(max-width: 640px)').matches);
+
+async function openRowEdit(page: Page, type: 'in' | 'out') {
+  const row = page.locator(`[data-test="book-row"][data-type="${type}"]:visible`).first();
+  if (await narrowOf(page)) await row.locator('[data-test="book-row-description"]').click();
+  else await row.locator('[data-test="book-row-edit"]').click();
+  const dialog = page.getByRole('dialog', { name: type === 'in' ? 'Edit payment' : 'Edit expense' });
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+test.describe('#10729 a Book row opens its edit dialog', () => {
+  test('a payment row and an expense row each open their own edit dialog', async ({ page }) => {
+    const fake = newFake({ payments: [incomeRow()], expenses: [expenseRow(101)] });
+    await open(page, fake);
+    let dialog = await openRowEdit(page, 'in');
+    await expect(dialog.locator('[data-test="manual-amount"]')).toHaveValue('350');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    dialog = await openRowEdit(page, 'out');
+    await expect(dialog.locator('[data-test="expense-amount"]')).toHaveValue('45,99');
+    await expect(dialog.locator('[data-test="edit-history"]')).toHaveCount(1);
+  });
+
+  test('the row keeps Receipt and loses its own Delete', async ({ page }) => {
     const fake = newFake({ expenses: [expenseRow(101)] });
     await open(page, fake);
-    const button = page.locator('[data-test="book-expense-delete"]');
-    await expect(button).toHaveText('Delete');
-    await button.click();
-    await expect(button).toHaveText('Delete this expense');
-    await button.click();
+    await expect(page.locator('[data-test="book-panel"] [data-test="book-expense-receipt"]:visible')).toHaveCount(1);
+    await expect(page.locator('[data-test="book-expense-delete"]')).toHaveCount(0);
+  });
+
+  test('Save on an expense from the Book refetches the Book with its new category', async ({ page }) => {
+    const fake = newFake({ expenses: [expenseRow(101)] });
+    await open(page, fake);
+    const dialog = await openRowEdit(page, 'out');
+    await dialog.locator('[data-test="expense-category"]').click();
+    await page.getByRole('option', { name: 'travel', exact: true }).click();
+    const before = fake.requests.length;
+    await dialog.getByRole('button', { name: 'Save changes' }).click();
+    await expect(dialog).toBeHidden();
+    const patch = fake.requests.find((r) => r.method === 'PATCH');
+    expect(patch && { path: patch.path, body: JSON.parse(patch.body) }).toEqual({ path: '/invoicing/expenses/101', body: { category: 'travel' } });
+    // The Book reads its rows again, so the row shows its new category. (It
+    // cannot leave the Book over a category until the Book counts by category,
+    // system_3 #10635.)
+    await expect.poll(() => fake.requests.slice(before).some((r) => r.method === 'GET' && r.path === '/invoicing/expenses')).toBe(true);
+    await expect(page.locator('[data-test="book-row"][data-type="out"]:visible').first()).toContainText('travel');
+  });
+
+  test('Save on a payment from the Book sends only what changed', async ({ page }) => {
+    const fake = newFake({ payments: [incomeRow()] });
+    await open(page, fake);
+    const dialog = await openRowEdit(page, 'in');
+    await dialog.locator('[data-test="manual-note"]').fill('Wandbild August');
+    await dialog.getByRole('button', { name: 'Save changes' }).click();
+    await expect(dialog).toBeHidden();
+    const patch = fake.requests.find((r) => r.method === 'PATCH');
+    expect(patch && { path: patch.path, body: JSON.parse(patch.body) }).toEqual({ path: '/invoicing/payments/10', body: { note: 'Wandbild August' } });
+    await expect(page.locator('[data-test="book-row"][data-type="in"]:visible').first()).toContainText('Wandbild August');
+  });
+
+  test('Remove from the Book arms first, then takes the row off the Book', async ({ page }) => {
+    const fake = newFake({ expenses: [expenseRow(101)] });
+    await open(page, fake);
+    const dialog = await openRowEdit(page, 'out');
+    const remove = dialog.locator('[data-test="edit-remove"]');
+    await remove.click();
+    await expect(remove).toHaveText('Remove this expense');
+    expect(fake.requests.some((r) => r.method === 'POST' && r.path.endsWith('/remove'))).toBe(false);
+    await remove.click();
+    await expect(dialog).toBeHidden();
     await expect(page.locator('[data-test="book-empty"]')).toBeVisible();
-    expect(fake.requests.some((r) => r.method === 'DELETE' && r.path === '/invoicing/expenses/101')).toBe(true);
+    expect(fake.requests.some((r) => r.method === 'POST' && r.path === '/invoicing/expenses/101/remove')).toBe(true);
+    // The restorable remove, never the legacy hard DELETE.
+    expect(fake.requests.some((r) => r.method === 'DELETE')).toBe(false);
   });
 });
 
