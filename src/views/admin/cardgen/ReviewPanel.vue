@@ -3,7 +3,7 @@
     <div class="review-head">
       <!-- Below 640 px the five-option type strip (469 px) collapses to a select
            (#8753 req 1, §3.114); the two short strips wrap in the row. -->
-      <AspSelect v-if="narrow" :options="typeOptions" :model-value="typeFilter" aria-label="Show cards of type" data-test="review-type-select" @update:model-value="setType" />
+      <AspSelect v-if="narrow" searchable :options="typeOptions" :model-value="typeFilter" aria-label="Show cards of type" data-test="review-type-select" @update:model-value="setType" />
       <AspSegmented v-else :options="typeOptions" :model-value="typeFilter" aria-label="Show cards of type" @update:model-value="setType" />
       <AspSegmented :options="sideOptions" :model-value="side" aria-label="Card side" @update:model-value="side = $event" />
       <AspSegmented :options="zoomOptions" :model-value="zoom" aria-label="Zoom" @update:model-value="zoom = $event" />

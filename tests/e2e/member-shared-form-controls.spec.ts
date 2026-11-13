@@ -48,6 +48,19 @@ async function openTranslator(page: Page): Promise<void> {
 }
 
 test.describe('Translator — AspSelect pickers and AspTextarea input', () => {
+  // §3.149 (system_3 #10750): the language lists grow with the installed
+  // pairs, so the pickers are searchable. (c) typing narrows, Enter picks.
+  test('(c) a language picker narrows as she types, and Enter picks the match', async ({ page }) => {
+    await openTranslator(page);
+    await page.getByRole('combobox', { name: 'From' }).click();
+    const field = page.locator('.select__search-input:visible');
+    await expect(field).toHaveAttribute('aria-label', 'Filter From');
+    await field.fill('swe');
+    await expect(page.getByRole('option')).toHaveText(['Swedish (sv)']);
+    await field.press('Enter');
+    await expect(page.getByRole('combobox', { name: 'From' })).toContainText('Swedish (sv)');
+  });
+
   test('the four pickers are named comboboxes whose options are built from the response', async ({ page }) => {
     await openTranslator(page);
 

@@ -11,6 +11,7 @@
         </div>
         <div class="head-field">
           <AspSelect
+            searchable
             :options="parentOptions"
             :model-value="template.parent_template_id || 0"
             label="Extends"
