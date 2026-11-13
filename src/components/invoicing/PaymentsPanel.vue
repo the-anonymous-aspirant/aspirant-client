@@ -159,32 +159,57 @@
           />
         </div>
       </div>
-      <!-- One selection, two actions on it (design_agent c60951 on system_3
-           #9873): Set category for any rows, Create invoice for Paid work
-           only. Create invoice stays the panel's one primary, rightmost. -->
+      <!-- One selection feeds every action, each enabled by its own
+           condition (§3.143 Decision 4, §3.129): Set category for rows of
+           one direction, Remove for any selected row, Create invoice for
+           Paid work only. Create invoice stays the panel's one primary,
+           rightmost. -->
       <div class="create">
         <div class="create__actions">
           <div class="set-category full-select">
             <AspSelect
               :model-value="null"
-              :options="categoryOptions"
+              :options="setCategoryOptions"
               :placeholder="setCategoryPlaceholder"
-              :disabled="selected.length === 0 || bulkSaving"
+              :disabled="!canSetCategory || bulkSaving || removing"
+              :aria-describedby="mixedSelection ? 'set-category-hint' : undefined"
               data-test="bulk-category"
               @update:model-value="setCategory"
             />
           </div>
+          <!-- Arms first, like the row delete: "Remove (N)" becomes
+               "Remove N rows", and only that second press removes. -->
           <AspButton
-            :disabled="!canCreate"
+            :variant="confirmingRemove ? 'destructive' : 'secondary'"
+            :disabled="selected.length === 0 || bulkSaving || creating"
+            :loading="removing"
+            :aria-describedby="confirmingRemove && removeConsequence ? 'bulk-remove-hint' : undefined"
+            class="block-on-phone"
+            data-test="bulk-remove"
+            @click="removeSelected"
+          >
+            {{ removeLabel }}
+          </AspButton>
+          <AspButton
+            :disabled="!canCreate || removing"
             :loading="creating"
             :aria-describedby="createCaption ? 'create-invoice-hint' : undefined"
             class="block-on-phone"
             data-test="create-invoice"
             @click="createInvoice"
           >
-            Create invoice{{ selected.length ? ` from ${selected.length} payment${selected.length === 1 ? '' : 's'}` : '' }}
+            Create invoice{{ selected.length && !selectedExpenses.length ? ` from ${selected.length} payment${selected.length === 1 ? '' : 's'}` : '' }}
           </AspButton>
         </div>
+        <!-- Why Set category cannot act on this selection, in terms the
+             owner can fix here (§3.114). -->
+        <p v-if="mixedSelection" id="set-category-hint" class="create__hint" data-test="set-category-hint">
+          Choose only money in or only money out to set a category
+        </p>
+        <!-- What else an armed Remove does, said before it acts. -->
+        <p v-if="confirmingRemove && removeConsequence" id="bulk-remove-hint" class="create__hint" data-test="bulk-remove-consequence">
+          {{ removeConsequence }}
+        </p>
         <!-- States why Create invoice cannot act, in terms the owner can fix
              here; the server is still the rule (only paid work is invoiced). -->
         <p v-if="createCaption" id="create-invoice-hint" class="create__hint" data-test="create-invoice-hint">
@@ -232,15 +257,14 @@
           <span class="payment-card__who">
             <AspCheckbox
               v-if="selectable(row)"
-              :model-value="selected.includes(row.id)"
+              :model-value="selected.includes(row.key)"
               :aria-label="`Select ${row.transaction_id}`"
               data-test="payment-select"
-              @update:model-value="toggle(row.id, $event)"
+              @update:model-value="toggle(row.key, $event)"
             />
             <!-- A row no checkbox can act on keeps an invisible copy, so every
                  name starts on one edge: an issued invoice's payment
-                 (§3.129 Decision 6, design_agent c62100), and an expense until
-                 the selection takes both directions (system_3 #10631). -->
+                 (§3.129 Decision 6, design_agent c62100). -->
             <AspCheckbox v-else :model-value="false" class="select-gutter" aria-hidden="true" tabindex="-1" data-test="payment-select-gutter" />
             <span class="sender" data-test="row-who">{{ row.who || row.what || '—' }}</span>
           </span>
@@ -275,7 +299,7 @@
                 :model-value="row.payment.category"
                 :options="categoryOptionsFor(row.payment)"
                 :aria-label="`Category for ${row.transaction_id}`"
-                :disabled="saving.has(row.id)"
+                :disabled="saving.has(row.key)"
                 data-test="payment-category"
                 @update:model-value="patch(row.payment, { category: $event })"
               />
@@ -287,7 +311,7 @@
                 :model-value="row.payment.client_id ?? 0"
                 :options="clientOptions"
                 :aria-label="`Client for ${row.transaction_id}`"
-                :disabled="saving.has(row.id)"
+                :disabled="saving.has(row.key)"
                 data-test="payment-client"
                 @update:model-value="patch(row.payment, { client_id: $event || null })"
               />
@@ -314,7 +338,7 @@
         <AspCheckbox
           :model-value="allShownSelected"
           :indeterminate="someShownSelected"
-          aria-label="Select all shown payments"
+          aria-label="Select all shown rows"
           data-test="select-all-shown"
           @update:model-value="selectAllShown"
         />
@@ -322,10 +346,10 @@
       <template #cell-select="{ row }">
         <AspCheckbox
           v-if="selectable(row)"
-          :model-value="selected.includes(row.id)"
+          :model-value="selected.includes(row.key)"
           :aria-label="`Select ${row.transaction_id}`"
           data-test="payment-select"
-          @update:model-value="toggle(row.id, $event)"
+          @update:model-value="toggle(row.key, $event)"
         />
         <AspCheckbox v-else :model-value="false" class="select-gutter" aria-hidden="true" tabindex="-1" data-test="payment-select-gutter" />
       </template>
@@ -368,7 +392,7 @@
             :model-value="row.payment.category"
             :options="categoryOptionsFor(row.payment)"
             :aria-label="`Category for ${row.transaction_id}`"
-            :disabled="saving.has(row.id)"
+            :disabled="saving.has(row.key)"
             data-test="payment-category"
             @update:model-value="patch(row.payment, { category: $event })"
           />
@@ -383,7 +407,7 @@
             :options="clientOptions"
             :aria-label="`Client for ${row.transaction_id}`"
             :title="optionLabel(clientOptions, row.payment.client_id ?? 0)"
-            :disabled="saving.has(row.id)"
+            :disabled="saving.has(row.key)"
             data-test="payment-client"
             @update:model-value="patch(row.payment, { client_id: $event || null })"
           />
@@ -451,9 +475,12 @@
     listPayerCandidates,
     payersSavedLine,
     parseN26PDFs,
+    patchExpense,
     patchPayment,
     listRemovedExpenses,
     listRemovedPayments,
+    removeExpenses,
+    removePayments,
     createDraft,
   } from './api.js';
   import { transactionRows } from './ledgerRows.js';
@@ -461,10 +488,11 @@
   // "2 of 5 kept their category: 2026-08-12 €40.00, 2026-08-14 €25.00 (on an
   // issued invoice; cancel it first)." One shared reason closes the line;
   // mixed reasons follow each row.
+  // `row` is a Transactions row (ledgerRows.js), of either direction.
   function bulkFailureLine(failed, total) {
     const k = failed.length;
     const head = `${k} of ${total} kept ${k === 1 ? 'its' : 'their'} category: `;
-    const name = (f) => `${formatDay(f.row.paid_on)} ${formatMoney(f.row.gross_cents, f.row.currency)}`;
+    const name = (f) => `${formatDay(f.row.paid_on)} ${formatMoney(f.row.amount_cents, f.row.currency)}`;
     const shared = failed.every((f) => f.reason === failed[0].reason);
     if (shared) return `${head}${failed.map(name).join(', ')} (${failed[0].reason}).`;
     return `${head}${failed.map((f) => `${name(f)} (${f.reason})`).join(', ')}.`;
@@ -504,7 +532,13 @@
         saving: new Set(),
         rowError: '',
         narrow: false,
+        // Row keys (`p<id>` / `e<id>`, ledgerRows.js), never bare ids:
+        // payment and expense ids share one number space (security c66333
+        // on system_3 #10630, carried to #10631 in c66336).
         selected: [],
+        confirmingRemove: false,
+        removing: false,
+        expenseCategoriesRequested: false,
         bulkSaving: false,
         bulkError: '',
         creating: false,
@@ -685,11 +719,36 @@
         const xlsx = f && (/\.xlsx$/i.test(f.name || '') || f.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         return xlsx ? 'Excel file' : 'CSV';
       },
+      // The selected Transactions rows, in list order, by key.
       selectedRows() {
-        return this.incoming.filter((p) => this.selected.includes(p.id));
+        return this.rows.filter((r) => this.selected.includes(r.key));
       },
+      selectedPayments() {
+        return this.selectedRows.filter((r) => r.direction === 'in');
+      },
+      selectedExpenses() {
+        return this.selectedRows.filter((r) => r.direction === 'out');
+      },
+      // Money in and money out at once: Set category acts on one direction
+      // at a time, because the two have different categories (§3.143
+      // Decision 4).
+      mixedSelection() {
+        return this.selectedPayments.length > 0 && this.selectedExpenses.length > 0;
+      },
+      canSetCategory() {
+        return this.selected.length > 0 && !this.mixedSelection;
+      },
+      // Money out offers her expense categories: the server's list once
+      // loaded, plus any her rows carry, so a select opened before the list
+      // arrives still offers the categories in view.
+      setCategoryOptions() {
+        if (!this.selectedExpenses.length) return this.categoryOptions;
+        const names = new Set([...this.expenseCategories.map((c) => c.name), ...this.expenses.map((e) => e.category)]);
+        return [...names].filter(Boolean).sort((x, y) => x.localeCompare(y)).map((n) => ({ value: n, label: n }));
+      },
+      // Not invoiceable: money out, or money in not marked Paid work.
       notPaidWork() {
-        return this.selectedRows.filter((p) => p.category !== 'paid_work').length;
+        return this.selectedRows.filter((r) => r.direction === 'out' || r.payment.category !== 'paid_work').length;
       },
       canCreate() {
         return this.selected.length > 0 && this.notPaidWork === 0;
@@ -698,7 +757,7 @@
       // panel (§3.114); it never quietly invoices the Paid work subset (D13).
       createCaption() {
         const n = this.selected.length;
-        if (n === 0) return 'Select payments to set their category, or Paid work payments to create an invoice.';
+        if (n === 0) return 'Select rows to set their category or remove them, or Paid work payments to create an invoice.';
         const k = this.notPaidWork;
         if (k === 0) return '';
         return `${k} of the ${n} selected ${k === 1 ? 'is' : 'are'} not Paid work. Only Paid work can be invoiced.`;
@@ -707,7 +766,22 @@
       // without a confirm step (design_agent c60951 rule 4).
       setCategoryPlaceholder() {
         const n = this.selected.length;
-        return n ? `Set category of ${n} selected` : 'Set category of selected payments';
+        return n ? `Set category of ${n} selected` : 'Set category of selected rows';
+      },
+      // "Remove (N)", armed "Remove N rows" (§3.143 Decision 4).
+      removeLabel() {
+        const n = this.selected.length;
+        if (this.confirmingRemove) return `Remove ${n} row${n === 1 ? '' : 's'}`;
+        return n ? `Remove (${n})` : 'Remove';
+      },
+      // What else an armed Remove does: a payment on a draft comes off it,
+      // as the server does on remove (aspirant-server invoicing_remove.go).
+      removeConsequence() {
+        const k = this.selectedPayments.filter((r) => r.payment.invoice && r.payment.invoice.status === 'draft').length;
+        if (!k) return '';
+        if (this.selected.length === 1) return 'It is also taken off its draft invoice.';
+        if (k === this.selected.length) return 'They are also taken off their draft invoices.';
+        return `${k} of them ${k === 1 ? 'is' : 'are'} also taken off ${k === 1 ? 'its draft invoice' : 'their draft invoices'}.`;
       },
       // The shown rows a checkbox can act on: not on an issued invoice
       // (§3.129 Decisions 4 and 6, design_agent c62100 on #10010).
@@ -715,10 +789,10 @@
         return this.shown.filter((r) => this.selectable(r));
       },
       allShownSelected() {
-        return this.selectableShown.length > 0 && this.selectableShown.every((p) => this.selected.includes(p.id));
+        return this.selectableShown.length > 0 && this.selectableShown.every((r) => this.selected.includes(r.key));
       },
       someShownSelected() {
-        return !this.allShownSelected && this.selectableShown.some((p) => this.selected.includes(p.id));
+        return !this.allShownSelected && this.selectableShown.some((r) => this.selected.includes(r.key));
       },
       skippedReasons() {
         const reasons = (this.summary && this.summary.skipped_reasons) || {};
@@ -737,9 +811,24 @@
       // The selection never holds a row the owner cannot see (§3.25): a
       // filter change or a reload unselects rows that left the view.
       shown(rows) {
-        const visible = new Set(rows.filter((r) => this.selectable(r)).map((r) => r.id));
-        const kept = this.selected.filter((id) => visible.has(id));
+        const visible = new Set(rows.filter((r) => this.selectable(r)).map((r) => r.key));
+        const kept = this.selected.filter((key) => visible.has(key));
         if (kept.length !== this.selected.length) this.selected = kept;
+      },
+      // An armed Remove names a count; any change to the selection disarms
+      // it, so the second press always removes what the label said.
+      selected() {
+        this.confirmingRemove = false;
+      },
+      // Set category's money-out options: her full expense category list,
+      // asked for once, the first time the selection holds money out. Never
+      // with the panel, so an import makes no categories request
+      // (invoicing.spec, invoicing-n26.spec).
+      selectedExpenses(rows) {
+        if (rows.length && !this.expenseCategoriesRequested) {
+          this.expenseCategoriesRequested = true;
+          this.loadExpenseCategories();
+        }
       },
       // A category the new direction does not offer falls back to all.
       filterOptions(options) {
@@ -813,11 +902,11 @@
         const amount = formatMoney(row.amount_cents, row.currency);
         return row.direction === 'out' ? `-${amount}` : amount;
       },
-      // A checkbox acts on a payment no issued invoice covers (§3.129
-      // Decisions 4 and 6). Expenses join the selection with C1 (system_3
-      // #10631), whose Set category acts on one direction at a time.
+      // A checkbox acts on any expense, and on a payment no issued invoice
+      // covers (§3.129 Decisions 4 and 6, §3.143 Decision 4): every action
+      // on the selection would be refused for an issued invoice's payment.
       selectable(row) {
-        return row.direction === 'in' && !row.payment.on_issued_invoice;
+        return row.direction === 'out' || !row.payment.on_issued_invoice;
       },
       // What a delete does, said while it is armed (#10010): an imported
       // payment leaves a tombstone, so the same file will not bring it back
@@ -850,7 +939,7 @@
         this.deleting = row.id;
         try {
           await deletePayment(row.id);
-          this.selected = this.selected.filter((x) => x !== row.id);
+          this.selected = this.selected.filter((x) => x !== `p${row.id}`);
         } catch (err) {
           this.rowError = errorOf(err).message;
         } finally {
@@ -963,11 +1052,15 @@
       // invoicing-n26.spec), and most visits never open this dialog.
       async openExpense() {
         this.expenseOpen = true;
+        await this.loadExpenseCategories();
+      },
+      async loadExpenseCategories() {
         try {
           this.expenseCategories = await listExpenseCategories();
         } catch {
-          // The dialog's category select is empty; the server still refuses
-          // a save with no category, so nothing wrong can be stored.
+          // The dialog's category select is empty, and Set category offers
+          // the categories her rows carry; the server still refuses an
+          // unknown category, so nothing wrong can be stored.
         }
       },
       onExpenseSaved() {
@@ -1023,50 +1116,93 @@
           if (this.$refs.fileInput) this.$refs.fileInput.value = '';
         }
       },
-      toggle(id, on) {
-        this.selected = on ? [...new Set([...this.selected, id])] : this.selected.filter((x) => x !== id);
+      toggle(key, on) {
+        this.selected = on ? [...new Set([...this.selected, key])] : this.selected.filter((x) => x !== key);
       },
       selectAllShown(on) {
-        const ids = this.selectableShown.map((r) => r.id);
-        this.selected = on ? [...new Set([...this.selected, ...ids])] : this.selected.filter((id) => !ids.includes(id));
+        const keys = this.selectableShown.map((r) => r.key);
+        this.selected = on ? [...new Set([...this.selected, ...keys])] : this.selected.filter((key) => !keys.includes(key));
       },
-      // Set one category on every selected row: one PATCH per row, in list
-      // order. Rows that succeed leave the selection; rows the server refuses
+      // Set one category on every selected row, all of one direction: one
+      // PATCH per row, in list order, to the payment or the expense the row
+      // is. Rows that succeed leave the selection; rows the server refuses
       // stay selected and are named in one alert that stays until the next
       // bulk action (design_agent c60951 rule 5, D2).
       async setCategory(category) {
-        if (!category || this.selected.length === 0 || this.bulkSaving) return;
-        const rows = this.selectableShown.filter((r) => this.selected.includes(r.id)).map((r) => r.payment);
+        if (!category || !this.canSetCategory || this.bulkSaving) return;
+        const rows = this.selectableShown.filter((r) => this.selected.includes(r.key));
         this.bulkSaving = true;
         this.bulkError = '';
         const failed = [];
         for (const row of rows) {
-          this.saving = new Set([...this.saving, row.id]);
+          this.saving = new Set([...this.saving, row.key]);
           try {
-            await patchPayment(row.id, { category });
+            if (row.direction === 'out') await patchExpense(row.id, { category });
+            else await patchPayment(row.id, { category });
           } catch (err) {
             const failure = errorOf(err);
             const reason = failure.code === 'payment_on_issued_invoice' ? 'on an issued invoice; cancel it first' : failure.message;
             failed.push({ row, reason });
           } finally {
             const next = new Set(this.saving);
-            next.delete(row.id);
+            next.delete(row.key);
             this.saving = next;
           }
         }
-        this.selected = failed.map((f) => f.row.id);
+        this.selected = failed.map((f) => f.row.key);
         if (failed.length) this.bulkError = bulkFailureLine(failed, rows.length);
         this.bulkSaving = false;
         this.$emit('changed');
       },
-      // Create invoice acts only when every selected row is Paid work; the
-      // server is still the rule (it refuses any other category, and a
-      // payment already invoiced).
+      // Remove the selection, a mistaken upload taken out in one go (§3.143
+      // Decision 4). The first press arms; the second sends one
+      // all-or-nothing request per table, payments first. A refused payment
+      // request removes nothing, and the expenses are not sent. If the
+      // expenses are refused after the payments went, the alert says which
+      // part was removed, and the expenses stay selected.
+      async removeSelected() {
+        if (this.selected.length === 0 || this.removing) return;
+        if (!this.confirmingRemove) {
+          this.confirmingRemove = true;
+          return;
+        }
+        const paymentIds = this.selectedPayments.map((r) => r.id);
+        const expenseIds = this.selectedExpenses.map((r) => r.id);
+        const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+        this.removing = true;
+        this.bulkError = '';
+        let paymentsRemoved = false;
+        try {
+          if (paymentIds.length) {
+            await removePayments(paymentIds);
+            paymentsRemoved = true;
+          }
+          if (expenseIds.length) await removeExpenses(expenseIds);
+          this.selected = [];
+        } catch (err) {
+          const reason = errorOf(err).message;
+          if (paymentsRemoved) {
+            this.selected = this.selectedExpenses.map((r) => r.key);
+            this.bulkError = `${plural(paymentIds.length, 'payment')} removed; ${plural(expenseIds.length, 'expense')} kept: ${reason}`;
+          } else {
+            this.bulkError = `Nothing was removed: ${reason}`;
+          }
+        } finally {
+          this.removing = false;
+          this.confirmingRemove = false;
+          this.$emit('changed');
+        }
+      },
+      // Create invoice acts only when every selected row is Paid work money
+      // in; the server is still the rule (it refuses any other category, and
+      // a payment already invoiced).
       async createInvoice() {
         this.creating = true;
         this.createError = '';
         try {
-          const detail = await createDraft(this.selected);
+          // In the order she selected them: the draft's lines follow it.
+          const ids = this.selected.filter((key) => key.startsWith('p')).map((key) => Number(key.slice(1)));
+          const detail = await createDraft(ids);
           this.selected = [];
           this.$emit('open-invoice', detail.invoice.id);
           this.$emit('changed');
@@ -1078,7 +1214,7 @@
       },
       async patch(row, change) {
         this.rowError = '';
-        this.saving = new Set([...this.saving, row.id]);
+        this.saving = new Set([...this.saving, `p${row.id}`]);
         try {
           await patchPayment(row.id, change);
           this.$emit('changed');
@@ -1089,7 +1225,7 @@
           this.$emit('changed');
         } finally {
           const next = new Set(this.saving);
-          next.delete(row.id);
+          next.delete(`p${row.id}`);
           this.saving = next;
         }
       },
@@ -1334,13 +1470,41 @@
     gap: var(--space-sm);
   }
 
-  /* Wide enough for its longest label on one line, "Set category of selected
-     payments" (operator c61550: no wrapping in these buttons, system_3 #9968):
-     281px measured at the desktop text size and 314px below 768px, where
-     option text is --text-base. A fixed width in rem fits both, so picking
-     rows does not shift the row and it grows with her text size. */
+  /* Wide enough for its longest label on one line (operator c61550: no
+     wrapping in these buttons, system_3 #9968): "Set category of selected
+     payments" measured 281px at the desktop text size and 314px below 768px,
+     where option text is --text-base, and today's "… selected rows" is
+     shorter. A fixed width in rem fits both, so picking rows does not shift
+     the row and it grows with her text size. */
   .set-category {
     width: 20rem;
+  }
+
+  /* Keyed on the toolbar's width, never the viewport, like the ways in: the
+     sidebar at 768 leaves the panel 504px (system_3 #10631). One row while
+     the widest state fits: Set category 320 + the armed "Remove 12 rows" ~130
+     + "Create invoice from 12 payments" ~230 + 2 × 12 = 704px = 44rem.
+     Below that, Set category takes its own full-width row and Remove and
+     Create invoice sit under it on the right, so the row never scrolls
+     sideways and the primary stays rightmost. */
+  .toolbar {
+    container: selection-bar / inline-size;
+  }
+
+  @container selection-bar (width < 44rem) {
+    .create {
+      width: 100%;
+    }
+
+    .create__actions {
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      width: 100%;
+    }
+
+    .set-category {
+      width: 100%;
+    }
   }
 
   /* The invisible checkbox on an issued invoice's row: its box keeps the
