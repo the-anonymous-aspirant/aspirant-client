@@ -249,7 +249,7 @@
         v-for="row in shown"
         :key="row.key"
         class="payment-card"
-        :class="{ 'payment-card--tap': !!row.payment }"
+        :class="{ 'payment-card--tap': !!(row.payment || row.expense) }"
         :data-test="row.direction === 'in' ? 'payment-row' : 'expense-row'"
         :data-txn="row.transaction_id"
         :data-direction="row.direction"
@@ -357,9 +357,11 @@
           <span v-if="row.payment.entry === 'manual'" class="muted manual-line" data-test="payment-manual">{{ manualLine(row.payment) }}</span>
           <!-- §3.143 Decision 5 (D12): the row's Edit replaces its Delete;
                removing moves into the dialog. An issued invoice's payment
-               opens read-only. -->
+               opens read-only. An expense row's Edit, below, opens the
+               expense dialog the same way (system_3 #10695). -->
           <AspButton variant="ghost" size="sm" class="manual-delete" data-test="payment-edit" @click="openEdit(row.payment)">Edit</AspButton>
         </template>
+        <AspButton v-else-if="row.expense" variant="ghost" size="sm" class="manual-delete" data-test="expense-edit" @click="openExpenseEdit(row.expense)">Edit</AspButton>
       </template>
       <template #cell-category="{ row }">
         <div v-if="row.payment" class="cell-select">
@@ -414,6 +416,14 @@
       v-model:open="expenseOpen"
       :categories="expenseCategories"
       @changed="onExpenseSaved"
+      @category-added="expenseCategories = [...expenseCategories, $event]"
+    />
+    <!-- The same dialog edits an expense (§3.143 Decision 5, system_3 #10695). -->
+    <ManualExpenseDialog
+      v-model:open="expenseEditOpen"
+      :expense="editExpense"
+      :categories="expenseCategories"
+      @changed="$emit('changed')"
       @category-added="expenseCategories = [...expenseCategories, $event]"
     />
     <N26ImportDialog v-model:open="n26Open" :files="n26Files" :payments="payments" @imported="onN26Imported" />
@@ -522,6 +532,8 @@
         manualOpen: false,
         editOpen: false,
         editPayment: null,
+        expenseEditOpen: false,
+        editExpense: null,
         expenseOpen: false,
         expenseCategories: [],
         manualSummary: null,
@@ -901,12 +913,18 @@
         this.editPayment = payment;
         this.editOpen = true;
       },
-      // A phone card's body opens its payment's dialog (§3.143 Decision 5);
-      // its own controls (checkbox, selects, buttons) keep their own job.
+      async openExpenseEdit(expense) {
+        this.editExpense = expense;
+        this.expenseEditOpen = true;
+        await this.loadExpenseCategories();
+      },
+      // A phone card's body opens its row's dialog (§3.143 Decision 5); its
+      // own controls (checkbox, selects, buttons) keep their own job.
       onCardTap(row, event) {
-        if (!row.payment) return;
+        if (!row.payment && !row.expense) return;
         if (event.target.closest('button, input, select, label, a, [role="combobox"], [role="listbox"], [role="option"], .select')) return;
-        this.openEdit(row.payment);
+        if (row.payment) this.openEdit(row.payment);
+        else this.openExpenseEdit(row.expense);
       },
       // The whole label, as a tooltip on a table-cell select whose value may
       // end in an ellipsis.
