@@ -93,7 +93,7 @@
             On draft invoice {{ draftLabel }}: take it off the draft first.
           </p>
         </div>
-        <!-- An imported payment's payer is a bank fact; what she can change is
+        <!-- An imported payment's payer is a bank fact; what ze can change is
              the client it belongs to. -->
         <div v-if="imported" class="full-select">
           <AspSelect v-model="form.client_id" searchable :options="clientOptions" label="Client" data-test="edit-client" />
@@ -198,7 +198,7 @@
   // made later from the list, as for an imported payment (§3.142 Decision 1,
   // #10539 — this dialog used to make a draft itself; it no longer does).
   // Given a `payment`, the same dialog edits it (§3.143 Decision 5, system_3
-  // #10694): a hand-entered payment is hers to change in full; an imported
+  // #10694): a hand-entered payment is zirs to change in full; an imported
   // one keeps what the bank recorded; one on an issued invoice only reads.
   export default {
     name: 'ManualPaymentDialog',
@@ -279,7 +279,7 @@
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       },
-      // Narrowed as she types by Decision 4's normalised "contains" (§3.142
+      // Narrowed as ze types by Decision 4's normalised "contains" (§3.142
       // Decision 2), not a plain substring match: accents, case and the
       // dropped punctuation marks never keep a real match out of the list.
       payerOptions() {
@@ -344,7 +344,7 @@
         }
         return '';
       },
-      // Only the fields she changed, and only those the server lets this row
+      // Only the fields ze changed, and only those the server lets this row
       // change (aspirant-server invoicing_edit.go's editable sets).
       editPatch() {
         const was = formFrom(this.payment);
@@ -365,7 +365,7 @@
         if (name !== was.sender_name) {
           patch.sender_name = name;
           // §3.142 Decisions 2-4, as on create: the same client links it; a
-          // new name (or a close one she chose to add as new) adds it to her
+          // new name (or a close one ze chose to add as new) adds it to zir
           // book with the payment; an empty field leaves no client.
           const m = this.payerMatch;
           if (m.state === 'same') {

@@ -35,8 +35,8 @@
             <strong class="nowrap exp-row__amount">{{ formatMoney(item.row.amount_cents, item.row.currency) }}</strong>
           </div>
           <span class="exp-row__muted" data-test="expense-row-meta"><span class="nowrap">{{ formatDay(item.row.paid_on) }}</span><template v-if="item.row.note"> · <span class="exp-row__note">{{ item.row.note }}</span></template></span>
-          <!-- A match to an expense she removed, or deleted for good, says
-               so: it is not in her book (§3.143 Decision 6). -->
+          <!-- A match to an expense ze removed, or deleted for good, says
+               so: it is not in zir book (§3.143 Decision 6). -->
           <span v-if="priorFlag(item.row)" class="exp-row__muted" data-test="expense-row-prior">{{ priorFlag(item.row) }}</span>
           <span v-else-if="item.row.already_imported" class="exp-row__muted" data-test="expense-row-imported">Already in your expenses</span>
           <template v-else>
@@ -72,7 +72,7 @@
       // (transaction_id, paid_on, currency, amount_cents, payee_name, note,
       // already_imported, removed, deleted_earlier, possible_duplicate_of).
       items: { type: Array, default: () => [] },
-      // The owner's expense category names, in her book's order.
+      // The owner's expense category names, in zir book's order.
       categories: { type: Array, default: () => [] },
       disabled: { type: Boolean, default: false },
     },

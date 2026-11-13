@@ -167,10 +167,10 @@ test.describe('#10694 Edit a payment', () => {
     expect(patches(fake)).toEqual([{ path: '/invoicing/payments/2', body: { category: 'gift', client_id: 2 } }]);
   });
 
-  // §3.149 (system_3 #10750): the Client select is searchable, because her
+  // §3.149 (system_3 #10750): the Client select is searchable, because zir
   // client book grows. (a) typing part of a name narrows to it and Enter picks;
   // (b) a word that matches nothing shows the line and changes nothing.
-  test('(a) the Client select narrows as she types, and Enter picks the match', async ({ page }) => {
+  test('(a) the Client select narrows as ze types, and Enter picks the match', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
     const dialog = await openEdit(page, 'N26-imp');

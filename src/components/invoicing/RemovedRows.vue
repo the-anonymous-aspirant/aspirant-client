@@ -67,7 +67,7 @@
   import { transactionRows } from './ledgerRows.js';
 
   // The removed view of Transactions (§3.143 Decision 6, system_3 #10633): the
-  // rows she removed, in the list's own row format, with Restore and an armed
+  // rows ze removed, in the list's own row format, with Restore and an armed
   // Delete for good. The selection is keyed by row.key ("p<id>" / "e<id>"),
   // since payment and expense ids share one number space (security, c66333).
   export default {

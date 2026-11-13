@@ -473,7 +473,7 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
   });
 
   // §3.149 Decision 2 (design_agent c67094 on system_3 #10750): the filter is
-  // searchable while it lists her own expense categories, and plain under In,
+  // searchable while it lists zir own expense categories, and plain under In,
   // where it holds only the six fixed income labels.
   test('the category filter is searchable unless the direction is In', async ({ page }) => {
     await open(page, mixedFake());
@@ -575,7 +575,7 @@ test.describe('#10631 Transactions: selection actions for both directions', () =
     await expect(bulkCategory(page)).toBeEnabled();
     expect(await bulkOptions(page)).toEqual(['Uncategorised', 'Paid work', 'Gift', 'Loan', 'Refund', 'Other']);
 
-    // Money out alone: her expense categories, written to the expense.
+    // Money out alone: zir expense categories, written to the expense.
     await select(page, 'PP-P4').uncheck();
     await select(page, 'M-e2').check();
     await expect(bulkCategory(page)).toBeEnabled();

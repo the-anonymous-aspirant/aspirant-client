@@ -586,7 +586,7 @@
       removedCount() {
         return this.removedPayments.length + this.removedExpenses.length;
       },
-      // The PayPal line's counts of payments matching a record she removed or
+      // The PayPal line's counts of payments matching a record ze removed or
       // deleted for good (§3.143 Decision 6, design_agent c66225). Server
       // `duplicates` includes them, so "already imported" leaves them out.
       // Payments only: the file's outgoing rows are already counted as
@@ -602,7 +602,7 @@
         };
       },
       // The expense sentence's counts: expenses added, and outgoing rows
-      // matching an expense she removed or deleted for good, from the
+      // matching an expense ze removed or deleted for good, from the
       // review's flags plus any its confirm met (c66307).
       paypalExpenses() {
         const exp = countPrior(this.paypalExpenseCandidates);
@@ -642,9 +642,9 @@
       // All they sit in two AspSelect groups, In then Out, with bare labels:
       // "Other" is both an income and an expense category, and the group
       // names its side (design_agent c66290 on system_3 #10630). "All
-      // categories" stays a plain option above both groups, so she always has
+      // categories" stays a plain option above both groups, so ze always has
       // a way back to every row (c66693 on #10702). Under In or Out the list
-      // is flat. Expense categories are the ones her rows carry: the panel
+      // is flat. Expense categories are the ones zir rows carry: the panel
       // makes no categories request until the expense dialog opens
       // (invoicing.spec, invoicing-n26.spec). Values carry the direction too,
       // so a filter never matches the other side.
@@ -665,14 +665,14 @@
       // A file that could not be read stays named after the dialog closes
       // (D2: a fold may hide detail, never a failure).
       // Transfers from PayPal the server left out of the N26 files (#9881).
-      // "left out" is the rule; "skipped" stays her own unticking (c61091).
+      // "left out" is the rule; "skipped" stays zir own unticking (c61091).
       n26PayPalClause() {
         const n = (this.n26Summary && this.n26Summary.paypal_transfers) || 0;
         return n === 1
           ? '1 transfer from PayPal left out (its payments come in through PayPal)'
           : `${n} transfers from PayPal left out (their payments come in through PayPal)`;
       },
-      // Moves between her own account and a Space that the server left out
+      // Moves between zir own account and a Space that the server left out
       // of a statement (system_3 #10541): the statement's analogue of the
       // PayPal clause above, kept short because the review dialog already
       // gave the full reason (design_agent c65358).
@@ -731,8 +731,8 @@
       canSetCategory() {
         return this.selected.length > 0 && !this.mixedSelection;
       },
-      // Money out offers her expense categories: the server's list once
-      // loaded, plus any her rows carry, so a select opened before the list
+      // Money out offers zir expense categories: the server's list once
+      // loaded, plus any zir rows carry, so a select opened before the list
       // arrives still offers the categories in view.
       setCategoryOptions() {
         if (!this.selectedExpenses.length) return this.categoryOptions;
@@ -813,7 +813,7 @@
       selected() {
         this.confirmingRemove = false;
       },
-      // Set category's money-out options: her full expense category list,
+      // Set category's money-out options: zir full expense category list,
       // asked for once, the first time the selection holds money out. Never
       // with the panel, so an import makes no categories request
       // (invoicing.spec, invoicing-n26.spec).
@@ -1041,7 +1041,7 @@
           this.expenseCategories = await listExpenseCategories();
         } catch {
           // The dialog's category select is empty, and Set category offers
-          // the categories her rows carry; the server still refuses an
+          // the categories zir rows carry; the server still refuses an
           // unknown category, so nothing wrong can be stored.
         }
       },
@@ -1182,7 +1182,7 @@
         this.creating = true;
         this.createError = '';
         try {
-          // In the order she selected them: the draft's lines follow it.
+          // In the order ze selected them: the draft's lines follow it.
           const ids = this.selected.filter((key) => key.startsWith('p')).map((key) => Number(key.slice(1)));
           const detail = await createDraft(ids);
           this.selected = [];
@@ -1255,7 +1255,7 @@
      3 × 12 = 780px = 48.75rem. Below that, a 2×2 of equal columns, the pairs
      by hand then from a file, in DOM order: two columns as wide as the widest
      button plus the gap, 202 + 12 + 202 = 416px = 26rem. Below 26rem all four
-     stack full width, as on a phone. In rem, so it moves with her text size;
+     stack full width, as on a phone. In rem, so it moves with zir text size;
      the spec sweeps it and fails on any partial row. */
   @container ways-in (width < 48.75rem) {
     .ways-in {
@@ -1457,7 +1457,7 @@
      payments" measured 281px at the desktop text size and 314px below 768px,
      where option text is --text-base, and today's "… selected rows" is
      shorter. A fixed width in rem fits both, so picking rows does not shift
-     the row and it grows with her text size. */
+     the row and it grows with zir text size. */
   .set-category {
     width: 20rem;
   }
