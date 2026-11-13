@@ -103,6 +103,8 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
     }
     // #10432: the Book tab reads the stored expenses.
     if (path === '/invoicing/expenses' && method === 'GET') return json(route, 200, { expenses: fake.expenses || [] });
+    // What the Book counts (system_3 #10635): the starting selection, Work only.
+    if (path === '/invoicing/book/selection' && method === 'GET') return json(route, 200, { selection: { preset: 'work_only', changed: false, income: ['paid_work'], expense_all: true, expense: [] }, presets: [{ id: 'work_only', name: 'Work only', builtin: true, income: ['paid_work'], expense_all: true, expense: [] }] });
     if (path === '/invoicing/payments/import' && method === 'POST') {
       const next = fake.importResponses.shift() || { status: 200, body: { summary: { rows_read: 0, imported: 0, duplicates: 0, skipped: 0, skipped_reasons: {}, withdrawals: 0 } } };
       return json(route, next.status, next.body);

@@ -4,27 +4,105 @@
       <h2 class="visually-hidden">Book</h2>
       <!-- "Enter expense by hand" moved to Transactions (§3.143 Decision 2,
            system_3 #10555): a movement has one place to be recorded. -->
-      <AspButton
-        variant="secondary"
-        class="block-on-phone"
-        :loading="reportDownloading"
-        data-test="book-report-csv"
-        @click="downloadBookReport"
-      >
-        Bookkeeping report (CSV)
-      </AspButton>
+      <!-- §3.143 Decision 7: the head row keeps only the CSV, captioned with
+           the selection it counts by (the server names the file after it). -->
+      <div class="report block-on-phone">
+        <AspButton
+          variant="secondary"
+          class="block-on-phone"
+          :loading="reportDownloading"
+          data-test="book-report-csv"
+          @click="downloadBookReport"
+        >
+          Bookkeeping report (CSV)
+        </AspButton>
+        <span v-if="book" class="muted report__caption" data-test="book-report-caption">Uses {{ name }}</span>
+      </div>
     </div>
 
     <p v-if="rowError" class="error" role="alert" data-test="book-error">{{ rowError }}</p>
+    <p v-if="bookError" class="error" role="alert" data-test="book-selection-error">{{ bookError }}</p>
+
+    <!-- §3.143 Decision 8: what counts, said first, then where to change it. -->
+    <section v-if="book" class="counting" aria-label="What the Book counts" data-test="book-counting">
+      <p class="muted counting__line">
+        <span data-test="book-counting-line">{{ sentence }}</span>
+        <template v-if="uncountedUncategorised">
+          {{ ' ' }}<span data-test="book-uncategorised">{{ uncategorisedSentence }}</span>
+          {{ ' ' }}<AspButton variant="ghost" size="sm" data-test="book-review-uncategorised" @click="$emit('review-uncategorised')">Review them</AspButton>
+        </template>
+      </p>
+      <details class="change" data-test="book-change" @toggle="onChangeToggle">
+        <summary class="fold-summary" data-test="book-change-summary">Change what counts</summary>
+        <div class="change__body">
+          <div class="change__preset full-select">
+            <AspSelect
+              :model-value="selection.preset"
+              :options="presetOptions"
+              label="Preset"
+              :disabled="saving"
+              data-test="book-preset"
+              @update:model-value="choosePreset"
+            />
+          </div>
+          <fieldset class="ticks" data-test="book-ticks-in">
+            <legend>Money in</legend>
+            <AspCheckbox
+              v-for="c in incomeChoices"
+              :key="c.value"
+              :label="c.label"
+              :model-value="selection.income.includes(c.value)"
+              :disabled="ticksLocked"
+              :data-test="`book-tick-in-${c.value}`"
+              @update:model-value="tickIncome(c.value, $event)"
+            />
+          </fieldset>
+          <fieldset class="ticks" data-test="book-ticks-out">
+            <legend>Money out</legend>
+            <AspCheckbox
+              v-for="n in expenseChoices"
+              :key="n"
+              :label="n"
+              :model-value="selection.expense_all || selection.expense.includes(n)"
+              :disabled="ticksLocked"
+              data-test="book-tick-out"
+              :data-category="n"
+              @update:model-value="tickExpense(n, $event)"
+            />
+            <p v-if="categoriesError" class="error" role="alert">{{ categoriesError }}</p>
+            <p class="muted ticks__note">Private expenses never count.</p>
+          </fieldset>
+          <div class="change__actions">
+            <AspButton variant="secondary" size="sm" :disabled="ticksLocked" data-test="book-save-preset" @click="openSavePreset">Save as preset…</AspButton>
+            <!-- Shown for her own preset; there is nothing to update until a tick changes. -->
+            <AspButton
+              v-if="ownPreset"
+              variant="secondary"
+              size="sm"
+              :disabled="ticksLocked || !selection.changed"
+              data-test="book-update-preset"
+              @click="updatePreset"
+            >
+              Update “{{ ownPreset.name }}”
+            </AspButton>
+            <!-- Arms first, as Remove does (§3.143 Decision 8). Work only has none. -->
+            <AspButton v-if="ownPreset" variant="ghost" size="sm" :disabled="saving" data-test="book-delete-preset" @click="deletePreset">
+              {{ confirmingDelete ? `Delete “${ownPreset.name}”` : 'Delete preset' }}
+            </AspButton>
+          </div>
+          <p v-if="selectionError" class="error" role="alert" data-test="book-selection-write-error">{{ selectionError }}</p>
+        </div>
+      </details>
+    </section>
 
     <AspEmptyState
-      v-if="rows.length === 0"
-      heading="Nothing in the book yet"
-      message="Payments and hand-entered expenses will appear here together, grouped by month."
+      v-if="book && rows.length === 0"
+      heading="Nothing counted yet"
+      message="Payments and expenses in the categories you count appear here, by month."
       data-test="book-empty"
     />
 
-    <template v-else>
+    <template v-else-if="book">
       <section v-for="month in months" :key="month.key" class="month" data-test="book-month">
         <header class="month__head" data-test="month-head">
           <h3 class="month__label">{{ month.label }}</h3>
@@ -102,8 +180,17 @@
         </AspDataTable>
       </section>
 
-      <BookChart :payments="payments" :expenses="expenses" />
+      <BookChart :payments="countedPayments" :expenses="countedExpenses" />
     </template>
+
+    <AspModal :open="presetDialogOpen" size="sm" title="Save as preset" @update:open="presetDialogOpen = $event">
+      <AspInput v-model="presetName" label="Name" maxlength="60" data-test="book-preset-name" @keydown.enter.prevent="savePreset" />
+      <p v-if="presetError" class="error" role="alert" data-test="book-preset-error">{{ presetError }}</p>
+      <template #footer>
+        <AspButton variant="secondary" type="button" @click="presetDialogOpen = false">Cancel</AspButton>
+        <AspButton variant="primary" type="button" :loading="saving" :disabled="!presetName.trim()" data-test="book-preset-confirm" @click="savePreset">Save</AspButton>
+      </template>
+    </AspModal>
 
     <ExpenseReceiptDialog
       v-model:open="receiptOpen"
@@ -125,7 +212,7 @@
 </template>
 
 <script>
-  import { AspButton, AspDataTable, AspEmptyState } from '@aspirant/design-system';
+  import { AspButton, AspCheckbox, AspDataTable, AspEmptyState, AspInput, AspModal, AspSelect } from '@aspirant/design-system';
   import BookChart from './BookChart.vue';
   import ExpenseReceiptDialog from './ExpenseReceiptDialog.vue';
   import ManualExpenseDialog from './ManualExpenseDialog.vue';
@@ -133,13 +220,18 @@
   import {
     CATEGORY_LABELS,
     bookReportCsvUrl,
+    createBookPreset,
+    deleteBookPreset,
     downloadBlob,
     errorOf,
     formatDay,
     formatMoney,
     listExpenseCategories,
+    putBookSelection,
+    updateBookPreset,
   } from './api.js';
   import { expenseParts, paymentParts } from './ledgerRows.js';
+  import { INCOME_ORDER, WORK_ONLY, countableExpenseNames, countingSentence, countsInBook, selectionName } from './bookSelection.js';
 
   // The income-and-expenses book (system_3 #10414-C): payments and
   // hand-entered expenses merged into one dated list, grouped by month, with
@@ -153,14 +245,19 @@
   // signal (c63777).
   export default {
     name: 'BookPanel',
-    components: { AspButton, AspDataTable, AspEmptyState, BookChart, ExpenseReceiptDialog, ManualExpenseDialog, ManualPaymentDialog },
+    components: { AspButton, AspCheckbox, AspDataTable, AspEmptyState, AspInput, AspModal, AspSelect, BookChart, ExpenseReceiptDialog, ManualExpenseDialog, ManualPaymentDialog },
     props: {
       payments: { type: Array, required: true },
       expenses: { type: Array, required: true },
       // The client book, for a hand payment's "Paid by" in its edit dialog.
       clients: { type: Array, default: () => [] },
+      // What counts and her presets, `{ selection, presets }` (§3.143
+      // Decision 8); null while unread or when the read failed, and then the
+      // Book counts nothing rather than guess.
+      book: { type: Object, default: null },
+      bookError: { type: String, default: '' },
     },
-    emits: ['changed'],
+    emits: ['changed', 'book-changed', 'review-uncategorised'],
     data() {
       return {
         narrow: false,
@@ -174,6 +271,16 @@
         receiptOpen: false,
         receiptExpenseId: null,
         receiptExpenseLabel: '',
+        // "Change what counts": her expense categories are read the first
+        // time it opens, never with the panel.
+        categoriesLoaded: false,
+        categoriesError: '',
+        saving: false,
+        selectionError: '',
+        confirmingDelete: false,
+        presetDialogOpen: false,
+        presetName: '',
+        presetError: '',
         columns: [
           { key: 'paid_on', label: 'Date paid' },
           { key: 'description', label: 'What it was for', sortable: false },
@@ -184,8 +291,67 @@
       };
     },
     computed: {
+      selection() {
+        return this.book ? this.book.selection : null;
+      },
+      presets() {
+        return this.book ? this.book.presets : [];
+      },
+      name() {
+        return selectionName(this.selection, this.presets);
+      },
+      sentence() {
+        return countingSentence(this.selection, this.presets, CATEGORY_LABELS);
+      },
+      // §3.143 Decision 7: only what the selection counts. Removed rows never
+      // reach these lists (the server leaves them out).
+      countedPayments() {
+        if (!this.selection) return [];
+        return this.payments.filter((p) => countsInBook(this.selection, { direction: 'in', category: p.category, kind: p.kind }));
+      },
+      countedExpenses() {
+        if (!this.selection) return [];
+        return this.expenses.filter((e) => countsInBook(this.selection, { direction: 'out', category: e.category }));
+      },
+      uncountedUncategorised() {
+        if (!this.selection || this.selection.income.includes('uncategorised')) return 0;
+        return this.payments.filter((p) => p.kind === 'incoming' && p.category === 'uncategorised').length;
+      },
+      uncategorisedSentence() {
+        const n = this.uncountedUncategorised;
+        return n === 1 ? '1 payment is still Uncategorised and not counted.' : `${n} payments are still Uncategorised and not counted.`;
+      },
+      // The active preset reads "(changed)" once a tick differs from it; a
+      // selection whose preset was deleted reads "Custom".
+      presetOptions() {
+        const options = this.presets.map((p) => ({
+          value: p.id,
+          label: p.id === this.selection.preset && this.selection.changed ? `${p.name} (changed)` : p.name,
+        }));
+        if (!this.presets.some((p) => p.id === this.selection.preset)) options.unshift({ value: this.selection.preset, label: 'Custom', disabled: true });
+        return options;
+      },
+      // A tick before her categories are read would turn "every expense" into
+      // none, so the ticks wait for them.
+      ticksLocked() {
+        return this.saving || !this.categoriesLoaded;
+      },
+      ownPreset() {
+        const p = this.presets.find((x) => x.id === this.selection.preset);
+        return p && !p.builtin ? p : null;
+      },
+      incomeChoices() {
+        return INCOME_ORDER.map((value) => ({ value, label: CATEGORY_LABELS[value] || value }));
+      },
+      // Her expense categories, without Private (never offered). Any category
+      // the selection already names is listed too, so no tick is hidden.
+      expenseChoices() {
+        const names = new Set(countableExpenseNames(this.expenseCategories));
+        if (this.selection) for (const n of this.selection.expense) names.add(n);
+        return [...names].sort((a, b) => a.localeCompare(b));
+      },
       rows() {
-        const income = this.payments
+        const income = this.countedPayments
           .filter((p) => p.kind === 'incoming')
           .map((p) => ({
             key: `p${p.id}`,
@@ -197,7 +363,7 @@
             amount_cents: p.gross_cents,
             payment: p,
           }));
-        const outgoing = this.expenses.map((e) => ({
+        const outgoing = this.countedExpenses.map((e) => ({
           key: `e${e.id}`,
           id: e.id,
           type: 'out',
@@ -257,6 +423,104 @@
       },
       onExpenseChanged() {
         this.$emit('changed');
+      },
+      async onChangeToggle(event) {
+        if (!event.target.open || this.categoriesLoaded) return;
+        try {
+          this.expenseCategories = await listExpenseCategories();
+          this.categoriesLoaded = true;
+          this.categoriesError = '';
+        } catch (err) {
+          this.categoriesError = `Your expense categories could not be loaded: ${errorOf(err).message}`;
+        }
+      },
+      // The expense categories that count, as a list: the server takes
+      // `expense_all` only for Work only unchanged (aspirant-server
+      // `workOnlyRule`), so a changed selection and every preset name theirs.
+      expenseList(selection) {
+        return selection.expense_all ? countableExpenseNames(this.expenseCategories) : [...selection.expense];
+      },
+      // A tick applies at once. Back on exactly Work only, it says so again,
+      // so the select stops reading "(changed)".
+      countingFor(income, expense) {
+        const all = countableExpenseNames(this.expenseCategories);
+        const isWorkOnly =
+          this.selection.preset === WORK_ONLY &&
+          income.length === 1 &&
+          income[0] === 'paid_work' &&
+          all.every((n) => expense.includes(n));
+        return isWorkOnly ? { income, expense_all: true, expense: [] } : { income, expense_all: false, expense };
+      },
+      tickIncome(category, on) {
+        const income = on ? [...this.selection.income, category] : this.selection.income.filter((c) => c !== category);
+        this.writeSelection({ ...this.countingFor(income, this.expenseList(this.selection)), preset: this.selection.preset });
+      },
+      tickExpense(name, on) {
+        const current = this.expenseList(this.selection);
+        const expense = on ? [...current, name] : current.filter((n) => n !== name);
+        this.writeSelection({ ...this.countingFor([...this.selection.income], expense), preset: this.selection.preset });
+      },
+      choosePreset(id) {
+        const p = this.presets.find((x) => x.id === id);
+        if (!p) return;
+        this.writeSelection({ income: [...p.income], expense_all: p.expense_all, expense: [...p.expense], preset: p.id });
+      },
+      async write(call) {
+        if (this.saving) return false;
+        this.saving = true;
+        this.selectionError = '';
+        try {
+          const book = await call();
+          this.$emit('book-changed', { selection: book.selection, presets: book.presets });
+          return true;
+        } catch (err) {
+          this.selectionError = errorOf(err).message;
+          return false;
+        } finally {
+          this.saving = false;
+        }
+      },
+      writeSelection(body) {
+        this.confirmingDelete = false;
+        return this.write(() => putBookSelection(body));
+      },
+      openSavePreset() {
+        this.presetName = '';
+        this.presetError = '';
+        this.presetDialogOpen = true;
+      },
+      // Save the ticks under her name, then count by that preset.
+      async savePreset() {
+        const name = this.presetName.trim();
+        if (!name || this.saving) return;
+        const counting = { income: [...this.selection.income], expense_all: false, expense: this.expenseList(this.selection) };
+        this.saving = true;
+        this.presetError = '';
+        try {
+          const created = await createBookPreset({ name, ...counting });
+          const book = await putBookSelection({ ...counting, preset: created.preset.id });
+          this.$emit('book-changed', { selection: book.selection, presets: book.presets });
+          this.presetDialogOpen = false;
+        } catch (err) {
+          this.presetError = errorOf(err).message;
+        } finally {
+          this.saving = false;
+        }
+      },
+      updatePreset() {
+        const p = this.ownPreset;
+        const counting = { income: [...this.selection.income], expense_all: false, expense: this.expenseList(this.selection) };
+        this.confirmingDelete = false;
+        return this.write(() => updateBookPreset(p.id, counting));
+      },
+      deletePreset() {
+        if (!this.confirmingDelete) {
+          this.confirmingDelete = true;
+          return;
+        }
+        this.confirmingDelete = false;
+        const p = this.ownPreset;
+        return this.write(() => deleteBookPreset(p.id));
       },
       openReceipt(row) {
         this.receiptExpenseId = row.id;
@@ -319,6 +583,59 @@
   .error {
     color: var(--feedback-error);
     margin: 0 0 var(--space-sm);
+  }
+
+  .report {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-2xs);
+  }
+
+  .report__caption {
+    font-size: var(--text-sm);
+  }
+
+  .counting {
+    margin-bottom: var(--space-md);
+  }
+
+  .counting__line {
+    margin: 0 0 var(--space-xs);
+  }
+
+  .change__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding: var(--space-sm) 0;
+    max-width: 40rem;
+  }
+
+  .ticks {
+    border: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs) var(--space-md);
+  }
+
+  .ticks > legend {
+    font-weight: 600;
+    margin-bottom: var(--space-2xs);
+  }
+
+  .ticks__note {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  .change__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
   }
 
   .month {
@@ -430,6 +747,10 @@
 
     .block-on-phone {
       width: 100%;
+    }
+
+    .report {
+      align-items: stretch;
     }
   }
 </style>

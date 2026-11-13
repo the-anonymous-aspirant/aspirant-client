@@ -310,6 +310,7 @@
         <!-- An expense's category reads as text here; it is set from the
              selection and the edit dialog (system_3 #10631, #10632). -->
         <span v-else class="muted" data-test="row-category">{{ row.categoryLabel }}</span>
+        <span v-if="!inBook(row)" class="muted not-in-book" data-test="row-not-in-book">Not in the Book</span>
       </li>
     </ul>
     </template>
@@ -379,6 +380,8 @@
           <span v-if="isPayPalTransferIntoN26(row.payment)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
         </div>
         <span v-else data-test="row-category">{{ row.categoryLabel }}</span>
+        <!-- §3.143 Decision 3: the row the Book does not count says so. -->
+        <span v-if="!inBook(row)" class="muted not-in-book" data-test="row-not-in-book">Not in the Book</span>
       </template>
       <template #cell-client_id="{ row }">
         <div v-if="row.payment" class="cell-select">
@@ -474,6 +477,7 @@
     createDraft,
   } from './api.js';
   import { transactionRows } from './ledgerRows.js';
+  import { countsInBook } from './bookSelection.js';
 
   // "2 of 5 kept their category: 2026-08-12 €40.00, 2026-08-14 €25.00 (on an
   // issued invoice; cancel it first)." One shared reason closes the line;
@@ -503,6 +507,10 @@
       // Money out, in the same list (§3.143 Decision 3, system_3 #10630).
       expenses: { type: Array, default: () => [] },
       clients: { type: Array, required: true },
+      // What the Book counts, for the "Not in the Book" flag; null unread.
+      bookSelection: { type: Object, default: null },
+      // `{ direction, category }` to open on, from the Book's "Review them".
+      initialFilter: { type: Object, default: null },
     },
     emits: ['changed', 'open-invoice'],
     data() {
@@ -830,6 +838,12 @@
       },
     },
     mounted() {
+      // The Book's "Review them" opens this tab on In plus Uncategorised
+      // (§3.143 Decision 7). Direction first: the category options follow it.
+      if (this.initialFilter) {
+        this.direction = this.initialFilter.direction;
+        this.categoryFilter = this.initialFilter.category;
+      }
       this.loadRemoved();
       // Seven columns do not fit a phone: below 640px the same rows render
       // as stacked cards, so the selects stay on screen without a sideways
@@ -862,6 +876,12 @@
       formatDay,
       formatMoney,
       payersSavedLine,
+      // The Book counts this row (bookSelection.js). Unread, no row is flagged.
+      inBook(row) {
+        const source = row.payment || row.expense;
+        if (!source) return true;
+        return countsInBook(this.bookSelection, { direction: row.direction, category: source.category, kind: row.payment ? row.payment.kind : undefined });
+      },
       // The import line's clauses for rows matching a removed or a deleted
       // record (design_agent c66225). Printed only when non-zero. "restore it
       // on Transactions" becomes the link to the removed view when that view
