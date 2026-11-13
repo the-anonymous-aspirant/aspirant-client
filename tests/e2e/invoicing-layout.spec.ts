@@ -101,7 +101,7 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
   test('the guardrail states are visible: missing Steuernummer on the card and in the draft, the Create invoice caption', async ({ page }) => {
     await open(page, 'light', { steuernummer: '' });
     await expect(page.locator('[data-test="steuernummer-missing"]')).toContainText('Missing: needed to issue');
-    await expect(page.locator('[data-test="create-invoice-hint"]')).toHaveText('Select payments to set their category, or Paid work payments to create an invoice.');
+    await expect(page.locator('[data-test="create-invoice-hint"]')).toHaveText('Select rows to set their category or remove them, or Paid work payments to create an invoice.');
     await expect(page.locator('[data-test="create-invoice"]')).toHaveAttribute('aria-describedby', 'create-invoice-hint');
 
     // TX1 is Paid work; the list runs newest first, so it is named, not taken by position.

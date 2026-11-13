@@ -443,7 +443,7 @@ function threeIncoming(): Fake {
   return fake;
 }
 
-const selectAll = (page: Page) => page.getByRole('checkbox', { name: /^Select all (shown payments|\d+ shown)$/ });
+const selectAll = (page: Page) => page.getByRole('checkbox', { name: /^Select all (shown rows|\d+ shown)$/ });
 const bulk = (page: Page) => page.locator('[data-test="bulk-category"]');
 
 async function setBulkCategory(page: Page, label: string): Promise<void> {
@@ -503,7 +503,7 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
     await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
 
-    await expect(bulk(page)).toContainText('Set category of selected payments');
+    await expect(bulk(page)).toContainText('Set category of selected rows');
     await expect(bulk(page)).toBeDisabled();
     for (const txn of ['TX1', 'TX2', 'TX3']) await page.getByRole('checkbox', { name: `Select ${txn}` }).check();
     await expect(bulk(page)).toContainText('Set category of 3 selected');
@@ -519,7 +519,7 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
       await expect(page.getByRole('combobox', { name: `Category for ${txn}` })).toContainText('Other');
       await expect(page.getByRole('checkbox', { name: `Select ${txn}` })).not.toBeChecked();
     }
-    await expect(bulk(page)).toContainText('Set category of selected payments');
+    await expect(bulk(page)).toContainText('Set category of selected rows');
     await expect(page.locator('[data-test="bulk-error"]')).toHaveCount(0);
   });
 
@@ -552,7 +552,7 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
 
     const create = page.locator('[data-test="create-invoice"]');
     const caption = page.locator('[data-test="create-invoice-hint"]');
-    await expect(caption).toHaveText('Select payments to set their category, or Paid work payments to create an invoice.');
+    await expect(caption).toHaveText('Select rows to set their category or remove them, or Paid work payments to create an invoice.');
     await page.getByRole('checkbox', { name: 'Select TX1' }).check();
     await page.getByRole('checkbox', { name: 'Select TX3' }).check();
     await expect(create).toBeDisabled();
@@ -587,7 +587,7 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
     await expect(bulk(page)).toContainText('Set category of 2 selected');
     await expect(all).toBeChecked();
     await all.uncheck();
-    await expect(bulk(page)).toContainText('Set category of selected payments');
+    await expect(bulk(page)).toContainText('Set category of selected rows');
   });
 
   test('on a phone the stacked toolbar buttons wrap instead of overflowing', async ({ page }) => {

@@ -2,7 +2,7 @@ import { test, expect, type Page, type Locator, type Route } from '@playwright/t
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 
 /** Invoices app (system_3 #9968/#9965, operator c61550): "make sure that
- *  buttons like (Set category of selected payments), and banuberviesning
+ *  buttons like (Set category of selected rows), and banuberviesning
  *  (bank transfer) are big enough that we don't have text wrapping".
  *  A control's lines are the distinct line-box tops of its text nodes. */
 
@@ -51,8 +51,8 @@ for (const width of [1440, 1024, 768, 700, 390]) {
     test('Set category, the Method select and the Status filter each fit on one line', async ({ page }) => {
       await open(page);
       const setCategory = page.locator('.set-category [role="combobox"]');
-      await expect(setCategory).toContainText('Set category of selected payments');
-      expect(await lines(setCategory), 'Set category of selected payments').toBe(1);
+      await expect(setCategory).toContainText('Set category of selected rows');
+      expect(await lines(setCategory), 'Set category of selected rows').toBe(1);
       expect(await noSideScroll(page), 'payments: no side scroll').toBe(true);
 
       await page.locator('[data-test="manual-new"]').click();
