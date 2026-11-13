@@ -732,8 +732,8 @@ test.describe('#10438 PayPal import — outgoing payments reviewed as work expen
     const rows = page.locator('[data-test="book-row"]');
     await expect(rows.filter({ hasText: 'Leinwand' })).toHaveCount(1);
     // Only the ticked payment became an expense: one expense row (only
-    // expense rows carry a delete), the unticked one is not in the book.
-    await expect(page.locator('[data-test="book-panel"] [data-test="book-expense-delete"]:visible')).toHaveCount(1);
+    // expense rows carry Receipt), the unticked one is not in the book.
+    await expect(page.locator('[data-test="book-panel"] [data-test="book-expense-receipt"]:visible')).toHaveCount(1);
   });
 
   test('a file whose outgoing payments are all in the book already, or that has none, opens no review', async ({ page }) => {
