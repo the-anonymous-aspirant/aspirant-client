@@ -167,6 +167,50 @@ test.describe('#10694 Edit a payment', () => {
     expect(patches(fake)).toEqual([{ path: '/invoicing/payments/2', body: { category: 'gift', client_id: 2 } }]);
   });
 
+  // §3.149 (system_3 #10750): the Client select is searchable, because her
+  // client book grows. (a) typing part of a name narrows to it and Enter picks;
+  // (b) a word that matches nothing shows the line and changes nothing.
+  test('(a) the Client select narrows as she types, and Enter picks the match', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    const dialog = await openEdit(page, 'N26-imp');
+    await dialog.locator('[data-test="edit-client"]').click();
+    const field = page.locator('.select__search-input:visible');
+    if (!(await narrowOf(page))) await expect(field).toBeFocused();
+    await field.fill('mara');
+    await expect(page.getByRole('option')).toHaveText(['Mara Esempio']);
+    await field.press('Enter');
+    await expect(dialog.locator('[data-test="edit-client"]')).toContainText('Mara Esempio');
+    await dialog.getByRole('button', { name: 'Save changes' }).click();
+    await expect(dialog).toBeHidden();
+    expect(patches(fake)).toEqual([{ path: '/invoicing/payments/2', body: { client_id: 2 } }]);
+  });
+
+  test('(b) a word that matches no client shows the no-match line and leaves the client unchanged', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    const dialog = await openEdit(page, 'N26-imp');
+    const clientText = () => dialog.locator('[data-test="edit-client"]').evaluate((el) => (el.textContent || '').replace(/\s+/g, ' ').trim());
+    const before = await clientText();
+    expect(before).toContain('No client');
+    await dialog.locator('[data-test="edit-client"]').click();
+    const field = page.locator('.select__search-input:visible');
+    await field.fill('zebra');
+    await expect(page.locator('.select__empty--nomatch:visible')).toHaveText('No match for "zebra"');
+    await expect(page.getByRole('option')).toHaveCount(0);
+    await field.press('Enter');
+    await expect(page.locator('.select__empty--nomatch:visible')).toBeVisible();
+    // A press elsewhere in the dialog closes the list and keeps the dialog.
+    // (Escape inside a modal also dismisses the modal today; that is a
+    // design-system defect filed on its own.)
+    await dialog.getByRole('heading', { name: 'Edit payment' }).click();
+    await expect(page.locator('.select__search-input:visible')).toHaveCount(0);
+    expect(await clientText()).toBe(before);
+    await dialog.getByRole('button', { name: 'Save changes' }).click();
+    await expect(dialog).toBeHidden();
+    expect(patches(fake)).toEqual([]);
+  });
+
   test('a payment on a draft names the draft, locks its category, and Remove says it comes off the draft', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);

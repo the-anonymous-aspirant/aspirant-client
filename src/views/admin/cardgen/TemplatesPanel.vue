@@ -24,7 +24,7 @@
     <AspModal :open="createOpen" size="sm" title="New template" @update:open="createOpen = $event">
       <AspInput :model-value="form.name" label="Name" data-test="create-name" @update:model-value="form.name = $event" />
       <AspInput :model-value="form.slug" label="Slug" hint="lowercase letters, digits and underscores, starting with a letter" data-test="create-slug" @update:model-value="form.slug = $event" />
-      <AspSelect :options="parentOptions" :model-value="form.parent" label="Extends" data-test="create-extends" @update:model-value="form.parent = $event" />
+      <AspSelect searchable :options="parentOptions" :model-value="form.parent" label="Extends" data-test="create-extends" @update:model-value="form.parent = $event" />
       <p v-if="createError" class="load-error" data-test="create-error">{{ createError }}</p>
       <template #footer>
         <AspButton variant="secondary" type="button" @click="createOpen = false">Cancel</AspButton>

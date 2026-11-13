@@ -45,6 +45,7 @@
             </span>
             <AspSelect
               :model-value="item.category"
+              searchable
               :options="categoryOptions"
               :disabled="disabled"
               :aria-label="`Category for the expense to ${payee(item.row)} on ${formatDay(item.row.paid_on)}`"

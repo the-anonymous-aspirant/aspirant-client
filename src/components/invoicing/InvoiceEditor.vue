@@ -82,7 +82,7 @@
       <template v-else>
         <div class="row">
           <div class="row__client full-select">
-            <AspSelect v-model="form.client_id" :options="clientOptions" label="Client" :label-hint="hints.client" data-test="draft-client" />
+            <AspSelect v-model="form.client_id" searchable :options="clientOptions" label="Client" :label-hint="hints.client" data-test="draft-client" />
           </div>
           <!-- The hint sits beside the label, never inside it: inside a
                <label>, a tap on it would focus the date (#10033). -->
