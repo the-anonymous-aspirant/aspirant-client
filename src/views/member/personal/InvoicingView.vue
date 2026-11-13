@@ -59,10 +59,29 @@
 
       <ClientsPanel v-if="tab === 'clients'" :clients="clients" @changed="fetchAll" />
       <InvoicesPanel v-else-if="tab === 'invoices'" :refresh-key="refreshKey" @open="openInvoice" />
-      <BookPanel v-else-if="tab === 'book'" :payments="payments" :expenses="expenses" :clients="clients" @changed="fetchAll" />
+      <BookPanel
+        v-else-if="tab === 'book'"
+        :payments="payments"
+        :expenses="expenses"
+        :clients="clients"
+        :book="book"
+        :book-error="bookError"
+        @changed="fetchAll"
+        @book-changed="book = $event"
+        @review-uncategorised="reviewUncategorised"
+      />
       <!-- Transactions is the Payments panel in its place (§3.143 Decision 1,
            system_3 #10555): where money is recorded, checked and corrected. -->
-      <PaymentsPanel v-else :payments="payments" :expenses="expenses" :clients="clients" @changed="fetchAll" @open-invoice="openInvoice" />
+      <PaymentsPanel
+        v-else
+        :payments="payments"
+        :expenses="expenses"
+        :clients="clients"
+        :book-selection="book && book.selection"
+        :initial-filter="transactionsFilter"
+        @changed="fetchAll"
+        @open-invoice="openInvoice"
+      />
 
       <InvoiceEditor
         v-model:open="editorOpen"
@@ -94,7 +113,7 @@
   import BookPanel from '../../../components/invoicing/BookPanel.vue';
   import InvoiceEditor from '../../../components/invoicing/InvoiceEditor.vue';
   import ProfileEditor from '../../../components/invoicing/ProfileEditor.vue';
-  import { errorOf, getProfile, listClients, listExpenses, listPayments } from '../../../components/invoicing/api.js';
+  import { errorOf, getBookSelection, getProfile, listClients, listExpenses, listPayments } from '../../../components/invoicing/api.js';
 
   // The Invoices app (system_3 #8367): one person's invoicing. The server
   // gates every route to the owner + Admin
@@ -127,6 +146,13 @@
         clients: [],
         payments: [],
         expenses: [],
+        // What the Book counts and her presets: `{ selection, presets }`, or
+        // null until read or when the read failed (§3.143 Decision 8).
+        book: null,
+        bookError: '',
+        // Set by the Book's "Review them": Transactions opens on In plus
+        // Uncategorised, once. Leaving the tab drops it.
+        transactionsFilter: null,
         refreshKey: 0,
         profileOpen: false,
         editorOpen: false,
@@ -144,6 +170,11 @@
       nextNumberLabel() {
         const n = String(this.profile.next_invoice_number || 1).padStart(3, '0');
         return this.profile.invoice_number_prefix ? `${this.profile.invoice_number_prefix}-${n}` : n;
+      },
+    },
+    watch: {
+      tab(next) {
+        if (next !== 'transactions') this.transactionsFilter = null;
       },
     },
     mounted() {
@@ -177,6 +208,19 @@
         } catch {
           this.expenses = [];
         }
+        // Also never fatal: unread, the Book says so and counts nothing, and
+        // Transactions flags no row, rather than guessing at what counts.
+        try {
+          this.book = await getBookSelection();
+          this.bookError = '';
+        } catch (err) {
+          this.book = null;
+          this.bookError = `What the Book counts could not be loaded: ${errorOf(err).message}`;
+        }
+      },
+      reviewUncategorised() {
+        this.transactionsFilter = { direction: 'in', category: 'in:uncategorised' };
+        this.tab = 'transactions';
       },
       openInvoice(id) {
         this.editorInvoiceId = id;

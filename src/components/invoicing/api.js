@@ -364,6 +364,16 @@ export const clientsCsvUrl = () => `${base}/export/clients.csv`;
 // The Book tab's income-and-expenses bookkeeping grid (system_3 #10414-E).
 export const bookReportCsvUrl = () => `${base}/export/book-report.csv`;
 
+// What the Book counts, and her presets (§3.143 Decision 8, system_3
+// #10555-A3). A counting is `{ income: [...], expense_all, expense: [...] }`;
+// the selection adds `preset` (its id, "work_only" for the built-in, '' for
+// none) and `changed`. Every call answers `{ selection, presets }`.
+export const getBookSelection = () => axios.get(`${base}/book/selection`).then((r) => r.data);
+export const putBookSelection = (selection) => axios.put(`${base}/book/selection`, selection).then((r) => r.data);
+export const createBookPreset = (preset) => axios.post(`${base}/book/presets`, preset).then((r) => r.data);
+export const updateBookPreset = (id, preset) => axios.put(`${base}/book/presets/${id}`, preset).then((r) => r.data);
+export const deleteBookPreset = (id) => axios.delete(`${base}/book/presets/${id}`).then((r) => r.data);
+
 // The filename the server named in a Content-Disposition header, or '' when
 // it named none. RFC 5987's filename*=UTF-8''... wins over filename="...".
 // A path separator never reaches the saved name.
