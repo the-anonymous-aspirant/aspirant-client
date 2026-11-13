@@ -231,7 +231,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await expect(page.locator('[data-test="manual-summary"]')).toHaveText('By hand: saved €350.00 from Mara Esempio. Added Mara Esempio to your client book.');
   });
 
-  test('a hand-entered payment says so; Delete takes two presses and is offered only while no issued invoice covers it', async ({ page }) => {
+  test('a hand-entered payment says so, and every payment row offers Edit instead of Delete', async ({ page }) => {
     const fake = newFake({ payments: [manualRow(), manualRow({ id: 42, reference: '', method: 'cash', on_invoice: true, on_issued_invoice: true })] });
     await open(page, fake);
     const lines = page.locator('[data-test="payment-manual"]');
@@ -241,57 +241,11 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await expect(lines.first()).toHaveText('Bar (Cash)');
     await expect(lines.nth(1)).toHaveText('Banküberweisung (Bank transfer) · RE-17');
     await expect(page.locator('[data-test="payment-row"] [data-test="row-source"]')).toHaveText(['By hand', 'By hand']);
-    const del = page.locator('[data-test="payment-delete"]');
-    await expect(del).toHaveCount(1);
-    // #9934-B2 (operator c61373): the row without Delete says why, in the
-    // server's own words (#10009: only an issued invoice blocks a delete).
-    await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveText('On an issued invoice — cancel that invoice first');
-
-    await del.click();
-    await expect(del).toHaveText('Delete this payment');
-    expect(fake.requests.some((r) => r.method === 'DELETE')).toBe(false);
-    await del.click();
-    await expect.poll(() => fake.requests.filter((r) => r.method === 'DELETE').map((r) => r.path)).toEqual(['/invoicing/payments/40']);
-    await expect(page.locator('[data-test="payment-manual"]')).toHaveCount(1);
-  });
-
-  // system_3 #10010 (operator c61587/c61868, server #10009): an imported
-  // payment can be deleted too while no issued invoice covers it; armed, the
-  // row says a re-import will not bring it back.
-  test('an imported payment offers Delete, and says a re-import will not bring it back', async ({ page }) => {
-    const fake = newFake({ payments: [manualRow({ id: 50, entry: 'import', source: 'paypal', reference: '' })] });
-    await open(page, fake);
-    await expect(page.locator('[data-test="payment-manual"]')).toHaveCount(0);
-    await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveCount(0);
-    const del = page.locator('[data-test="payment-delete"]');
-    await expect(del).toHaveText('Delete');
-    await expect(page.locator('[data-test="payment-delete-consequence"]')).toHaveCount(0);
-    await del.click();
-    await expect(del).toHaveText('Delete this payment');
-    await expect(page.locator('[data-test="payment-delete-consequence"]')).toHaveText('Gone for good: importing the same file again will not bring it back.');
-    await del.click();
-    await expect.poll(() => fake.requests.filter((r) => r.method === 'DELETE').map((r) => r.path)).toEqual(['/invoicing/payments/50']);
-  });
-
-  test('a payment on a draft or cancelled invoice can go, and says it comes off that invoice; on an issued one it says why not', async ({ page }) => {
-    const fake = newFake({
-      payments: [
-        manualRow({ id: 60, on_invoice: true, on_issued_invoice: false }),
-        manualRow({ id: 61, entry: 'import', source: 'n26', reference: '', on_invoice: true, on_issued_invoice: false, sender_name: 'Studio Süd' }),
-        manualRow({ id: 62, entry: 'import', source: 'paypal', reference: '', on_invoice: true, on_issued_invoice: true, sender_name: 'Atelier Ost' }),
-      ],
-    });
-    await open(page, fake);
-    const dels = page.locator('[data-test="payment-delete"]');
-    await expect(dels).toHaveCount(2);
-    // Newest first, the later id leads on a shared day: 61 (imported), then 60 (by hand).
-    await dels.nth(1).click();
-    await expect(page.locator('[data-test="payment-delete-consequence"]')).toHaveText('It also comes off the draft or cancelled invoice that lists it. A draft keeps its lines, so check its total.');
-    // Arming another row disarms the first; both sentences when both apply.
-    await dels.first().click();
-    await expect(page.locator('[data-test="payment-delete-consequence"]')).toHaveText('Gone for good: importing the same file again will not bring it back. It also comes off the draft or cancelled invoice that lists it. A draft keeps its lines, so check its total.');
-    await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveCount(1);
-    await expect(page.locator('[data-test="payment-no-delete-reason"]')).toHaveText('On an issued invoice — cancel that invoice first');
+    // §3.143 Decision 5 (system_3 #10694): the row's Edit replaces its
+    // Delete, issued or not; removing moves into the edit dialog.
+    const narrow = await page.evaluate(() => window.matchMedia('(max-width: 640px)').matches);
+    if (!narrow) await expect(page.locator('[data-test="payment-edit"]')).toHaveCount(2);
+    await expect(page.locator('[data-test="payment-delete"]')).toHaveCount(0);
   });
 
   // design_agent c62100 (§3.129 Decision 6): a payment on an issued invoice
@@ -335,19 +289,6 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     });
   }
 
-  test('a delete the server refuses is shown, and the row stays', async ({ page }) => {
-    const fake = newFake({
-      payments: [manualRow()],
-      deleteFailure: { status: 409, body: { error: { code: 'payment_on_invoice', message: 'payment is on invoice 7; delete that draft (or cancel that invoice) first' } } },
-    });
-    await open(page, fake);
-    const del = page.locator('[data-test="payment-delete"]');
-    await del.click();
-    await del.click();
-    await expect(page.locator('[data-test="payment-error"]')).toContainText('delete that draft');
-    await expect(page.locator('[data-test="payment-manual"]')).toHaveCount(1);
-  });
-
   // design_agent's acceptance for the client PR (sign-off on #8409).
   for (const theme of ['light', 'dark'] as const) {
     test(`the head row reads Enter payment by hand, then Import, with no primary (${theme})`, async ({ page }) => {
@@ -380,11 +321,11 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     }
   });
 
-  test('a hand-entered row with Delete keeps the payments table inside its column', async ({ page }) => {
+  test('a hand-entered row with Edit keeps the payments table inside its column', async ({ page }) => {
     await open(page, newFake({ payments: [manualRow({ sender_name: 'Galerie Nord GmbH', reference: 'RE-2026-0017' })] }));
     const box = page.locator('[data-test="payments-panel"] .data-table__scroll').first();
     test.skip((await box.count()) === 0, 'phones show payment cards, not the table');
-    await expect(page.locator('[data-test="payment-delete"]')).toBeVisible();
+    await expect(page.locator('[data-test="payment-edit"]')).toBeVisible();
     const [scrollWidth, clientWidth] = await box.evaluate((el) => [el.scrollWidth, el.clientWidth]);
     expect(scrollWidth - clientWidth, 'no sideways scroll').toBeLessThanOrEqual(0);
   });
