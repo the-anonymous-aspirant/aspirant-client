@@ -300,9 +300,32 @@ async function categoryOptions(page: Page): Promise<string[]> {
   return labels.map((l) => l.trim());
 }
 
-async function pickCategory(page: Page, name: string): Promise<void> {
+async function pickCategory(page: Page, name: string, group?: string): Promise<void> {
   await page.locator('[data-test="category-filter"]').click();
-  await page.getByRole('option', { name, exact: true }).click();
+  const scope = group ? page.getByRole('group', { name: group, exact: true }) : page;
+  await scope.getByRole('option', { name, exact: true }).click();
+}
+
+// Under All the open filter is "All categories" on its own, then a group per
+// direction: [plain options, [group label, its options]...].
+async function categoryGroups(page: Page): Promise<{ plain: string[]; groups: [string, string[]][] }> {
+  await page.locator('[data-test="category-filter"]').click();
+  const listbox = page.getByRole('listbox');
+  const plain = await listbox.evaluate((lb) =>
+    [...lb.querySelectorAll('[role="option"]')]
+      .filter((o) => !o.closest('[role="group"]'))
+      .map((o) => (o.textContent || '').trim()),
+  );
+  const groups: [string, string[]][] = [];
+  for (const g of await listbox.getByRole('group').all()) {
+    const name = await g.evaluate((el) => {
+      const id = el.getAttribute('aria-labelledby');
+      return ((id && document.getElementById(id)?.textContent) || '').trim();
+    });
+    groups.push([name, (await g.getByRole('option').allTextContents()).map((l) => l.trim())]);
+  }
+  await page.keyboard.press('Escape');
+  return { plain, groups };
 }
 
 test.describe('#10630 Transactions: one list of money in and out', () => {
@@ -379,20 +402,31 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     await expect(direction.getByRole('radio')).toHaveText(['All', 'In', 'Out']);
     await expect(direction.getByRole('radio', { name: 'All' })).toBeChecked();
 
-    // Both directions (design_agent c66290): each option names its
-    // direction in the filter's own words, income first, and no two labels
-    // are the same, though "Other" is a category on both sides.
-    const both = await categoryOptions(page);
-    expect(both).toEqual([
-      'All categories', 'In · Uncategorised', 'In · Paid work', 'In · Gift', 'In · Loan', 'In · Refund', 'In · Other',
-      'Out · materials and supplies', 'Out · other', 'Out · travel',
+    // Both directions (design_agent c66290, c66693 on system_3 #10702): "All
+    // categories" on its own, then two groups, In and Out, income first. The
+    // group names the direction, so no label carries an "In · " or "Out · "
+    // prefix, and no group repeats a label, though "Other" is a category on
+    // both sides.
+    const both = await categoryGroups(page);
+    expect(both.plain, '"All categories" sits in no group').toEqual(['All categories']);
+    expect(both.groups).toEqual([
+      ['In', ['Uncategorised', 'Paid work', 'Gift', 'Loan', 'Refund', 'Other']],
+      ['Out', ['materials and supplies', 'other', 'travel']],
     ]);
-    expect(new Set(both).size, 'no duplicate labels under All').toBe(both.length);
-    await pickCategory(page, 'Out · other');
+    const labels = both.groups.flatMap(([, options]) => options);
+    expect(labels.filter((l) => /^(In|Out) · /.test(l)), 'no prefixed labels').toEqual([]);
+    for (const [name, options] of both.groups) {
+      expect(new Set(options).size, `no duplicate labels in ${name}`).toBe(options.length);
+    }
+    await pickCategory(page, 'other', 'Out');
     await expect.poll(() => txns(page)).toEqual(['N26-E3']);
-    await pickCategory(page, 'In · Other');
+    expect(await page.locator(ROWS).evaluateAll((els) => els.map((el) => el.getAttribute('data-direction'))), 'Out\'s other is expenses only').toEqual(['out']);
+    await expect(page.locator('[data-test="category-filter"]')).toContainText('Out · other');
+    await pickCategory(page, 'Other', 'In');
     await expect.poll(() => txns(page)).toEqual(['PP-P4']);
     await pickCategory(page, 'All categories');
+    await expect.poll(() => txns(page), 'All categories brings back every row').toEqual(NEWEST_FIRST);
+    await expect(page.locator('[data-test="category-filter"]')).toHaveText(/^\s*All categories/);
 
     // Under In or Out the labels are bare: the direction is already chosen.
     await direction.getByRole('radio', { name: 'Out' }).click();
@@ -409,7 +443,7 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     await pickCategory(page, 'Gift');
     await expect.poll(() => txns(page)).toEqual(['M-p3']);
 
-    // All keeps a category it offers, now named with its direction.
+    // All keeps a category it offers; the trigger names its group.
     await direction.getByRole('radio', { name: 'All' }).click();
     await expect.poll(() => txns(page)).toEqual(['M-p3']);
     await expect(page.locator('[data-test="category-filter"]')).toContainText('In · Gift');
