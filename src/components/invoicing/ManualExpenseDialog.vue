@@ -200,7 +200,7 @@
         try {
           const events = await listAuditEvents('expense', id);
           if (!this.expense || this.expense.id !== id) return;
-          this.history = historyLines(events);
+          this.history = historyLines(events, [], 'expense');
         } catch (err) {
           this.historyError = `The history could not be loaded: ${errorOf(err).message}`;
         } finally {
