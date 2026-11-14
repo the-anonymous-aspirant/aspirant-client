@@ -24,7 +24,7 @@ export const OPERATOR_DEFAULTS = {
   ort: 'Exempelby',
   maklare_namn: 'Testa Testsson',
   maklare_titel: 'Auktoriserad mäklare',
-  foretag: 'Exempel Mäkleri',
+  foretag: 'Exempel Mäkleri AB',
   likviditet: 'god',
 };
 
