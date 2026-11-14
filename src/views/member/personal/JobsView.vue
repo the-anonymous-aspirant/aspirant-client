@@ -6,11 +6,20 @@
       Berlin · part-time · English-speaking — deduplicated overview across the scraped boards.
     </p>
 
-    <!-- A 403 from any of the page's reads means the page is not this
-         member's. It is said once, in place of the page body, with no retry
-         (system_3 #11025); before, each panel printed the server's own
-         "Insufficient permissions" around an empty shell. -->
-    <ReadState v-if="pageState" :state="pageState" data-test="jobs-page-state" />
+    <!-- One state for the page, in place of its body (system_3 #11025):
+         a 403 from any read (the page is not this member's, no retry), a 401
+         (the session ended), or a failed jobs read (the list is the page, so
+         its failure is said once, not again by the about and sources lines).
+         Before, each panel printed the server's own message around an empty
+         shell. -->
+    <ReadState
+      v-if="pageState"
+      :state="pageState"
+      :heading="pageState === 'failed' ? 'The jobs could not be loaded' : ''"
+      :message="pageState === 'failed' ? listError.reason : ''"
+      data-test="jobs-page-state"
+      @retry="fetchAll"
+    />
 
     <template v-else>
 
@@ -149,18 +158,6 @@
       </div>
     </details>
 
-    <!-- A failed list read replaces the controls and the table: nothing can be
-         filtered or saved while no job is loaded (#11025). -->
-    <ReadState
-      v-if="listError && !loading"
-      state="failed"
-      heading="The jobs could not be loaded"
-      :message="listError.reason"
-      data-test="jobs-failed"
-      @retry="fetchJobs"
-    />
-
-    <template v-else>
     <div class="tab-strip" data-test="jobs-tabs">
       <button
         type="button"
@@ -336,7 +333,6 @@
       <AspButton type="button" variant="secondary" size="sm" :disabled="page >= totalPages || loading" @click="changePage(page + 1)">Next ›</AspButton>
     </div>
     </template>
-    </template>
   </div>
 </template>
 
@@ -405,11 +401,13 @@
     },
     computed: {
       // Any read answered 403: the page is someone else's. Any read answered
-      // 401: the session ended. Either is said once, for the page (#11025).
+      // 401: the session ended. The jobs read failed: nothing to show. Each
+      // is said once, for the page (#11025).
       pageState() {
         const kinds = [this.listError, this.aboutLoadError, this.sourcesLoadError].map((e) => e && e.kind);
         if (kinds.includes('refused')) return 'refused';
         if (kinds.includes('signed-out')) return 'signed-out';
+        if (this.listError && this.listError.kind === 'failed' && !this.loading) return 'failed';
         return '';
       },
       totalPages() {
@@ -446,6 +444,12 @@
           this.page = 1;
           this.fetchJobs();
         }, FILTER_DEBOUNCE_MS);
+      },
+      // Every read of the page, again: Try again on the page's failed state.
+      fetchAll() {
+        this.fetchJobs();
+        this.fetchSources();
+        this.fetchAbout();
       },
       async fetchJobs() {
         this.loading = true;
@@ -536,9 +540,7 @@
       },
     },
     mounted() {
-      this.fetchJobs();
-      this.fetchSources();
-      this.fetchAbout();
+      this.fetchAll();
     },
     beforeUnmount() {
       if (this.debounceTimer) clearTimeout(this.debounceTimer);

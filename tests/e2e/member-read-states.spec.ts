@@ -123,6 +123,18 @@ test.describe('#11025 Jobs', () => {
     await expect(page.locator('[data-test="jobs-table"]')).toBeVisible();
   });
 
+  test('when every read fails, the page says it once', async ({ page }) => {
+    await base(page);
+    await page.route(/\/api\/jobs/, (route) => json(route, 502, { detail: 'jobs-scraper unavailable' }));
+    await go(page, '/member/personal/jobs');
+    await expect(failed(page)).toHaveCount(1);
+    await expect(failed(page)).toContainText('The jobs could not be loaded');
+    await expect(page.locator('[data-test="about-me-error"]')).toHaveCount(0);
+    await expect(page.locator('.sources-status.error')).toHaveCount(0);
+    const text = await page.locator('.page').first().innerText();
+    expect(text.split('not running right now').length - 1).toBe(1);
+  });
+
   test('a failed sources read says so in plain words, in ink that reads on its dark bar', async ({ page }) => {
     await base(page);
     await page.route(/\/api\/jobs(\?.*)?$/, (route) => json(route, 200, { jobs: [], total: 0 }));
