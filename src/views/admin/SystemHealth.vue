@@ -654,10 +654,14 @@ export default {
   color: var(--feedback-success);
 }
 
+/* The warning treatment: the design system's warning tint and the ink made
+   for it (TOKENS.md, #1970). Brand amber on the elevated ground measured well
+   under AA in light, and a partial-failure banner is read first (#11003). */
 .status-banner.degraded {
   background-color: var(--surface-elevated);
-  border: 2px solid var(--brand-primary);
-  color: var(--brand-primary);
+  background-image: linear-gradient(var(--feedback-warning-bg), var(--feedback-warning-bg));
+  border: 2px solid var(--feedback-warning);
+  color: var(--feedback-warning-text);
 }
 
 /* `ok` is what the server actually sends — `{"status":"ok"}`, read live
@@ -679,6 +683,7 @@ export default {
 }
 
 .status-dot {
+  flex-shrink: 0;
   width: 12px;
   height: 12px;
   border-radius: var(--radius-full);
@@ -690,7 +695,7 @@ export default {
 }
 
 .status-dot.degraded {
-  background-color: var(--brand-primary);
+  background-color: var(--feedback-warning-text);
 }
 
 .status-dot.ok {

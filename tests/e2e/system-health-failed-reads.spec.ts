@@ -71,6 +71,31 @@ for (const theme of ['light', 'dark'] as const) {
         'Server and database OK. Containers and disk could not be read.'
       );
       await expect(banner).toHaveClass(/degraded/);
+      // Its words clear AA on its own ground, in both themes.
+      const ratio = await banner.evaluate((el) => {
+        const rgb = (c: string) => c.match(/[\d.]+/g)!.map(Number);
+        const lum = ([r, g, b]: number[]) => {
+          const f = (v: number) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+          return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+        };
+        // Paint the ground exactly as composited: a probe with the banner's background.
+        const cs = getComputedStyle(el);
+        const probe = document.createElement('canvas');
+        probe.width = probe.height = 1;
+        const ctx = probe.getContext('2d')!;
+        ctx.fillStyle = cs.backgroundColor;
+        ctx.fillRect(0, 0, 1, 1);
+        const tint = cs.backgroundImage.match(/rgba?\([^)]+\)/);
+        if (tint) {
+          ctx.fillStyle = tint[0];
+          ctx.fillRect(0, 0, 1, 1);
+        }
+        const [r, g, b] = Array.from(ctx.getImageData(0, 0, 1, 1).data);
+        const a = lum(rgb(cs.color));
+        const g2 = lum([r, g, b]);
+        return (Math.max(a, g2) + 0.05) / (Math.min(a, g2) + 0.05);
+      });
+      expect(ratio, `banner ink ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
       await expect(page.getByText('OK', { exact: true })).toHaveCount(0);
       // First screen: the banner answers "is anything wrong?" without scrolling.
       const box = (await banner.boundingBox())!;
