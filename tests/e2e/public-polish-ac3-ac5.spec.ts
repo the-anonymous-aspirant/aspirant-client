@@ -118,7 +118,7 @@ for (const theme of ['light', 'dark'] as const) {
           bottom: r.bottom,
         };
       });
-      const copy = page.getByRole('button', { name: 'Click to copy' });
+      const copy = page.getByRole('button', { name: 'Copy address' });
       const copyTop = (await copy.boundingBox())!.y;
       console.log(
         `AC5 ${theme} address lines=${geo.lines} width=${geo.width}/${geo.boxWidth} copyTop=${copyTop} codeBottom=${geo.bottom}`

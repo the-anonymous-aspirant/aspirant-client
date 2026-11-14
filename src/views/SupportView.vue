@@ -7,18 +7,10 @@
     <div class="donation-grid">
     <div class="donation-card bmac-card">
       <h2>Buy Me a Coffee</h2>
-      <div class="qr-section">
-        <div class="qr-code">
-          <img
-            v-if="bmacQrUrl"
-            :src="bmacQrUrl"
-            alt="Buy Me a Coffee QR Code"
-            class="qr-image"
-          />
-        </div>
-        <p class="qr-label">Scan to open in your browser</p>
-      </div>
-
+      <!-- The action first, then the code (system_3 #10981, UX walk AP5): a
+           phone cannot scan a code on its own screen, so at phone width the
+           control that works there leads. From 768px the code is shown first
+           again (`order` below); the DOM keeps the phone's order. -->
       <!-- The primary action of record, rendered as the link it is (#9196,
            §1.3, §1.5): AspButton's own fill, radius and height. -->
       <AspButton
@@ -33,10 +25,34 @@
         </template>
         Buy me a coffee
       </AspButton>
+
+      <div class="qr-section">
+        <div class="qr-code">
+          <img
+            v-if="bmacQrUrl"
+            :src="bmacQrUrl"
+            alt="Buy Me a Coffee QR Code"
+            class="qr-image"
+          />
+        </div>
+        <p class="qr-label">Scan to open in your browser</p>
+      </div>
     </div>
 
     <div class="donation-card btc-card">
       <h2>Bitcoin</h2>
+
+      <div class="address-section">
+        <label>BTC Address</label>
+        <!-- The address is one line that wraps at the box width, and the copy
+             action is a real control under it (#9582, UX walk AC5, §1.5). -->
+        <div class="address-box">
+          <code>{{ btcAddress }}</code>
+        </div>
+        <AspButton variant="link" type="button" class="copy-address" @click="copyAddress">
+          {{ copied ? 'Copied!' : 'Copy address' }}
+        </AspButton>
+      </div>
 
       <div class="qr-section">
         <div class="qr-code">
@@ -48,18 +64,6 @@
           />
         </div>
         <p class="qr-label">Scan with your Bitcoin wallet</p>
-      </div>
-
-      <div class="address-section">
-        <label>BTC Address</label>
-        <!-- The address is one line that wraps at the box width, and the copy
-             action is a real control under it (#9582, UX walk AC5, §1.5). -->
-        <div class="address-box">
-          <code>{{ btcAddress }}</code>
-        </div>
-        <AspButton variant="link" type="button" class="copy-address" @click="copyAddress">
-          {{ copied ? 'Copied!' : 'Click to copy' }}
-        </AspButton>
       </div>
 
     </div>
@@ -81,13 +85,15 @@ const bmacUrl = 'https://buymeacoffee.com/theaspirant';
 const btcAddress = 'bc1qj433rpvgrv8kzdrqa2uuxpgknzug3lqwzpzypj';
 const copied = ref(false);
 const coffemugUrl = ref(null);
-// Drawn in the browser (#9132), light on the card's dark, as the qrserver
-// images were (bgcolor=424242, color=ffffff). Margin 1, not the spec's 4: the
-// qrserver codes filled their frame, and the dark card around the frame is the
-// quiet zone, so a 4-module border only shrank the code (#9132 evidence walk).
+// Drawn in the browser (#9132): dark modules on a light ground with the
+// spec's 4-module quiet zone inside the image, in both themes (system_3
+// #10981, UX walk AP5). They were white on the card's #424242 with a 1-module
+// margin, and some readers do not read an inverted code or a narrow margin.
+// The light tile (`.qr-code`) is the image's own ground, so the code does not
+// depend on what the card paints around it.
 const bmacQrUrl = ref('');
 const btcQrUrl = ref('');
-const qrOpts = { size: 200, dark: '#ffffff', light: '#424242', margin: 1 };
+const qrOpts = { size: 200, dark: '#000000', light: '#ffffff', margin: 4 };
 const bmacQr = createQrImage((url) => { bmacQrUrl.value = url; });
 const btcQr = createQrImage((url) => { btcQrUrl.value = url; });
 onBeforeUnmount(() => { bmacQr.clear(); btcQr.clear(); });
@@ -166,6 +172,9 @@ onMounted(async () => {
    link (AspButton variant="link", `color: inherit`) measured 1:1 on the card
    (#9582). Headings and labels name their own ink below. */
 .donation-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   color: var(--text-on-dark);
   background-color: var(--surface-card);
   border: 3px solid var(--border-card);
@@ -215,10 +224,15 @@ onMounted(async () => {
   margin-bottom: var(--space-lg);
 }
 
+/* The code's own white ground, in both themes: a QR is read as dark on
+   light, and the quiet zone is drawn into the image (qrOpts.margin). The frame
+   keeps the card's border. Literal white on purpose: no theme token may turn
+   this ground dark. */
 .qr-code {
-  background: var(--surface-card);
+  background: #ffffff;
   border-radius: var(--radius-lg);
-  padding: var(--space-sm);
+  padding: 0;
+  overflow: hidden;
   border: 2px solid var(--border-card);
 }
 
@@ -237,7 +251,28 @@ onMounted(async () => {
 }
 
 .address-section {
+  align-self: stretch;
   margin-bottom: var(--space-lg);
+}
+
+/* The action leads at phone width; the card's heading stays on top. */
+.bmac-button {
+  margin-bottom: var(--space-lg);
+}
+
+/* From 768px both codes come back above their actions, as before. */
+@media (min-width: 768px) {
+  .donation-card .qr-section {
+    order: -1;
+  }
+
+  .donation-card h2 {
+    order: -2;
+  }
+
+  .bmac-button {
+    margin-bottom: 0;
+  }
 }
 
 .address-section label {
