@@ -51,14 +51,14 @@ def main() -> None:
 
     p = doc.add_paragraph()
     p.add_run("Adress: ").bold = True
-    p.add_run("Exempelgatan 1, 123 45 Nynäshamn")
+    p.add_run("Exempelgatan 1, 123 45 Exempelby")
 
     p = doc.add_paragraph()
     p.add_run("Marknadsvärde: ").bold = True
     p.add_run("3 050 000 kr (± 50 000 kr)")
 
     pmark = doc.add_paragraph(
-        "Nynäshamn, 2026-06-21 — Jenny Wiklund, Auktoriserad mäklare"
+        "Exempelby, 2026-06-21 — Testa Testsson, Auktoriserad mäklare"
     )
     add_pmark_yellow_highlight(pmark)
 
