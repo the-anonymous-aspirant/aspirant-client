@@ -27,10 +27,24 @@
       message="An invoice needs a client with a name. Above 250 € gross it also needs their postal address."
       data-test="clients-empty"
     />
+    <!-- §3.145: the book folds by first letter, A-Z in German order and "#"
+         last. A single letter starts open (§3.17 R3), and every fold uses the
+         shared caret (.fold-summary, design_agent c67318). -->
+    <template v-else>
+    <details
+      v-for="group in groups"
+      :key="group.key"
+      class="client-group"
+      :open="isOpen(group.key)"
+      data-test="client-group"
+      :data-letter="group.key"
+      @toggle="onToggle(group.key, $event)"
+    >
+    <summary class="fold-summary client-group__summary" data-test="client-group-summary">{{ group.key }} · {{ group.rows.length }}</summary>
     <!-- Below 640px each client is a card (§3.114 decision 6): name and Edit
          on one row, then the address and emails at the card's edge. -->
-    <ul v-else-if="narrow" class="client-cards" aria-label="Clients">
-      <li v-for="row in rows" :key="row.id" class="client-card" data-test="client-row">
+    <ul v-if="narrow" class="client-cards" :aria-label="`Clients: ${group.key}`">
+      <li v-for="row in group.rows" :key="row.id" class="client-card" data-test="client-row" :data-client-id="row.id">
         <div class="client-card__top">
           <strong>{{ row.name }}</strong>
           <AspButton variant="ghost" size="sm" :data-test="`client-edit-${row.id}`" @click="startEdit(row)">Edit</AspButton>
@@ -66,11 +80,11 @@
     <AspDataTable
       v-else
       :columns="columns"
-      :rows="rows"
+      :rows="group.rows"
       row-key="id"
       density="compact"
-      caption="Clients"
-      :row-attrs="(row) => ({ 'data-test': 'client-row' })"
+      :caption="`Clients: ${group.key}`"
+      :row-attrs="(row) => ({ 'data-test': 'client-row', 'data-client-id': row.id })"
     >
       <!-- Zir notes read as one muted line under the name, cut with an
            ellipsis so a cut shows (design ack c61704 on system_3 #9987); the
@@ -116,6 +130,8 @@
         <AspButton variant="ghost" size="sm" :data-test="`client-edit-${row.id}`" @click="startEdit(row)">Edit</AspButton>
       </template>
     </AspDataTable>
+    </details>
+    </template>
 
     <!-- Zir client list as a spreadsheet (operator c61628, system_3 #10013;
          server #10012). An occasional action, so it follows the list, the
@@ -231,6 +247,7 @@
   import { AspButton, AspDataTable, AspEmptyState, AspInput, AspModal, AspTextarea } from '@aspirant/design-system';
   import ModalActions from './ModalActions.vue';
   import PayersDialog from './PayersDialog.vue';
+  import { groupByLetter, letterKey } from './listGroups.js';
   import { FIELD_REFUSALS, clientsCsvUrl, createClient, downloadBlob, errorOf, formatBerlinDay, formatDay, formatMoney, listInvoices, listPayerCandidates, payersSavedLine, safeSocialUrl, socialHandle, updateClient } from './api.js';
 
   const blank = () => ({ name: '', address: '', email: '', paypal_email: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
@@ -265,18 +282,30 @@
         payerLeftOut: {},
         payersOpen: false,
         payersSummary: null,
+        // Letters she opened or closed this visit, by key; a letter not in
+        // here takes the default. Kept through a refetch, never stored.
+        openLetters: {},
+        // The client ids known when a save started; the refetch's new ids
+        // open their letters and the first scrolls into view. The payers
+        // save answers with counts, not names, so ids are compared.
+        revealFrom: null,
+        // Fixed widths on every column, the same in every letter's table, so
+        // the columns line up from group to group (§3.145).
         columns: [
-          { key: 'name', label: 'Name' },
-          { key: 'address', label: 'Address', sortable: false },
-          { key: 'email', label: 'Contact' },
-          { key: 'paypal_email', label: 'PayPal email' },
-          { key: 'actions', label: '', sortable: false, align: 'right' },
+          { key: 'name', label: 'Name', width: '24%' },
+          { key: 'address', label: 'Address', sortable: false, width: '24%' },
+          { key: 'email', label: 'Contact', width: '24%' },
+          { key: 'paypal_email', label: 'PayPal email', width: '20%' },
+          { key: 'actions', label: '', sortable: false, align: 'right', width: '8%' },
         ],
       };
     },
     computed: {
       rows() {
         return this.clients.map((c) => ({ ...c, actions: '' }));
+      },
+      groups() {
+        return groupByLetter(this.rows, (r) => r.name);
       },
       // What the CSV holds and how many, said before the click (#9948's unit).
       csvScope() {
@@ -312,6 +341,7 @@
       // A client added here or elsewhere can take payers off the list.
       clients() {
         this.refreshPayerCandidates();
+        this.revealNew();
       },
       // Editing a refused field clears its refusal.
       'form.phone'() {
@@ -325,6 +355,30 @@
       },
     },
     methods: {
+      // Folded by default; a book with one letter shows it open (§3.17 R3).
+      isOpen(key) {
+        if (key in this.openLetters) return this.openLetters[key];
+        return this.groups.length === 1;
+      },
+      onToggle(key, event) {
+        this.openLetters = { ...this.openLetters, [key]: event.target.open };
+      },
+      // After a save, the clients that are new since it started are shown:
+      // their letters open and the first scrolls into view.
+      revealNew() {
+        if (!this.revealFrom) return;
+        const known = this.revealFrom;
+        const added = this.clients.filter((c) => !known.has(c.id));
+        if (!added.length) return;
+        this.revealFrom = null;
+        const open = { ...this.openLetters };
+        for (const c of added) open[letterKey(c.name)] = true;
+        this.openLetters = open;
+        this.$nextTick(() => {
+          const el = this.$el.querySelector(`[data-client-id="${added[0].id}"]`);
+          if (el) el.scrollIntoView({ block: 'nearest' });
+        });
+      },
       // The offer is optional: a failed read shows no button.
       async refreshPayerCandidates() {
         try {
@@ -344,6 +398,7 @@
       // The new clients appear in the list on the parent's refetch.
       onPayersSaved(result) {
         this.payersSummary = result;
+        this.revealFrom = new Set(this.clients.map((c) => c.id));
         this.$emit('changed');
       },
       safeSocialUrl,
@@ -419,10 +474,14 @@
         this.error = '';
         try {
           if (this.editing) await updateClient(this.editing.id, this.form);
-          else await createClient(this.form);
+          else {
+            this.revealFrom = new Set(this.clients.map((c) => c.id));
+            await createClient(this.form);
+          }
           this.editorOpen = false;
           this.$emit('changed');
         } catch (err) {
+          this.revealFrom = null;
           const { code, message } = errorOf(err);
           const refusal = FIELD_REFUSALS[code];
           if (refusal) {
@@ -440,6 +499,25 @@
 </script>
 
 <style scoped>
+  /* §3.145: one fold per letter. The table layout is fixed and every column
+     has a width, so the columns line up from one letter's table to the next. */
+  .client-group {
+    margin-bottom: var(--space-xs);
+  }
+
+  .client-group__summary {
+    font-weight: 600;
+  }
+
+  .client-group > :deep(*:not(summary)) {
+    margin-top: var(--space-xs);
+  }
+
+  .client-group :deep(table) {
+    table-layout: fixed;
+    width: 100%;
+  }
+
   .visually-hidden {
     position: absolute;
     width: 1px;
