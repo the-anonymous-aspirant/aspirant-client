@@ -9,8 +9,8 @@
     <ReadState
       v-if="languagesLoading || languagesError"
       :state="languagesLoading ? 'loading' : languagesError.kind"
-      heading="The translator could not be loaded"
-      :message="languagesError ? languagesError.reason : ''"
+      :heading="languagesError && languagesError.kind === 'failed' ? 'The translator could not be loaded' : ''"
+      :message="languagesError && languagesError.kind === 'failed' ? languagesError.reason : ''"
       loading-label="Loading languages"
       data-test="translator-read-state"
       @retry="retryLanguages"
