@@ -5,7 +5,9 @@
 
     <!-- Sign-up kill-switch (system_3 #5291, server half #5289). A labelled
          action button rather than a toggle: a switch's position has to be
-         learned, a button that says "Close sign-up" does not. -->
+         learned, a button that says "Close sign-up" does not. Quiet at rest:
+         red belongs to the confirmation, not to the page's first control
+         (system_3 #11004, UX walk AA2). -->
     <section class="signup-switch" data-testid="signup-switch">
       <div class="signup-switch__state">
         <span class="signup-switch__label">Public sign-up</span>
@@ -26,7 +28,7 @@
       </p>
       <AspButton
         v-else-if="signup.state === 'ready'"
-        :variant="signup.enabled ? 'destructive' : 'primary'"
+        :variant="signup.enabled ? 'secondary' : 'primary'"
         :disabled="signup.saving"
         data-testid="signup-action"
         @click="signup.enabled ? (confirmingClose = true) : setSignup(true)"
@@ -57,7 +59,11 @@
         Could not load the user list.
         <AspButton variant="secondary" size="sm" @click="fetchUsers">Try again</AspButton>
       </p>
-      <AspDataTable v-else :columns="columns" :rows="users" row-key="ID">
+      <template v-else>
+      <!-- A refused row action, said on the page (#11004): a failed delete
+           used to reach the console only. -->
+      <p v-if="actionError" class="action-error" role="alert" data-test="row-action-error">{{ actionError }}</p>
+      <AspDataTable :columns="columns" :rows="users" row-key="ID">
         <template #cell-verified="{ row }">
           <AspBadge v-if="row.email_verified_at" status="positive" size="sm" data-testid="verified-badge">
             {{ formatDate(row.email_verified_at) }}
@@ -67,10 +73,16 @@
         <template #cell-CreatedAt="{ row }">{{ formatDate(row.CreatedAt) }}</template>
         <template #cell-UpdatedAt="{ row }">{{ formatDate(row.UpdatedAt) }}</template>
         <template #cell-actions="{ row }">
+          <!-- Quiet at rest, Delete set apart and last (§3.122 P5); red is the
+               confirmation's. Block and Delete are not offered on the account
+               signed in here: one slip there locks out, or removes, the
+               person using the page (#11004). The server refuses deleting
+               your own account too; this is the screen saying so first. -->
           <div class="actions-cell">
             <AspButton variant="secondary" size="sm" @click="editUser(row)">Edit</AspButton>
+            <span v-if="isSelf(row)" class="actions-self" data-test="self-row-note">Your account</span>
             <AspButton
-              v-if="row.access_role === 'Blocked'"
+              v-else-if="row.access_role === 'Blocked'"
               variant="secondary"
               size="sm"
               data-testid="unblock-user"
@@ -81,11 +93,21 @@
             <AspButton v-else variant="secondary" size="sm" data-testid="block-user" @click="blocking = row">
               Block
             </AspButton>
-            <AspButton variant="destructive" size="sm" @click="deleteUser(row)">Delete</AspButton>
+            <AspButton
+              v-if="!isSelf(row)"
+              variant="secondary"
+              size="sm"
+              class="actions-delete"
+              data-test="delete-user"
+              @click="deleting = row"
+            >
+              Delete
+            </AspButton>
           </div>
         </template>
         <template #empty>No users.</template>
       </AspDataTable>
+      </template>
     </div>
 
     <!-- Closing sign-up is the direction worth a confirmation. Opening it is
@@ -125,6 +147,29 @@
         <AspButton variant="secondary" @click="blocking = null">Cancel</AspButton>
         <AspButton variant="destructive" data-testid="confirm-block-user" @click="blockUser">
           Block account
+        </AspButton>
+      </template>
+    </AspModal>
+
+    <!-- Delete names the account and what goes, in Block's grammar, and points
+         at Block for the case that only wants access stopped (#11004). The
+         server soft-deletes the user row (gorm.Model): the account cannot sign
+         in and leaves this list; nothing on this screen brings it back. -->
+    <AspModal
+      :open="deleting !== null"
+      title="Delete this account?"
+      size="sm"
+      @update:open="(open) => (open ? null : (deleting = null))"
+    >
+      <p v-if="deleting" data-test="delete-consequence">
+        <strong>{{ deleting.username }}</strong> can no longer sign in, and the account leaves this
+        list. There is no undo on this screen. To stop access and keep the account, block it
+        instead.
+      </p>
+      <template #footer>
+        <AspButton variant="secondary" @click="deleting = null">Cancel</AspButton>
+        <AspButton variant="destructive" data-test="confirm-delete-user" @click="deleteUser">
+          Delete account
         </AspButton>
       </template>
     </AspModal>
@@ -177,6 +222,14 @@
         confirmingClose: false,
         // The row awaiting a block confirmation, or null.
         blocking: null,
+        // The row awaiting a delete confirmation, or null (#11004).
+        deleting: null,
+        // The last refused row action, in words, or null (#11004).
+        actionError: null,
+        // The account signed in here, as the shell and route guard read it. A
+        // client hint, used only to not offer Block and Delete on it; the
+        // server decides (it refuses deleting your own account).
+        selfName: localStorage.getItem('user_name') || '',
         // user id → the tier it held when this screen blocked it, so unblock
         // restores rather than guesses.
         priorRole: {},
@@ -302,6 +355,7 @@
         await this.setUserRole(user, this.priorRole[user.ID] || DEFAULT_RESTORE_ROLE);
       },
       async setUserRole(user, accessRole) {
+        this.actionError = null;
         try {
           await axios.put(`/api/data_models/users/${user.ID}`, {
             username: user.username,
@@ -312,16 +366,33 @@
           this.fetchUsers();
         } catch (error) {
           console.error('Error changing user tier:', error);
-          this.roster = { state: 'failed' };
+          // A refused write, not a failed read: the list is still right, so it
+          // stays, and the sentence names the change that did not happen.
+          const why = this.refusal(error, 'the server did not say why. It may be unreachable — try again.');
+          this.actionError = `Could not change ${user.username}'s access: ${why}`;
         }
       },
 
-      async deleteUser(user) {
+      isSelf(row) {
+        return !!this.selfName && row.username === this.selfName;
+      },
+      // The server's own sentence when it sent one ("Cannot delete your own
+      // account", "User not found"), else ours; never axios's message.
+      refusal(error, fallback) {
+        return error.response?.data?.error?.message || fallback;
+      },
+      async deleteUser() {
+        const target = this.deleting;
+        this.deleting = null;
+        if (!target) return;
+        this.actionError = null;
         try {
-          await axios.delete(`/api/data_models/users/${user.ID}`);
+          await axios.delete(`/api/data_models/users/${target.ID}`);
           this.fetchUsers();
         } catch (error) {
           console.error('Error deleting user:', error);
+          const why = this.refusal(error, 'the server did not say why. It may be unreachable — try again.');
+          this.actionError = `Could not delete ${target.username}: ${why}`;
         }
       },
       resetForm() {
@@ -413,10 +484,29 @@
     overflow-x: auto;
   }
 
+  /* 8px between targets, and Delete set apart from the rest (§3.99,
+     §3.122 P5; #11004). They were 4px apart at 390. */
   .actions-cell {
     display: inline-flex;
-    gap: var(--space-2xs);
+    align-items: center;
+    gap: var(--space-sm);
     white-space: nowrap;
+  }
+
+  .actions-delete {
+    margin-left: var(--space-lg);
+  }
+
+  .actions-self {
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+
+  /* A refusal looks like one: the design system's error ink, as the site's
+     other failed lines are drawn (design c68794 on #11004). */
+  .action-error {
+    color: var(--feedback-error-text);
+    margin: 0 0 var(--space-sm);
   }
 
   @media (max-width: 768px) {
