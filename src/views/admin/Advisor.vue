@@ -7,7 +7,10 @@
     <div class="sources-card">
       <h3>Knowledge Base</h3>
       <div v-if="sourcesLoading" class="loading-text">Loading sources...</div>
-      <div v-else-if="sourcesError" class="error-text">{{ sourcesError }}</div>
+      <div v-else-if="sourcesError" class="read-failed" role="alert" data-test="advisor-sources-failed">
+        <p class="error-text">{{ sourcesError }}</p>
+        <AspButton variant="secondary" size="sm" data-test="advisor-sources-retry" @click="retrySources">Try again</AspButton>
+      </div>
       <template v-else>
         <div class="sources-stats">
           <span>{{ sources.total_documents }} documents</span>
@@ -148,15 +151,25 @@
             </div>
           </div>
           <div class="form-group">
-            <label>Files (PDF, DOCX, TXT)</label>
-            <input
-              type="file"
-              ref="fileInput"
-              accept=".pdf,.docx,.txt"
-              :disabled="uploading"
-              multiple
-              @change="onFilesSelected"
-            />
+            <label for="advisor-files">Files (PDF, DOCX, TXT)</label>
+            <!-- The browser's own file control painted in its own colours on
+                 this card (UX walk AA3). The design system has no file input,
+                 so a DS button opens a hidden native one, as on Assets. -->
+            <div class="file-pick">
+              <input
+                id="advisor-files"
+                type="file"
+                ref="fileInput"
+                class="file-input-hidden"
+                accept=".pdf,.docx,.txt"
+                :disabled="uploading"
+                multiple
+                data-test="advisor-file-input"
+                @change="onFilesSelected"
+              />
+              <AspButton variant="secondary" size="sm" :disabled="uploading" data-test="advisor-choose-files" @click="$refs.fileInput.click()">Choose files</AspButton>
+              <span class="file-pick__names" data-test="advisor-chosen-files">{{ chosenFilesLine }}</span>
+            </div>
           </div>
           <AspButton
             class="btn-upload"
@@ -177,7 +190,14 @@
       <div class="docs-list-section">
         <h4>Uploaded Documents</h4>
         <div v-if="docsLoading" class="loading-text">Loading...</div>
-        <div v-else-if="documents.length === 0" class="empty-text">No documents uploaded yet.</div>
+        <!-- A failed read is not an empty list (D2, UX walk AA3): before this,
+             a 502 here showed "No documents uploaded yet." and logged the
+             failure to the console, so the documents looked gone. -->
+        <div v-else-if="docsError" class="read-failed" role="alert" data-test="advisor-docs-failed">
+          <p class="error-text">{{ docsError }}</p>
+          <AspButton variant="secondary" size="sm" data-test="advisor-docs-retry" @click="retryDocuments">Try again</AspButton>
+        </div>
+        <div v-else-if="documents.length === 0" class="empty-text" data-test="advisor-docs-empty">No documents uploaded yet.</div>
         <div v-else class="docs-table">
           <div v-for="doc in documents" :key="doc.id" class="doc-row">
             <div class="doc-info">
@@ -224,6 +244,7 @@ export default {
       // Documents
       documents: [],
       docsLoading: true,
+      docsError: null,
       uploading: false,
       uploadDomain: '',
       uploadAccess: 'admin',
@@ -261,6 +282,11 @@ export default {
     domainOptions() {
       return this.domainList.map(d => ({ value: d.name, label: d.display_name }));
     },
+    chosenFilesLine() {
+      const n = this.selectedFiles.length;
+      if (n === 0) return 'No file chosen';
+      return n === 1 ? this.selectedFiles[0].name : `${n} files: ${this.selectedFiles.map((f) => f.name).join(', ')}`;
+    },
     accessOptions() {
       return [
         { value: 'admin', label: 'Admin only' },
@@ -295,11 +321,26 @@ export default {
       if (!this.isAdmin) return;
       try {
         const resp = await axios.get('/api/advisor/documents');
-        this.documents = resp.data.items || resp.data;
+        const d = resp.data;
+        this.documents = Array.isArray(d) ? d : d?.items || d?.documents || [];
+        this.docsError = null;
       } catch (err) {
-        console.error('Failed to load documents:', err);
+        // The sources card's own words for the same service (UX walk AA3).
+        this.docsError = 'Failed to load documents: ' + (err.response?.data?.detail || 'the advisor service did not answer');
       }
       this.docsLoading = false;
+    },
+
+    retrySources() {
+      this.sourcesLoading = true;
+      this.sourcesError = null;
+      this.fetchSources();
+    },
+
+    retryDocuments() {
+      this.docsLoading = true;
+      this.docsError = null;
+      this.fetchDocuments();
     },
 
     async askQuestion() {
@@ -460,13 +501,31 @@ export default {
   text-align: center;
 }
 
+/* Every error line here sits on a dark card. */
 .error-text {
-  color: var(--feedback-error);
+  color: var(--feedback-error-text-on-dark);
   font-size: var(--text-sm);
-  margin-top: var(--space-sm);
+  margin: var(--space-sm) 0 0;
+}
+
+.read-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
 }
 
 /* Sources Card */
+/* Each dark card sets its own ink, so text that inherits it (the muted
+   labels, the hint, the empty line, which mix from currentColor) reads on the
+   card in both themes. The page root's on-light ink made them dark on dark in
+   the light theme (UX walk AA3). */
+.sources-card,
+.chat-card,
+.documents-card {
+  color: var(--text-on-dark);
+}
+
 .sources-card {
   background-color: var(--surface-card);
   border: 2px solid var(--border-card);
@@ -810,18 +869,25 @@ export default {
   font-weight: 600;
 }
 
-/* `.form-group select` has left this selector: both selects are AspSelect now,
-   which renders its own trigger past this file's data-v attribute and paints
-   the §3.86 control box itself. The `file` input stays native — no DS
-   component covers it, and AspInput's §3.85 allowlist excludes the type — so
-   it keeps the card-inner box it has always had. */
-.form-group input[type="file"] {
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-  background-color: var(--surface-card-inner);
-  color: var(--text-on-dark);
+/* Both selects are AspSelect, which paints the §3.86 control box itself. The
+   native file input is hidden behind a DS button (no DS component covers the
+   type); the chosen names read beside it. */
+.file-input-hidden {
+  display: none;
+}
+
+.file-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.file-pick__names {
   font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 /* Layout only — visuals from AspButton (variant="primary"). */
@@ -838,7 +904,7 @@ export default {
 }
 
 .upload-message.error {
-  color: var(--feedback-error);
+  color: var(--feedback-error-text-on-dark);
 }
 
 /* Document List */
