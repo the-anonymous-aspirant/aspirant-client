@@ -32,8 +32,29 @@
       @retry="fetchAll"
     />
 
-    <!-- Overall Status Banner -->
-    <template v-if="health">
+    <!-- Overall status. It names what it covers (system_3 #11003, UX walk AA1;
+         D2, D4): the server's own status says nothing about containers or
+         disk, so while any read has failed it says which, in the warning
+         treatment, and a bare "OK" appears only when every read returned. -->
+    <div
+      v-if="readState === 'ready' && failedReads.length > 0"
+      class="status-banner degraded"
+      data-test="status-banner-partial"
+    >
+      <span class="status-dot degraded"></span>
+      <span class="status-label">{{ partialBanner }}</span>
+    </div>
+
+    <!-- Server: its read failed, so the card keeps its heading and says so. -->
+    <div v-if="failures.health" class="health-grid">
+      <div class="health-card" data-test="read-failed-health">
+        <h3>Server</h3>
+        <p class="read-failed">{{ failures.health }}</p>
+        <AspButton variant="secondary" size="sm" @click="fetchAll">Try again</AspButton>
+      </div>
+    </div>
+
+    <template v-if="health && !failures.health">
       <!-- `status` is guarded, not assumed (#5317). Unguarded,
            `health.status.toUpperCase()` throws on any 200 whose body omits it —
            and a thrown render does not fall back, it FREEZES: Vue stops
@@ -43,7 +64,7 @@
            check answers oddly. Same fault class as #5312, which existed because
            this file read a shape the server had stopped serving; the shape has
            already moved under it once. -->
-      <div class="status-banner" :class="health.status || 'unknown'">
+      <div v-if="failedReads.length === 0" class="status-banner" :class="health.status || 'unknown'">
         <span class="status-dot" :class="health.status || 'unknown'"></span>
         <span class="status-label">{{ (health.status || 'unknown').toUpperCase() }}</span>
       </div>
@@ -73,8 +94,15 @@
       </div>
     </template>
 
-    <!-- Disk Overview -->
-    <template v-if="disks.length > 0">
+    <!-- Disk Overview. A failed read keeps the heading and says so; an
+         empty list used to hide the section, so a disk that could not be read
+         looked like no section at all (#11003). -->
+    <div v-if="failures.disk" class="health-card wide" data-test="read-failed-disk">
+      <h3>Disk Usage</h3>
+      <p class="read-failed">{{ failures.disk }}</p>
+      <AspButton variant="secondary" size="sm" @click="fetchAll">Try again</AspButton>
+    </div>
+    <template v-else-if="disks.length > 0">
       <div class="health-card wide">
         <h3>Disk Usage</h3>
         <div v-for="d in disks" :key="d.mount" class="disk-bar-container">
@@ -100,7 +128,16 @@
          #10558; design c65900, security c65887, design_conventions §3.144).
          The control is absent, not disabled, where `controllable` is not true:
          the allowlist lives on the monitor and is never copied here. -->
-    <template v-if="containers.length > 0">
+    <template v-if="failures.containers">
+      <div class="section-header">
+        <h3>Containers</h3>
+      </div>
+      <div class="read-failed-block" data-test="read-failed-containers">
+        <p class="read-failed read-failed--page">{{ failures.containers }}</p>
+        <AspButton variant="secondary" size="sm" @click="fetchAll">Try again</AspButton>
+      </div>
+    </template>
+    <template v-else-if="containers.length > 0">
       <div class="section-header">
         <h3>Containers</h3>
         <span class="container-count">{{ runningCount }} / {{ containers.length }} running</span>
@@ -210,7 +247,7 @@
     </AspModal>
 
     <!-- Volumes -->
-    <template v-if="volumes.length > 0">
+    <template v-if="volumes.length > 0 && !failures.disk">
       <div class="health-card wide">
         <h3>Volumes</h3>
         <div class="info-rows">
@@ -226,7 +263,12 @@
     </template>
 
     <!-- Database Stats -->
-    <template v-if="dbStats">
+    <div v-if="failures.db" class="health-card wide" data-test="read-failed-db">
+      <h3>Database</h3>
+      <p class="read-failed">{{ failures.db }}</p>
+      <AspButton variant="secondary" size="sm" @click="fetchAll">Try again</AspButton>
+    </div>
+    <template v-else-if="dbStats">
       <div class="health-card wide">
         <h3>Database</h3>
         <div class="db-summary">
@@ -271,6 +313,32 @@ const POLL_FOR_MS = 30000;
 const DAY = { day: 'numeric', month: 'short', timeZone: 'UTC' };
 const formatDay = (iso) => new Date(iso).toLocaleDateString('en-GB', DAY);
 
+// The reads that each have their own section. The usage read is an addition
+// to the containers, not a section, and keeps its own quiet failure.
+const READS = [
+  { key: 'health', noun: 'server health', source: 'server' },
+  { key: 'containers', noun: 'containers', source: 'monitor' },
+  { key: 'disk', noun: 'disk', source: 'monitor' },
+  { key: 'db', noun: 'database statistics', source: 'server' },
+];
+const LABEL = { health: 'server health', containers: 'containers', disk: 'disk usage', db: 'database statistics' };
+
+const joinNames = (names) =>
+  names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
+// Words for a failed read, keyed on what answered, never err.message (D2).
+// Containers and disk come through the server from the monitor, so a gateway
+// error there is the monitor not answering.
+export function readFailure(key, err) {
+  const read = READS.find((r) => r.key === key);
+  const res = err && err.response;
+  let why;
+  if (!res) why = 'no answer came back';
+  else if (res.status === 502 || res.status === 503 || res.status === 504) why = `the ${read.source} did not answer`;
+  else why = `the server answered with an error (${res.status})`;
+  return `Could not read ${LABEL[key]}: ${why}.`;
+}
+
 export default {
   components: {
     AspButton,
@@ -288,6 +356,9 @@ export default {
       volumes: [],
       images: { total_count: 0, total_size_mb: 0 },
       dbStats: null,
+      // Per read that failed on the latest fetch: the sentence the page shows.
+      // Absent means that read returned (#11003).
+      failures: {},
       refreshInterval: null,
       // The latest nightly rollup run (GET /system/service-usage). `read` is
       // false until a read answers, so a failed read says nothing rather than
@@ -323,8 +394,24 @@ export default {
     readState() {
       if (this.loading) return 'loading';
       if (this.error) return 'failed';
-      if (!this.health && !this.containers.length && !this.disks.length && !this.dbStats) return 'empty';
+      // "Nothing to show" only when nothing failed: a failed read is a thing
+      // to show, in its own section (#11003).
+      if (this.failedReads.length === 0 && !this.health && !this.containers.length && !this.disks.length && !this.dbStats) return 'empty';
       return 'ready';
+    },
+    failedReads() {
+      return READS.filter((r) => this.failures[r.key]);
+    },
+    // "Server and database OK. Containers and disk could not be read."
+    partialBanner() {
+      const sentences = [];
+      if (this.health && !this.failures.health) {
+        const covers = ['Server', ...Object.keys(this.health.checks || {})];
+        sentences.push(`${joinNames(covers)} ${(this.health.status || 'unknown').toUpperCase()}.`);
+      }
+      const failed = joinNames(this.failedReads.map((r) => r.noun));
+      sentences.push(`${failed.charAt(0).toUpperCase()}${failed.slice(1)} could not be read.`);
+      return sentences.join(' ');
     },
   },
   methods: {
@@ -466,6 +553,17 @@ export default {
           this.usage = { read: true, asOf: d.as_of || null, services: d.services || [] };
         }
 
+        const failures = {};
+        [
+          ['health', healthRes],
+          ['containers', containersRes],
+          ['disk', diskRes],
+          ['db', dbRes],
+        ].forEach(([key, r]) => {
+          if (r.status === 'rejected') failures[key] = readFailure(key, r.reason);
+        });
+        this.failures = failures;
+
         // Show error only if all requests failed. The usage read is an
         // addition to the containers, not a page of its own, so it does not
         // count toward "nothing answered".
@@ -515,6 +613,22 @@ export default {
   color: var(--text-muted);
   font-size: var(--text-lg);
   margin-top: var(--space-2xl);
+}
+
+/* A failed read inside a dark card takes the card's ink; on the page, the
+   page's (#11003). Words, not colour, carry the failure (D2). */
+.read-failed {
+  color: inherit;
+  margin: 0 0 var(--space-md) 0;
+}
+
+.read-failed-block {
+  width: 100%;
+  margin-bottom: var(--space-xl);
+}
+
+.read-failed--page {
+  color: var(--text-on-light);
 }
 
 .error-text {
