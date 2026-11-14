@@ -2,10 +2,24 @@
   <div class="token-view page">
     <h1>Choose a new password</h1>
     <AspCard class="token-view-card" padding="md">
-      <p v-if="!token" class="message message--error">
-        This link is missing its reset code. Open the link from your email again, or request a
-        new one.
-      </p>
+      <!-- The next step is a door, not a sentence (UX walk AP3, system_3
+           #10979): "request a new one" was plain text on a page with nothing
+           else on it. -->
+      <template v-if="!token">
+        <p class="message message--error" data-test="reset-no-code">
+          This link is missing its reset code. Open the link from your email again, or
+          <RouterLink to="/forgot-password" data-test="reset-request-new">request a new one</RouterLink>.
+        </p>
+      </template>
+
+      <!-- A spent or expired link: the form cannot help any more, so the
+           message and its door replace it. -->
+      <template v-else-if="linkDead">
+        <p class="message message--error" data-test="reset-link-dead">
+          That link is invalid or has expired.
+          <RouterLink to="/forgot-password" data-test="reset-request-new">Request a new reset link</RouterLink>.
+        </p>
+      </template>
 
       <template v-else-if="state === 'done'">
         <p class="message message--success">
@@ -76,6 +90,9 @@
         state: 'ready',
         busy: false,
         error: '',
+        // The API refused the link itself (400): it is spent, expired or
+        // never existed, which the API does not tell apart on purpose.
+        linkDead: false,
         MIN_LENGTH,
         MAX_LENGTH,
       };
@@ -126,9 +143,15 @@
             // expired, already used, never existed, minted for verification.
             // Telling them apart tells a guesser which attempts were
             // structurally right.
+            // A 400 is the one bad-token answer: say it with the door to a new
+            // link. Anything else keeps the server's own words.
             const body = await response.json().catch(() => null);
-            this.error =
-              body?.error?.message || 'That link is invalid or has expired. Request a new one.';
+            if (response.status === 400) {
+              this.linkDead = true;
+              this.error = '';
+            } else {
+              this.error = body?.error?.message || 'That did not work. Try again.';
+            }
             return;
           }
           this.state = 'done';
