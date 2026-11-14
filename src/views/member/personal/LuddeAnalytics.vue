@@ -2,6 +2,44 @@
   <!-- Intended user: sister (Ludde) (personal app — #4184 IA) -->
   <div class="container page">
     <h1>Ludde Meal Time Tracker (LMTT)</h1>
+
+    <!-- A refused read is not a failure: this log belongs to someone else, and
+         trying again cannot help. The same words as the Invoices app's refusal,
+         in place of the page body (D5; system_3 #11018, #11025). -->
+    <AspEmptyState
+      v-if="readState === 'refused'"
+      heading="This app belongs to another account"
+      message="Only its owner and an administrator can open it."
+      data-test="meal-log-refused"
+    />
+
+    <template v-else>
+    <!-- The page's question first, in words: when did Ludde last eat, and how
+         often today (system_3 #11018). A log that could not be read says so
+         and is never shown as zero meals (D2). The shared ReadState gives the
+         loading and failed shapes; retry is offered because it can help. -->
+    <ReadState
+      v-if="readState === 'loading' || readState === 'failed'"
+      :state="readState"
+      heading="The meal log could not be read"
+      :message="`${readError} The figures are hidden, and saving waits until the log is read.`"
+      loading-label="Reading the meal log"
+      skeleton="text"
+      :lines="1"
+      class="meal-read-state"
+      @retry="fetchFeedingTimes"
+    />
+    <p v-else class="meal-status meal-status--last" data-test="meal-last">
+      <template v-if="!feedingTimes.length">No meals in the log yet.</template>
+      <template v-else>
+        Last meal: {{ lastMealText }}.
+        <template v-if="totalNumberOfMealsToday">
+          {{ totalNumberOfMealsToday }} {{ totalNumberOfMealsToday === 1 ? 'meal' : 'meals' }} today.
+        </template>
+        <template v-else>No meals today yet.</template>
+      </template>
+    </p>
+
     <p>The date and time defaults to right now, but can be adjusted by clicking on it</p>
     <div class="image-container">
       <img :src="luddeImageUrl" alt="Ludde" class="ludde-image" @click="playSound" />
@@ -28,12 +66,22 @@
       </div>
 
       <div class="button-group">
-        <AspButton class="confirm-btn" variant="primary" size="lg" @click="confirmDateTime">
+        <AspButton
+          class="confirm-btn"
+          variant="primary"
+          size="lg"
+          :disabled="readState !== 'ok'"
+          data-test="meal-save"
+          @click="confirmDateTime"
+        >
           Save Meal Time
         </AspButton>
       </div>
+      <p v-if="saveError" class="meal-save-error" role="alert" data-test="meal-save-error">
+        {{ saveError }}
+      </p>
 
-      <div class="info-boxes">
+      <div v-if="readState === 'ok' && feedingTimes.length" class="info-boxes" data-test="meal-figures">
         <div class="info-box">
           <h4>Average time between meals (last week)</h4>
           <p>{{ averageTimeBetweenMealsLastWeek }} hours</p>
@@ -65,7 +113,7 @@
       </div>
     </div>
 
-    <div v-if="currentView === 'showData'" class="feeding-times">
+    <div v-if="currentView === 'showData' && readState === 'ok'" class="feeding-times">
       <h3>Saved Feeding Times</h3>
       <AspDataTable :columns="feedingColumns" :rows="feedingTimes">
         <template #cell-date="{ row }">{{ formatDate(row.timestamp) }}</template>
@@ -76,19 +124,23 @@
       </AspDataTable>
     </div>
     <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
+    </template>
   </div>
 </template>
 
 <script>
   import axios from 'axios';
-  import { AspButton, AspDataTable, AspTextarea } from '@aspirant/design-system';
+  import { AspButton, AspDataTable, AspEmptyState, AspTextarea } from '@aspirant/design-system';
   import assetManager from '../../../asset_manager';
+  import ReadState from '../../../components/ReadState.vue';
 
   export default {
     components: {
       AspButton,
       AspDataTable,
+      AspEmptyState,
       AspTextarea,
+      ReadState,
     },
     data() {
       return {
@@ -104,6 +156,15 @@
           { key: 'actions', label: 'Actions', sortable: false },
         ],
         feedingTimes: [],
+        // 'loading' until the first read answers, then 'ok', 'failed', or
+        // 'refused' (403: the log is someone else's, as on Invoices). The figures are
+        // computed only from a log that was read (D2).
+        readState: 'loading',
+        readError: '',
+        saveError: '',
+        // Ticks once a minute so "2 h 10 min ago" stays true on an open page.
+        now: Date.now(),
+        nowTimer: null,
         feedingTimesVisible: false,
         currentView: 'enterData',
         flashShowDataButton: false,
@@ -113,6 +174,28 @@
       };
     },
     computed: {
+      // The newest meal in the log, in the device's local time, 24-hour
+      // (design_agent c68245 on system_3 #11018): "today 07:40, 2 h 10 min
+      // ago", "yesterday 22:10, 11 h 50 min ago", and past a day the date
+      // alone carries it ("12 Nov 21:05").
+      lastMealText() {
+        if (!this.feedingTimes.length) return '';
+        const last = new Date(Math.max(...this.feedingTimes.map((t) => new Date(t.timestamp).getTime())));
+        const now = new Date(this.now);
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+        const pad = (n) => String(n).padStart(2, '0');
+        const clock = `${pad(last.getHours())}:${pad(last.getMinutes())}`;
+        const minutes = Math.max(0, Math.floor((now - last) / 60000));
+        const ago =
+          minutes < 1 ? 'just now' : minutes < 60 ? `${minutes} min ago` : `${Math.floor(minutes / 60)} h ${minutes % 60} min ago`;
+        if (minutes < 24 * 60) {
+          const day = this.isSameDay(last, now) ? 'today' : 'yesterday';
+          return `${day} ${clock}, ${ago}`;
+        }
+        const date = last.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        return `${date} ${clock}`;
+      },
       averageTimeBetweenMealsLastWeek() {
         const last7Days = this.getLast7Days();
         const intervals = last7Days.flatMap((day) => {
@@ -185,15 +268,37 @@
     },
     methods: {
       async fetchFeedingTimes() {
+        this.readState = 'loading';
+        this.readError = '';
         try {
           const response = await axios.get('/api/data_models/ludde_feeding_times');
-          this.feedingTimes = (response.data.items || response.data.data).reverse();
-          console.log('feedingTimes fetched successfully');
+          const rows = response.data.items || response.data.data;
+          if (!Array.isArray(rows)) throw new Error('unreadable answer');
+          this.feedingTimes = rows.reverse();
+          this.readState = 'ok';
         } catch (error) {
-          console.error('Error fetching feedingTimes:', error);
+          // Never the empty list in place of the log: the figures computed
+          // from it would read as "no meal today" (system_3 #11018, D2).
+          this.feedingTimes = [];
+          const status = error?.response?.status;
+          if (status === 403) {
+            this.readState = 'refused';
+            return;
+          }
+          this.readError = this.reasonOf(error);
+          this.readState = 'failed';
         }
       },
+      // Why a request failed, in words.
+      reasonOf(error) {
+        const status = error?.response?.status;
+        if (status === 401) return 'You are signed out. Sign in again to read it.';
+        if (status) return `The server answered with an error (${status}).`;
+        if (error?.request) return 'The server did not answer.';
+        return 'The answer could not be read.';
+      },
       async saveFeedingTime() {
+        this.saveError = '';
         try {
           const response = await axios.post('/api/data_models/ludde_feeding_times', {
             timestamp: this.selectedDateTime,
@@ -209,10 +314,10 @@
               this.successMessage = '';
             }, 3000); // Clear the message after 3 seconds
           } else {
-            console.error('Failed to save feeding time');
+            this.saveError = `The meal was not saved. The server answered with ${response.status}.`;
           }
         } catch (error) {
-          console.error('Error saving feeding time:', error);
+          this.saveError = `The meal was not saved. ${this.reasonOf(error)}`;
         }
       },
       async deleteFeedingTime(index) {
@@ -295,6 +400,12 @@
     mounted() {
       this.fetchFeedingTimes();
       this.fetchLuddeAssets();
+      this.nowTimer = setInterval(() => {
+        this.now = Date.now();
+      }, 60000);
+    },
+    beforeUnmount() {
+      clearInterval(this.nowTimer);
     },
     // #5324: dead `beforeDestroy` asset-release hook removed rather than
     // renamed — see the note in MemberView.vue. `ludde` shares its hash with
@@ -375,11 +486,61 @@
     width: 100%;
   }
 
+  /* The house field style, from AspInput's control (system_3 #11018):
+     AspInput itself takes no datetime-local. It fits its column at 360px;
+     before, its 2xl bold text made the page 472px wide at 390. */
   .datetime-input {
-    font-size: var(--text-2xl);
-    padding: var(--space-sm);
-    font-weight: bold;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 22rem;
+    min-height: var(--asp-input-height, 2.75rem);
+    padding: 0 var(--space-sm);
+    font: inherit;
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-medium);
     text-align: center;
+    color: var(--text-on-light);
+    background: var(--surface-elevated);
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-md);
+  }
+
+  .datetime-input:focus-visible {
+    outline: none;
+    border-color: var(--text-body);
+    box-shadow: var(--shadow-focus);
+  }
+
+  /* The native picker's own icon follows the theme. */
+  :global([data-theme='dark']) .datetime-input {
+    color-scheme: dark;
+  }
+
+  /* On the page's own left edge, as the title and the intro line are. */
+  .meal-status {
+    font-size: var(--text-lg);
+    margin: var(--space-sm) 0 var(--space-md);
+    max-width: 36rem;
+    text-align: left;
+  }
+
+  .meal-status--last {
+    font-weight: var(--font-weight-bold);
+  }
+
+  /* A failed save, under the button: one line in the page's error ink. */
+  .meal-save-error {
+    max-width: 36rem;
+    margin: var(--space-sm) auto 0;
+    padding: var(--space-xs) var(--space-sm);
+    border-left: 4px solid var(--feedback-error-solid);
+    background: var(--feedback-error-bg);
+    color: var(--text-body);
+  }
+
+  .meal-read-state {
+    margin: var(--space-sm) 0 var(--space-md);
+    text-align: left;
   }
 
   /* Was .comment-input, hand-painting the box. AspTextarea paints it now, with
