@@ -491,10 +491,12 @@
     color-scheme: dark;
   }
 
+  /* On the page's own left edge, as the title and the intro line are. */
   .meal-status {
     font-size: var(--text-lg);
-    margin: var(--space-sm) auto var(--space-md);
+    margin: var(--space-sm) 0 var(--space-md);
     max-width: 36rem;
+    text-align: left;
   }
 
   .meal-status--last {
@@ -503,7 +505,7 @@
 
   .meal-error {
     max-width: 36rem;
-    margin: var(--space-sm) auto var(--space-md);
+    margin: var(--space-sm) 0 var(--space-md);
     padding: var(--space-sm) var(--space-md);
     border-left: 4px solid var(--feedback-error-solid);
     background: var(--feedback-error-bg);
