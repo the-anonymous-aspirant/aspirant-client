@@ -51,31 +51,41 @@ const meals = () => [
   { ID: 3, timestamp: at('07:50'), comment: '' },
 ];
 
-const errorState = (page: Page) => page.locator('[data-test="meal-log-error"]');
+const errorState = (page: Page) => page.locator('[data-testid="read-state-failed"]');
+const refused = (page: Page) => page.locator('[data-test="meal-log-refused"]');
 const figures = (page: Page) => page.locator('[data-test="meal-figures"]');
 const save = (page: Page) => page.locator('[data-test="meal-save"]');
 
 test.describe('#11018 the meal log says when it could not be read', () => {
-  test('a refused read is said in words: no figures, saving held, and Try again recovers', async ({ page }) => {
-    const fake: Fake = { reads: [{ status: 403 }, { status: 200 }], items: meals(), saveStatus: 200 };
-    await open(page, fake);
-    await expect(errorState(page)).toContainText('The meal log could not be read.');
-    await expect(errorState(page)).toContainText('The server refused the request (403).');
+  test("a refused read (403) says the log is someone else's, with no retry and no form", async ({ page }) => {
+    await open(page, { reads: [{ status: 403 }], items: meals(), saveStatus: 200 });
+    await expect(refused(page)).toContainText('This app belongs to another account');
+    await expect(refused(page)).toContainText('Only its owner and an administrator can open it.');
+    // Trying again cannot help with a refusal, so it is not offered.
+    await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+    await expect(save(page)).toHaveCount(0);
     await expect(figures(page)).toHaveCount(0);
     await expect(page.getByText('0 hours')).toHaveCount(0);
+  });
+
+  test('a failed read is said in words: no figures, saving held, and Try again recovers', async ({ page }) => {
+    await open(page, { reads: [{ status: 502 }, { status: 200 }], items: meals(), saveStatus: 200 });
+    await expect(errorState(page)).toContainText('The meal log could not be read');
+    await expect(errorState(page)).toContainText('The server answered with an error (502).');
+    await expect(figures(page)).toHaveCount(0);
+    await expect(page.locator('[data-test="meal-last"]')).toHaveCount(0);
     await expect(save(page)).toBeDisabled();
 
-    await page.locator('[data-test="meal-log-retry"]').click();
+    await page.getByRole('button', { name: 'Try again' }).click();
     await expect(errorState(page)).toHaveCount(0);
     await expect(page.locator('[data-test="meal-last"]')).toContainText('Last meal: today');
     await expect(figures(page)).toBeVisible();
     await expect(save(page)).toBeEnabled();
   });
 
-  test('a server error names the server, not the log', async ({ page }) => {
-    await open(page, { reads: [{ status: 502 }], items: [], saveStatus: 200 });
-    await expect(errorState(page)).toContainText('The server answered with an error (502).');
-    await expect(page.locator('[data-test="meal-last"]')).toHaveCount(0);
+  test('a signed-out read says to sign in again', async ({ page }) => {
+    await open(page, { reads: [{ status: 401 }], items: [], saveStatus: 200 });
+    await expect(errorState(page)).toContainText('You are signed out. Sign in again to read it.');
   });
 
   test('a log that was read and is empty says so in words, with no zeros', async ({ page }) => {

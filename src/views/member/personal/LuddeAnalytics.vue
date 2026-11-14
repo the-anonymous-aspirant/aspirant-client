@@ -3,17 +3,32 @@
   <div class="container page">
     <h1>Ludde Meal Time Tracker (LMTT)</h1>
 
+    <!-- A refused read is not a failure: this log belongs to someone else, and
+         trying again cannot help. The same words as the Invoices app's refusal,
+         in place of the page body (D5; system_3 #11018, #11025). -->
+    <AspEmptyState
+      v-if="readState === 'refused'"
+      heading="This app belongs to another account"
+      message="Only its owner and an administrator can open it."
+      data-test="meal-log-refused"
+    />
+
+    <template v-else>
     <!-- The page's question first, in words: when did Ludde last eat, and how
          often today (system_3 #11018). A log that could not be read says so
-         and is never shown as zero meals (D2). -->
-    <p v-if="readState === 'loading'" class="meal-status" role="status" data-test="meal-log-loading">
-      Reading the meal log…
-    </p>
-    <div v-else-if="readState === 'error'" class="meal-error" role="alert" data-test="meal-log-error">
-      <p><strong>The meal log could not be read.</strong> {{ readError }}</p>
-      <p>The figures are hidden and saving waits until it is read.</p>
-      <AspButton variant="secondary" data-test="meal-log-retry" @click="fetchFeedingTimes">Try again</AspButton>
-    </div>
+         and is never shown as zero meals (D2). The shared ReadState gives the
+         loading and failed shapes; retry is offered because it can help. -->
+    <ReadState
+      v-if="readState === 'loading' || readState === 'failed'"
+      :state="readState"
+      heading="The meal log could not be read"
+      :message="`${readError} The figures are hidden, and saving waits until the log is read.`"
+      loading-label="Reading the meal log"
+      skeleton="text"
+      :lines="1"
+      class="meal-read-state"
+      @retry="fetchFeedingTimes"
+    />
     <p v-else class="meal-status meal-status--last" data-test="meal-last">
       <template v-if="!feedingTimes.length">No meals in the log yet.</template>
       <template v-else>
@@ -62,7 +77,7 @@
           Save Meal Time
         </AspButton>
       </div>
-      <p v-if="saveError" class="meal-error meal-error--inline" role="alert" data-test="meal-save-error">
+      <p v-if="saveError" class="meal-save-error" role="alert" data-test="meal-save-error">
         {{ saveError }}
       </p>
 
@@ -109,19 +124,23 @@
       </AspDataTable>
     </div>
     <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
+    </template>
   </div>
 </template>
 
 <script>
   import axios from 'axios';
-  import { AspButton, AspDataTable, AspTextarea } from '@aspirant/design-system';
+  import { AspButton, AspDataTable, AspEmptyState, AspTextarea } from '@aspirant/design-system';
   import assetManager from '../../../asset_manager';
+  import ReadState from '../../../components/ReadState.vue';
 
   export default {
     components: {
       AspButton,
       AspDataTable,
+      AspEmptyState,
       AspTextarea,
+      ReadState,
     },
     data() {
       return {
@@ -137,8 +156,9 @@
           { key: 'actions', label: 'Actions', sortable: false },
         ],
         feedingTimes: [],
-        // 'loading' until the first read answers, then 'ok' or 'error'. The
-        // figures are computed only from a log that was read (D2).
+        // 'loading' until the first read answers, then 'ok', 'failed', or
+        // 'refused' (403: the log is someone else's, as on Invoices). The figures are
+        // computed only from a log that was read (D2).
         readState: 'loading',
         readError: '',
         saveError: '',
@@ -260,14 +280,19 @@
           // Never the empty list in place of the log: the figures computed
           // from it would read as "no meal today" (system_3 #11018, D2).
           this.feedingTimes = [];
+          const status = error?.response?.status;
+          if (status === 403) {
+            this.readState = 'refused';
+            return;
+          }
           this.readError = this.reasonOf(error);
-          this.readState = 'error';
+          this.readState = 'failed';
         }
       },
       // Why a request failed, in words.
       reasonOf(error) {
         const status = error?.response?.status;
-        if (status === 401 || status === 403) return `The server refused the request (${status}).`;
+        if (status === 401) return 'You are signed out. Sign in again to read it.';
         if (status) return `The server answered with an error (${status}).`;
         if (error?.request) return 'The server did not answer.';
         return 'The answer could not be read.';
@@ -503,22 +528,19 @@
     font-weight: var(--font-weight-bold);
   }
 
-  .meal-error {
+  /* A failed save, under the button: one line in the page's error ink. */
+  .meal-save-error {
     max-width: 36rem;
-    margin: var(--space-sm) 0 var(--space-md);
-    padding: var(--space-sm) var(--space-md);
+    margin: var(--space-sm) auto 0;
+    padding: var(--space-xs) var(--space-sm);
     border-left: 4px solid var(--feedback-error-solid);
     background: var(--feedback-error-bg);
     color: var(--text-body);
+  }
+
+  .meal-read-state {
+    margin: var(--space-sm) 0 var(--space-md);
     text-align: left;
-  }
-
-  .meal-error p {
-    margin: 0 0 var(--space-xs);
-  }
-
-  .meal-error--inline {
-    margin-top: var(--space-sm);
   }
 
   /* Was .comment-input, hand-painting the box. AspTextarea paints it now, with
