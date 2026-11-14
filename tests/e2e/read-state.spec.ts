@@ -165,8 +165,13 @@ test.describe('#5302 system health read states', () => {
     await page.goto('/admin/system-health');
     await dismissMobileSidebarIfPresent(page);
 
-    await expect(page.getByText('OK')).toBeVisible();
     await expect(page.getByTestId('read-state-failed')).toHaveCount(0);
+    // ...and it says which reads failed: a bare "OK" over three failed reads
+    // read as all-clear (#11003, UX walk AA1).
+    await expect(page.locator('[data-test="status-banner-partial"]')).toHaveText(
+      'Server and database OK. Containers, disk and database statistics could not be read.',
+    );
+    await expect(page.getByText('OK', { exact: true })).toHaveCount(0);
   });
 });
 
