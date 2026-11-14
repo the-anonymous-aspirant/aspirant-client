@@ -18,8 +18,7 @@
              first draft did exactly that, with a sentence explaining that the
              red did not mean what red means. -->
         <p class="message message--notice" data-testid="signup-closed">
-          Sign-up is closed at the moment. It can be reopened, so it is worth trying again another
-          day.
+          Sign-up can be reopened, so it is worth trying again another day.
         </p>
         <RouterLink class="next" to="/login">Go to sign in</RouterLink>
       </template>

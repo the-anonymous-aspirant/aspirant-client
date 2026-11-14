@@ -60,7 +60,9 @@ for (const width of [390, 1440]) {
       await status(page, 200, { signup_enabled: false });
       await page.goto('/signup');
       await dismissMobileSidebarIfPresent(page);
-      await expect(page.getByTestId('signup-closed')).toBeVisible();
+      await expect(page.getByTestId('signup-closed')).toHaveText(
+        'Sign-up can be reopened, so it is worth trying again another day.'
+      );
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Sign-up is closed');
       await expect(page.getByRole('heading', { name: 'Create an account' })).toHaveCount(0);
     });
