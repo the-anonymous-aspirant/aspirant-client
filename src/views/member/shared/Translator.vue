@@ -3,6 +3,20 @@
     <h1>Translator</h1>
     <h2 class="page-subtitle">Translate text between languages</h2>
 
+    <!-- Both cards need the language list. Until it is read, or when it cannot
+         be, one state stands in place of them: no form that looks usable with
+         empty pickers (system_3 #11025). A 403 is a refusal, with no retry. -->
+    <ReadState
+      v-if="languagesLoading || languagesError"
+      :state="languagesLoading ? 'loading' : languagesError.kind"
+      :heading="languagesError && languagesError.kind === 'failed' ? 'The translator could not be loaded' : ''"
+      :message="languagesError && languagesError.kind === 'failed' ? languagesError.reason : ''"
+      loading-label="Loading languages"
+      data-test="translator-read-state"
+      @retry="retryLanguages"
+    />
+
+    <template v-else>
     <!-- Translate Card -->
     <div class="translate-card">
       <h3>Translate</h3>
@@ -91,9 +105,7 @@
     <div class="languages-card">
       <h3>Language Pairs</h3>
 
-      <div v-if="languagesLoading" class="loading-text">Loading languages...</div>
-      <div v-else-if="languagesError" class="error-text">{{ languagesError }}</div>
-      <template v-else>
+      <template v-if="languagesData">
         <div class="lang-stats">
           <span>{{ languagesData.installed_pairs }} installed</span>
           <span class="stat-sep">/</span>
@@ -153,15 +165,18 @@
         </div>
       </template>
     </div>
+    </template>
   </div>
 </template>
 
 <script>
 import axios from 'axios';
 import { AspButton, AspSelect, AspTextarea, AspTooltip } from '@aspirant/design-system';
+import ReadState from '../../../components/ReadState.vue';
+import { readError } from '../../../components/readError.js';
 
 export default {
-  components: { AspButton, AspSelect, AspTextarea, AspTooltip },
+  components: { AspButton, AspSelect, AspTextarea, AspTooltip, ReadState },
   data() {
     return {
       // Translation state
@@ -226,9 +241,15 @@ export default {
         this.languagesData = resp.data;
         this.languagesError = null;
       } catch (err) {
-        this.languagesError = 'Failed to load languages: ' + (err.response?.data?.error?.message || 'the translator service did not answer');
+        this.languagesError = readError(err);
       }
       this.languagesLoading = false;
+    },
+
+    retryLanguages() {
+      this.languagesLoading = true;
+      this.languagesError = null;
+      this.fetchLanguages();
     },
 
     swapLanguages() {
@@ -309,8 +330,10 @@ export default {
   text-align: center;
 }
 
+/* Inside the cards, which are dark in both themes: the on-dark error ink.
+   --feedback-error measured 2.8:1 here in the light theme (#11025). */
 .error-text {
-  color: var(--feedback-error);
+  color: var(--feedback-error-text-on-dark);
   font-size: var(--text-sm);
   margin-top: var(--space-sm);
 }

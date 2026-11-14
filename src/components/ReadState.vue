@@ -1,6 +1,9 @@
 <template>
   <!-- loading -->
-  <div v-if="state === 'loading'" class="read-state" data-testid="read-state-loading">
+  <!-- inheritAttrs is off (the ready state renders the caller's own slot), so
+       each state's root takes the caller's class and data attributes itself;
+       before, a `data-test` on <ReadState> was silently dropped (#11025). -->
+  <div v-if="state === 'loading'" class="read-state" data-testid="read-state-loading" v-bind="$attrs">
     <AspSkeleton
       :variant="skeleton"
       :lines="lines"
@@ -12,7 +15,7 @@
   </div>
 
   <!-- failed -->
-  <div v-else-if="state === 'failed'" class="read-state read-state__failed" data-testid="read-state-failed" role="alert">
+  <div v-else-if="state === 'failed'" class="read-state read-state__failed" data-testid="read-state-failed" role="alert" v-bind="$attrs">
     <AspEmptyState :heading="heading || 'That did not load'" :message="message" variant="empty">
       <template #icon>
         <svg viewBox="0 0 24 24" width="40" height="40" fill="none" aria-hidden="true">
@@ -46,10 +49,44 @@
     </AspButton>
   </div>
 
+  <!-- refused: the read was answered, and the answer is "not yours". Trying
+       again cannot change it, so there is never a retry here, whatever the
+       caller binds (system_3 #11025; the Invoices app's words, #8367). -->
+  <AspEmptyState
+    v-else-if="state === 'refused'"
+    class="read-state"
+    data-testid="read-state-refused"
+    v-bind="$attrs"
+    :heading="heading || 'This app belongs to another account'"
+    :message="message || 'Only its owner and an administrator can open it.'"
+    variant="empty"
+  />
+
+  <!-- signed-out: the session ended (a 401). Not a refusal, which would tell
+       them they lost access, and not a failure a retry can fix: the door is
+       signing in again, back to this page (design_agent c68306 on #11025). -->
+  <div
+    v-else-if="state === 'signed-out'"
+    class="read-state"
+    data-testid="read-state-signed-out"
+    role="alert"
+    v-bind="$attrs"
+  >
+    <AspEmptyState
+      :heading="heading || 'Your session has ended'"
+      :message="message || 'Sign in again.'"
+      variant="empty"
+    />
+    <AspButton variant="primary" size="sm" :href="signInHref" data-testid="read-state-sign-in">
+      {{ signInLabel }}
+    </AspButton>
+  </div>
+
   <!-- empty -->
   <AspEmptyState
     v-else-if="state === 'empty'"
     data-testid="read-state-empty"
+    v-bind="$attrs"
     :heading="heading"
     :message="message"
     :variant="filtered ? 'filtered' : 'empty'"
@@ -107,7 +144,7 @@
     state: {
       type: String,
       default: 'ready',
-      validator: (v) => ['ready', 'loading', 'failed', 'empty'].includes(v),
+      validator: (v) => ['ready', 'loading', 'failed', 'refused', 'signed-out', 'empty'].includes(v),
     },
     heading: { type: String, default: '' },
     /**
@@ -134,6 +171,8 @@
     /** Announced to a screen reader while the skeleton is up. */
     loadingLabel: { type: String, default: 'Loading' },
     retryLabel: { type: String, default: 'Try again' },
+    /** `signed-out` only — the sign-in link's words. */
+    signInLabel: { type: String, default: 'Sign in' },
   })
 
   defineEmits(['retry'])
@@ -145,6 +184,13 @@
   // 404 should not get one, and this makes that the default rather than
   // something each page has to remember not to do.
   const canRetry = computed(() => Boolean(instance?.vnode?.props?.onRetry))
+
+  // Back to this page after signing in; `expired=1` makes the sign-in page say
+  // the session ended (#5925). LoginView only follows a same-origin redirect.
+  const signInHref = computed(() => {
+    const here = typeof window === 'undefined' ? '/' : window.location.pathname + window.location.search
+    return `/login?expired=1&redirect=${encodeURIComponent(here)}`
+  })
 
   /**
    * The dev-time guard that keeps the class closed.
