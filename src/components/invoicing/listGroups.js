@@ -53,3 +53,35 @@ export function monthLabel(key) {
   const [y, m] = key.split('-').map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 }
+
+export const DRAFTS_GROUP = 'drafts';
+
+// Invoices grouped for the list (§3.145 Decision 1): a "Drafts" group first,
+// for rows with no issue date, then one group per month of the issue date,
+// newest month first, and newest first within a month. A cancelled invoice
+// keeps its issue date, so it stays in its month. Returns
+// `[{ key, label, rows }]`; `key` is "drafts" or "YYYY-MM".
+export function groupInvoicesByMonth(rows) {
+  const drafts = [];
+  const months = new Map();
+  for (const row of rows) {
+    const key = monthKey(row.issue_date);
+    if (!key) {
+      drafts.push(row);
+      continue;
+    }
+    if (!months.has(key)) months.set(key, []);
+    months.get(key).push(row);
+  }
+  const newestFirst = (a, b) => {
+    const da = String(a.issue_date);
+    const db = String(b.issue_date);
+    if (da !== db) return da < db ? 1 : -1;
+    return (b.id || 0) - (a.id || 0);
+  };
+  const groups = [...months.keys()]
+    .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
+    .map((key) => ({ key, label: monthLabel(key), rows: months.get(key).sort(newestFirst) }));
+  if (drafts.length) groups.unshift({ key: DRAFTS_GROUP, label: 'Drafts', rows: drafts });
+  return groups;
+}
