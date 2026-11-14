@@ -41,7 +41,7 @@
         <AspInput v-model="form.payer" label="Payer (BETALARE)" />
       </div>
 
-      <AspButton variant="primary" @click="generatePdf">Generate PDF</AspButton>
+      <AspButton variant="primary" :disabled="!formComplete" @click="generatePdf">Generate PDF</AspButton>
     </div>
   </div>
 </template>
@@ -76,11 +76,21 @@
         form: {
           year: new Date().getFullYear(),
           address: '',
-          amount: 3500,
+          amount: '',
           recipient: '',
           payer: '',
         },
       };
+    },
+
+    computed: {
+      // Every field goes on every page of the receipt, so the PDF is made only
+      // once all of them are filled.
+      formComplete() {
+        const { year, address, amount, recipient, payer } = this.form;
+        const filled = (v) => String(v ?? '').trim() !== '';
+        return filled(year) && filled(address) && filled(amount) && filled(recipient) && filled(payer);
+      },
     },
 
     methods: {
