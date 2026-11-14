@@ -51,7 +51,7 @@ test.describe('#8465 Tidigare värderingar on a phone', () => {
       {
         id: 'house',
         name: 'Kunden återkom',
-        final_values: { objekt_short: 'Testby Eklunda 1:76', marknadsvarde_kr: '3 050 000' },
+        final_values: { objekt_short: 'Testby Provlunda 1:76', marknadsvarde_kr: '3 050 000' },
         created_at: '2026-08-10T09:00:00Z',
       },
     ]);

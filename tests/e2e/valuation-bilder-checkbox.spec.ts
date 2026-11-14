@@ -85,8 +85,8 @@ test.describe('#8420 Bilder från kund', () => {
   test('a saved valuation with the sentence reopens ticked', async ({ page }) => {
     seedProcessedRows([{
       id: 'with-photos',
-      name: '2026-10-01_Testby Eklunda 1:76',
-      final_values: { objekt: 'Testby Eklunda 1:76', bilder_note: `${SENTENCE} Gott skick.` },
+      name: '2026-10-01_Testby Provlunda 1:76',
+      final_values: { objekt: 'Testby Provlunda 1:76', bilder_note: `${SENTENCE} Gott skick.` },
     }]);
     await page.goto('/member/personal/valuation-statement');
     await dismissMobileSidebarIfPresent(page);

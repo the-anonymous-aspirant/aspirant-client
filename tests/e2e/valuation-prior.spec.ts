@@ -27,8 +27,8 @@ const HOUSE_EXTRACT = {
       fields: [
         { key: 'source_class', value: 'fastighetsutdrag', confidence: 'confident', source_page: 1 },
         { key: 'property_shape', value: 'fastighet', confidence: 'confident', source_page: 1 },
-        { key: 'objekt', value: 'Testby Eklunda 1:76', confidence: 'confident', source_page: 1 },
-        { key: 'objekt_short', value: 'Testby Eklunda 1:76', confidence: 'confident', source_page: 1 },
+        { key: 'objekt', value: 'Testby Provlunda 1:76', confidence: 'confident', source_page: 1 },
+        { key: 'objekt_short', value: 'Testby Provlunda 1:76', confidence: 'confident', source_page: 1 },
         { key: 'upplatelseform', value: 'Friköpt', confidence: 'confident', source_page: 1 },
         { key: 'document_date', value: '2026-09-15', confidence: 'confident', source_page: 1 },
       ],
@@ -87,9 +87,9 @@ test.describe('#8419 Värderad tidigare', () => {
   }) => {
     await installCommanderMocks(page, { extractResponse: HOUSE_EXTRACT });
     seedProcessedRows([
-      valuation('older', 'Testby Eklunda 1:76', { marknadsvarde_kr: '2 900 000', datum: '2026-03-02' }, '2026-03-02T09:00:00Z'),
-      valuation('other-property', 'Testby Eklunda 1:77'),
-      valuation('newer', 'TESTBY EKLUNDA 1 : 76'),
+      valuation('older', 'Testby Provlunda 1:76', { marknadsvarde_kr: '2 900 000', datum: '2026-03-02' }, '2026-03-02T09:00:00Z'),
+      valuation('other-property', 'Testby Provlunda 1:77'),
+      valuation('newer', 'TESTBY PROVLUNDA 1 : 76'),
     ]);
     await walkToReview(page);
 
@@ -97,7 +97,7 @@ test.describe('#8419 Värderad tidigare', () => {
     await expect(banner).toBeVisible();
     await expect(banner).toContainText('Värderad tidigare');
     // Named as on her form, not as the earlier row spelled it.
-    await expect(banner).toContainText('Du har värderat Testby Eklunda 1:76 tidigare.');
+    await expect(banner).toContainText('Du har värderat Testby Provlunda 1:76 tidigare.');
     // Newest first; the neighbouring 1:77 is a different property.
     const items = banner.getByTestId('prior-valuation-item');
     await expect(items).toHaveCount(2);
@@ -122,7 +122,7 @@ test.describe('#8419 Värderad tidigare', () => {
 
   test('a never-valued property shows nothing', async ({ page }) => {
     await installCommanderMocks(page, { extractResponse: HOUSE_EXTRACT });
-    seedProcessedRows([valuation('other', 'Testby Eklunda 1:77'), valuation('lgh', 'LGH 1001 Brf Annan (769600-1111)')]);
+    seedProcessedRows([valuation('other', 'Testby Provlunda 1:77'), valuation('lgh', 'LGH 1001 Brf Annan (769600-1111)')]);
     await walkToReview(page);
 
     await expect(page.getByTestId('prior-valuation-warning')).toHaveCount(0);
@@ -133,8 +133,8 @@ test.describe('#8419 Värderad tidigare', () => {
   test('a renamed valuation shows its name; an automatic name is not repeated', async ({ page }) => {
     await installCommanderMocks(page, { extractResponse: HOUSE_EXTRACT });
     seedProcessedRows([
-      { ...valuation('renamed', 'Testby Eklunda 1:76'), name: 'Kunden återkom' },
-      valuation('auto', 'Testby Eklunda 1:76', {}, '2026-01-10T09:00:00Z'),
+      { ...valuation('renamed', 'Testby Provlunda 1:76'), name: 'Kunden återkom' },
+      valuation('auto', 'Testby Provlunda 1:76', {}, '2026-01-10T09:00:00Z'),
     ]);
     await walkToReview(page);
     const items = page.getByTestId('prior-valuation-item');
@@ -150,12 +150,12 @@ test.describe('#8419 Värderad tidigare', () => {
         documents: [{
           ...doc,
           samintecknad: true,
-          samintecknad_evidence: [{ section: 'inteckningar', row: '2', other_property: 'Testby EKLUNDA 1:11' }],
+          samintecknad_evidence: [{ section: 'inteckningar', row: '2', other_property: 'Testby PROVLUNDA 1:11' }],
           diagnostics: { ocr_used: true, outcome: 'extracted' },
         }],
       },
     });
-    seedProcessedRows([valuation('older', 'Testby Eklunda 1:76')]);
+    seedProcessedRows([valuation('older', 'Testby Provlunda 1:76')]);
     await walkToReview(page);
     await page.getByRole('dialog', { name: 'OBS! samintecknad' }).getByRole('button', { name: 'Jag förstår' }).click();
 
@@ -210,20 +210,20 @@ test.describe('#8419 Värderad tidigare', () => {
 
   test('the warning follows Objekt as it is corrected', async ({ page }) => {
     await installCommanderMocks(page, { extractResponse: HOUSE_EXTRACT });
-    seedProcessedRows([valuation('older', 'Testby Eklunda 1:76')]);
+    seedProcessedRows([valuation('older', 'Testby Provlunda 1:76')]);
     await walkToReview(page);
     const banner = page.getByTestId('prior-valuation-warning');
     await expect(banner).toBeVisible();
 
-    await objektInput(page).fill('Testby Eklunda 1:99');
+    await objektInput(page).fill('Testby Provlunda 1:99');
     await expect(banner).toHaveCount(0);
-    await objektInput(page).fill('Testby Eklunda 1:76');
+    await objektInput(page).fill('Testby Provlunda 1:76');
     await expect(banner).toBeVisible();
   });
 
   test('Edit does not warn about the row being edited, only about other valuations of it', async ({ page }) => {
     await installCommanderMocks(page);
-    seedProcessedRows([valuation('only', 'Testby Eklunda 1:76')]);
+    seedProcessedRows([valuation('only', 'Testby Provlunda 1:76')]);
     await page.goto('/member/personal/valuation-statement');
     await dismissMobileSidebarIfPresent(page);
     await page.getByRole('tab', { name: HISTORY_TAB }).click();
@@ -231,7 +231,7 @@ test.describe('#8419 Värderad tidigare', () => {
     await page.locator('[data-test-row-id="only"] .row-menu-trigger').click();
     await page.locator('[data-test-row-id="only"] .row-menu-popover >> text=Redigera').click();
     await expect(page.getByRole('heading', { name: new RegExp(REVIEW_LEGEND) })).toBeVisible();
-    await expect(objektInput(page)).toHaveValue('Testby Eklunda 1:76');
+    await expect(objektInput(page)).toHaveValue('Testby Provlunda 1:76');
     await expect(page.getByTestId('prior-valuation-warning')).toHaveCount(0);
   });
 
@@ -242,7 +242,7 @@ test.describe('#8419 Värderad tidigare', () => {
     );
     await walkToReview(page);
     await expect(page.getByTestId('prior-valuation-warning')).toHaveCount(0);
-    await expect(objektInput(page)).toHaveValue('Testby Eklunda 1:76');
+    await expect(objektInput(page)).toHaveValue('Testby Provlunda 1:76');
   });
 });
 
@@ -251,22 +251,22 @@ test.describe('#8419 property keys', () => {
     findPriorValuations([{ id: 1, final_values: { objekt: b }, created_at: '' }], { objekt: a }).length === 1;
 
   test('houses: spacing, case and co-encumbered properties in parentheses do not matter', () => {
-    expect(match('Testby Eklunda 1:76', 'TESTBY  EKLUNDA 1 : 76')).toBe(true);
-    expect(match('Testby Eklunda 1:76', 'Testby Eklunda 1:76 (Testby Eklunda 1:11)')).toBe(true);
-    expect(match('Testby Eklunda 1:76', 'Testby Eklunda 1:7')).toBe(false);
-    expect(match('Testby Eklunda 1:76', 'Annanby Eklunda 1:76')).toBe(false);
+    expect(match('Testby Provlunda 1:76', 'TESTBY  PROVLUNDA 1 : 76')).toBe(true);
+    expect(match('Testby Provlunda 1:76', 'Testby Provlunda 1:76 (Testby Provlunda 1:11)')).toBe(true);
+    expect(match('Testby Provlunda 1:76', 'Testby Provlunda 1:7')).toBe(false);
+    expect(match('Testby Provlunda 1:76', 'Annanby Provlunda 1:76')).toBe(false);
   });
 
   test('apartments: org number + LGH number decide, whatever the förening is called', () => {
     expect(match('LGH 1001 Brf Exempel (769600-0000)', 'LGH 1001 Bostadsrättsföreningen Exempel (org 7696000000)')).toBe(true);
-    expect(match('LGH 1001 Brf Exempel (769600-0000)', 'LGH 1002 Brf Exempel (769600-0000)')).toBe(false);
+    expect(match('LGH 1001 Brf Exempel (769600-0000)', 'LGH 1205 Brf Exempel (769600-0000)')).toBe(false);
     expect(match('LGH 1001 Brf Exempel (769600-0000)', 'LGH 1001 Brf Annan (769600-1111)')).toBe(false);
   });
 
   test('Objekt decides; the short form stands in only when Objekt is blank', () => {
-    const rows = [{ id: 1, final_values: { objekt: 'Testby Eklunda 1:76' }, created_at: '' }];
-    expect(findPriorValuations(rows, { objekt: 'Testby Eklunda 1:99', objekt_short: 'Testby Eklunda 1:76' })).toHaveLength(0);
-    expect(findPriorValuations(rows, { objekt: '', objekt_short: 'Testby Eklunda 1:76' })).toHaveLength(1);
+    const rows = [{ id: 1, final_values: { objekt: 'Testby Provlunda 1:76' }, created_at: '' }];
+    expect(findPriorValuations(rows, { objekt: 'Testby Provlunda 1:99', objekt_short: 'Testby Provlunda 1:76' })).toHaveLength(0);
+    expect(findPriorValuations(rows, { objekt: '', objekt_short: 'Testby Provlunda 1:76' })).toHaveLength(1);
   });
 
   test('a blank or near-blank identity matches nothing', () => {

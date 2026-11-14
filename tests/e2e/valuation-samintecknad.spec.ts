@@ -24,8 +24,8 @@ function fastighetsutdrag(samintecknad: Record<string, unknown>) {
         fields: [
           { key: 'source_class', value: 'fastighetsutdrag', confidence: 'confident', source_page: 1 },
           { key: 'property_shape', value: 'fastighet', confidence: 'confident', source_page: 1 },
-          { key: 'objekt', value: 'Testby Eklunda 1:76', confidence: 'confident', source_page: 1 },
-          { key: 'objekt_short', value: 'Testby Eklunda 1:76', confidence: 'confident', source_page: 1 },
+          { key: 'objekt', value: 'Testby Provlunda 1:76', confidence: 'confident', source_page: 1 },
+          { key: 'objekt_short', value: 'Testby Provlunda 1:76', confidence: 'confident', source_page: 1 },
           { key: 'upplatelseform', value: 'Friköpt', confidence: 'confident', source_page: 1 },
           { key: 'document_date', value: '2026-09-15', confidence: 'confident', source_page: 1 },
         ],
@@ -41,8 +41,8 @@ const SAMINTECKNAD = fastighetsutdrag({
   samintecknad: true,
   samintecknad_evidence: [
     { section: 'agare', row: '2022-04-28', other_property: null },
-    { section: 'inteckningar', row: '2', other_property: 'Testby EKLUNDA 1:11' },
-    { section: 'inteckningar', row: '3', other_property: 'Testby EKLUNDA 1:11' },
+    { section: 'inteckningar', row: '2', other_property: 'Testby PROVLUNDA 1:11' },
+    { section: 'inteckningar', row: '3', other_property: 'Testby PROVLUNDA 1:11' },
   ],
 });
 
@@ -73,7 +73,7 @@ test.describe('#6006 OBS! samintecknad', () => {
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('Fastigheten verkar vara samintecknad');
     await expect(dialog).toContainText('Kontrollera pantbreven innan du går vidare.');
-    await expect(dialog).toContainText('Inteckning nr 2 och 3 belastar även Testby EKLUNDA 1:11.');
+    await expect(dialog).toContainText('Inteckning nr 2 och 3 belastar även Testby PROVLUNDA 1:11.');
     await expect(dialog).toContainText('Köpet från 2022-04-28 avser även en annan fastighet.');
 
     await dialog.getByRole('button', { name: 'Jag förstår' }).click();
@@ -83,7 +83,7 @@ test.describe('#6006 OBS! samintecknad', () => {
     await expect(banner).toBeVisible();
     await expect(banner).toContainText('OBS! samintecknad');
     await expect(banner).toContainText('fastighetsutdrag.pdf');
-    await expect(banner).toContainText('Inteckning nr 2 och 3 belastar även Testby EKLUNDA 1:11.');
+    await expect(banner).toContainText('Inteckning nr 2 och 3 belastar även Testby PROVLUNDA 1:11.');
   });
 
   test('negative control: samintecknad=false shows neither modal nor warning', async ({ page }) => {

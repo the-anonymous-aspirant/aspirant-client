@@ -6,7 +6,7 @@
 // Tidigare värderingar.
 //
 // The identifier is `objekt_short`, the property as the statement's running
-// text names it: a beteckning with its kommun for a house ("Testby Eklunda
+// text names it: a beteckning with its kommun for a house ("Testby Provlunda
 // 1:76"), "LGH <nr> <förening>" for an apartment. `objekt` without its
 // parenthesised org number stands in when it is blank, then the street
 // address; with none of them the name is "Värdeutlåtande <datum>".
@@ -16,7 +16,7 @@ const MAX_STEM = 120;
 const RESERVED = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
 
 /** A file-name stem safe on Windows, macOS and Linux; '' when nothing is left.
- *  A beteckning's ":" becomes "-" ("Eklunda 1:76" → "Eklunda 1-76"); the other
+ *  A beteckning's ":" becomes "-" ("Provlunda 1:76" → "Provlunda 1-76"); the other
  *  forbidden characters and control characters become spaces. Å, ä and ö stay. */
 export function safeStem(value) {
   const stem = String(value ?? '')
@@ -33,7 +33,7 @@ export function safeStem(value) {
   return [...stem].slice(0, MAX_STEM).join('').replace(/[. ]+$/, '');
 }
 
-/** "Testby Eklunda 1-76.docx"; "Värdeutlåtande 2026-10-22.pdf" with no
+/** "Testby Provlunda 1-76.docx"; "Värdeutlåtande 2026-10-22.pdf" with no
  *  identifier. `values` is the statement's field set (the review form or a
  *  saved row's final_values); `ext` is "docx" or "pdf". */
 export function statementFilename(values, ext) {

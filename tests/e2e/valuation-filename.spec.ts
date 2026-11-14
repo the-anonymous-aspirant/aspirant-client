@@ -50,8 +50,8 @@ test.describe('#8421 the saved statement is named after the property', () => {
   });
 
   test('a house: the beteckning with its colon made file-safe, å/ä/ö kept', async ({ page }) => {
-    await walkToDone(page, 'Täby Åkerby 1:76');
-    await expect(docxLink(page)).toHaveAttribute('download', 'Täby Åkerby 1-76.docx');
+    await walkToDone(page, 'Testköping Åkerlund 2:76');
+    await expect(docxLink(page)).toHaveAttribute('download', 'Testköping Åkerlund 2-76.docx');
   });
 
   test('no identifier at all: "Värdeutlåtande <datum>"', async ({ page }) => {
@@ -67,14 +67,14 @@ test.describe('#8421 the saved statement is named after the property', () => {
   test('a re-download from Tidigare värderingar gets the same name', async ({ page }) => {
     seedProcessedRows([{
       id: 'house',
-      name: '2026-08-12_Testby Eklunda 1:76',
-      final_values: { objekt: 'Testby Eklunda 1:76', objekt_short: 'Testby Eklunda 1:76', datum: '2026-08-12' },
+      name: '2026-08-12_Testby Provlunda 1:76',
+      final_values: { objekt: 'Testby Provlunda 1:76', objekt_short: 'Testby Provlunda 1:76', datum: '2026-08-12' },
     }]);
     await page.goto('/member/personal/valuation-statement');
     await dismissMobileSidebarIfPresent(page);
     await page.getByRole('tab', { name: 'Tidigare värderingar' }).click();
 
-    for (const [item, name] of [['.docx', 'Testby Eklunda 1-76.docx'], ['.pdf', 'Testby Eklunda 1-76.pdf']]) {
+    for (const [item, name] of [['.docx', 'Testby Provlunda 1-76.docx'], ['.pdf', 'Testby Provlunda 1-76.pdf']]) {
       await page.locator('[data-test-row-id="house"] .row-menu-trigger').click();
       const [download] = await Promise.all([
         page.waitForEvent('download'),
@@ -88,7 +88,7 @@ test.describe('#8421 the saved statement is named after the property', () => {
 test.describe('#8421 file-name rules', () => {
   test('forbidden characters, trailing dots and length', () => {
     expect(safeStem('A/B\\C*D?E"F<G>H|I')).toBe('A B C D E F G H I');
-    expect(safeStem('Eklunda 1:76')).toBe('Eklunda 1-76');
+    expect(safeStem('Provlunda 1:76')).toBe('Provlunda 1-76');
     expect(safeStem('  Brf Ödegården.  ')).toBe('Brf Ödegården');
     expect(safeStem('Rad ett\nrad två\t')).toBe('Rad ett rad två');
     expect([...safeStem('x'.repeat(300))]).toHaveLength(120);

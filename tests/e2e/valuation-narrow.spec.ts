@@ -30,7 +30,7 @@ const BANNERS = {
       ],
       outcome: 'extracted',
       samintecknad: true,
-      samintecknad_evidence: [{ section: 'inteckningar', row: '2', other_property: 'Testby EKLUNDA 1:11' }],
+      samintecknad_evidence: [{ section: 'inteckningar', row: '2', other_property: 'Testby PROVLUNDA 1:11' }],
       diagnostics: { ocr_used: true, outcome: 'extracted' },
     },
   ],

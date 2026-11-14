@@ -28,17 +28,17 @@ const UNCLASSIFIED_ONLY = {
         { key: 'property_shape', value: 'bostadsratt', confidence: 'confident', source_page: 1 },
         {
           key: 'objekt',
-          value: 'LGH 1201 HSB Brf Klövern i Norsborg (7164164183)',
+          value: 'LGH 1201 HSB Brf Exempelgården i Exempelby (7160000002)',
           confidence: 'confident',
           source_page: 1,
         },
         {
           key: 'objekt_short',
-          value: 'LGH 1201 HSB Brf Klövern i Norsborg',
+          value: 'LGH 1201 HSB Brf Exempelgården i Exempelby',
           confidence: 'confident',
           source_page: 1,
         },
-        { key: 'adress', value: 'Linvägen 11', confidence: 'confident', source_page: 1 },
+        { key: 'adress', value: 'Exempelgatan 11', confidence: 'confident', source_page: 1 },
         { key: 'kommun', value: 'Botkyrka', confidence: 'confident', source_page: 1 },
       ],
     },
@@ -73,16 +73,16 @@ test.describe('#5947 identity fields survive the merge from an unclassified docu
     const objektInput = page
       .locator('.field-row', { has: page.getByText('Objekt', { exact: true }) })
       .locator('input');
-    await expect(objektInput).toHaveValue('LGH 1201 HSB Brf Klövern i Norsborg (7164164183)');
+    await expect(objektInput).toHaveValue('LGH 1201 HSB Brf Exempelgården i Exempelby (7160000002)');
 
     const objektShortInput = page
       .locator('.field-row', { has: page.getByText('Objekt (i löptext)', { exact: true }) })
       .locator('input');
-    await expect(objektShortInput).toHaveValue('LGH 1201 HSB Brf Klövern i Norsborg');
+    await expect(objektShortInput).toHaveValue('LGH 1201 HSB Brf Exempelgården i Exempelby');
 
     const adressInput = page
       .locator('.field-row', { has: page.getByText('Adress', { exact: true }) })
       .locator('input');
-    await expect(adressInput).toHaveValue('Linvägen 11');
+    await expect(adressInput).toHaveValue('Exempelgatan 11');
   });
 });

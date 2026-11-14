@@ -30,7 +30,7 @@ test.describe('Tidigare värderingar tab — list + edit + delete', () => {
         id: 'row-a',
         name: '2026-06-20_LGH 1001',
         final_values: {
-          fastighetsbeteckning: 'Hägersten 1:1',
+          fastighetsbeteckning: 'Provsätra 1:1',
           objekt_short: 'LGH 1001 Brf Exempel',
           adress: 'Exempelgatan 1',
           marknadsvarde_kr: '3 050 000',
@@ -63,7 +63,7 @@ test.describe('Tidigare värderingar tab — list + edit + delete', () => {
     await expect(editedRow).toContainText('4 200 000');
 
     const autoRow = page.locator('[data-test-row-id="row-a"]');
-    await expect(autoRow).toContainText('Hägersten 1:1');
+    await expect(autoRow).toContainText('Provsätra 1:1');
     await expect(autoRow).toContainText('3 050 000');
   });
 
@@ -93,12 +93,12 @@ test.describe('Tidigare värderingar tab — list + edit + delete', () => {
         objekt: 'LGH 3003 Brf Tre (123)',
         objekt_short: 'LGH 3003 Brf Tre',
         adress: 'Tredje gatan 3',
-        kommun: 'Stockholm',
+        kommun: 'Exempelholm',
         upplatelseform: 'Bostadsrätt',
         marknadsvarde_kr: '5 500 000',
         intervall_kr: '100 000',
         datum: '2026-06-22',
-        ort: 'Stockholm',
+        ort: 'Exempelholm',
         maklare_namn: 'Test Mäklare',
         maklare_titel: 'Fastighetsmäklare',
         foretag: 'Test AB',
