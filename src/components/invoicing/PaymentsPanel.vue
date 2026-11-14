@@ -141,7 +141,7 @@
       :expenses="removedExpenses"
       :direction="removedDirection"
       @back="removedOpen = false"
-      @changed="$emit('changed')"
+      @changed="changed"
     />
     <template v-else>
     <!-- Nothing to filter or select before the first movement of money. -->
@@ -426,11 +426,11 @@
     <ManualPaymentDialog
       v-model:open="manualOpen"
       :clients="clients"
-      @changed="$emit('changed')"
+      @changed="changed"
       @saved="onManualSaved"
     />
     <!-- The same dialog edits a payment (§3.143 Decision 5, system_3 #10694). -->
-    <ManualPaymentDialog v-model:open="editOpen" :payment="editPayment" :clients="clients" @changed="$emit('changed')" />
+    <ManualPaymentDialog v-model:open="editOpen" :payment="editPayment" :clients="clients" @changed="changed" />
     <ManualExpenseDialog
       v-model:open="expenseOpen"
       :categories="expenseCategories"
@@ -442,7 +442,7 @@
       v-model:open="expenseEditOpen"
       :expense="editExpense"
       :categories="expenseCategories"
-      @changed="$emit('changed')"
+      @changed="changed"
       @category-added="expenseCategories = [...expenseCategories, $event]"
     />
     <N26ImportDialog v-model:open="n26Open" :files="n26Files" :payments="payments" @imported="onN26Imported" />
@@ -548,8 +548,14 @@
         // (§3.17 R2). Dropped whenever the filter changes or clears, so
         // clearing it brings back zir folds from before.
         filterOpen: {},
-        // Set by an import just before it asks for a reload, so the reload
-        // can name where the new rows went; and the months it named.
+        // Where each row was (key -> month) when this panel last reported a
+        // change of its own, a save, an import or a restore. The reload that
+        // follows is compared against it; null until then, so the page's own
+        // first loads (expenses arrive after payments) open nothing.
+        revealFrom: null,
+        revealCount: 0,
+        // Set by an import, so its reload can name where the rows went; and
+        // the months it named.
         importPending: false,
         landedIn: '',
         saving: new Set(),
@@ -878,17 +884,20 @@
       },
       // After a save, an import or a restore: every month that holds a new
       // row, or a row whose date moved it there, opens, and the newest of
-      // them is brought into view (§3.145 Decision 2). The panel mounts with
-      // its rows loaded, so this only ever sees a later change.
-      rows(now, before) {
-        const was = new Map(before.map((r) => [r.key, monthKey(r.paid_on)]));
-        const landed = landedRows(was, groupByMonth(now, (r) => r.paid_on), (r) => r.key);
-        this.landedIn = this.importPending && landed.length ? monthSpanLabel(landed.map((l) => l.group)) : '';
-        this.importPending = false;
+      // them is brought into view (§3.145 Decision 2). Compared against the
+      // snapshot `changed()` took, so only this panel's own changes count,
+      // and the two reloads that follow one change (payments, then
+      // expenses) give the same answer.
+      rows(now) {
+        if (!this.revealFrom) return;
+        const landed = landedRows(this.revealFrom, groupByMonth(now, (r) => r.paid_on), (r) => r.key);
+        if (this.importPending) this.landedIn = monthSpanLabel(landed.map((l) => l.group));
         if (!landed.length) return;
         const open = { ...this.openGroups };
         for (const l of landed) open[l.group] = true;
         this.openGroups = open;
+        if (landed.length <= this.revealCount) return;
+        this.revealCount = landed.length;
         this.$nextTick(() => {
           // The newest landed row the current filter shows.
           const shown = new Set(this.shown.map((r) => r.key));
@@ -1097,7 +1106,7 @@
           removed: (result && result.removed_earlier) || 0,
           deleted: (result && result.deleted_earlier) || 0,
         };
-        if (this.paypalExpensesAdded) this.importChanged();
+        if (this.paypalExpensesAdded) this.importChanged(true);
       },
       onN26Imported(summary) {
         this.n26Summary = summary;
@@ -1124,7 +1133,7 @@
         this.manualSummary = null;
         this.payersSummary = { clients_added: result.clients_added || 0, payments_linked: result.payments_linked || 0 };
         this.payerCandidates = [];
-        this.$emit('changed');
+        this.changed();
       },
       // §3.142 Decision 1: one line in the shared import-state region, same
       // "one summary shows at a time" rule as the two imports (§3.127
@@ -1151,7 +1160,7 @@
         this.n26Summary = null;
         this.payersSummary = null;
         this.manualSummary = { expense: true };
-        this.$emit('changed');
+        this.changed();
       },
       onManualSaved({ payment, client }) {
         this.summary = null;
@@ -1200,15 +1209,34 @@
         }
       },
       // Records only zir own toggles: a change the page made itself (a
-      // filter, a default) already matches what `openKeys` says.
+      // filter, a default) already matches what `openKeys` says. Zir toggle
+      // also ends the reveal, so a late reload cannot reopen what ze closed.
       onGroupToggle(key, event) {
         const open = event.target.open;
         if (open === this.openKeys.has(key)) return;
+        this.revealFrom = null;
         if (this.filtered) this.filterOpen = { ...this.filterOpen, [key]: open };
         else this.openGroups = { ...this.openGroups, [key]: open };
       },
-      // An import's reload names the months its rows went to.
-      importChanged() {
+      // Every change this panel reports goes through here: it notes where
+      // each row is now, so the reload can open the months rows land in.
+      snapshotRows() {
+        this.revealFrom = new Map(this.rows.map((r) => [r.key, monthKey(r.paid_on)]));
+        this.revealCount = 0;
+      },
+      changed() {
+        this.snapshotRows();
+        this.importPending = false;
+        this.$emit('changed');
+      },
+      // An import's reload also names the months its rows went to. A second
+      // step of the same import (the PayPal expenses) keeps the first step's
+      // snapshot, so the line names both.
+      importChanged(sameImport = false) {
+        if (!(sameImport && this.importPending && this.revealFrom)) {
+          this.snapshotRows();
+          this.landedIn = '';
+        }
         this.importPending = true;
         this.$emit('changed');
       },
@@ -1248,7 +1276,7 @@
         this.selected = failed.map((f) => f.row.key);
         if (failed.length) this.bulkError = bulkFailureLine(failed, rows.length);
         this.bulkSaving = false;
-        this.$emit('changed');
+        this.changed();
       },
       // Remove the selection, a mistaken upload taken out in one go (§3.143
       // Decision 4). The first press arms; the second sends one
@@ -1286,7 +1314,7 @@
         } finally {
           this.removing = false;
           this.confirmingRemove = false;
-          this.$emit('changed');
+          this.changed();
         }
       },
       // Create invoice acts only when every selected row is Paid work money
@@ -1301,7 +1329,7 @@
           const detail = await createDraft(ids);
           this.selected = [];
           this.$emit('open-invoice', detail.invoice.id);
-          this.$emit('changed');
+          this.changed();
         } catch (err) {
           this.createError = errorOf(err).message;
         } finally {
@@ -1313,12 +1341,12 @@
         this.saving = new Set([...this.saving, `p${row.id}`]);
         try {
           await patchPayment(row.id, change);
-          this.$emit('changed');
+          this.changed();
         } catch (err) {
           // The server refused (for example a payment already on an issued
           // invoice); the parent's reload puts the select back to the truth.
           this.rowError = errorOf(err).message;
-          this.$emit('changed');
+          this.changed();
         } finally {
           const next = new Set(this.saving);
           next.delete(`p${row.id}`);

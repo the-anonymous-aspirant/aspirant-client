@@ -212,12 +212,12 @@
     />
     <!-- The rows' edit dialogs, the same as Transactions' (§3.143 Decisions 5
          and 7, system_3 #10729). Save or Remove refetches the Book. -->
-    <ManualPaymentDialog v-model:open="paymentEditOpen" :payment="editPayment" :clients="clients" @changed="$emit('changed')" />
+    <ManualPaymentDialog v-model:open="paymentEditOpen" :payment="editPayment" :clients="clients" @changed="changed" />
     <ManualExpenseDialog
       v-model:open="expenseEditOpen"
       :expense="editExpense"
       :categories="expenseCategories"
-      @changed="$emit('changed')"
+      @changed="changed"
       @category-added="expenseCategories = [...expenseCategories, $event]"
     />
   </section>
@@ -308,6 +308,11 @@
         // takes the default. Kept through a refetch, never stored (§3.145
         // Decision 3).
         openGroups: {},
+        // Where each row was (key -> month) when the Book last reported a
+        // change of its own; the reload that follows is compared against
+        // it. Null until then.
+        revealFrom: null,
+        revealCount: 0,
       };
     },
     computed: {
@@ -423,25 +428,19 @@
       },
     },
     watch: {
-      // After a save from the Book's edit dialog, the month the row is in
-      // now opens and the row is brought into view (§3.145 Decision 2). A
-      // change of what counts moves many rows at once and is no save, so it
-      // opens nothing: only a change of the lists themselves does.
-      payments() {
-        this.revealNext = true;
-      },
-      expenses() {
-        this.revealNext = true;
-      },
-      rows(now, before) {
-        if (!this.revealNext) return;
-        this.revealNext = false;
-        const was = new Map(before.map((r) => [r.key, monthKey(r.paid_on)]));
-        const landed = landedRows(was, groupByMonth(now, (r) => r.paid_on), (r) => r.key);
+      // After a save from the Book's own dialogs, the month the row is in
+      // now opens and the row is brought into view (§3.145 Decision 2).
+      // Compared against the snapshot `changed()` took, so a change of what
+      // counts, or the page's own first loads, open nothing.
+      rows(now) {
+        if (!this.revealFrom) return;
+        const landed = landedRows(this.revealFrom, groupByMonth(now, (r) => r.paid_on), (r) => r.key);
         if (!landed.length) return;
         const open = { ...this.openGroups };
         for (const l of landed) open[l.group] = true;
         this.openGroups = open;
+        if (landed.length <= this.revealCount) return;
+        this.revealCount = landed.length;
         this.$nextTick(() => {
           const el = this.$el.querySelector(`[data-row-key="${landed[0].key}"]`);
           if (el) el.scrollIntoView({ block: 'nearest' });
@@ -463,10 +462,20 @@
       formatDay,
       formatMoney,
       // Records only zir own toggles: a default already matches `openKeys`.
+      // Zir toggle also ends the reveal, so a late reload cannot reopen what
+      // ze closed.
       onMonthToggle(key, event) {
         const open = event.target.open;
         if (open === this.openKeys.has(key)) return;
+        this.revealFrom = null;
         this.openGroups = { ...this.openGroups, [key]: open };
+      },
+      // Every change the Book reports goes through here: it notes where each
+      // row is now, so the reload can open the month a row lands in.
+      changed() {
+        this.revealFrom = new Map(this.rows.map((r) => [r.key, monthKey(r.paid_on)]));
+        this.revealCount = 0;
+        this.$emit('changed');
       },
       formatSignedMoney(cents) {
         const sign = cents < 0 ? '-' : '';
@@ -485,7 +494,7 @@
         }
       },
       onExpenseChanged() {
-        this.$emit('changed');
+        this.changed();
       },
       async onChangeToggle(event) {
         if (!event.target.open || this.categoriesLoaded) return;

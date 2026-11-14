@@ -190,7 +190,7 @@ test.describe('#10636 Transactions folds by month', () => {
     await page.locator('[data-test="expense-new"]').click();
     await page.locator('[data-test="expense-date"]').fill('2026-09-20');
     await page.locator('[data-test="expense-amount"]').fill('12,00');
-    await page.getByRole('combobox', { name: 'Category' }).click();
+    await page.getByRole('dialog', { name: 'Enter expense by hand' }).getByRole('combobox', { name: 'Category' }).click();
     await page.getByRole('option', { name: 'materials and supplies' }).click();
     await page.locator('[data-test="expense-note"]').fill('Brushes');
     await page.locator('[data-test="expense-save"]').click();
