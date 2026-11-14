@@ -227,11 +227,18 @@
     },
     methods: {
       startGame() {
-        // Call handleResize first to ensure game dimensions are properly set
-        this.handleResize();
-
+        // The panel above the board goes when play starts, so the board is
+        // fitted to the space that leaves, then measured, before any pipe is
+        // placed against its height (#10993).
         this.isPlaying = true;
         this.gameOver = false;
+        this.$nextTick(() => {
+          this.fitBoardHeight();
+          this.handleResize();
+          this.beginRound();
+        });
+      },
+      beginRound() {
 
         // Reset difficulty settings
         this.difficultyLevel = 1;

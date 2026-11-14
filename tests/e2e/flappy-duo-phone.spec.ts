@@ -91,25 +91,39 @@ for (const theme of ['light', 'dark'] as const) {
   }
 }
 
-test('on a touch phone the lines say which side of the board each player taps', async ({
-  browser,
-}) => {
-  const context = await browser.newContext({
-    viewport: { width: 390, height: 844 },
-    hasTouch: true,
-    isMobile: true,
+for (const theme of ['light', 'dark'] as const) {
+  test(`on a touch phone the lines name each bird and its side, on their own panel (${theme})`, async ({
+    browser,
+  }) => {
+    // The branch a phone player sees: `isMobileDevice` is true only with touch.
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true,
+    });
+    const page = await context.newPage();
+    await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
+    await page.route(/\/api\//, (r) =>
+      r.fulfill({ status: 404, contentType: 'application/json', body: '{}' })
+    );
+    await seedViewerSession(page);
+    await page.goto('/games/flappyduo');
+    await dismissMobileSidebarIfPresent(page);
+    await expect(page.locator('[data-test="instructions-p1"]')).toContainText(
+      'Player 1, the amber bird: tap the left side to flap'
+    );
+    await expect(page.locator('[data-test="instructions-p2"]')).toContainText(
+      'Player 2, the white bird: tap the right side to flap'
+    );
+    await expect(page.locator('.bird-swatch.player1')).toBeVisible();
+    await expect(page.locator('.bird-swatch.player2')).toBeVisible();
+    for (const sel of ['[data-test="instructions-p1"]', '[data-test="instructions-p2"]']) {
+      const r = await ratio(page, sel);
+      expect(r, `${sel} touch ${theme} ${r.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+    }
+    await context.close();
   });
-  const page = await context.newPage();
-  await page.route(/\/api\//, (r) =>
-    r.fulfill({ status: 404, contentType: 'application/json', body: '{}' })
-  );
-  await seedViewerSession(page);
-  await page.goto('/games/flappyduo');
-  await dismissMobileSidebarIfPresent(page);
-  await expect(page.locator('[data-test="instructions-p1"]')).toContainText('tap the left side');
-  await expect(page.locator('[data-test="instructions-p2"]')).toContainText('tap the right side');
-  await context.close();
-});
+}
 
 test('after a game, both birds start inside the board again', async ({ page }) => {
   await open(page, 'light', 390);
@@ -121,4 +135,16 @@ test('after a game, both birds start inside the board again', async ({ page }) =
   expect(b2.x + b2.width).toBeLessThanOrEqual(board.x + board.width);
   const ground = await box(page, '.game-area .ground');
   expect(ground.y + ground.height).toBeLessThanOrEqual(844);
+});
+
+test('at Start the board grows into the space the instructions leave, and the ground stays on screen', async ({
+  page,
+}) => {
+  await open(page, 'light', 390);
+  const before = await box(page, '.game-area');
+  await page.getByRole('button', { name: 'Start Game' }).click();
+  await expect(page.locator('.time-display')).toBeVisible();
+  const during = await box(page, '.game-area');
+  expect(during.height).toBeGreaterThan(before.height);
+  expect(during.y + during.height).toBeLessThanOrEqual(844);
 });
