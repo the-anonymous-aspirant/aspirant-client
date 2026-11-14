@@ -2,13 +2,28 @@
   <div class="flappy-duo-container">
     <h1>Flappy Duo</h1>
     <div class="game-instructions" v-if="!isPlaying && !gameOver">
+      <!-- Each line names its bird by colour, with a swatch of it, so "which
+           bird is mine?" is answered before the game starts (system_3
+           #10993, UX walk AG1). -->
       <template v-if="isMobileDevice">
-        <p>Tap <strong>left side</strong> to flap Player 1</p>
-        <p>Tap <strong>right side</strong> to flap Player 2</p>
+        <p data-test="instructions-p1">
+          <span class="bird-swatch player1" aria-hidden="true"></span>
+          <strong>Player 1</strong>, the amber bird: tap the <strong>left side</strong> to flap
+        </p>
+        <p data-test="instructions-p2">
+          <span class="bird-swatch player2" aria-hidden="true"></span>
+          <strong>Player 2</strong>, the white bird: tap the <strong>right side</strong> to flap
+        </p>
       </template>
       <template v-else>
-        <p><strong>Player 1:</strong> Press <kbd>W</kbd> to flap</p>
-        <p><strong>Player 2:</strong> Press <kbd>↑</kbd> (Up Arrow) to flap</p>
+        <p data-test="instructions-p1">
+          <span class="bird-swatch player1" aria-hidden="true"></span>
+          <strong>Player 1</strong>, the amber bird: press <kbd>W</kbd> to flap
+        </p>
+        <p data-test="instructions-p2">
+          <span class="bird-swatch player2" aria-hidden="true"></span>
+          <strong>Player 2</strong>, the white bird: press <kbd>↑</kbd> (Up Arrow) to flap
+        </p>
       </template>
       <p>Survive as long as possible to set a high score!</p>
       <AspButton class="start-button" variant="primary" @click="startGame">Start Game</AspButton>
@@ -64,22 +79,10 @@
       <div class="time-display" v-if="isPlaying || gameOver">
         <div class="time-counter">Time: {{ formatTime(elapsedTime) }}</div>
       </div>
-      <!-- High Score Panel (inside game area on desktop) -->
-      <div class="high-scores-panel high-scores-overlay" v-if="!isPlaying && !isMobileLayout">
-        <h3>High Scores</h3>
-        <div class="high-scores-list">
-          <div v-for="(score, index) in highScores" :key="index" class="high-score-item">
-            <span class="high-score-rank">{{ index + 1 }}.</span>
-            <span class="high-score-time">{{ formatTime(score) }}</span>
-          </div>
-          <div v-if="highScores.length === 0" class="no-scores">
-            No scores yet. Play to set a record!
-          </div>
-        </div>
-      </div>
     </div>
-    <!-- High Score Panel (below game area on mobile) -->
-    <div class="high-scores-panel high-scores-below" v-if="!isPlaying && isMobileLayout">
+    <!-- High scores, below the board at every width: on a desktop it used to
+         sit on the playfield, over where the birds fly (#10993). -->
+    <div class="high-scores-panel high-scores-below" v-if="!isPlaying" data-test="high-scores">
       <h3>High Scores</h3>
       <div class="high-scores-list">
         <div v-for="(score, index) in highScores" :key="index" class="high-score-item">
@@ -97,6 +100,17 @@
 <script>
   import AssetManager from '../../asset_manager.js';
   import { AspButton } from '@aspirant/design-system';
+
+  // Where each bird flies, as a share of the board's width (#10993). They were
+  // fixed pixels before the first game, so Player 2 started at x=420 on a
+  // 390px board: one bird of two on a phone.
+  const PLAYER1_SHARE = 0.2;
+  const PLAYER2_SHARE = 0.35;
+  // The board fits the space left on the screen, between these bounds, so the
+  // ground is on the first screen (#10993). 700 is the board's design height.
+  const BOARD_MAX = 700;
+  const BOARD_MIN = 280;
+  const BOARD_BOTTOM_GAP = 16;
 
   export default {
     name: 'GameFlappyDuo',
@@ -189,6 +203,11 @@
       // Add resize event listener
       window.addEventListener('resize', this.handleResize);
       this.handleResize();
+    },
+    watch: {
+      gameOver(over) {
+        if (over) this.$nextTick(() => this.handleResize());
+      },
     },
     beforeUnmount() {
       window.removeEventListener('keydown', this.handleKeyDown);
@@ -298,8 +317,8 @@
       },
       resetPlayers() {
         const initialY = this.gameHeight * 0.4;
-        const p1x = Math.round(this.gameWidth * 0.2);
-        const p2x = Math.round(this.gameWidth * 0.35);
+        const p1x = Math.round(this.gameWidth * PLAYER1_SHARE);
+        const p2x = Math.round(this.gameWidth * PLAYER2_SHARE);
         const birdSize = this.isMobileLayout ? 24 : 30;
         const birdHeight = this.isMobileLayout ? 18 : 24;
 
@@ -584,11 +603,24 @@
         }
       },
 
+      // The board's height: what is left of the window below its top, within
+      // BOARD_MIN..BOARD_MAX. Read from the board's place in the document, so
+      // the instructions above it (before a game) are allowed for.
+      fitBoardHeight() {
+        const area = this.$refs.gameArea;
+        if (!area) return;
+        const top = area.getBoundingClientRect().top + window.scrollY;
+        const left = window.innerHeight - top - BOARD_BOTTOM_GAP;
+        const height = Math.max(BOARD_MIN, Math.min(BOARD_MAX, Math.floor(left)));
+        area.style.height = `${height}px`;
+      },
       handleResize() {
         this.screenWidth = window.innerWidth;
         this.isMobileLayout = this.screenWidth <= 768;
 
         if (!this.$refs.gameArea) return;
+        // Not mid-game: changing the board under live pipes would move them.
+        if (!this.isPlaying) this.fitBoardHeight();
 
         if (this.isMobileLayout) {
           // Mobile: fit game area to screen, use CSS-driven dimensions
@@ -615,6 +647,15 @@
           this.pipeWidth = 80;
           this.pipeDistance = 600;
           this.gravity = 0.3;
+        }
+
+        // Birds stand at their share of the width, inside the board at any
+        // size; before a game they also return to their start height.
+        this.player1.x = Math.round(this.gameWidth * PLAYER1_SHARE);
+        this.player2.x = Math.round(this.gameWidth * PLAYER2_SHARE);
+        if (!this.isPlaying) {
+          this.player1.y = this.gameHeight * 0.4;
+          this.player2.y = this.gameHeight * 0.4;
         }
 
         // Keep players in bounds during resize
@@ -827,13 +868,6 @@
     z-index: 25;
   }
 
-  .high-scores-overlay {
-    position: absolute;
-    top: 100px;
-    right: 20px;
-    width: 180px;
-  }
-
   .high-scores-below {
     width: 100%;
     max-width: 400px;
@@ -887,14 +921,33 @@
     color: var(--border-subtle);
   }
 
+  /* The panel's ink follows its own fill, in both themes (#10993): the fill
+     was a fixed near-white while the text took the page's ink, so in dark
+     it read light on light, about 1.08:1. */
   .game-instructions,
   .game-over {
-    background-color: rgba(255, 255, 255, 0.9);
+    background-color: var(--surface-elevated);
+    color: var(--text-body);
     padding: var(--space-lg);
     border-radius: var(--radius-md);
     margin: var(--space-lg) auto;
     max-width: 600px;
-    border: 4px solid var(--text-on-light);
+    border: 4px solid var(--border-subtle);
+  }
+
+  .game-instructions h2,
+  .game-over h2 {
+    color: inherit;
+  }
+
+  /* A swatch of each bird beside its line, drawn as the bird is. */
+  .bird-swatch {
+    display: inline-block;
+    width: 1.4em;
+    height: 1em;
+    vertical-align: -0.15em;
+    margin-right: var(--space-2xs);
+    box-sizing: border-box;
   }
 
   .game-instructions p {
@@ -902,7 +955,8 @@
   }
 
   kbd {
-    background-color: var(--surface-elevated);
+    background-color: var(--surface-page);
+    color: var(--text-body);
     border: 1px solid var(--border-subtle);
     border-radius: 4px;
     padding: 2px 6px;
