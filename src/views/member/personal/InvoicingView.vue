@@ -8,12 +8,8 @@
       </p>
     </header>
 
-    <AspEmptyState
-      v-if="forbidden"
-      heading="This app belongs to another account"
-      message="Only its owner and an administrator can open it."
-      data-test="invoicing-forbidden"
-    />
+    <!-- The shared refusal; these were its words first (#11025). -->
+    <ReadState v-if="forbidden" state="refused" data-test="invoicing-forbidden" />
 
     <ReadState
       v-else-if="loading || loadError"

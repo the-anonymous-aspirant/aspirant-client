@@ -12,9 +12,10 @@
 
     <ReadState
       v-if="loading || loadError"
-      :state="loading ? 'loading' : 'failed'"
-      heading="Utmaningen kunde inte laddas"
-      message="Vi nådde inte servern. Det är oftast tillfälligt."
+      :state="loading ? 'loading' : loadError.kind"
+      :heading="stateWords.heading"
+      :message="stateWords.message"
+      sign-in-label="Logga in"
       loading-label="Laddar"
       retry-label="Försök igen"
       skeleton="row"
@@ -111,6 +112,17 @@
   import axios from 'axios';
   import { markRaw } from 'vue';
   import ReadState from '../../../components/ReadState.vue';
+  import { readError, READ_ERROR_WORDS_SV } from '../../../components/readError.js';
+
+  // The state's words, in Swedish like every other word on the page (#5303;
+  // design_agent c68306 on system_3 #11025).
+  const SV_STATE_WORDS = {
+    refused: {
+      heading: 'Den här appen tillhör ett annat konto',
+      message: 'Bara ägaren och en administratör kan öppna den.',
+    },
+    'signed-out': { heading: 'Din session har gått ut', message: 'Logga in igen.' },
+  };
   import {
     Chart,
     LineController,
@@ -212,7 +224,8 @@
         entries: [],
         milestones: [],
         loading: true,
-        loadError: false,
+        // null, or { kind: 'refused' | 'failed', reason } from readError().
+        loadError: null,
         savingDates: new Set(),
         errorDates: new Set(),
         activeToast: null,
@@ -221,6 +234,10 @@
       };
     },
     computed: {
+      stateWords() {
+        const kind = this.loadError && this.loadError.kind;
+        return SV_STATE_WORDS[kind] || { heading: 'Utmaningen kunde inte laddas', message: this.loadError ? this.loadError.reason : '' };
+      },
       milestoneMap() {
         const map = new Map();
         for (const m of this.milestones) {
@@ -300,7 +317,9 @@
           // The transport detail goes to the console; the page says it in
           // Swedish, like every other word on it (#5303).
           console.error('Pushups: kunde inte hämta data', err);
-          this.loadError = true;
+          // A 403 is a refusal, not an outage: it gets the refusal, with no
+          // retry, instead of "we could not reach the server" (#11025).
+          this.loadError = readError(err, READ_ERROR_WORDS_SV);
         }
         this.loading = false;
         this.$nextTick(() => this.renderChart());
