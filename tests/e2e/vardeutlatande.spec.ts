@@ -1290,7 +1290,7 @@ test.describe('#5914 manual data-entry route', () => {
     // operator_defaults still populate their slots — "no source document", not
     // "no defaults".
     const ort = page.locator('.field-row', { hasText: /^Ort/ }).locator('input');
-    await expect(ort).toHaveValue('Nynäshamn');
+    await expect(ort).toHaveValue('Exempelby');
 
     // A doc-derived slot starts empty and is never 'confident' — nothing was
     // extracted for it.
