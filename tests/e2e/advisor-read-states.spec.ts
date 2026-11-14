@@ -119,7 +119,7 @@ test.describe('#11005 the file control is a DS button', () => {
   test('Choose files opens the picker, and the chosen names read beside it', async ({ page }) => {
     await open(page, [{ status: 200, body: [] }]);
     await expect(page.locator('[data-test="advisor-file-input"]')).toBeHidden();
-    await expect(page.locator('[data-test="advisor-chosen-files"]')).toHaveText('No file chosen');
+    await expect(page.locator('[data-test="advisor-chosen-files"]')).toHaveText('No files chosen');
     const chooser = page.waitForEvent('filechooser');
     await page.locator('[data-test="advisor-choose-files"]').click();
     await (await chooser).setFiles([

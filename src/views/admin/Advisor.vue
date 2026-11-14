@@ -284,7 +284,7 @@ export default {
     },
     chosenFilesLine() {
       const n = this.selectedFiles.length;
-      if (n === 0) return 'No file chosen';
+      if (n === 0) return 'No files chosen';
       return n === 1 ? this.selectedFiles[0].name : `${n} files: ${this.selectedFiles.map((f) => f.name).join(', ')}`;
     },
     accessOptions() {
