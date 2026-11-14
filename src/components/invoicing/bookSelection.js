@@ -21,7 +21,7 @@ export function countsInBook(selection, { direction, category, kind }) {
   return selection.expense_all || selection.expense.includes(category);
 }
 
-// The expense categories that may count: hers, without Private.
+// The expense categories that may count: zirs, without Private.
 export const countableExpenseNames = (categories) => categories.map((c) => c.name).filter((n) => !isPrivate(n));
 
 // The name the selection reads by: its preset's, "(changed)" when the ticks

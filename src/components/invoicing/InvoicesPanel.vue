@@ -52,7 +52,10 @@
          card has its checkbox beside the button, not inside it (a checkbox in
          a button is invalid and the two clicks would collide); other cards keep
          a blank gutter of the same width, so the numbers line up. -->
-    <template v-else-if="narrow">
+    <!-- §3.145: the list folds into a Drafts group and one group per issue
+         month, newest first. The one "select all" sits above the groups on both
+         layouts, and counts issued rows in open groups only (Decision 5). -->
+    <template v-else>
     <div v-if="shownIssued.length" class="select-all" data-test="select-all-shown">
       <AspCheckbox
         :model-value="allShownSelected"
@@ -62,8 +65,18 @@
         @update:model-value="selectAllShown"
       />
     </div>
-    <ul class="invoice-cards" aria-label="Invoices">
-      <li v-for="row in rows" :key="row.id" class="invoice-cards__item">
+    <details
+      v-for="group in groups"
+      :key="group.key"
+      class="invoice-group"
+      :open="openKeys.has(group.key)"
+      data-test="invoice-group"
+      :data-group="group.key"
+      @toggle="onToggle(group.key, $event)"
+    >
+    <summary class="fold-summary invoice-group__summary" data-test="invoice-group-summary">{{ summaryOf(group) }}</summary>
+    <ul v-if="narrow" class="invoice-cards" :aria-label="`Invoices: ${group.label}`">
+      <li v-for="row in group.rows" :key="row.id" class="invoice-cards__item">
         <span class="invoice-card__select">
           <AspCheckbox
             v-if="row.status === 'issued'"
@@ -79,6 +92,7 @@
           class="invoice-card"
           data-test="invoice-row"
           :data-status="row.status"
+          :data-invoice-id="row.id"
           @click="$emit('open', row.id)"
         >
           <span class="invoice-card__row">
@@ -93,29 +107,17 @@
         </button>
       </li>
     </ul>
-    </template>
     <AspDataTable
       v-else
       :columns="columns"
-      :rows="rows"
+      :rows="group.rows"
       row-key="id"
       density="compact"
-      caption="Invoices"
+      :caption="`Invoices: ${group.label}`"
       interactive
-      :row-attrs="(row) => ({ 'data-test': 'invoice-row', 'data-status': row.status })"
+      :row-attrs="(row) => ({ 'data-test': 'invoice-row', 'data-status': row.status, 'data-invoice-id': row.id })"
       @row-click="(row) => $emit('open', row.id)"
     >
-      <template #header-select>
-        <AspCheckbox
-          v-if="shownIssued.length"
-          :model-value="allShownSelected"
-          :indeterminate="someShownSelected"
-          :disabled="mergeDownloading"
-          aria-label="Select all shown issued invoices"
-          data-test="select-all-shown"
-          @update:model-value="selectAllShown"
-        />
-      </template>
       <!-- The checkbox swallows its own click and key, so a tick never opens
            the invoice; the rest of the row still does. -->
       <template #cell-select="{ row }">
@@ -139,6 +141,8 @@
       <template #cell-issue_date="{ row }"><span class="nowrap">{{ formatDay(row.issue_date) || '—' }}</span></template>
       <template #cell-total_cents="{ row }"><span class="nowrap">{{ formatMoney(row.total_cents, row.currency) }}</span></template>
     </AspDataTable>
+    </details>
+    </template>
 
     <InvoicesChart :refresh-key="refreshKey" />
 
@@ -203,6 +207,7 @@
     formatMoney,
     listInvoices,
   } from './api.js';
+  import { DRAFTS_GROUP, groupInvoicesByMonth } from './listGroups.js';
 
   // Every export goes through the validation screen first (spec §5).
   const EXPORTS = {
@@ -239,18 +244,28 @@
         selected: [],
         mergeDownloading: false,
         mergeError: '',
+        // Groups ze opened or closed this visit, by key; a group not in here
+        // takes the default. Kept through a refetch, never stored (§3.145
+        // Decision 3).
+        openGroups: {},
+        // The same while a filter is active, when every group starts open
+        // (§3.17 R2). Dropped whenever the filter changes or clears, so
+        // clearing it brings back zir state from before.
+        filterOpen: {},
         statusOptions: [
           { value: '', label: 'All statuses' },
           ...Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })),
         ],
+        // A fixed width on every column, the same in every group's table, so
+        // the columns line up from month to month (§3.145 Decision 6).
         columns: [
           { key: 'select', label: '', sortable: false, width: '2.5rem' },
-          { key: 'invoice_number', label: 'Number' },
-          { key: 'status', label: 'Status' },
-          { key: 'client_name', label: 'Client' },
-          { key: 'service', label: 'Service', sortable: false },
-          { key: 'issue_date', label: 'Issued' },
-          { key: 'total_cents', label: 'Total', align: 'right' },
+          { key: 'invoice_number', label: 'Number', width: '14%' },
+          { key: 'status', label: 'Status', width: '13%' },
+          { key: 'client_name', label: 'Client', width: '27%' },
+          { key: 'service', label: 'Service', sortable: false, width: '19%' },
+          { key: 'issue_date', label: 'Issued', width: '13%' },
+          { key: 'total_cents', label: 'Total', align: 'right', width: '14%' },
         ],
       };
     },
@@ -258,13 +273,35 @@
       filtered() {
         return !!(this.status || this.issuedFrom || this.issuedTo || this.search.trim());
       },
+      groups() {
+        return groupInvoicesByMonth(this.rows);
+      },
+      // The groups that are open now. Filtered: every group, unless ze closed
+      // one (§3.17 R2). Otherwise zir own choice, or the default: Drafts, the
+      // newest month, and a lone group (§3.145 Decision 3, §3.17 R3).
+      openKeys() {
+        const newestMonth = (this.groups.find((g) => g.key !== DRAFTS_GROUP) || {}).key;
+        const open = new Set();
+        for (const g of this.groups) {
+          let on;
+          if (this.filtered) on = g.key in this.filterOpen ? this.filterOpen[g.key] : true;
+          else if (g.key in this.openGroups) on = this.openGroups[g.key];
+          else on = this.groups.length === 1 || g.key === DRAFTS_GROUP || g.key === newestMonth;
+          if (on) open.add(g.key);
+        }
+        return open;
+      },
+      // The rows ze can see: a folded group's rows are not shown (§3.129).
+      shownRows() {
+        return this.groups.filter((g) => this.openKeys.has(g.key)).flatMap((g) => g.rows);
+      },
       // Only an issued invoice has a stored PDF the merge accepts: a draft has
       // none yet, and a cancelled one's PDF carries no cancellation mark.
       shownIssued() {
-        return this.rows.filter((r) => r.status === 'issued');
+        return this.shownRows.filter((r) => r.status === 'issued');
       },
       hasUnselectable() {
-        return this.rows.some((r) => r.status !== 'issued');
+        return this.shownRows.some((r) => r.status !== 'issued');
       },
       allShownSelected() {
         return this.shownIssued.length > 0 && this.shownIssued.every((r) => this.selected.includes(r.id));
@@ -306,22 +343,28 @@
     },
     watch: {
       // The selection never holds a row the owner cannot see (§3.25): a
-      // filter change or a reload unselects rows that left the view, so the
-      // count on the button only ever counts rows on screen.
+      // filter change, a reload or a folded group unselects rows that left the
+      // view, so the count on the button only ever counts rows on screen
+      // (§3.145 Decision 5).
       shownIssued(rows) {
         const visible = new Set(rows.map((r) => r.id));
         const kept = this.selected.filter((id) => visible.has(id));
         if (kept.length !== this.selected.length) this.selected = kept;
       },
-      status: 'load',
-      issuedFrom: 'load',
-      issuedTo: 'load',
-      refreshKey() {
-        this.load();
+      status: 'onFilterChange',
+      issuedFrom: 'onFilterChange',
+      issuedTo: 'onFilterChange',
+      // After a save, a group that gained a row opens and the row is brought
+      // into view (§3.145 Decision 2): an issued draft lands in its month.
+      async refreshKey() {
+        const before = this.groupOfRow();
+        await this.load();
+        this.reveal(before);
         this.loadCounts();
       },
       search() {
         clearTimeout(this.searchTimer);
+        this.filterOpen = {};
         this.searchTimer = setTimeout(() => this.load(), 250);
       },
     },
@@ -343,6 +386,44 @@
     methods: {
       formatDay,
       formatMoney,
+      // "November 2026 · 4 invoices", "Drafts · 2": the count is the rows the
+      // group renders (§3.145 Decision 4).
+      summaryOf(group) {
+        const n = group.rows.length;
+        if (group.key === DRAFTS_GROUP) return `${group.label} · ${n}`;
+        return `${group.label} · ${n} ${n === 1 ? 'invoice' : 'invoices'}`;
+      },
+      // Records only zir own toggles: a change the page made itself (a
+      // filter, a default) already matches what `openKeys` says.
+      onToggle(key, event) {
+        const open = event.target.open;
+        if (open === this.openKeys.has(key)) return;
+        if (this.filtered) this.filterOpen = { ...this.filterOpen, [key]: open };
+        else this.openGroups = { ...this.openGroups, [key]: open };
+      },
+      // Any change of filter starts every group open again (§3.17 R2), and
+      // clearing the last one brings back zir state from before.
+      onFilterChange() {
+        this.filterOpen = {};
+        this.load();
+      },
+      groupOfRow() {
+        const map = new Map();
+        for (const g of this.groups) for (const r of g.rows) map.set(r.id, g.key);
+        return map;
+      },
+      reveal(before) {
+        const moved = [];
+        for (const g of this.groups) for (const r of g.rows) if (before.get(r.id) !== g.key) moved.push({ id: r.id, key: g.key });
+        if (!moved.length) return;
+        const open = { ...this.openGroups };
+        for (const m of moved) open[m.key] = true;
+        this.openGroups = open;
+        this.$nextTick(() => {
+          const el = this.$el.querySelector(`[data-invoice-id="${moved[0].id}"]`);
+          if (el) el.scrollIntoView({ block: 'nearest' });
+        });
+      },
       async load() {
         const params = {};
         if (this.status) params.status = this.status;
@@ -503,6 +584,21 @@
   .select-cell {
     display: inline-flex;
     align-items: center;
+  }
+
+  /* §3.145: one fold per group. The layout is fixed and every column has a
+     width, so the columns line up from one month's table to the next. */
+  .invoice-group__summary {
+    font-weight: 600;
+  }
+
+  .invoice-group > :deep(*:not(summary)) {
+    margin-top: var(--space-xs);
+  }
+
+  .invoice-group :deep(table) {
+    table-layout: fixed;
+    width: 100%;
   }
 
   .select-all {

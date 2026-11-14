@@ -54,7 +54,7 @@
   // format as the PayPal document kind).
   const KIND_LABELS = { ...N26_KIND_LABELS, n26_csv_export: 'CSV export', csv: 'CSV', xlsx: 'Excel' };
 
-  // Her calendar and clock (Berlin), so a row reads as the owner remembers
+  // Zir calendar and clock (Berlin), so a row reads as the owner remembers
   // the upload. Time as well as date: several uploads can fail on one day
   // (design_agent c65576 on system_3 #10564).
   const WHEN = new Intl.DateTimeFormat('en-GB', {

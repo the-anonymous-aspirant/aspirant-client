@@ -146,7 +146,7 @@
         clients: [],
         payments: [],
         expenses: [],
-        // What the Book counts and her presets: `{ selection, presets }`, or
+        // What the Book counts and zir presets: `{ selection, presets }`, or
         // null until read or when the read failed (§3.143 Decision 8).
         book: null,
         bookError: '',
