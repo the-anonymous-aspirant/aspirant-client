@@ -122,7 +122,7 @@ test.describe('#10817 Clients fold by first letter', () => {
     await expect(group(page, 'O')).toHaveAttribute('open', '');
     const added = group(page, 'O').locator('[data-test="client-row"]', { hasText: 'Ölmann' });
     await expect(added).toBeInViewport();
-    // Her own choice survives the refetch; the untouched letters stay folded.
+    // Zir own choice survives the refetch; the untouched letters stay folded.
     await expect(group(page, 'Z')).toHaveAttribute('open', '');
     await expect(group(page, 'A')).not.toHaveAttribute('open', '');
   });

@@ -282,7 +282,7 @@
         payerLeftOut: {},
         payersOpen: false,
         payersSummary: null,
-        // Letters she opened or closed this visit, by key; a letter not in
+        // Letters ze opened or closed this visit, by key; a letter not in
         // here takes the default. Kept through a refetch, never stored.
         openLetters: {},
         // The client ids known when a save started; the refetch's new ids

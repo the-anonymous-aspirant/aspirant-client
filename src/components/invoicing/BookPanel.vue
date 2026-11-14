@@ -74,7 +74,7 @@
           </fieldset>
           <div class="change__actions">
             <AspButton variant="secondary" size="sm" :disabled="ticksLocked" data-test="book-save-preset" @click="openSavePreset">Save as preset…</AspButton>
-            <!-- Shown for her own preset; there is nothing to update until a tick changes. -->
+            <!-- Shown for zir own preset; there is nothing to update until a tick changes. -->
             <AspButton
               v-if="ownPreset"
               variant="secondary"
@@ -251,7 +251,7 @@
       expenses: { type: Array, required: true },
       // The client book, for a hand payment's "Paid by" in its edit dialog.
       clients: { type: Array, default: () => [] },
-      // What counts and her presets, `{ selection, presets }` (§3.143
+      // What counts and zir presets, `{ selection, presets }` (§3.143
       // Decision 8); null while unread or when the read failed, and then the
       // Book counts nothing rather than guess.
       book: { type: Object, default: null },
@@ -271,7 +271,7 @@
         receiptOpen: false,
         receiptExpenseId: null,
         receiptExpenseLabel: '',
-        // "Change what counts": her expense categories are read the first
+        // "Change what counts": zir expense categories are read the first
         // time it opens, never with the panel.
         categoriesLoaded: false,
         categoriesError: '',
@@ -331,7 +331,7 @@
         if (!this.presets.some((p) => p.id === this.selection.preset)) options.unshift({ value: this.selection.preset, label: 'Custom', disabled: true });
         return options;
       },
-      // A tick before her categories are read would turn "every expense" into
+      // A tick before zir categories are read would turn "every expense" into
       // none, so the ticks wait for them.
       ticksLocked() {
         return this.saving || !this.categoriesLoaded;
@@ -343,7 +343,7 @@
       incomeChoices() {
         return INCOME_ORDER.map((value) => ({ value, label: CATEGORY_LABELS[value] || value }));
       },
-      // Her expense categories, without Private (never offered). Any category
+      // Zir expense categories, without Private (never offered). Any category
       // the selection already names is listed too, so no tick is hidden.
       expenseChoices() {
         const names = new Set(countableExpenseNames(this.expenseCategories));
@@ -489,7 +489,7 @@
         this.presetError = '';
         this.presetDialogOpen = true;
       },
-      // Save the ticks under her name, then count by that preset.
+      // Save the ticks under zir name, then count by that preset.
       async savePreset() {
         const name = this.presetName.trim();
         if (!name || this.saving) return;

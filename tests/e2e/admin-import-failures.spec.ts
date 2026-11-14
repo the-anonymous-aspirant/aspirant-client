@@ -50,7 +50,7 @@ test.describe('#10564 Admin — failed imports', () => {
     await expect(rows.filter({ hasText: 'kept.pdf' })).toContainText(
       'N26 · Account statement · the file was recognised but a field was missing or malformed · 2.0 KB');
     await expect(rows.filter({ hasText: 'big.csv' })).toContainText('PayPal · the file is larger than 5 MB · 2.0 KB');
-    // Date and time, in her clock: 10:00Z is 11:00 in Berlin in November.
+    // Date and time, in zir clock: 10:00Z is 11:00 in Berlin in November.
     await expect(rows.filter({ hasText: 'kept.pdf' })).toContainText('11 Nov 2026, 11:00');
   });
 

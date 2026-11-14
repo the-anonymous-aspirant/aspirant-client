@@ -364,7 +364,7 @@ export const clientsCsvUrl = () => `${base}/export/clients.csv`;
 // The Book tab's income-and-expenses bookkeeping grid (system_3 #10414-E).
 export const bookReportCsvUrl = () => `${base}/export/book-report.csv`;
 
-// What the Book counts, and her presets (§3.143 Decision 8, system_3
+// What the Book counts, and zir presets (§3.143 Decision 8, system_3
 // #10555-A3). A counting is `{ income: [...], expense_all, expense: [...] }`;
 // the selection adds `preset` (its id, "work_only" for the built-in, '' for
 // none) and `changed`. Every call answers `{ selection, presets }`.

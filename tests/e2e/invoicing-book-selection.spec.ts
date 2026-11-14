@@ -2,8 +2,8 @@ import { test, expect, type Locator, type Page, type Route } from '@playwright/t
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 
 /** What the Book counts (design §3.143 Decisions 7 and 8, system_3
- *  #10555-D1 / #10635): the Book counts the categories in her selection,
- *  says so in one line, and lets her change it and save it as a preset.
+ *  #10555-D1 / #10635): the Book counts the categories in zir selection,
+ *  says so in one line, and lets zir change it and save it as a preset.
  *  Transactions flags the rows it leaves out. The fake keeps the selection
  *  and presets in memory and applies the server's rules
  *  (aspirant-server `invoicing_book_selection.go`): Private never counts,
@@ -165,7 +165,7 @@ async function showTransactions(page: Page): Promise<void> {
   await expect(page.locator('[data-test="payments-panel"]')).toBeVisible();
 }
 
-// Opens "Change what counts" and waits for her expense categories, which
+// Opens "Change what counts" and waits for zir expense categories, which
 // the ticks wait for.
 async function openChange(page: Page): Promise<Locator> {
   const change = page.locator('[data-test="book-change"]');
@@ -182,7 +182,7 @@ const lastPut = (fake: Fake) => {
   return put ? JSON.parse(put.body) : null;
 };
 
-test.describe('#10635 the Book counts what she chose', () => {
+test.describe('#10635 the Book counts what ze chose', () => {
   test('under Work only, Gift and Private are left out of the Book and flagged on Transactions', async ({ page }) => {
     const fake = newFake({
       payments: [payment(1), payment(2, { category: 'gift', note: 'Birthday', sender_name: 'Aunt Ada', gross_cents: 5000 })],
@@ -295,7 +295,7 @@ test.describe('#10635 the Book counts what she chose', () => {
     await expect(change.locator('[data-test="book-ticks-out"]')).toContainText('Private expenses never count.');
   });
 
-  test('her own preset updates once changed, and its delete arms first', async ({ page }) => {
+  test('zir own preset updates once changed, and its delete arms first', async ({ page }) => {
     const jobcenter: Preset = { id: '7', name: 'Jobcenter', builtin: false, income: ['paid_work', 'gift'], expense_all: false, expense: COUNTABLE };
     const fake = newFake({
       payments: [payment(1)],
@@ -355,7 +355,7 @@ test.describe('#10635 the Book counts what she chose', () => {
     const empty = page.locator('[data-test="book-empty"]');
     await expect(empty).toContainText('Nothing counted yet');
     await expect(empty).toContainText('Payments and expenses in the categories you count appear here, by month.');
-    // The counting line still says what counts, so she can change it.
+    // The counting line still says what counts, so ze can change it.
     await expect(countingLine(page)).toBeVisible();
   });
 });
