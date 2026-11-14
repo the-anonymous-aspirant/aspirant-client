@@ -277,12 +277,14 @@ test.describe('#10603 Invoices: a receipt on a work expense', () => {
     await open(page, fake);
     await expect(page.locator('[data-test="book-row"]')).toHaveCount(2);
 
-    await openReceiptFor(page, 0);
+    // Both are paid on one day, so the row entered last (102) is first
+    // (§3.145 Decision 1): expense 101 is row 1.
+    await openReceiptFor(page, 1);
     await page.locator('[data-test="receipt-file-input"]').setInputFiles({ name: 'a.png', mimeType: 'image/png', buffer: img });
     await expectImagePreview(page, 60);
     await page.getByRole('button', { name: 'Close', exact: true }).click();
 
-    await openReceiptFor(page, 1);
+    await openReceiptFor(page, 0);
     await expect(page.locator('[data-test="receipt-none"]')).toHaveText('No receipt attached.');
     expect(fake.receipts.has(101)).toBe(true);
     expect(fake.receipts.has(102)).toBe(false);

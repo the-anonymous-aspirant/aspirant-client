@@ -85,3 +85,75 @@ export function groupInvoicesByMonth(rows) {
   if (drafts.length) groups.unshift({ key: DRAFTS_GROUP, label: 'Drafts', rows: drafts });
   return groups;
 }
+
+// Rows grouped by the month of `dateOf(row)` (§3.145 Decision 1): newest month
+// first, `[{ key, label, rows }]` with `key` "YYYY-MM". Rows keep the order
+// they came in, so the caller sorts them (newest day first) before grouping.
+export function groupByMonth(rows, dateOf) {
+  const months = new Map();
+  for (const row of rows) {
+    const key = monthKey(dateOf(row));
+    if (!months.has(key)) months.set(key, []);
+    months.get(key).push(row);
+  }
+  return [...months.keys()]
+    .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
+    .map((key) => ({ key, label: key ? monthLabel(key) : 'No date', rows: months.get(key) }));
+}
+
+// Which groups are open now, as a Set of keys (§3.145 Decision 3, §3.17):
+// - while a filter is active, every group, unless ze closed one (R2);
+// - otherwise zir own choice this visit (`chosen`, key -> open);
+// - otherwise the default: a lone group (R3), and whatever `defaultOpen` says.
+// `chosenWhileFiltered` is kept apart and dropped by the caller when the
+// filter changes, so clearing a filter brings back the folds from before.
+export function openGroupKeys(groups, { filtered = false, chosen = {}, chosenWhileFiltered = {}, defaultOpen }) {
+  const open = new Set();
+  for (const g of groups) {
+    let on;
+    if (filtered) on = g.key in chosenWhileFiltered ? chosenWhileFiltered[g.key] : true;
+    else if (g.key in chosen) on = chosen[g.key];
+    else on = groups.length === 1 || defaultOpen(g);
+    if (on) open.add(g.key);
+  }
+  return open;
+}
+
+// `Map(rowKey -> groupKey)` for a list of groups: a snapshot to compare
+// against after a reload.
+export function groupOfRows(groups, keyOf) {
+  const map = new Map();
+  for (const g of groups) for (const row of g.rows) map.set(keyOf(row), g.key);
+  return map;
+}
+
+// The rows that are new, or now in another group, since `before` (a
+// `groupOfRows` snapshot): `[{ key, group }]` in list order, so the first is
+// the newest. After a save or an import these are the groups to open and the
+// row to bring into view (§3.145 Decision 2).
+export function landedRows(before, groups, keyOf) {
+  const landed = [];
+  for (const g of groups) {
+    for (const row of g.rows) {
+      const key = keyOf(row);
+      if (before.get(key) !== g.key) landed.push({ key, group: g.key });
+    }
+  }
+  return landed;
+}
+
+// "September 2026", "September–November 2026" or "November 2026–January
+// 2027": where a batch of rows went, for the import line (§3.145 Decision 2).
+export function monthSpanLabel(keys) {
+  const sorted = [...new Set(keys)].filter(Boolean).sort();
+  if (!sorted.length) return '';
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  if (first === last) return monthLabel(first);
+  if (first.slice(0, 4) === last.slice(0, 4)) {
+    const [y, m] = first.split('-').map(Number);
+    const firstName = new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long' });
+    return `${firstName}–${monthLabel(last)}`;
+  }
+  return `${monthLabel(first)}–${monthLabel(last)}`;
+}
