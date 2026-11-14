@@ -1,14 +1,26 @@
 <template>
   <div id="myVapp">
     <div class="app-container">
-        <!-- Mobile hamburger menu -->
-        <div v-if="isMobile" class="mobile-menu-toggle" @click="toggleSidebar">
-          <div class="hamburger-icon">
+        <!-- Mobile menu button. A real button with a name and a 44px target,
+             whose ink follows the surface under it (UX walk AP2, system_3
+             #10978): amber on the light page measured 1.41:1. Closed, it sits
+             on the page and takes body ink; open, it sits on the dark drawer
+             and takes the on-dark ink. -->
+        <button
+          v-if="isMobile"
+          type="button"
+          class="mobile-menu-toggle"
+          :class="{ 'mobile-menu-toggle--over-drawer': !sidebarHidden }"
+          :aria-label="sidebarHidden ? 'Open menu' : 'Close menu'"
+          :aria-expanded="String(!sidebarHidden)"
+          @click="toggleSidebar"
+        >
+          <span class="hamburger-icon" aria-hidden="true">
             <span></span>
             <span></span>
             <span></span>
-          </div>
-        </div>
+          </span>
+        </button>
         
         <!-- Mobile overlay. Not wired to v-overlay-history (#4172). The nav
              drawer starts CLOSED on a phone and opens only from the toggle
@@ -95,27 +107,48 @@
     overflow-y: auto;
   }
 
+  /* A 44px target around the 30x24 bars, offset so the bars sit exactly where
+     they always did (top and left --space-lg) and the content inset below is
+     unchanged. The bars are currentColor, so the button's ink is theirs. */
   .mobile-menu-toggle {
     position: fixed;
-    top: var(--space-lg);
-    left: var(--space-lg);
+    top: calc(var(--space-lg) - 10px);
+    left: calc(var(--space-lg) - 7px);
     z-index: calc(var(--z-index-sticky) + 2);
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-md);
+    background: none;
+    color: var(--text-body);
     cursor: pointer;
     display: none;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-menu-toggle--over-drawer {
+    color: var(--text-on-dark);
+  }
+
+  .mobile-menu-toggle:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
   }
 
   .hamburger-icon {
+    display: block;
     width: 30px;
     height: 24px;
     position: relative;
-    cursor: pointer;
   }
 
   .hamburger-icon span {
     display: block;
     height: 3px;
     width: 100%;
-    background-color: var(--brand-primary);
+    background-color: currentColor;
     margin: 6px 0;
     transition: var(--transition-moderate);
     border-radius: 2px;
@@ -152,7 +185,7 @@
   /* Mobile styles */
   @media (max-width: 767.98px) {
     .mobile-menu-toggle {
-      display: block;
+      display: flex;
     }
 
     /* The top inset clears the fixed drawer toggle: its --space-lg offset,
