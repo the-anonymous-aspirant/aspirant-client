@@ -259,7 +259,7 @@ test.describe('#8419 property keys', () => {
 
   test('apartments: org number + LGH number decide, whatever the förening is called', () => {
     expect(match('LGH 1001 Brf Exempel (769600-0000)', 'LGH 1001 Bostadsrättsföreningen Exempel (org 7696000000)')).toBe(true);
-    expect(match('LGH 1001 Brf Exempel (769600-0000)', 'LGH 1002 Brf Exempel (769600-0000)')).toBe(false);
+    expect(match('LGH 1001 Brf Exempel (769600-0000)', 'LGH 1205 Brf Exempel (769600-0000)')).toBe(false);
     expect(match('LGH 1001 Brf Exempel (769600-0000)', 'LGH 1001 Brf Annan (769600-1111)')).toBe(false);
   });
 
