@@ -14,18 +14,28 @@
          generator. #4460. -->
     <p class="generator-name">{{ generatorNames[currentGenerator] }}</p>
 
-    <div class="generator-card">
+    <!-- Loading, and a load that failed, are said by the shared ReadState; the
+         preview and the actions appear only once a generator is loaded. Before,
+         a failed load wrote an error into the generator's HTML, so "Loading
+         generator..." stayed and Download offered that error as a PDF
+         (system_3 #11025). -->
+    <ReadState
+      v-if="generatorState !== 'ready'"
+      :state="generatorState"
+      heading="The generator could not be loaded"
+      :message="generatorError"
+      loading-label="Loading the generator"
+      skeleton="block"
+      height="20rem"
+      data-test="generator-read-state"
+      @retry="loadGenerator(currentGenerator)"
+    />
+
+    <div v-else class="generator-card">
       <div class="preview-container">
         <h3>Preview</h3>
         <div class="preview-box">
-          <iframe
-            v-if="previewUrl"
-            :srcdoc="htmlContent"
-            class="preview-iframe"
-          ></iframe>
-          <div v-else class="loading">
-            <p>Loading generator...</p>
-          </div>
+          <iframe :srcdoc="htmlContent" class="preview-iframe"></iframe>
         </div>
       </div>
 
@@ -43,11 +53,14 @@
 
 <script>
 import { AspButton } from '@aspirant/design-system';
+import ReadState from '../../../components/ReadState.vue';
+import { readError } from '../../../components/readError.js';
 
 export default {
   name: 'RemarkablePdfs',
   components: {
     AspButton,
+    ReadState,
   },
   data() {
     return {
@@ -59,6 +72,9 @@ export default {
       },
       htmlContent: '',
       previewUrl: '',
+      // 'loading' | 'failed' | 'ready', and why it failed, in words.
+      generatorState: 'loading',
+      generatorError: '',
       generators: {
         planner: 'https://raw.githubusercontent.com/the-anonymous-aspirant/remarkable-pdf-journal/main/generate_planner.html'
       }
@@ -69,17 +85,24 @@ export default {
       this.currentGenerator = type;
       this.htmlContent = '';
       this.previewUrl = '';
+      this.generatorState = 'loading';
+      this.generatorError = '';
 
       try {
         const response = await fetch(this.generators[type]);
-        if (!response.ok) throw new Error('Failed to fetch HTML');
+        if (!response.ok) throw Object.assign(new Error('generator fetch'), { status: response.status });
 
         const html = await response.text();
         this.htmlContent = html;
         this.previewUrl = this.generators[type];
+        this.generatorState = 'ready';
       } catch (error) {
+        // The generator lives in a public repository, so a 401 or 403 here is
+        // not about this member's access: it is a failed load like any other.
         console.error('Error loading generator:', error);
-        this.htmlContent = '<p>Error loading generator. Please try again.</p>';
+        const { reason } = readError(error.status === 401 || error.status === 403 ? { status: 500 } : error);
+        this.generatorError = reason;
+        this.generatorState = 'failed';
       }
     },
 
@@ -164,14 +187,6 @@ export default {
   border: none;
   transform: scale(0.5);
   transform-origin: 0 0;
-}
-
-.loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-on-light);
 }
 
 .actions {

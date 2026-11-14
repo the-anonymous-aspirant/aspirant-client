@@ -6,6 +6,23 @@
       Berlin · part-time · English-speaking — deduplicated overview across the scraped boards.
     </p>
 
+    <!-- One state for the page, in place of its body (system_3 #11025):
+         a 403 from any read (the page is not this member's, no retry), a 401
+         (the session ended), or a failed jobs read (the list is the page, so
+         its failure is said once, not again by the about and sources lines).
+         Before, each panel printed the server's own message around an empty
+         shell. -->
+    <ReadState
+      v-if="pageState"
+      :state="pageState"
+      :heading="pageState === 'failed' ? 'The jobs could not be loaded' : ''"
+      :message="pageState === 'failed' ? listError.reason : ''"
+      data-test="jobs-page-state"
+      @retry="fetchAll"
+    />
+
+    <template v-else>
+
     <section
       v-if="about"
       class="about-me"
@@ -44,13 +61,13 @@
       class="about-me-error"
       data-test="about-me-error"
     >
-      {{ aboutLoadError }}
+      The description of what you are looking for could not be loaded. {{ aboutLoadError.reason }}
     </p>
 
     <details class="sources-panel" data-test="sources-panel">
       <summary class="sources-panel-summary" data-test="sources-panel-summary">
         <span>Sources &amp; criteria</span>
-        <span v-if="sourcesLoadError" class="sources-status error">{{ sourcesLoadError }}</span>
+        <span v-if="sourcesLoadError" class="sources-status error">Sources could not be loaded. {{ sourcesLoadError.reason }}</span>
         <span v-else-if="sourcesLoading" class="sources-status muted">Laddar…</span>
         <span v-else class="sources-status muted">
           {{ sources.length }} source{{ sources.length === 1 ? '' : 's' }}
@@ -178,7 +195,7 @@
         />
       </div>
       <span v-if="loading" class="filter-status">Laddar…</span>
-      <span v-else-if="loadError" class="filter-status error">{{ loadError }}</span>
+      <span v-else-if="actionError" class="filter-status error" role="alert" data-test="jobs-action-error">{{ actionError }}</span>
       <span v-else class="filter-status muted">{{ total }} hits</span>
     </div>
 
@@ -210,7 +227,7 @@
         <tbody>
           <tr v-if="!loading && !jobs.length">
             <td colspan="5" class="empty-cell" data-test="jobs-empty">
-              <span v-if="loadError">—</span>
+              <span v-if="listError">—</span>
               <span v-else-if="query">No jobs match “{{ query }}”.</span>
               <span v-else-if="tab === 'saved'">No saved jobs yet — press <em>Save</em> on a row to add one.</span>
               <span v-else>No jobs in the feed yet — the scrapers may not have run.</span>
@@ -315,12 +332,15 @@
       <span class="page-indicator">Page {{ page }} of {{ totalPages }}</span>
       <AspButton type="button" variant="secondary" size="sm" :disabled="page >= totalPages || loading" @click="changePage(page + 1)">Next ›</AspButton>
     </div>
+    </template>
   </div>
 </template>
 
 <script>
   import axios from 'axios';
   import { AspButton, AspInput, AspTimeSince, AspTooltip, AspDataTable } from '@aspirant/design-system';
+  import ReadState from '../../../components/ReadState.vue';
+  import { readError } from '../../../components/readError.js';
 
   const PER_PAGE = 25;
   const FILTER_DEBOUNCE_MS = 300;
@@ -343,7 +363,7 @@
 
   export default {
     name: 'JobsView',
-    components: { AspButton, AspInput, AspTimeSince, AspTooltip, AspDataTable },
+    components: { AspButton, AspInput, AspTimeSince, AspTooltip, AspDataTable, ReadState },
     data() {
       return {
         // #4278-A2: the scraper-sources panel is a uniform read → AspDataTable.
@@ -365,7 +385,10 @@
         tab: 'all',
         query: '',
         loading: false,
-        loadError: null,
+        // null, or { kind, reason } from readError() for the jobs list read.
+        listError: null,
+        // A failed Save or Hide on one row, in words; the list stays.
+        actionError: '',
         actingIds: new Set(),
         debounceTimer: null,
         sources: [],
@@ -377,6 +400,16 @@
       };
     },
     computed: {
+      // Any read answered 403: the page is someone else's. Any read answered
+      // 401: the session ended. The jobs read failed: nothing to show. Each
+      // is said once, for the page (#11025).
+      pageState() {
+        const kinds = [this.listError, this.aboutLoadError, this.sourcesLoadError].map((e) => e && e.kind);
+        if (kinds.includes('refused')) return 'refused';
+        if (kinds.includes('signed-out')) return 'signed-out';
+        if (this.listError && this.listError.kind === 'failed' && !this.loading) return 'failed';
+        return '';
+      },
       totalPages() {
         if (!this.total) return 1;
         return Math.max(1, Math.ceil(this.total / this.perPage));
@@ -412,9 +445,15 @@
           this.fetchJobs();
         }, FILTER_DEBOUNCE_MS);
       },
+      // Every read of the page, again: Try again on the page's failed state.
+      fetchAll() {
+        this.fetchJobs();
+        this.fetchSources();
+        this.fetchAbout();
+      },
       async fetchJobs() {
         this.loading = true;
-        this.loadError = null;
+        this.listError = null;
         try {
           const params = {
             sort: this.sort,
@@ -427,10 +466,7 @@
           this.jobs = resp.data.jobs || [];
           this.total = resp.data.total ?? 0;
         } catch (err) {
-          this.loadError =
-            err.response?.data?.error?.message ||
-            err.response?.data?.detail ||
-            'Could not fetch jobs';
+          this.listError = readError(err);
           this.jobs = [];
           this.total = 0;
         } finally {
@@ -439,6 +475,7 @@
       },
       async onSave(job) {
         if (this.actingIds.has(job.id)) return;
+        this.actionError = '';
         this.actingIds.add(job.id);
         try {
           const resp = await axios.patch(`/api/jobs/${job.id}/save`);
@@ -448,10 +485,7 @@
             this.jobs.splice(idx, 1, { ...this.jobs[idx], ...updated });
           }
         } catch (err) {
-          this.loadError =
-            err.response?.data?.error?.message ||
-            err.response?.data?.detail ||
-            'Could not save row';
+          this.actionError = `That job was not saved. ${readError(err).reason}`;
         } finally {
           this.actingIds.delete(job.id);
         }
@@ -465,10 +499,7 @@
           const resp = await axios.get('/api/jobs/about');
           this.about = resp.data || null;
         } catch (err) {
-          this.aboutLoadError =
-            err.response?.data?.error?.message ||
-            err.response?.data?.detail ||
-            'Could not load target description';
+          this.aboutLoadError = readError(err);
           this.about = null;
         }
       },
@@ -480,10 +511,7 @@
           this.sources = resp.data.sources || [];
           this.globalCriteria = resp.data.global_criteria || null;
         } catch (err) {
-          this.sourcesLoadError =
-            err.response?.data?.error?.message ||
-            err.response?.data?.detail ||
-            'Could not fetch sources';
+          this.sourcesLoadError = readError(err);
           this.sources = [];
           this.globalCriteria = null;
         } finally {
@@ -492,6 +520,7 @@
       },
       async onHide(job) {
         if (this.actingIds.has(job.id)) return;
+        this.actionError = '';
         this.actingIds.add(job.id);
         try {
           await axios.patch(`/api/jobs/${job.id}/hide`);
@@ -504,19 +533,14 @@
             this.fetchJobs();
           }
         } catch (err) {
-          this.loadError =
-            err.response?.data?.error?.message ||
-            err.response?.data?.detail ||
-            'Could not hide row';
+          this.actionError = `That job was not hidden. ${readError(err).reason}`;
         } finally {
           this.actingIds.delete(job.id);
         }
       },
     },
     mounted() {
-      this.fetchJobs();
-      this.fetchSources();
-      this.fetchAbout();
+      this.fetchAll();
     },
     beforeUnmount() {
       if (this.debounceTimer) clearTimeout(this.debounceTimer);
@@ -586,9 +610,9 @@
   .about-me-error {
     margin: 0 0 var(--space-md);
     padding: var(--space-sm) var(--space-md);
-    border: 1px solid var(--text-error, #c00);
+    border: 1px solid var(--feedback-error-solid);
     border-radius: var(--radius-sm, 4px);
-    color: var(--text-error, #c00);
+    color: var(--feedback-error-text);
     font-size: var(--text-sm);
   }
 
@@ -633,7 +657,7 @@
   }
 
   .sources-status.error {
-    color: var(--text-error, #c00);
+    color: var(--feedback-error-text-on-dark);
   }
 
   .sources-status.muted {
@@ -805,7 +829,7 @@
   }
 
   .filter-status.error {
-    color: var(--text-error, #c00);
+    color: var(--feedback-error-text);
   }
 
   .filter-status.muted {
