@@ -330,3 +330,57 @@ test.describe('#4446 strips held out of the port, and why', () => {
     await expect(scale.locator('button.active')).toHaveText('4');
   });
 });
+
+/**
+ * UX walk AG2 (#10922, system_3 #10994): the six emotion boxes sat in one
+ * unwrapped ~680px-wide row, so a 390px phone either scrolled sideways or
+ * loaded zoomed out, and each label took the page's fixed ink rather than
+ * one chosen for its own fill — in dark, "Scared" on yellow measured about
+ * 1.3:1.
+ */
+test.describe('AG2 (#10994) — the emotion grid wraps at phone width; each label clears 4.5:1', () => {
+  test('at 390px the six emotion boxes wrap onto more than one row, with no sideways scroll', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/applications/emotional-excellence');
+    await dismissMobileSidebarIfPresent(page);
+
+    const boxes = page.locator('.emotion-container .emotion-box');
+    await expect(boxes).toHaveCount(6);
+
+    const tops = await boxes.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().top));
+    expect(new Set(tops).size, 'boxes span at least two rows').toBeGreaterThan(1);
+
+    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(scrollWidth, 'no page-wide horizontal scroll at 390px').toBeLessThanOrEqual(390);
+  });
+
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`each of the six emotion boxes' label clears 4.5:1 against its own fill, in ${scheme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto('/applications/emotional-excellence');
+      await dismissMobileSidebarIfPresent(page);
+
+      const boxes = page.locator('.emotion-container .emotion-box');
+      const count = await boxes.count();
+      expect(count).toBe(6);
+      for (let i = 0; i < count; i += 1) {
+        const ratio = await contrastRatio(boxes.nth(i));
+        expect(ratio, `box ${i} in ${scheme}`).toBeGreaterThanOrEqual(4.5);
+      }
+    });
+  }
+
+  test("a box's derived label ink is the same in light and dark (derived from its fill, not a theme token)", async ({ page }) => {
+    const readInk = async (scheme: 'light' | 'dark') => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto('/applications/emotional-excellence');
+      await dismissMobileSidebarIfPresent(page);
+      return page
+        .locator('.emotion-container .emotion-box')
+        .first()
+        .evaluate((el) => getComputedStyle(el).color);
+    };
+
+    expect(await readInk('dark')).toBe(await readInk('light'));
+  });
+});
