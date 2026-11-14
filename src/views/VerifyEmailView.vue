@@ -2,9 +2,12 @@
   <div class="token-view page">
     <h1>Confirm your address</h1>
     <AspCard class="token-view-card" padding="md">
-      <p v-if="!token" class="message message--error">
-        This link is missing its confirmation code. Open the link from your email again, or
-        request a new one.
+      <!-- No door to name (UX walk AP3, system_3 #10979): nothing on this site
+           sends a new confirmation link, so the page says so instead of
+           naming a step nobody can take. The resend is #11143. -->
+      <p v-if="!token" class="message message--error" data-test="verify-no-code">
+        This link is missing its confirmation code. Open the link from your email again: the
+        code is part of the link, so a link copied in part loses it.
       </p>
 
       <template v-else-if="state === 'ready'">
@@ -26,7 +29,12 @@
       </template>
 
       <template v-else>
-        <p class="message message--error">{{ error }}</p>
+        <p class="message message--error" data-test="verify-failed">{{ error }}</p>
+        <!-- An already-used link usually means the address is confirmed: the
+             one step that may work is signing in. -->
+        <p v-if="linkDead" class="message" data-test="verify-try-sign-in">
+          If you confirmed your address already, <RouterLink to="/login">sign in</RouterLink>.
+        </p>
       </template>
     </AspCard>
   </div>
@@ -59,6 +67,8 @@
         state: 'ready',
         busy: false,
         error: '',
+        // The API refused the link itself (400).
+        linkDead: false,
       };
     },
     computed: {
@@ -87,8 +97,11 @@
             // guesses which ones were structurally right. Show what it said
             // and do not try to be more specific.
             const body = await response.json().catch(() => null);
+            this.linkDead = response.status === 400;
             this.error =
-              body?.error?.message || 'That link is invalid or has expired. Request a new one.';
+              response.status === 400
+                ? 'That confirmation link is invalid, already used or expired. A new one cannot be requested from this site yet.'
+                : body?.error?.message || 'That did not work. Try again.';
             this.state = 'failed';
             return;
           }
