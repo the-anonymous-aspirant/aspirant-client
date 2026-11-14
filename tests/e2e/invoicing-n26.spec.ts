@@ -778,6 +778,22 @@ test.describe('#10432-A1 N26 import — outgoing rows as work expenses', () => {
     await expect(page.locator('[data-test="book-row"]').filter({ hasText: 'Pigmenti e tele' })).toHaveCount(1);
   });
 
+  // §3.145 Decision 2 (system_3 #10636): an import says where its rows went,
+  // and the month they landed in opens.
+  test('the import line names the month its rows went to, and that month opens', async ({ page }) => {
+    const fake = withOutgoing([outgoingRow(1, { paid_on: '2026-06-11' })]);
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+    for (let i = 0; i < 2; i++) await checkbox(page, i).uncheck();
+    await expenseCheck(page, 0).check();
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
+    await expect(page.locator('[data-test="summary-landed"]')).toHaveText('The new rows are in June 2026.');
+    const june = page.locator('[data-test="ledger-group"][data-group="2026-06"]');
+    await expect(june).toHaveAttribute('open', '');
+    await expect(june.locator('[data-test="expense-row"]', { hasText: 'Pigmenti e tele' })).toBeVisible();
+  });
+
   test('an expense already in the book has no checkbox or picker; a look-alike is flagged and starts unticked', async ({ page }) => {
     const fake = withOutgoing([outgoingRow(1, { already_imported: true }), outgoingRow(2, { possible_duplicate_of: 41 })]);
     await open(page, fake);

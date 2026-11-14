@@ -172,13 +172,26 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
     expect(gap, 'the separator sits on the line of the text after it').toBeLessThan(lineHeight / 2);
   });
 
-  test('on a 390×844 phone the first payment card is on the first screen', async ({ page }) => {
+  // The list folds by month (§3.145, system_3 #10636), so the first group's
+  // summary is the list's first content (design_agent c68002 and c68157, the
+  // note under §3.145 Decision 4): it is wholly on the first screen, the
+  // newest month is open, and the first card starts directly under it. On a
+  // phone the gaps above the list are 4px to make that hold.
+  test('on a 390×844 phone the first month line is on the first screen, with the first card directly under it', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await open(page, 'light');
-    const card = page.locator('[data-test="payment-row"]').first();
+    const group = page.locator('[data-test="ledger-group"]').first();
+    const summary = group.locator('[data-test="ledger-group-summary"]');
+    await expect(summary).toBeVisible();
+    await expect(group).toHaveAttribute('open', '');
+    const summaryBottom = await summary.evaluate((el) => el.getBoundingClientRect().bottom);
+    expect(summaryBottom, 'first month summary ends above the fold').toBeLessThanOrEqual(844);
+    const card = group.locator('[data-test="payment-row"], [data-test="expense-row"]').first();
     await expect(card).toBeVisible();
     const top = await card.evaluate((el) => el.getBoundingClientRect().top);
-    expect(top, 'first payment card starts above the fold').toBeLessThan(844);
+    // Nothing between them but the list's own gap.
+    expect(top - summaryBottom, 'first card starts directly under the summary').toBeGreaterThanOrEqual(0);
+    expect(top - summaryBottom, 'first card starts directly under the summary').toBeLessThanOrEqual(12);
     const cardHeight = await page.locator('[data-test="profile-card"]').evaluate((el) => el.getBoundingClientRect().height);
     expect(cardHeight, 'Issuer card under 140px').toBeLessThan(140);
   });
