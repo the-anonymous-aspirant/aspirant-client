@@ -78,21 +78,32 @@ async function open(page: Page, fake: Fake): Promise<void> {
 const group = (page: Page, letter: string) => page.locator(`[data-test="client-group"][data-letter="${letter}"]`);
 const visibleRows = (page: Page) => page.locator('[data-test="client-row"]:visible');
 
-test.describe('#10817 Clients fold by first letter', () => {
-  test('every letter starts folded, in German order, each summary counting its rows', async ({ page }) => {
-    await open(page, { clients: [client(1, 'Zeller'), client(2, 'Ärztin Weber'), client(3, 'Anna'), client(4, '3D-Druck'), client(5, 'bauer')] });
+// Letters fold only when the book is long: more than 10 clients (§3.145
+// Decision 3, amended 2026-11-14; system_3 #11102). `book` pads a list of
+// names to `n` clients with invented ones under letters the tests do not read.
+const FILLER = ['Kai Muster', 'Lena Probe', 'Moritz Beispiel', 'Nina Test', 'Paul Platzhalter', 'Rita Exempel', 'Sven Testsson', 'Tara Muster', 'Uwe Probe', 'Vera Beispiel', 'Wim Test'];
+const book = (names: string[], n = 11) =>
+  [...names, ...FILLER.slice(0, Math.max(0, n - names.length))].map((name, i) => client(i + 1, name));
+
+test.describe('#10817 Clients fold by first letter (a book of more than 10)', () => {
+  test('every letter starts folded, in German order, each summary counting its clients', async ({ page }) => {
+    await open(page, { clients: book(['Zeller', 'Ärztin Weber', 'Anna', '3D-Druck', 'bauer'], 11) });
     const groups = page.locator('[data-test="client-group"]');
-    await expect(groups).toHaveCount(4);
-    expect(await groups.evaluateAll((els) => els.map((e) => e.getAttribute('data-letter')))).toEqual(['A', 'B', 'Z', '#']);
-    expect(await groups.evaluateAll((els) => els.map((e) => (e as HTMLDetailsElement).open))).toEqual([false, false, false, false]);
+    const letters = await groups.evaluateAll((els) => els.map((e) => e.getAttribute('data-letter')));
+    expect(letters.slice(0, 2)).toEqual(['A', 'B']);
+    expect(letters.slice(-2)).toEqual(['Z', '#']);
+    expect(await groups.evaluateAll((els) => els.every((e) => !(e as HTMLDetailsElement).open))).toBe(true);
     await expect(visibleRows(page)).toHaveCount(0);
-    await expect(group(page, 'A').locator('[data-test="client-group-summary"]')).toHaveText('A · 2');
+    await expect(page.locator('[data-test="client-list"]')).toHaveCount(0);
+    // The count names its noun (#11102): plural, and singular for one.
+    await expect(group(page, 'A').locator('[data-test="client-group-summary"]')).toHaveText('A · 2 clients');
+    await expect(group(page, 'Z').locator('[data-test="client-group-summary"]')).toHaveText('Z · 1 client');
     // The count is the rows the group renders.
     await expect(group(page, 'A').locator('[data-test="client-row"]')).toHaveCount(2);
   });
 
   test('opening a letter shows its clients, Ärztin among the A', async ({ page }) => {
-    await open(page, { clients: [client(1, 'Zeller'), client(2, 'Ärztin Weber'), client(3, 'Anna')] });
+    await open(page, { clients: book(['Zeller', 'Ärztin Weber', 'Anna']) });
     await group(page, 'A').locator('[data-test="client-group-summary"]').click();
     await expect(group(page, 'A')).toHaveAttribute('open', '');
     await expect(visibleRows(page)).toHaveCount(2);
@@ -101,15 +112,16 @@ test.describe('#10817 Clients fold by first letter', () => {
     await expect(group(page, 'Z')).not.toHaveAttribute('open', '');
   });
 
-  test('a book with one letter shows it open', async ({ page }) => {
-    await open(page, { clients: [client(1, 'Galerie Nord'), client(2, 'Gärtnerei Süd')] });
+  test('a book of 11 under one letter shows it open', async ({ page }) => {
+    await open(page, { clients: Array.from({ length: 11 }, (_, i) => client(i + 1, `Galerie ${String.fromCharCode(65 + i)}`)) });
     await expect(page.locator('[data-test="client-group"]')).toHaveCount(1);
     await expect(group(page, 'G')).toHaveAttribute('open', '');
-    await expect(visibleRows(page)).toHaveCount(2);
+    await expect(group(page, 'G').locator('[data-test="client-group-summary"]')).toHaveText('G · 11 clients');
+    await expect(visibleRows(page)).toHaveCount(11);
   });
 
   test('a new client opens its letter and is in view; an opened letter stays open through the refetch', async ({ page }) => {
-    await open(page, { clients: [client(1, 'Zeller'), client(2, 'Anna'), client(3, 'Bach')] });
+    await open(page, { clients: book(['Zeller', 'Anna', 'Bach']) });
     await group(page, 'Z').locator('[data-test="client-group-summary"]').click();
     await expect(group(page, 'Z')).toHaveAttribute('open', '');
 
@@ -125,5 +137,44 @@ test.describe('#10817 Clients fold by first letter', () => {
     // Zir own choice survives the refetch; the untouched letters stay folded.
     await expect(group(page, 'Z')).toHaveAttribute('open', '');
     await expect(group(page, 'A')).not.toHaveAttribute('open', '');
+  });
+});
+
+test.describe('#11102 a book of 10 or fewer is one flat list', () => {
+  test('three clients: every name on the first screen at 390x844, no letter row', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open(page, { clients: [client(1, 'Zeller'), client(2, 'Ärztin Weber'), client(3, 'Anna')] });
+    await expect(page.locator('[data-test="client-group"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="client-group-summary"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="client-list"]')).toHaveCount(1);
+    await expect(visibleRows(page)).toHaveCount(3);
+    for (const name of ['Anna', 'Ärztin Weber', 'Zeller']) {
+      await expect(page.getByText(name, { exact: true })).toBeInViewport();
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+  });
+
+  test('the flat list keeps the German order, "#" last', async ({ page }) => {
+    await open(page, { clients: [client(1, 'Zeller'), client(2, '3D-Druck'), client(3, 'Ärztin Weber'), client(4, 'bauer'), client(5, 'Anna')] });
+    const names = await visibleRows(page).evaluateAll((els) => els.map((e) => (e.querySelector('.client-name, strong') as HTMLElement).innerText.trim()));
+    expect(names).toEqual(['Anna', 'Ärztin Weber', 'bauer', 'Zeller', '3D-Druck']);
+  });
+
+  test('ten is still flat, eleven folds', async ({ page }) => {
+    const fake = { clients: book(['Anna'], 10) };
+    await open(page, fake);
+    await expect(page.locator('[data-test="client-list"]')).toHaveCount(1);
+    await expect(visibleRows(page)).toHaveCount(10);
+
+    await page.locator('[data-test="client-add"]').click();
+    const form = page.locator('[data-test="client-form"]');
+    await form.getByLabel('Name').fill('Bruno Beispiel');
+    await page.locator('[data-test="client-save"]').click();
+    await expect(form).toBeHidden();
+    await expect(page.locator('[data-test="client-list"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="client-group"]').first()).toBeAttached();
+    // The new client's letter opens and the client is in view.
+    await expect(group(page, 'B')).toHaveAttribute('open', '');
+    await expect(group(page, 'B').locator('[data-test="client-row"]', { hasText: 'Bruno Beispiel' })).toBeInViewport();
   });
 });
