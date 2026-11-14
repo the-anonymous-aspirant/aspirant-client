@@ -127,6 +127,12 @@
       </p>
     </AspCard>
 
+    <!-- §3.145 Decision 2: an import says where its rows went, so a back-fill
+         into an old month is not hunted for. -->
+    <p v-if="landedIn && (summary || n26Summary)" class="summary__where muted" data-test="summary-landed">
+      The new rows are in {{ landedIn }}.
+    </p>
+
     <!-- §3.143 Decision 6: the removed rows open in place of the list, with
          "Back to transactions" (system_3 #10633). -->
     <RemovedRows
@@ -234,8 +240,11 @@
       heading="Nothing matches this filter"
       data-test="payments-filtered-empty"
     />
-    <template v-else-if="narrow">
-    <div class="select-all" data-test="select-all-shown">
+    <!-- §3.145: the list folds by the month the money moved, newest first.
+         The one "select all" sits above the months on both layouts and counts
+         rows in open months only (Decision 5). -->
+    <template v-else>
+    <div v-if="selectableShown.length" class="select-all" data-test="select-all-shown">
       <AspCheckbox
         :model-value="allShownSelected"
         :indeterminate="someShownSelected"
@@ -243,17 +252,28 @@
         @update:model-value="selectAllShown"
       />
     </div>
+    <details
+      v-for="group in groups"
+      :key="group.key"
+      class="ledger-group"
+      :open="openKeys.has(group.key)"
+      data-test="ledger-group"
+      :data-group="group.key"
+      @toggle="onGroupToggle(group.key, $event)"
+    >
+    <summary class="fold-summary ledger-group__summary" data-test="ledger-group-summary">{{ group.label }} · {{ group.rows.length }}</summary>
     <!-- §3.114 card in §3.143 Decision 3's order: the checkbox, who top-left,
          the amount top-right, then the date and source muted, then what it
          was for, then the controls. -->
-    <ul class="payment-cards" aria-label="Money in and out">
+    <ul v-if="narrow" class="payment-cards" :aria-label="`Money in and out: ${group.label}`">
       <li
-        v-for="row in shown"
+        v-for="row in group.rows"
         :key="row.key"
         class="payment-card"
         :class="{ 'payment-card--tap': !!(row.payment || row.expense) }"
         :data-test="row.direction === 'in' ? 'payment-row' : 'expense-row'"
         :data-txn="row.transaction_id"
+        :data-row-key="row.key"
         :data-direction="row.direction"
         @click="onCardTap(row, $event)"
       >
@@ -313,25 +333,15 @@
         <span v-if="!inBook(row)" class="muted not-in-book" data-test="row-not-in-book">Not in the Book</span>
       </li>
     </ul>
-    </template>
     <AspDataTable
       v-else
       :columns="columns"
-      :rows="shown"
+      :rows="group.rows"
       row-key="key"
       density="compact"
-      caption="Money in and out"
-      :row-attrs="(row) => ({ 'data-test': row.direction === 'in' ? 'payment-row' : 'expense-row', 'data-txn': row.transaction_id, 'data-direction': row.direction })"
+      :caption="`Money in and out: ${group.label}`"
+      :row-attrs="(row) => ({ 'data-test': row.direction === 'in' ? 'payment-row' : 'expense-row', 'data-txn': row.transaction_id, 'data-direction': row.direction, 'data-row-key': row.key })"
     >
-      <template #header-select>
-        <AspCheckbox
-          :model-value="allShownSelected"
-          :indeterminate="someShownSelected"
-          aria-label="Select all shown rows"
-          data-test="select-all-shown"
-          @update:model-value="selectAllShown"
-        />
-      </template>
       <template #cell-select="{ row }">
         <AspCheckbox
           v-if="selectable(row)"
@@ -404,6 +414,8 @@
         <span class="nowrap amount" :class="row.direction === 'in' ? 'in-amount' : 'out-amount'" data-test="row-amount">{{ signedAmount(row) }}</span>
       </template>
     </AspDataTable>
+    </details>
+    </template>
     <!-- Absent at zero (§3.133 Decision 5). -->
     <AspButton v-if="removedCount" variant="ghost" class="removed-show" data-test="removed-show" @click="openRemoved('all')">
       Show {{ removedCount }} removed row{{ removedCount === 1 ? '' : 's' }}
@@ -477,6 +489,7 @@
     createDraft,
   } from './api.js';
   import { transactionRows } from './ledgerRows.js';
+  import { groupByMonth, landedRows, monthKey, monthSpanLabel, openGroupKeys } from './listGroups.js';
   import { countsInBook } from './bookSelection.js';
 
   // "2 of 5 kept their category: 2026-08-12 €40.00, 2026-08-14 €25.00 (on an
@@ -527,6 +540,18 @@
           { value: 'out', label: 'Out' },
         ],
         categoryFilter: 'all',
+        // Months ze opened or closed this visit, by key; a month not in here
+        // takes the default. Kept through a refetch, never stored (§3.145
+        // Decision 3).
+        openGroups: {},
+        // The same while a filter is active, when every month starts open
+        // (§3.17 R2). Dropped whenever the filter changes or clears, so
+        // clearing it brings back zir folds from before.
+        filterOpen: {},
+        // Set by an import just before it asks for a reload, so the reload
+        // can name where the new rows went; and the months it named.
+        importPending: false,
+        landedIn: '',
         saving: new Set(),
         rowError: '',
         narrow: false,
@@ -574,7 +599,10 @@
         paypalExpensePrior: { removed: 0, deleted: 0 },
         columns: [
           { key: 'select', label: '', sortable: false, width: '2.5rem' },
-          { key: 'paid_on', label: 'Date' },
+          // Every column has a width and the layout is fixed, so the columns
+          // line up from one month's table to the next (§3.145 Decision 6).
+          // "Who and what for" takes what the others leave.
+          { key: 'paid_on', label: 'Date', width: '7.5rem' },
           { key: 'who', label: 'Who and what for', sortable: false },
           // Width measured at 1280 with the sidebar open, where the table has
           // 968px (#8407): the cell pads 12px a side and a table-cell trigger
@@ -584,7 +612,7 @@
           { key: 'category', label: 'Category', sortable: false, width: '10.25rem' },
           { key: 'client_id', label: 'Client', sortable: false, width: '10.25rem' },
           // Last, as the row reads (§3.143 Decision 3).
-          { key: 'amount', label: 'Amount', align: 'right', sortable: false },
+          { key: 'amount', label: 'Amount', align: 'right', sortable: false, width: '8rem' },
         ],
       };
     },
@@ -786,8 +814,31 @@
       },
       // The shown rows a checkbox can act on: not on an issued invoice
       // (§3.129 Decisions 4 and 6, design_agent c62100 on #10010).
+      filtered() {
+        return this.direction !== 'all' || this.categoryFilter !== 'all';
+      },
+      // The shown rows by the month the money moved, newest month first
+      // (§3.145 Decision 1); `rows` is already newest day first.
+      groups() {
+        return groupByMonth(this.shown, (r) => r.paid_on);
+      },
+      // Open now: every month under a filter, else zir own choice, else the
+      // newest month (§3.145 Decision 3, §3.17 R2 and R3).
+      openKeys() {
+        const newest = this.groups.length ? this.groups[0].key : '';
+        return openGroupKeys(this.groups, {
+          filtered: this.filtered,
+          chosen: this.openGroups,
+          chosenWhileFiltered: this.filterOpen,
+          defaultOpen: (g) => g.key === newest,
+        });
+      },
+      // The rows ze can see: a folded month's rows are not shown (§3.129).
+      visibleRows() {
+        return this.groups.filter((g) => this.openKeys.has(g.key)).flatMap((g) => g.rows);
+      },
       selectableShown() {
-        return this.shown.filter((r) => this.selectable(r));
+        return this.visibleRows.filter((r) => this.selectable(r));
       },
       allShownSelected() {
         return this.selectableShown.length > 0 && this.selectableShown.every((r) => this.selected.includes(r.key));
@@ -810,11 +861,41 @@
         this.loadRemoved();
       },
       // The selection never holds a row the owner cannot see (§3.25): a
-      // filter change or a reload unselects rows that left the view.
-      shown(rows) {
+      // filter change, a reload or a folded month unselects rows that left
+      // the view (§3.145 Decision 5).
+      visibleRows(rows) {
         const visible = new Set(rows.filter((r) => this.selectable(r)).map((r) => r.key));
         const kept = this.selected.filter((key) => visible.has(key));
         if (kept.length !== this.selected.length) this.selected = kept;
+      },
+      // Any change of filter starts every month open again (§3.17 R2), and
+      // clearing the last one brings back zir folds from before.
+      direction() {
+        this.filterOpen = {};
+      },
+      categoryFilter() {
+        this.filterOpen = {};
+      },
+      // After a save, an import or a restore: every month that holds a new
+      // row, or a row whose date moved it there, opens, and the newest of
+      // them is brought into view (§3.145 Decision 2). The panel mounts with
+      // its rows loaded, so this only ever sees a later change.
+      rows(now, before) {
+        const was = new Map(before.map((r) => [r.key, monthKey(r.paid_on)]));
+        const landed = landedRows(was, groupByMonth(now, (r) => r.paid_on), (r) => r.key);
+        this.landedIn = this.importPending && landed.length ? monthSpanLabel(landed.map((l) => l.group)) : '';
+        this.importPending = false;
+        if (!landed.length) return;
+        const open = { ...this.openGroups };
+        for (const l of landed) open[l.group] = true;
+        this.openGroups = open;
+        this.$nextTick(() => {
+          // The newest landed row the current filter shows.
+          const shown = new Set(this.shown.map((r) => r.key));
+          const first = landed.find((l) => shown.has(l.key));
+          const el = first && this.$el.querySelector(`[data-row-key="${first.key}"]`);
+          if (el) el.scrollIntoView({ block: 'nearest' });
+        });
       },
       // An armed Remove names a count; any change to the selection disarms
       // it, so the second press always removes what the label said.
@@ -1016,14 +1097,14 @@
           removed: (result && result.removed_earlier) || 0,
           deleted: (result && result.deleted_earlier) || 0,
         };
-        if (this.paypalExpensesAdded) this.$emit('changed');
+        if (this.paypalExpensesAdded) this.importChanged();
       },
       onN26Imported(summary) {
         this.n26Summary = summary;
         this.manualSummary = null;
         this.payersSummary = null;
         this.refreshPayerCandidates();
-        if (summary.imported || summary.expenses_added) this.$emit('changed');
+        if (summary.imported || summary.expenses_added) this.importChanged();
       },
       // The offer is optional: a failed read shows no clause and no button,
       // and the list itself is unaffected.
@@ -1098,7 +1179,7 @@
           this.summary = summary;
           this.needsDateOrder = false;
           this.refreshPayerCandidates();
-          this.$emit('changed');
+          this.importChanged();
           // Offer the outgoing payments only when one is new to the book.
           this.paypalExpenseCandidates = expenseCandidates;
           this.paypalExpensesOpen = expenseCandidates.some((row) => !row.already_imported);
@@ -1117,6 +1198,19 @@
           this.importing = false;
           if (this.$refs.fileInput) this.$refs.fileInput.value = '';
         }
+      },
+      // Records only zir own toggles: a change the page made itself (a
+      // filter, a default) already matches what `openKeys` says.
+      onGroupToggle(key, event) {
+        const open = event.target.open;
+        if (open === this.openKeys.has(key)) return;
+        if (this.filtered) this.filterOpen = { ...this.filterOpen, [key]: open };
+        else this.openGroups = { ...this.openGroups, [key]: open };
+      },
+      // An import's reload names the months its rows went to.
+      importChanged() {
+        this.importPending = true;
+        this.$emit('changed');
       },
       toggle(key, on) {
         this.selected = on ? [...new Set([...this.selected, key])] : this.selected.filter((x) => x !== key);
@@ -1517,6 +1611,25 @@
 
   .select-all {
     margin-bottom: var(--space-sm);
+  }
+
+  /* §3.145: one fold per month. The layout is fixed and every column has a
+     width, so the columns line up from one month's table to the next. */
+  .ledger-group__summary {
+    font-weight: 600;
+  }
+
+  .ledger-group > :deep(*:not(summary)) {
+    margin-top: var(--space-xs);
+  }
+
+  .ledger-group :deep(table) {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  .summary__where {
+    margin: var(--space-xs) 0 0;
   }
 
   .create__hint {
