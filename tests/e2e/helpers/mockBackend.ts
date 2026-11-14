@@ -21,17 +21,17 @@ export const GOLDEN_DOCX: Buffer = goldenDocx;
 
 /** Operator-defaults block that #879 surfaces in the review step pre-fill. */
 export const OPERATOR_DEFAULTS = {
-  ort: 'Nynäshamn',
-  maklare_namn: 'Jenny Wiklund',
+  ort: 'Exempelby',
+  maklare_namn: 'Testa Testsson',
   maklare_titel: 'Auktoriserad mäklare',
-  foretag: 'Wiklund Mäkleri',
+  foretag: 'Exempel Mäkleri AB',
   likviditet: 'god',
 };
 
 /** Structured comparable-sales row — #878 column-table render. */
 const COMPARABLE_ROWS = [
   {
-    forening: 'Brf Solviken',
+    forening: 'Brf Exempelviken',
     area_m2: '62,5',
     balkong: 'ja',
     avgift_kr_manad: '3450',
@@ -41,7 +41,7 @@ const COMPARABLE_ROWS = [
     salj_datum: '2026-04-12',
   },
   {
-    forening: 'Brf Bryggan',
+    forening: 'Brf Exempelbryggan',
     area_m2: '58',
     balkong: 'nej',
     avgift_kr_manad: '3120',
@@ -70,7 +70,7 @@ const EXTRACT_RESPONSE = {
         { key: 'objekt', value: 'LGH 1001 Brf Exempel (769600-0000)', confidence: 'confident', source_page: 1 },
         { key: 'objekt_short', value: 'LGH 1001 Brf Exempel', confidence: 'confident', source_page: 1 },
         { key: 'adress', value: 'Exempelgatan 1', confidence: 'confident', source_page: 2 },
-        { key: 'kommun', value: 'Nynäshamn', confidence: 'confident', source_page: 2 },
+        { key: 'kommun', value: 'Exempelby', confidence: 'confident', source_page: 2 },
         { key: 'upplatelseform', value: 'Bostadsrätt', confidence: 'confident', source_page: 1 },
         { key: 'document_date', value: '2026-06-01', confidence: 'confident', source_page: 1 },
         { key: 'marknadsvarde_kr', value: null, confidence: 'not_found', source_page: null },
@@ -85,7 +85,7 @@ const EXTRACT_RESPONSE = {
         { key: 'objekt', value: 'LGH 1001 Brf Exempel (769600-0000)', confidence: 'uncertain', source_page: 1 },
         { key: 'objekt_short', value: 'LGH 1001 Brf Exempel', confidence: 'uncertain', source_page: 1 },
         { key: 'adress', value: 'Exempelgatan 1', confidence: 'uncertain', source_page: 1 },
-        { key: 'kommun', value: 'Nynäshamn', confidence: 'uncertain', source_page: 1 },
+        { key: 'kommun', value: 'Exempelby', confidence: 'uncertain', source_page: 1 },
         { key: 'upplatelseform', value: 'Bostadsrätt', confidence: 'uncertain', source_page: 1 },
         { key: 'marknadsvarde_kr', value: '3050000', confidence: 'uncertain', source_page: 3 },
         { key: 'intervall_kr', value: '50000', confidence: 'uncertain', source_page: 3 },

@@ -17,8 +17,8 @@ const MIN_KEY_LENGTH = 3;
 /** The comparison keys for one identity string; empty for a blank value.
  *
  *  - Base key: NFKC, upper case, parenthesised text dropped, then everything
- *    but letters, digits and `:` dropped. "Testby Eklunda 1 : 76 (Testby
- *    Eklunda 1:11)" and "TESTBY EKLUNDA 1:76" share it.
+ *    but letters, digits and `:` dropped. "Testby Provlunda 1 : 76 (Testby
+ *    Provlunda 1:11)" and "TESTBY PROVLUNDA 1:76" share it.
  *  - Apartment key: org number digits + LGH number, when both parse. The
  *    förening name is spelled differently across sources; these two are not.
  */
