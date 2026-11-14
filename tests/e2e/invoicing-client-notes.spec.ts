@@ -62,6 +62,18 @@ async function open(page: Page, fake: Fake): Promise<void> {
   await dismissMobileSidebarIfPresent(page);
   await page.getByRole('tab', { name: 'Clients' }).click();
   await expect(page.locator('[data-test="client-row"]')).toHaveCount(fake.clients.length);
+  await openAllLetters(page);
+}
+
+// The client book folds by first letter (§3.145, system_3 #10817). These tests
+// are about rows, not folding, so every letter is opened.
+async function openAllLetters(page: Page): Promise<void> {
+  const groups = page.locator('[data-test="client-group"]');
+  // A book with no clients shows the empty state and no groups.
+  await expect(page.locator('[data-test="client-group"], [data-test="clients-empty"]').first()).toBeAttached();
+  for (const g of await groups.all()) {
+    if (!(await g.evaluate((el) => (el as HTMLDetailsElement).open))) await g.locator('[data-test="client-group-summary"]').click();
+  }
 }
 
 const row = (page: Page, name: string) => page.locator('[data-test="client-row"]', { hasText: name });
