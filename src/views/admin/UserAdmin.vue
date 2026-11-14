@@ -502,8 +502,10 @@
     font-size: var(--text-sm);
   }
 
+  /* A refusal looks like one: the design system's error ink, as the site's
+     other failed lines are drawn (design c68794 on #11004). */
   .action-error {
-    color: var(--text-on-light);
+    color: var(--feedback-error-text);
     margin: 0 0 var(--space-sm);
   }
 

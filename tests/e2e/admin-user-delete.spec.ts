@@ -76,6 +76,18 @@ test("a refused delete says so on the page, in the server's words", async ({ pag
   await expect(page.locator('[data-test="row-action-error"]')).toHaveText(
     'Could not delete flora-test: User not found'
   );
+  // It looks and sounds like a failure: announced, and in the error ink.
+  const line = page.locator('[data-test="row-action-error"]');
+  await expect(line).toHaveAttribute('role', 'alert');
+  const inks = await line.evaluate((el) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--feedback-error-text)';
+    document.body.appendChild(probe);
+    const want = getComputedStyle(probe).color;
+    probe.remove();
+    return { got: getComputedStyle(el).color, want };
+  });
+  expect(inks.got).toBe(inks.want);
   // The list is still there: a refused write is not a failed read.
   await expect(userRow(page, 'flora-test')).toBeVisible();
 });
