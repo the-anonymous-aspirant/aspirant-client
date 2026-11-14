@@ -70,7 +70,7 @@ async function open(page: Page, fake: Fake): Promise<void> {
 async function openAllLetters(page: Page): Promise<void> {
   const groups = page.locator('[data-test="client-group"]');
   // A book with no clients shows the empty state and no groups.
-  await expect(page.locator('[data-test="client-group"], [data-test="clients-empty"]').first()).toBeAttached();
+  await expect(page.locator('[data-test="client-group"], [data-test="client-list"], [data-test="clients-empty"]').first()).toBeAttached();
   for (const g of await groups.all()) {
     if (!(await g.evaluate((el) => (el as HTMLDetailsElement).open))) await g.locator('[data-test="client-group-summary"]').click();
   }
