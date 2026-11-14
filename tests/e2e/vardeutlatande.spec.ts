@@ -694,7 +694,7 @@ test.describe('#5362 an extraction that recognised nothing', () => {
   const NOTHING_EXTRACTED = {
     documents: [
       {
-        filename: 'FastighetPlus_Karlskrona_INGLATORP_1-46.pdf',
+        filename: 'FastighetPlus_Exempelstad_ANGATORP_5-46.pdf',
         outcome: 'unrecognised',
         fields: [
           { key: 'objekt', value: null, confidence: 'not_found', source_page: null },
@@ -713,7 +713,7 @@ test.describe('#5362 an extraction that recognised nothing', () => {
 
     const warning = page.getByTestId('extract-warning');
     await expect(warning).toBeVisible();
-    await expect(warning).toContainText('FastighetPlus_Karlskrona_INGLATORP_1-46.pdf');
+    await expect(warning).toContainText('FastighetPlus_Exempelstad_ANGATORP_5-46.pdf');
     // It explains why the form below is blank — that was the missing half.
     await expect(warning).toContainText(/tomma därför/i);
     // An `unrecognised` layout is a report-type / coverage question — telling
@@ -823,8 +823,8 @@ test.describe('#5362 an extraction that recognised nothing', () => {
           outcome: 'partial',
           diagnostics: { no_text_subkind: 'reprinted_vector', ocr_used: true },
           fields: [
-            { key: 'adress', value: 'Gryningsvägen 13', confidence: 'uncertain', source_page: 1, note: 'OCR' },
-            { key: 'kommun', value: 'Partille', confidence: 'uncertain', source_page: 1, note: 'OCR' },
+            { key: 'adress', value: 'Exempelgatan 13', confidence: 'uncertain', source_page: 1, note: 'OCR' },
+            { key: 'kommun', value: 'Exempelby', confidence: 'uncertain', source_page: 1, note: 'OCR' },
           ],
         },
       ],
@@ -1093,7 +1093,7 @@ test.describe('#5362 an extraction that recognised nothing', () => {
             filename: 'datavardering_b.pdf',
             fields: [
               { key: 'source_class', value: 'datavardering', confidence: 'confident', source_page: 1 },
-              { key: 'objekt', value: 'LGH 9999 Brf Annan B (222222-2222)', confidence: 'confident', source_page: 1 },
+              { key: 'objekt', value: 'LGH 9999 Brf Annan B (222222-2220)', confidence: 'confident', source_page: 1 },
               { key: 'objekt_short', value: 'LGH 9999 Brf Annan B', confidence: 'confident', source_page: 1 },
               { key: 'kommun', value: 'Malmö', confidence: 'confident', source_page: 1 },
               { key: 'adress', value: 'Andra vägen 42', confidence: 'confident', source_page: 2 },
@@ -1143,7 +1143,7 @@ test.describe('#5362 an extraction that recognised nothing', () => {
           outcome: 'partial',
           diagnostics: { ocr_used: false, missed_expected_slots: ['marknadsvarde_kr'] },
           fields: [
-            { key: 'adress', value: 'Storgatan 1', confidence: 'confident', source_page: 1 },
+            { key: 'adress', value: 'Exempelgatan 1', confidence: 'confident', source_page: 1 },
             { key: 'kommun', value: 'Lund', confidence: 'confident', source_page: 1 },
             { key: 'objekt', value: 'LGH 1', confidence: 'confident', source_page: 1 },
             { key: 'upplatelseform', value: 'Bostadsrätt', confidence: 'confident', source_page: 1 },
@@ -1300,7 +1300,7 @@ test.describe('#5914 manual data-entry route', () => {
 
     // Typing marks it manual — a hand-typed figure is never rendered as though
     // a document produced it.
-    await adressRow.locator('input').fill('Storgatan 1');
+    await adressRow.locator('input').fill('Exempelgatan 1');
     await expect(adressRow).toHaveClass(/\bmanual\b/);
 
     // Generate produces the värdeutlåtande, same artifact as the extracted path.

@@ -31,7 +31,7 @@ export const OPERATOR_DEFAULTS = {
 /** Structured comparable-sales row — #878 column-table render. */
 const COMPARABLE_ROWS = [
   {
-    forening: 'Brf Solviken',
+    forening: 'Brf Exempelviken',
     area_m2: '62,5',
     balkong: 'ja',
     avgift_kr_manad: '3450',
@@ -41,7 +41,7 @@ const COMPARABLE_ROWS = [
     salj_datum: '2026-04-12',
   },
   {
-    forening: 'Brf Bryggan',
+    forening: 'Brf Exempelbryggan',
     area_m2: '58',
     balkong: 'nej',
     avgift_kr_manad: '3120',

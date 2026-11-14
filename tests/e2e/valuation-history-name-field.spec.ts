@@ -81,7 +81,7 @@ for (const scheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: scheme });
       await seedTrustedSession(page);
       await installCommanderMocks(page);
-      seedProcessedRows([{ id: 'row', name: 'Kunden återkom', final_values: { objekt_short: 'Testby Eklunda 1:76' } }]);
+      seedProcessedRows([{ id: 'row', name: 'Kunden återkom', final_values: { objekt_short: 'Testby Provlunda 1:76' } }]);
       await openHistory(page);
     });
 
