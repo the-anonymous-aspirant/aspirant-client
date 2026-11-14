@@ -29,21 +29,23 @@
     />
     <!-- §3.145: the book folds by first letter, A-Z in German order and "#"
          last. A single letter starts open (§3.17 R3), and every fold uses the
-         shared caret (.fold-summary, design_agent c67318). -->
+         shared caret (.fold-summary, design_agent c67318). Folds only when the
+         book is long (§3.145 Decision 3, amended 2026-11-14; system_3 #11102):
+         with FLAT_MAX clients or fewer it is one flat list in the same order,
+         with no letter rows, so every name is on the first screen. -->
     <template v-else>
-    <details
+    <component
+      :is="flat ? 'div' : 'details'"
       v-for="group in groups"
       :key="group.key"
-      class="client-group"
-      :open="isOpen(group.key)"
-      data-test="client-group"
-      :data-letter="group.key"
-      @toggle="onToggle(group.key, $event)"
+      :class="flat ? 'client-list' : 'client-group'"
+      v-bind="flat ? { 'data-test': 'client-list' } : { open: isOpen(group.key), 'data-test': 'client-group', 'data-letter': group.key }"
+      @toggle="!flat && onToggle(group.key, $event)"
     >
-    <summary class="fold-summary client-group__summary" data-test="client-group-summary">{{ group.key }} · {{ group.rows.length }}</summary>
+    <summary v-if="!flat" class="fold-summary client-group__summary" data-test="client-group-summary">{{ group.key }} · {{ clientCount(group.rows.length) }}</summary>
     <!-- Below 640px each client is a card (§3.114 decision 6): name and Edit
          on one row, then the address and emails at the card's edge. -->
-    <ul v-if="narrow" class="client-cards" :aria-label="`Clients: ${group.key}`">
+    <ul v-if="narrow" class="client-cards" :aria-label="flat ? 'Clients' : `Clients: ${group.key}`">
       <li v-for="row in group.rows" :key="row.id" class="client-card" data-test="client-row" :data-client-id="row.id">
         <div class="client-card__top">
           <strong>{{ row.name }}</strong>
@@ -83,7 +85,7 @@
       :rows="group.rows"
       row-key="id"
       density="compact"
-      :caption="`Clients: ${group.key}`"
+      :caption="flat ? 'Clients' : `Clients: ${group.key}`"
       :row-attrs="(row) => ({ 'data-test': 'client-row', 'data-client-id': row.id })"
     >
       <!-- Zir notes read as one muted line under the name, cut with an
@@ -130,7 +132,7 @@
         <AspButton variant="ghost" size="sm" :data-test="`client-edit-${row.id}`" @click="startEdit(row)">Edit</AspButton>
       </template>
     </AspDataTable>
-    </details>
+    </component>
     </template>
 
     <!-- Zir client list as a spreadsheet (operator c61628, system_3 #10013;
@@ -250,6 +252,9 @@
   import { groupByLetter, letterKey } from './listGroups.js';
   import { FIELD_REFUSALS, clientsCsvUrl, createClient, downloadBlob, errorOf, formatBerlinDay, formatDay, formatMoney, listInvoices, listPayerCandidates, payersSavedLine, safeSocialUrl, socialHandle, updateClient } from './api.js';
 
+  // The longest book shown flat (§3.145 Decision 3, amended 2026-11-14).
+  const FLAT_MAX = 10;
+
   const blank = () => ({ name: '', address: '', email: '', paypal_email: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
   const noErrors = () => ({ phone: '', instagram_url: '', telegram_url: '' });
 
@@ -304,8 +309,16 @@
       rows() {
         return this.clients.map((c) => ({ ...c, actions: '' }));
       },
+      // Ten rows fit within about one phone screen below the tab's controls,
+      // so a fold saves scrolling only above that (§3.145 Decision 3).
+      flat() {
+        return this.clients.length <= FLAT_MAX;
+      },
       groups() {
-        return groupByLetter(this.rows, (r) => r.name);
+        const byLetter = groupByLetter(this.rows, (r) => r.name);
+        if (!this.flat) return byLetter;
+        // One list, in the letters' own order: German collation, "#" last.
+        return [{ key: 'all', rows: byLetter.flatMap((g) => g.rows) }];
       },
       // What the CSV holds and how many, said before the click (#9948's unit).
       csvScope() {
@@ -355,6 +368,11 @@
       },
     },
     methods: {
+      // A letter's count names its noun (§3.145 Decision 3, amended): "G · 1
+      // client". The app's UI is English, so the noun is too.
+      clientCount(n) {
+        return n === 1 ? '1 client' : `${n} clients`;
+      },
       // Folded by default; a book with one letter shows it open (§3.17 R3).
       isOpen(key) {
         if (key in this.openLetters) return this.openLetters[key];
@@ -501,7 +519,8 @@
 <style scoped>
   /* §3.145: one fold per letter. The table layout is fixed and every column
      has a width, so the columns line up from one letter's table to the next. */
-  .client-group {
+  .client-group,
+  .client-list {
     margin-bottom: var(--space-xs);
   }
 
@@ -513,7 +532,8 @@
     margin-top: var(--space-xs);
   }
 
-  .client-group :deep(table) {
+  .client-group :deep(table),
+  .client-list :deep(table) {
     table-layout: fixed;
     width: 100%;
   }
