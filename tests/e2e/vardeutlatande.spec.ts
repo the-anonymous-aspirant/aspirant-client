@@ -1095,7 +1095,7 @@ test.describe('#5362 an extraction that recognised nothing', () => {
               { key: 'source_class', value: 'datavardering', confidence: 'confident', source_page: 1 },
               { key: 'objekt', value: 'LGH 9999 Brf Annan B (222222-2220)', confidence: 'confident', source_page: 1 },
               { key: 'objekt_short', value: 'LGH 9999 Brf Annan B', confidence: 'confident', source_page: 1 },
-              { key: 'kommun', value: 'Malmö', confidence: 'confident', source_page: 1 },
+              { key: 'kommun', value: 'Provmö', confidence: 'confident', source_page: 1 },
               { key: 'adress', value: 'Andra vägen 42', confidence: 'confident', source_page: 2 },
               { key: 'document_date', value: '2026-05-10', confidence: 'confident', source_page: 1 },
               { key: 'marknadsvarde_kr', value: null, confidence: 'not_found', source_page: null },
