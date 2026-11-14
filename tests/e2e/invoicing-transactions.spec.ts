@@ -495,6 +495,7 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
 
   test('an expense has a checkbox; Select all counts every row but the issued invoice\'s payment', async ({ page }) => {
     await open(page, mixedFake());
+    await openAllMonths(page);
     await expect(row(page, 'N26-E1').locator('[data-test="payment-select"]')).toHaveCount(1);
     await expect(row(page, 'N26-E1').locator('[data-test="payment-select-gutter"]')).toHaveCount(0);
     // Six rows: N26-P1 is on an issued invoice.
@@ -547,6 +548,14 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
 const bulkCategory = (page: Page) => page.locator('[data-test="bulk-category"]');
 const bulkRemove = (page: Page) => page.locator('[data-test="bulk-remove"]');
 const select = (page: Page, txn: string) => row(page, txn).locator('[data-test="payment-select"]').getByRole('checkbox');
+// The list folds by month, newest open (§3.145, system_3 #10636). These cases
+// are about the selection across the whole fixture, so they open every month.
+const openAllMonths = async (page: Page) => {
+  // One at a time, re-reading the set: opening a month takes it out of it.
+  const folded = page.locator('[data-test="ledger-group"]:not([open]) > [data-test="ledger-group-summary"]');
+  for (let left = await folded.count(); left > 0; left = await folded.count()) await folded.first().click();
+  await expect(page.locator('[data-test="ledger-group"]:not([open])')).toHaveCount(0);
+};
 const sent = (fake: Fake, method: string, pattern: RegExp) => fake.requests.filter((r) => r.method === method && pattern.test(r.path));
 
 async function bulkOptions(page: Page): Promise<string[]> {
@@ -560,6 +569,7 @@ test.describe('#10631 Transactions: selection actions for both directions', () =
   test('a selection of money in and money out cannot set a category, and says why', async ({ page }) => {
     const fake = mixedFake();
     await open(page, fake);
+    await openAllMonths(page);
     await select(page, 'M-e2').check();
     await select(page, 'PP-P4').check();
 
@@ -594,6 +604,7 @@ test.describe('#10631 Transactions: selection actions for both directions', () =
   test('Remove (N) arms to "Remove N rows", then removes both directions in one go', async ({ page }) => {
     const fake = mixedFake();
     await open(page, fake);
+    await openAllMonths(page);
     await expect(bulkRemove(page)).toHaveText('Remove');
     await expect(bulkRemove(page)).toBeDisabled();
 
@@ -628,6 +639,7 @@ test.describe('#10631 Transactions: selection actions for both directions', () =
   test('a row on an issued invoice cannot be selected, so Select all and Remove leave it', async ({ page }) => {
     const fake = mixedFake();
     await open(page, fake);
+    await openAllMonths(page);
     await expect(row(page, 'N26-P1').locator('[data-test="payment-select"]')).toHaveCount(0);
     await expect(row(page, 'N26-P1').locator('[data-test="payment-select-gutter"]')).toHaveCount(1);
 

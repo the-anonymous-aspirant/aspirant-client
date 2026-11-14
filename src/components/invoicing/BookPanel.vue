@@ -103,15 +103,26 @@
     />
 
     <template v-else-if="book">
-      <section v-for="month in months" :key="month.key" class="month" data-test="book-month">
-        <header class="month__head" data-test="month-head">
+      <!-- §3.145: months newest first, each a fold. The summary is the month
+           line, so a folded month still shows its In, Out and Result
+           (Decision 4: the month's totals are its glance, and never fold). -->
+      <details
+        v-for="month in months"
+        :key="month.key"
+        class="month"
+        :open="openKeys.has(month.key)"
+        data-test="book-month"
+        :data-group="month.key"
+        @toggle="onMonthToggle(month.key, $event)"
+      >
+        <summary class="fold-summary month__head" data-test="month-head">
           <h3 class="month__label">{{ month.label }}</h3>
-          <p class="month__totals">
+          <span class="month__totals">
             <span class="in-amount">In {{ formatMoney(month.inCents) }}</span>
             <span class="out-amount">Out {{ formatMoney(month.outCents) }}</span>
             <span class="result" :class="{ negative: month.resultCents < 0 }">Result {{ formatSignedMoney(month.resultCents) }}</span>
-          </p>
-        </header>
+          </span>
+        </summary>
 
         <template v-if="narrow">
           <ul class="book-cards" aria-label="Book entries">
@@ -121,6 +132,7 @@
               class="book-card book-card--tap"
               data-test="book-row"
               :data-type="row.type"
+              :data-row-key="row.key"
               @click="onCardTap(row, $event)"
             >
               <div class="book-card__top">
@@ -151,7 +163,7 @@
           row-key="key"
           density="compact"
           :caption="`Book entries for ${month.label}`"
-          :row-attrs="(row) => ({ 'data-test': 'book-row', 'data-type': row.type })"
+          :row-attrs="(row) => ({ 'data-test': 'book-row', 'data-type': row.type, 'data-row-key': row.key })"
         >
           <template #cell-paid_on="{ row }"><span class="nowrap">{{ formatDay(row.paid_on) }}</span></template>
           <template #cell-description="{ row }">
@@ -178,7 +190,7 @@
             </template>
           </template>
         </AspDataTable>
-      </section>
+      </details>
 
       <BookChart :payments="countedPayments" :expenses="countedExpenses" />
     </template>
@@ -200,12 +212,12 @@
     />
     <!-- The rows' edit dialogs, the same as Transactions' (§3.143 Decisions 5
          and 7, system_3 #10729). Save or Remove refetches the Book. -->
-    <ManualPaymentDialog v-model:open="paymentEditOpen" :payment="editPayment" :clients="clients" @changed="$emit('changed')" />
+    <ManualPaymentDialog v-model:open="paymentEditOpen" :payment="editPayment" :clients="clients" @changed="changed" />
     <ManualExpenseDialog
       v-model:open="expenseEditOpen"
       :expense="editExpense"
       :categories="expenseCategories"
-      @changed="$emit('changed')"
+      @changed="changed"
       @category-added="expenseCategories = [...expenseCategories, $event]"
     />
   </section>
@@ -230,7 +242,8 @@
     putBookSelection,
     updateBookPreset,
   } from './api.js';
-  import { expenseParts, paymentParts } from './ledgerRows.js';
+  import { expenseParts, newestFirst, paymentParts } from './ledgerRows.js';
+  import { groupByMonth, landedRows, monthKey, openGroupKeys } from './listGroups.js';
   import { INCOME_ORDER, WORK_ONLY, countableExpenseNames, countingSentence, countsInBook, selectionName } from './bookSelection.js';
 
   // The income-and-expenses book (system_3 #10414-C): payments and
@@ -281,13 +294,25 @@
         presetDialogOpen: false,
         presetName: '',
         presetError: '',
+        // Every column but the description has a width and the layout is
+        // fixed, so the columns line up from one month's table to the next
+        // (§3.145 Decision 6). "Out" is wider: it carries the Receipt button.
         columns: [
-          { key: 'paid_on', label: 'Date paid' },
+          { key: 'paid_on', label: 'Date paid', width: '7.5rem' },
           { key: 'description', label: 'What it was for', sortable: false },
-          { key: 'category', label: 'Category', sortable: false },
-          { key: 'in', label: 'In', align: 'right', sortable: false },
-          { key: 'out', label: 'Out', align: 'right', sortable: false },
+          { key: 'category', label: 'Category', sortable: false, width: '11rem' },
+          { key: 'in', label: 'In', align: 'right', sortable: false, width: '7.5rem' },
+          { key: 'out', label: 'Out', align: 'right', sortable: false, width: '12rem' },
         ],
+        // Months ze opened or closed this visit, by key; a month not in here
+        // takes the default. Kept through a refetch, never stored (§3.145
+        // Decision 3).
+        openGroups: {},
+        // Where each row was (key -> month) when the Book last reported a
+        // change of its own; the reload that follows is compared against
+        // it. Null until then.
+        revealFrom: null,
+        revealCount: 0,
       };
     },
     computed: {
@@ -357,7 +382,9 @@
             key: `p${p.id}`,
             id: p.id,
             type: 'in',
+            direction: 'in',
             paid_on: p.paid_on,
+            created_at: p.created_at,
             ...paymentParts(p),
             categoryLabel: CATEGORY_LABELS[p.category] || p.category,
             amount_cents: p.gross_cents,
@@ -367,28 +394,57 @@
           key: `e${e.id}`,
           id: e.id,
           type: 'out',
+          direction: 'out',
           paid_on: e.paid_on,
+          created_at: e.created_at,
           // Who and what, named as on Transactions (ledgerRows.js).
           ...expenseParts(e),
           categoryLabel: e.category,
           amount_cents: e.amount_cents,
           expense: e,
         }));
-        return [...income, ...outgoing].sort((a, b) => (a.paid_on < b.paid_on ? -1 : a.paid_on > b.paid_on ? 1 : a.key.localeCompare(b.key)));
+        // Newest day first, and on one day the row entered last first: the
+        // order Transactions uses (§3.145 Decision 1).
+        return [...income, ...outgoing].sort(newestFirst);
       },
+      // By the month the money moved (§3.140 Decision 1), newest month first
+      // (§3.145 Decision 1), each with its totals.
       months() {
-        const groups = new Map();
-        for (const row of this.rows) {
-          const key = String(row.paid_on).slice(0, 7); // YYYY-MM
-          if (!groups.has(key)) groups.set(key, { key, label: monthLabel(key), rows: [], inCents: 0, outCents: 0 });
-          const g = groups.get(key);
-          g.rows.push(row);
-          if (row.type === 'in') g.inCents += row.amount_cents;
-          else g.outCents += row.amount_cents;
-        }
-        return [...groups.values()]
-          .sort((a, b) => a.key.localeCompare(b.key))
-          .map((g) => ({ ...g, resultCents: g.inCents - g.outCents }));
+        return groupByMonth(this.rows, (r) => r.paid_on).map((g) => {
+          let inCents = 0;
+          let outCents = 0;
+          for (const row of g.rows) {
+            if (row.type === 'in') inCents += row.amount_cents;
+            else outCents += row.amount_cents;
+          }
+          return { ...g, inCents, outCents, resultCents: inCents - outCents };
+        });
+      },
+      // Open now: zir own choice, else the newest month; a lone month is
+      // open (§3.145 Decision 3, §3.17 R3). The Book has no filter.
+      openKeys() {
+        const newest = this.months.length ? this.months[0].key : '';
+        return openGroupKeys(this.months, { chosen: this.openGroups, defaultOpen: (g) => g.key === newest });
+      },
+    },
+    watch: {
+      // After a save from the Book's own dialogs, the month the row is in
+      // now opens and the row is brought into view (§3.145 Decision 2).
+      // Compared against the snapshot `changed()` took, so a change of what
+      // counts, or the page's own first loads, open nothing.
+      rows(now) {
+        if (!this.revealFrom) return;
+        const landed = landedRows(this.revealFrom, groupByMonth(now, (r) => r.paid_on), (r) => r.key);
+        if (!landed.length) return;
+        const open = { ...this.openGroups };
+        for (const l of landed) open[l.group] = true;
+        this.openGroups = open;
+        if (landed.length <= this.revealCount) return;
+        this.revealCount = landed.length;
+        this.$nextTick(() => {
+          const el = this.$el.querySelector(`[data-row-key="${landed[0].key}"]`);
+          if (el) el.scrollIntoView({ block: 'nearest' });
+        });
       },
     },
     mounted() {
@@ -405,6 +461,22 @@
     methods: {
       formatDay,
       formatMoney,
+      // Records only zir own toggles: a default already matches `openKeys`.
+      // Zir toggle also ends the reveal, so a late reload cannot reopen what
+      // ze closed.
+      onMonthToggle(key, event) {
+        const open = event.target.open;
+        if (open === this.openKeys.has(key)) return;
+        this.revealFrom = null;
+        this.openGroups = { ...this.openGroups, [key]: open };
+      },
+      // Every change the Book reports goes through here: it notes where each
+      // row is now, so the reload can open the month a row lands in.
+      changed() {
+        this.revealFrom = new Map(this.rows.map((r) => [r.key, monthKey(r.paid_on)]));
+        this.revealCount = 0;
+        this.$emit('changed');
+      },
       formatSignedMoney(cents) {
         const sign = cents < 0 ? '-' : '';
         return `${sign}${formatMoney(Math.abs(cents))}`;
@@ -422,7 +494,7 @@
         }
       },
       onExpenseChanged() {
-        this.$emit('changed');
+        this.changed();
       },
       async onChangeToggle(event) {
         if (!event.target.open || this.categoriesLoaded) return;
@@ -551,14 +623,6 @@
       },
     },
   };
-
-  // "2026-07" -> "July 2026". Built from Date's own month names rather than a
-  // hand-written list, so it follows the browser's locale like every other
-  // date on this page.
-  function monthLabel(key) {
-    const [y, m] = key.split('-').map(Number);
-    return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-  }
 </script>
 
 <style scoped>
@@ -638,19 +702,35 @@
     gap: var(--space-xs);
   }
 
+  /* §3.145: each month is a fold and the month line is its summary, on the
+     shared `.fold-summary` (caret on the left, 44px row). The totals sit at
+     the far end and wrap under the month name when the row is too narrow. */
   .month {
+    margin-bottom: var(--space-sm);
+  }
+
+  .month[open] {
     margin-bottom: var(--space-lg);
   }
 
   .month__head {
-    display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    justify-content: space-between;
-    gap: var(--space-sm);
-    margin-bottom: var(--space-sm);
-    padding-bottom: var(--space-2xs);
+    column-gap: var(--space-sm);
+    row-gap: 0;
+    padding-block: var(--space-2xs);
     border-bottom: 1px solid var(--border-subtle, currentColor);
+  }
+
+  .month[open] > .month__head {
+    margin-bottom: var(--space-sm);
+  }
+
+  /* The layout is fixed and the columns have widths, so they line up from
+     one month's table to the next (§3.145 Decision 6). */
+  .month :deep(table) {
+    table-layout: fixed;
+    width: 100%;
   }
 
   .month__label {
@@ -661,7 +741,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-sm);
-    margin: 0;
+    margin: 0 0 0 auto;
     font-size: var(--text-sm);
     font-variant-numeric: tabular-nums;
   }
@@ -740,6 +820,14 @@
   }
 
   @media (max-width: 640px) {
+    /* The totals take their own line under the month name, starting where
+       the name starts (past the caret). */
+    .month__totals {
+      flex-basis: 100%;
+      margin-left: calc(1em + var(--space-xs));
+      padding-bottom: var(--space-2xs);
+    }
+
     .panel-head {
       flex-direction: column;
       justify-content: stretch;
