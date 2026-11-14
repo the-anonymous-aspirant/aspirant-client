@@ -28,7 +28,9 @@
       <AspCard class="profile-card" padding="md" data-test="profile-card">
         <div class="profile-card__head">
           <h2>Issuer</h2>
-          <AspButton variant="secondary" size="sm" data-test="profile-edit" @click="profileOpen = true">
+          <!-- md, not sm: sm drew 22px tall, under the 24px floor every
+               control clears (§3.99 tier 1; UX walk AM9). -->
+          <AspButton variant="secondary" size="md" data-test="profile-edit" @click="profileOpen = true">
             Edit profile
           </AspButton>
         </div>
@@ -41,13 +43,15 @@
           </span>
           <span v-else data-test="profile-name">{{ profile.full_name || '—' }}</span>
         </p>
+        <!-- The separator ends the first item: when the line wraps it stays at
+             the end of the first line, and no line starts with "·" (UX walk
+             AM9, system_3 #11027). Each item keeps its own words together. -->
         <p class="glance__line glance__line--state">
-          <span v-if="profile.steuernummer">
-            <span class="muted">Steuernummer (Tax number)</span> <span data-test="profile-steuernummer">{{ profile.steuernummer }}</span>
+          <span v-if="profile.steuernummer" class="nowrap">
+            <span class="muted">Steuernummer (Tax number)</span> <span data-test="profile-steuernummer">{{ profile.steuernummer }}</span>&nbsp;<span class="muted" aria-hidden="true">·</span>
           </span>
-          <AspBadge v-else status="caution" data-test="steuernummer-missing">Missing: needed to issue</AspBadge>
-          <!-- The separator wraps with the text after it, never alone at a line end. -->
-          <span class="nowrap"><span class="muted" aria-hidden="true">·</span> <span class="muted">next invoice</span> <span data-test="profile-next-number">{{ nextNumberLabel }}</span></span>
+          <span v-else class="nowrap"><AspBadge status="caution" data-test="steuernummer-missing">Missing: needed to issue</AspBadge>&nbsp;<span class="muted" aria-hidden="true">·</span></span>
+          <span class="nowrap"><span class="muted">next invoice</span> <span data-test="profile-next-number">{{ nextNumberLabel }}</span></span>
         </p>
       </AspCard>
 

@@ -47,16 +47,17 @@
     </div>
 
     <div class="upload-section">
-      <label class="btn btn-upload" for="file-input">
-        Choose Files
-      </label>
+      <!-- The house button opens the hidden input (UX walk AM9, system_3
+           #11027): the hand-styled label was white on pale blue, 2.2:1. -->
       <input
         id="file-input"
+        ref="fileInput"
         type="file"
         multiple
         class="file-input-hidden"
         @change="onFileSelected"
       />
+      <AspButton variant="secondary" data-test="files-choose" @click="$refs.fileInput.click()">Choose files</AspButton>
       <span v-if="selectedFiles.length === 1" class="selected-filename">{{ selectedFiles[0].name }}</span>
       <span v-else-if="selectedFiles.length > 1" class="selected-filename">{{ selectedFiles.length }} files selected</span>
       <AspButton
@@ -508,45 +509,9 @@
     width: 200px;
   }
 
-  /* Buttons */
-  .btn {
-    padding: var(--space-sm) var(--space-md);
-    border: none;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    font-size: var(--text-sm);
-    font-weight: 600;
-    transition: filter var(--transition-moderate), transform var(--transition-moderate);
-  }
 
-  .btn:hover {
-    filter: brightness(1.15);
-    transform: translateY(-1px);
-  }
-
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-    filter: none;
-  }
-
-  .btn-upload {
-    background-color: var(--brand-accent);
-    color: var(--text-on-dark);
-    padding: var(--space-sm) var(--space-lg);
-    border-radius: var(--radius-md);
-    display: inline-block;
-  }
-
-  /* .btn-confirm / .btn-cancel / .btn-folder / .btn-action / .btn-delete are
-     gone — all six of their usages are AspButtons now.
-
-     The base .btn block above STAYS, and deleting it with them would be the
-     trap in this file: .btn-upload at the rule below is on a <label> (:53, the
-     hidden file-input trigger), not a <button>, so it still needs .btn's box.
-     Nothing that reaches an AspButton is left here — a consumer class lands on
-     the DS <button> and would paint over .btn--*. */
+  /* Every button on this page is an AspButton now, the file trigger included
+     (system_3 #11027), so the hand-made .btn / .btn-upload rules are gone. */
 
   /* Folder row styling */
   .folder-row {
@@ -587,10 +552,6 @@
 
   /* Mobile */
   @media (max-width: 767px) {
-    .files-manager h1 {
-      font-size: var(--text-2xl);
-    }
-
     th,
     td {
       padding: var(--space-2xs);
