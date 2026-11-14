@@ -491,6 +491,20 @@
 </script>
 
 <style scoped>
+  /* A tick box's target was the box itself, 16px square, standing alone with
+     no label: small in both dimensions, so it takes the 44px house target
+     (§3.99 tier 2; UX walk AM9, system_3 #11027). The label that wraps the
+     input takes the size, so a tap anywhere in it toggles; the box draws as
+     before. */
+  .invoice-card__select :deep(.checkbox),
+  .select-cell :deep(.checkbox) {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .invoices-panel {
     display: flex;
     flex-direction: column;

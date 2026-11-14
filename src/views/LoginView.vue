@@ -37,6 +37,12 @@
         <p v-if="sessionExpired" class="session-expired-notice" role="status">
           Din session har gått ut. Logga in igen för att fortsätta.
         </p>
+        <!-- A signed-in member sent here from /admin was shown a second
+             sign-in with no word why (UX walk AM9, system_3 #11027). -->
+        <p v-if="admin && signedInBelowAdmin" class="signed-in-member-notice" role="status" data-test="signed-in-not-admin">
+          You are signed in, but your account is not an administrator. Admin needs an
+          administrator's sign-in below.
+        </p>
         <Login :loggedIn="false" :admin="admin" @login="onLogin" />
       </template>
     </AspCard>
@@ -127,6 +133,10 @@
         // neither needs framing, so `frame-ancestors 'self'` doesn't cover
         // them. See resetArmTimer() and onContinueClick()/onContinueKeydown().
         continueArmed: false,
+        // Signed in below the admin tier: a cached name without the Admin
+        // role. Display only; the server decides what the session may open.
+        signedInBelowAdmin:
+          !!localStorage.getItem('user_name') && localStorage.getItem('user_role') !== 'Admin',
       };
     },
     created() {
@@ -345,7 +355,8 @@
      `--surface-caution, var(--surface-2)`, neither of which exists, so it
      painted nothing, and its `--text-body` ink would be #424242 on the light
      theme's #424242 card (#9195). */
-  .session-expired-notice {
+  .session-expired-notice,
+  .signed-in-member-notice {
     margin: 0 0 var(--space-sm);
     padding: var(--space-xs) var(--space-sm);
     border-radius: var(--radius-sm);
