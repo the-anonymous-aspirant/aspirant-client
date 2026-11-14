@@ -79,8 +79,13 @@ export function measure(page: Page): Promise<Geometry> {
       // on purpose (it inherits its surface), so onOwnGround cannot see it.
       // Matched by its own BEM parts, so a view-local `.empty-state` still
       // counts (#9596).
+      // The shared ReadState's failed and refused states are an AspEmptyState
+      // plus its action (Try again) and an optional line under it, stacked in
+      // one column that centres them with the message: the same block, so the
+      // same exemption (system_3 #11018). Matched by the wrapper holding a DS
+      // empty state, so a bare `.read-state` column still counts.
       const inEmptyState = !!el.closest(
-        '.empty-state:has(> .empty-state__heading, > .empty-state__message)'
+        '.empty-state:has(> .empty-state__heading, > .empty-state__message), .read-state:has(> .empty-state)'
       );
       if (
         /^H[1-6]$|^P$/.test(el.tagName) &&
