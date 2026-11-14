@@ -172,10 +172,11 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
 
     const rows = month.locator('[data-test="book-row"]');
     await expect(rows).toHaveCount(2);
-    // Oldest first within the month, matching the rest of the app's convention.
-    await expect(rows.nth(0)).toContainText('Wandbild Juli');
-    await expect(rows.nth(1)).toContainText('Guitar strings');
-    await expect(rows.nth(1)).toContainText('-€45.99');
+    // Newest day first within the month (§3.145 Decision 1, system_3 #10636):
+    // the expense of the 20th above the payment of the 14th.
+    await expect(rows.nth(0)).toContainText('Guitar strings');
+    await expect(rows.nth(0)).toContainText('-€45.99');
+    await expect(rows.nth(1)).toContainText('Wandbild Juli');
   });
 
   test('a withdrawal is not income: it does not appear in the book', async ({ page }) => {
@@ -192,8 +193,13 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
     });
     await open(page, fake);
     await expect(page.locator('[data-test="book-month"]')).toHaveCount(2);
-    await expect(page.locator('[data-test="month-head"]').nth(0)).toContainText('July 2026');
-    await expect(page.locator('[data-test="month-head"]').nth(1)).toContainText('August 2026');
+    // Newest month first, and open; the older one folded, its line still shown
+    // (§3.145 Decisions 1, 3 and 4, system_3 #10636).
+    await expect(page.locator('[data-test="month-head"]').nth(0)).toContainText('August 2026');
+    await expect(page.locator('[data-test="month-head"]').nth(1)).toContainText('July 2026');
+    await expect(page.locator('[data-test="book-month"]').nth(0)).toHaveAttribute('open', '');
+    await expect(page.locator('[data-test="book-month"]').nth(1)).not.toHaveAttribute('open', '');
+    await expect(page.locator('[data-test="month-head"]').nth(1)).toBeVisible();
   });
 
   test('entering an expense by hand stores it and it appears in the book', async ({ page }) => {
@@ -463,8 +469,9 @@ test.describe('#10459 Invoices app — the Book shows who was paid', () => {
         expenseRow(102, { source: 'n26', entry: 'import', paid_on: '2026-07-21T00:00:00Z', reference: 'Tipografia Esempio SRL', note: ' tipografia esempio ' }),
       ],
     }));
-    await expect(descriptions(page)).toHaveText(['Payment to Print Shop GmbH', 'Tipografia Esempio SRL']);
-    const c = await inks(page, 0);
+    // Newest day first (§3.145): the 21st above the 20th.
+    await expect(descriptions(page)).toHaveText(['Tipografia Esempio SRL', 'Payment to Print Shop GmbH']);
+    const c = await inks(page, 1);
     expect(c.note).toBe(c.body);
   });
 
@@ -476,8 +483,8 @@ test.describe('#10459 Invoices app — the Book shows who was paid', () => {
       ],
     }));
     // With a note, the note alone; with none, the reference stands in, as before.
-    await expect(descriptions(page)).toHaveText(['Guitar strings', 'RE-2026-18']);
-    const c = await inks(page, 0);
+    await expect(descriptions(page)).toHaveText(['RE-2026-18', 'Guitar strings']);
+    const c = await inks(page, 1);
     expect(c.note).toBe(c.body);
   });
 
@@ -490,6 +497,7 @@ test.describe('#10459 Invoices app — the Book shows who was paid', () => {
         incomeRow({ id: 13, paid_on: '2026-07-17T00:00:00Z', sender_name: '', note: '' }),
       ],
     }));
-    await expect(descriptions(page)).toHaveText(['Galerie Nord · Wandbild Juli', 'Cash at the market', 'Mara Esempio', '—']);
+    // Newest day first (§3.145): the 17th down to the 14th.
+    await expect(descriptions(page)).toHaveText(['—', 'Mara Esempio', 'Cash at the market', 'Galerie Nord · Wandbild Juli']);
   });
 });

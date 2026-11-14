@@ -1818,5 +1818,18 @@
     .date-order__actions {
       flex-direction: column;
     }
+
+    /* On a phone the three gaps between the filters and the list are 4px, so
+       the first month line ends on the first screen at 390×844 and is never
+       cut through its text (design_agent c68157 on system_3 #10636, the note
+       under §3.145 Decision 4). Above 640px they stay 12px. */
+    .toolbar {
+      gap: var(--space-2xs);
+      margin-bottom: var(--space-2xs);
+    }
+
+    .select-all {
+      margin-bottom: var(--space-2xs);
+    }
   }
 </style>
