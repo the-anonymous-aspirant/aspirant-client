@@ -56,7 +56,10 @@
            `!loggedIn` branch, so it never appears to a signed-in viewer. -->
       <!-- Neither link belongs on the admin sign-in (system_3 #9270): an admin
            account is not self-served, and recovery runs through /login. -->
-      <p v-if="!admin" class="signup-prompt">
+      <!-- Not offered while sign-up is known to be closed (system_3 #10980):
+           the page it opened said so and had no door for someone without an
+           account. Unknown keeps it, as SignupView does. -->
+      <p v-if="!admin && signupState !== 'closed'" class="signup-prompt">
         <RouterLink to="/signup" data-testid="signup-link">Create an account</RouterLink>
       </p>
       <!-- Beside the sign-up link and in the same shared component, for the
@@ -81,6 +84,7 @@
   import { AspInput, AspButton } from '@aspirant/design-system';
 
   import { toggleSidebar } from '../../global_state_manager.js';
+  import { readSignupStatus, signupState } from '../../signupStatus.js';
 
   export default {
     components: { AspInput, AspButton },
@@ -106,6 +110,9 @@
         default: false,
       },
     },
+    setup() {
+      return { signupState };
+    },
     data() {
       return {
         username: '',
@@ -114,6 +121,10 @@
         error: '',
         success: '',
       };
+    },
+    mounted() {
+      // The admin sign-in offers no sign-up, so it has nothing to ask.
+      if (!this.admin) readSignupStatus();
     },
     methods: {
       toggleSidebar() {
