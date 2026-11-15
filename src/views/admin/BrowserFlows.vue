@@ -9,12 +9,22 @@
 
   <div v-else class="browser-flows-view page" data-test="browser-flows-view">
     <h1>Browser Flows</h1>
-    <p class="meta">
+    <!-- Reading instructions for a grid: say nothing about a grid that is not
+         drawn (UX walk AA6, system_3 #11008; D1/D2). -->
+    <p v-if="!loadError" class="meta">
       Rows = registered flows. Columns = last {{ maxRuns }} runs, oldest left, newest right.
       Click a cell for the run detail.
     </p>
 
-    <p v-if="loadError" class="load-error" data-test="browser-flows-error">{{ loadError }}</p>
+    <div v-if="loadError" class="load-error-state" data-test="browser-flows-error">
+      <p class="load-error">{{ loadError }}</p>
+      <!-- The one next step a service outage has: go see whether it needs
+           starting, where every other service's status already lives. -->
+      <p class="load-error-next">
+        <router-link to="/admin/system-health" data-test="browser-flows-error-next">Check System Health</router-link>
+        to see whether the service needs starting.
+      </p>
+    </div>
 
     <div v-else-if="loading" class="loading" data-test="browser-flows-loading">Laddar…</div>
 
@@ -102,7 +112,7 @@
       </table>
     </div>
 
-    <div class="legend" data-test="browser-flows-legend">
+    <div v-if="!loadError" class="legend" data-test="browser-flows-legend">
       <span><span class="swatch cell-success"></span>success</span>
       <span><span class="swatch cell-running"></span>running</span>
       <span><span class="swatch cell-blocked"></span>blocked</span>
@@ -243,7 +253,6 @@
   }
   h1 {
     margin: 0 0 0.25rem;
-    color: var(--brand-primary);
     font-weight: 600;
   }
   .meta {
@@ -254,6 +263,10 @@
   .load-error {
     color: var(--feedback-error);
     font-weight: 600;
+  }
+  .load-error-next {
+    margin: 0.5rem 0 0;
+    color: var(--text-muted);
   }
   .loading {
     color: var(--text-muted);
@@ -364,6 +377,30 @@
     margin-right: 0.25rem;
     vertical-align: middle;
   }
+  /* The grid's own cells always sit on `.matrix-card`, which is dark in
+     both themes, so the `-on-dark` fills (below) are correct there. The
+     legend sits on the page itself, which is light or dark by site theme,
+     so its swatches need the theme-matched fill (UX walk AA6, system_3
+     #11008; the un-paired `-on-dark`-only fills read as two near-identical
+     greys in light, and "no run" read as almost the page colour in dark).
+     "No run" becomes an outlined empty cell instead of a fill, so it never
+     depends on a hue reading differently from "unknown" at all. */
+  .legend .swatch.cell-success { background: var(--chart-series-3-on-light); }
+  .legend .swatch.cell-running { background: var(--chart-series-1-on-light); }
+  .legend .swatch.cell-blocked { background: var(--chart-series-5-on-light); }
+  .legend .swatch.cell-failed { background: var(--chart-series-4-on-light); }
+  .legend .swatch.cell-cancelled { background: var(--chart-series-2-on-light); }
+  .legend .swatch.cell-unknown { background: var(--chart-series-9-on-light); }
+  .legend .swatch.cell-empty {
+    background: transparent;
+    border: 1.5px solid var(--border-control, var(--border-subtle));
+  }
+  :global([data-theme='dark']) .legend .swatch.cell-success { background: var(--chart-series-3-on-dark); }
+  :global([data-theme='dark']) .legend .swatch.cell-running { background: var(--chart-series-1-on-dark); }
+  :global([data-theme='dark']) .legend .swatch.cell-blocked { background: var(--chart-series-5-on-dark); }
+  :global([data-theme='dark']) .legend .swatch.cell-failed { background: var(--chart-series-4-on-dark); }
+  :global([data-theme='dark']) .legend .swatch.cell-cancelled { background: var(--chart-series-2-on-dark); }
+  :global([data-theme='dark']) .legend .swatch.cell-unknown { background: var(--chart-series-9-on-dark); }
 
   .browser-flows-frame {
     height: 100vh;

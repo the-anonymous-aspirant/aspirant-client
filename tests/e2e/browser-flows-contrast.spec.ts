@@ -59,6 +59,41 @@ async function contrastRatio(locator: Locator): Promise<number> {
 
 const AA = 4.5;
 
+/** Non-text contrast (a swatch fill or an outline, never a glyph): same
+ *  measurement as contrastRatio, reading `prop` on `el` itself rather than
+ *  its `color`, against the nearest ancestor's own opaque background. WCAG's
+ *  non-text floor (UX walk AA6, system_3 #11008). */
+async function nonTextContrastRatio(locator: Locator, prop: 'backgroundColor' | 'borderTopColor'): Promise<number> {
+  return locator.first().evaluate((el, cssProp) => {
+    const parse = (s: string) => {
+      let m = s.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+      if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] };
+      m = s.match(/color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)/);
+      if (m) return { r: 255 * +m[1], g: 255 * +m[2], b: 255 * +m[3], a: m[4] === undefined ? 1 : +m[4] };
+      return null;
+    };
+    const lum = (c: { r: number; g: number; b: number }) => {
+      const f = (v: number) => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+    };
+    let bg = null;
+    for (let n: Element | null = el.parentElement; n && !bg; n = n.parentElement) {
+      const c = parse(getComputedStyle(n).backgroundColor);
+      if (c && c.a === 1) bg = c;
+    }
+    const fg = parse(getComputedStyle(el)[cssProp as 'backgroundColor' | 'borderTopColor']);
+    if (!fg || !bg || fg.a === 0) return 0;
+    const l1 = lum(fg);
+    const l2 = lum(bg);
+    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+  }, prop);
+}
+
+const NON_TEXT_AA = 3;
+
 const FLOW = {
   id: 'flow-a',
   name: 'berlinstartupjobs.com',
@@ -144,5 +179,47 @@ for (const theme of ['light', 'dark'] as const) {
         ['meta value', page.locator('[data-test="meta-rows"] .meta-value')],
       ], theme);
     });
+
+    // UX walk AA6 (system_3 #11008): the legend sits on the page itself, not
+    // the dark matrix card its swatches used to be calibrated for, so
+    // "unknown" and "no run" read as near-identical greys in light, and "no
+    // run" nearly vanished into the page in dark.
+    test('legend marks clear the 3:1 non-text floor against the page', async ({ page }) => {
+      await open(page, '/admin/browser-flows');
+      const legend = page.locator('[data-test="browser-flows-legend"]');
+      await expect(legend).toBeVisible();
+      const marks: Array<[string, Locator, 'backgroundColor' | 'borderTopColor']> = [
+        ['success', legend.locator('.cell-success'), 'backgroundColor'],
+        ['running', legend.locator('.cell-running'), 'backgroundColor'],
+        ['blocked', legend.locator('.cell-blocked'), 'backgroundColor'],
+        ['failed', legend.locator('.cell-failed'), 'backgroundColor'],
+        ['cancelled', legend.locator('.cell-cancelled'), 'backgroundColor'],
+        ['unknown', legend.locator('.cell-unknown'), 'backgroundColor'],
+        ['no run (outline)', legend.locator('.cell-empty'), 'borderTopColor'],
+      ];
+      for (const [name, loc, prop] of marks) {
+        const ratio = await nonTextContrastRatio(loc, prop);
+        expect(ratio, `${name} @ ${theme}: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(NON_TEXT_AA);
+      }
+    });
   });
 }
+
+// UX walk AA6, system_3 #11008: "no run" is an outlined empty cell, not a
+// fill, so it never depends on reading as a different grey from "unknown" —
+// the shape, not only the hue, carries the distinction.
+test('the legend\'s "no run" mark is an outline on no fill, not another coloured square', async ({ page }) => {
+  await seedAdminSession(page);
+  await page.route(/\/api\//, (route) => route.fulfill({ status: 204, body: '' }));
+  await installBrowserFlowsMocks(page);
+  seedBrowserFlows([FLOW]);
+  seedBrowserFlowRuns([RUN]);
+  await open(page, '/admin/browser-flows');
+  const noRun = page.locator('[data-test="browser-flows-legend"] .cell-empty');
+  const [fill, borderWidth] = await noRun.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return [s.backgroundColor, s.borderTopWidth];
+  });
+  expect(fill, 'no-run fill is transparent').toMatch(/^rgba?\([\d.\s,]*,?\s*0\)$|^transparent$/);
+  expect(parseFloat(borderWidth), 'no-run has a visible outline').toBeGreaterThan(0);
+});

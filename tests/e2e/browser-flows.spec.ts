@@ -176,4 +176,31 @@ test.describe('/admin/browser-flows — native matrix', () => {
     const link = page.locator('[data-test="flow-row-flow-a"] .flow-name a');
     await expect(link).toHaveAttribute('href', '/admin/browser-flows/flow-a');
   });
+
+  // UX walk AA6 (system_3 #11008): with the service unreachable, the page
+  // used to keep the reading instructions and the seven-colour legend for a
+  // grid it never draws, above an error with no next step.
+  test('service down: the error names a next step, and the reading instructions and legend hide', async ({ page }) => {
+    await page.route(/\/api\/browser-flows(\?.*)?$/, async (route: Route) => {
+      if (route.request().method() !== 'GET') {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'Browser service unavailable' } }),
+      });
+    });
+    await page.goto('/admin/browser-flows');
+    await dismissMobileSidebarIfPresent(page);
+
+    await expect(page.locator('[data-test="browser-flows-error"]')).toContainText('Browser service unavailable');
+    const next = page.locator('[data-test="browser-flows-error-next"]');
+    await expect(next).toBeVisible();
+    await expect(next).toHaveAttribute('href', '/admin/system-health');
+    await expect(page.locator('.meta')).toHaveCount(0);
+    await expect(page.locator('[data-test="browser-flows-legend"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="browser-flows-matrix"]')).toHaveCount(0);
+  });
 });
