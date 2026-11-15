@@ -173,25 +173,27 @@ test.describe('#9972 Invoices app: the statistics', () => {
 // that also shows a cancelled one. Bars and the line get headroom so the
 // tallest mark no longer sits on the plot's edge.
 test.describe('#11024 UX walk AM7: chart captions state real figures and give headroom', () => {
+  // `open` fixes the clock at 2026-09-15 (set inside the helper, after any
+  // clock call a test makes first), so September is "the current month" in
+  // every fixture below.
   test('a caption names the low and high month, the current month so far, and that cancelled invoices are left out', async ({ page }) => {
-    await page.clock.setFixedTime(new Date('2026-11-14T12:00:00Z'));
     const fake = newFake();
     fake.issued = [
-      inv(1, '2026-09-05'),
-      inv(2, '2026-11-14'),
-      inv(3, '2026-11-14'),
-      inv(4, '2026-11-14'),
-      inv(5, '2026-11-14'),
-      { ...inv(6, '2026-11-14'), status: 'cancelled' },
+      inv(1, '2026-07-05'),
+      inv(2, '2026-09-10'),
+      inv(3, '2026-09-11'),
+      inv(4, '2026-09-12'),
+      inv(5, '2026-09-13'),
+      { ...inv(6, '2026-09-14'), status: 'cancelled' },
     ];
     await open(page, fake);
     const chart = page.locator('[data-test="invoices-chart"]');
-    await expect(chart).toHaveAttribute('data-labels', 'Sep 2026,Oct 2026,Nov 2026');
-    // Six invoices are dated November on the list; the chart's "4" is the
+    await expect(chart).toHaveAttribute('data-labels', 'Jul 2026,Aug 2026,Sep 2026');
+    // Six invoices are dated September on the list; the chart's "4" is the
     // issued ones (the cancelled one left out), which the caption explains.
     await expect(chart).toHaveAttribute('data-counts', '1,0,4');
     await expect(page.locator('[data-test="stat-invoices-range"]')).toHaveText(
-      'per month, by issue date, cancelled invoices left out; low 0 in Oct · high 4 in Nov so far',
+      'per month, by issue date, cancelled invoices left out; low 0 in Aug · high 4 in Sep so far',
     );
   });
 
@@ -200,9 +202,8 @@ test.describe('#11024 UX walk AM7: chart captions state real figures and give he
     // motion renders it there on the first frame, so afterRender's reading
     // is the settled one, not a mid-animation one, with no timing wait.
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.clock.setFixedTime(new Date('2026-11-14T12:00:00Z'));
     const fake = newFake();
-    fake.issued = [served(1, 1, '2026-09-05', '2026-09-05', 35000), served(2, 2, '2026-11-14', '2026-11-14', 9000)];
+    fake.issued = [served(1, 1, '2026-07-05', '2026-07-05', 35000), served(2, 2, '2026-09-10', '2026-09-10', 9000)];
     await open(page, fake);
     const probe = async (id: string) => {
       const el = page.locator(`[data-test="${id}"] .asp-chart`);
