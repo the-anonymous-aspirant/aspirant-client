@@ -159,17 +159,23 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
     expect(cut, 'select values cut off in the table').toEqual([]);
   });
 
-  test('the "·" before "next invoice" never ends a line on its own', async ({ page }) => {
+  // §3.122 P3, "never break before a separator", as UX walk AM9 applied it
+  // (system_3 #11027, PR 481): the "·" ends the item before it, so when the
+  // line wraps it stays at the end of the first line and no line starts with
+  // it. This test used to assert the opposite (the dot sits with the text after
+  // it), which #11027 deliberately reversed; aligned in system_3 #11281.
+  test('the "·" before "next invoice" never starts a line on its own', async ({ page }) => {
     await open(page, 'light', { steuernummer: '' });
     // Same line = vertical centres closer than half a line; separate flex
     // items on one line can differ by a pixel, a wrap moves a whole line.
     const { gap, lineHeight } = await page.locator('[data-test="profile-card"]').evaluate((card) => {
       const centre = (el: Element) => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
       const dotEl = [...card.querySelectorAll('span')].find((s) => s.textContent!.trim() === '·')!;
-      const nextEl = card.querySelector('[data-test="profile-next-number"]')!;
-      return { gap: Math.abs(centre(dotEl) - centre(nextEl)), lineHeight: nextEl.getBoundingClientRect().height };
+      // The item the dot follows: the tax number, or the badge saying it is missing.
+      const beforeEl = card.querySelector('[data-test="profile-steuernummer"], [data-test="steuernummer-missing"]')!;
+      return { gap: Math.abs(centre(dotEl) - centre(beforeEl)), lineHeight: dotEl.getBoundingClientRect().height };
     });
-    expect(gap, 'the separator sits on the line of the text after it').toBeLessThan(lineHeight / 2);
+    expect(gap, 'the separator sits on the line of the text before it').toBeLessThan(lineHeight / 2);
   });
 
   // The list folds by month (§3.145, system_3 #10636), so the first group's
