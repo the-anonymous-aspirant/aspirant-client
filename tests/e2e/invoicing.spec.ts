@@ -130,6 +130,12 @@ async function openInvoicing(page: Page): Promise<void> {
 
 const csvFile = { name: 'activity.csv', mimeType: 'text/csv', buffer: Buffer.from('Date,Name\n') };
 
+// A payment's category as either layout shows it: the inline select on a
+// desktop, or the card's text on a phone (system_3 #11019-A4).
+const categoryOf = (page: Page, txn: string) =>
+  page.getByRole('combobox', { name: `Category for ${txn}` })
+    .or(page.locator(`.payment-card[data-txn="${txn}"] [data-test="row-category"]`));
+
 test.describe('#8367 Invoices app — profile, clients, import, categorisation', () => {
   test('the Invoices card is listed for vinoly and opens the app', async ({ page }) => {
     const fake = newFake();
@@ -311,6 +317,10 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
   });
 
   test('choosing a category PATCHes it; a server refusal is shown', async ({ page }) => {
+    // The inline category select is desktop only since system_3 #11019-A4
+    // (Design ack c69874 item 5): on a phone the card reads as text and the
+    // category changes in Edit payment (invoicing-edit-payment.spec.ts).
+    test.skip((page.viewportSize()?.width ?? 1280) < 640, 'inline category select is desktop only');
     const fake = newFake();
     await mockInvoicing(page, fake);
     await seedTrustedSessionAs(page, 'vinoly');
@@ -334,6 +344,10 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
   // work (the PayPal payments it sums are), so Paid work is disabled and the
   // row says why, instead of a round trip through a failed PATCH.
   test('a PayPal-into-N26 transfer has Paid work disabled, with a reason', async ({ page }) => {
+    // The inline category select is desktop only since system_3 #11019-A4
+    // (Design ack c69874 item 5): on a phone the card reads as text and the
+    // category changes in Edit payment (invoicing-edit-payment.spec.ts).
+    test.skip((page.viewportSize()?.width ?? 1280) < 640, 'inline category select is desktop only');
     const fake = newFake({
       payments: [
         { id: 13, kind: 'incoming', source: 'n26', transaction_id: 'TX3', paid_on: '2026-07-23T00:00:00Z', currency: 'EUR', gross_cents: 40000, sender_name: 'PAYPAL / INSTANT TRANSFER', sender_email: '', note: '', category: 'uncategorised', client_id: null },
@@ -357,6 +371,10 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
   // and "Paid work" sat behind the table's edge, unreachable by mouse. The
   // hit test is what a pointer would get.
   test('near the window bottom the category options are on top and clickable', async ({ page }) => {
+    // The inline category select is desktop only since system_3 #11019-A4
+    // (Design ack c69874 item 5): on a phone the card reads as text and the
+    // category changes in Edit payment (invoicing-edit-payment.spec.ts).
+    test.skip((page.viewportSize()?.width ?? 1280) < 640, 'inline category select is desktop only');
     const fake = newFake();
     await mockInvoicing(page, fake);
     await seedTrustedSessionAs(page, 'vinoly');
@@ -518,7 +536,7 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
     expect(patches.map((r) => r.path)).toEqual(['/invoicing/payments/13', '/invoicing/payments/11', '/invoicing/payments/10']);
     for (const r of patches) expect(JSON.parse(r.body)).toEqual({ category: 'other' });
     for (const txn of ['TX1', 'TX2', 'TX3']) {
-      await expect(page.getByRole('combobox', { name: `Category for ${txn}` })).toContainText('Other');
+      await expect(categoryOf(page, txn)).toContainText('Other');
       await expect(page.getByRole('checkbox', { name: `Select ${txn}` })).not.toBeChecked();
     }
     await expect(bulk(page)).toContainText('Set category of selected rows');
@@ -541,8 +559,8 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
     await expect(page.getByRole('checkbox', { name: 'Select TX2' })).toBeChecked();
     await expect(page.getByRole('checkbox', { name: 'Select TX1' })).not.toBeChecked();
     await expect(page.getByRole('checkbox', { name: 'Select TX3' })).not.toBeChecked();
-    await expect(page.getByRole('combobox', { name: 'Category for TX1' })).toContainText('Other');
-    await expect(page.getByRole('combobox', { name: 'Category for TX2' })).toContainText('Gift');
+    await expect(categoryOf(page, 'TX1')).toContainText('Other');
+    await expect(categoryOf(page, 'TX2')).toContainText('Gift');
     await expect(bulk(page)).toContainText('Set category of 1 selected');
   });
 
