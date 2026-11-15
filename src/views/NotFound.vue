@@ -42,7 +42,7 @@
   }
 
   .not-found-message code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-family-mono);
     word-break: break-all;
   }
 </style>

@@ -1,6 +1,6 @@
 <template>
   <div class="login-view page">
-    <h1>{{ admin ? 'Admin sign-in' : 'Login' }}</h1>
+    <h1>{{ admin ? 'Admin sign-in' : 'Sign in' }}</h1>
     <AspCard class="login-view-card" padding="md">
       <!-- State 3 of design_agent's ack on #8798-B2 (c63362, amended c63391
            after security's c63381): while the live /api/profile check is in

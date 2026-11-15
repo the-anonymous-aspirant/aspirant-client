@@ -10,7 +10,7 @@ import { test, expect, type Page } from '@playwright/test';
 
 const ROUTES: Array<[string, string]> = [
   ['/', 'The Aspirant'],
-  ['/login', 'Login'],
+  ['/login', 'Sign in'],
   ['/support', 'Support'],
 ];
 
