@@ -11,6 +11,17 @@
       </p>
       <p><em>See if you can get to the top on the highscore tab... and have fun!</em></p>
     </div>
+    <!-- How to play on a phone (UX walk AG3, system_3 #10995). The three lines
+         above are hidden below 769px, and they name arrow keys a phone does not
+         have, so a phone showed an empty grid and a button. This one line, for
+         touch, names the ← ↓ → buttons that appear under the board once a game
+         starts (.mobile-controls). From 769px it is hidden and the lines above
+         are unchanged. -->
+    <p class="intro-touch" data-test="wordweaver-touch-how-to">
+      <!-- &nbsp; keeps the three arrows on one line: they name one control. -->
+      Letters fall one at a time. Steer each with the ←&nbsp;↓&nbsp;→ buttons under the board to
+      spell the longest words across and down.
+    </p>
     <div class="controls">
       <!-- Held deliberately as native buttons, not ported to AspSegmented
            (#4446 decision H2, filed on #4450): each member carries
@@ -1103,6 +1114,13 @@
     border-radius: var(--radius-full);
   }
 
+  /* The touch how-to line exists for the phone only: hidden here, shown by the
+     phone block just below. This rule must stay ABOVE that block, since at equal
+     specificity the later rule wins. */
+  .intro-touch {
+    display: none;
+  }
+
   @media (max-width: 768px) {
     #wordweaver h1 {
       margin-bottom: var(--space-2xs);
@@ -1111,6 +1129,12 @@
 
     .intro-text {
       display: none;
+    }
+
+    .intro-touch {
+      display: block;
+      margin: 0 0 var(--space-sm);
+      font-size: var(--text-sm);
     }
 
     .sound-toggle {
