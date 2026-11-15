@@ -60,11 +60,18 @@ async function readsAsLink(link: Locator) {
   });
 }
 
-async function open(page: Page, path: string, theme: string): Promise<void> {
+async function open(page: Page, path: string, theme: string, signupEnabled = true): Promise<void> {
   await page.addInitScript((t) => localStorage.setItem('theme', t as string), theme);
   await page.route(/\/api\//, (route) => route.fulfill({ status: 204, body: '' }));
+  // Open by default: "Create an account" is one of the links measured, and it
+  // is not offered while sign-up is closed (#10980). /signup's "Go to sign in"
+  // shows only when closed, so that case asks for closed.
   await page.route('**/api/signup/status', (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ signup_enabled: false }) }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ signup_enabled: signupEnabled }),
+    }),
   );
   await page.goto(path);
   await expect.poll(() => page.evaluate(() => document.documentElement.getAttribute('data-theme'))).toBe(theme);
@@ -114,7 +121,7 @@ for (const theme of ['light', 'dark'] as const) {
     });
 
     test('/signup "Go to sign in" clears AA, underlined, 24px target', async ({ page }) => {
-      await open(page, '/signup', theme);
+      await open(page, '/signup', theme, false);
       const link = page.locator('.next', { hasText: 'Go to sign in' });
       await expect(link).toBeVisible();
       const ratio = await contrastRatio(link);
