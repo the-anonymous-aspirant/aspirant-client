@@ -3,13 +3,23 @@
     <h1>Voice Commander</h1>
     <h2 class="page-subtitle">Record voice commands and manage extracted tasks</h2>
 
+    <!-- One line, in words, before any per-card detail: the service not
+         answering is one fact, not four separate raw errors (D2, D4, S3;
+         §3.144 Decision 5; system_3 #11006, UX walk AA4). Mirrors the
+         SystemHealth.vue status-banner shape from the same UX walk (#11003). -->
+    <div v-if="serviceUnreachable" class="status-banner degraded" role="alert" data-test="service-banner">
+      <span class="status-dot degraded"></span>
+      <span class="status-label">{{ serviceBannerMessage }}</span>
+      <AspButton variant="secondary" size="sm" data-test="service-banner-retry" @click="retryAll">Retry</AspButton>
+    </div>
+
     <!-- Record Card -->
     <div class="record-card">
       <h3>Record</h3>
       <div class="record-controls">
         <AspButton
           class="btn-record"
-          :disabled="recordState === 'uploading'"
+          :disabled="recordState === 'uploading' || (recordState === 'idle' && messagesUnreachable)"
           :variant="recordState === 'recording' ? 'destructive' : 'primary'"
           @click="toggleRecording"
         >
@@ -29,12 +39,27 @@
         </span>
         <span v-if="recordError" class="error-text">{{ recordError }}</span>
       </div>
+      <!-- Says where a recording goes, or that it is held back, instead of
+           staying silently offered into a dead service (system_3 #11006). -->
+      <p class="record-destination">
+        <template v-if="messagesUnreachable">Recording is held back until the voice commander responds.</template>
+        <template v-else>Recordings go to the voice commander for transcription.</template>
+      </p>
     </div>
 
     <!-- Recent Messages Card -->
     <div class="messages-card">
-      <h3>Recent Messages</h3>
+      <div class="card-header-row">
+        <h3>Recent Messages</h3>
+        <!-- Names what it processes, and leaves the Filters card, where on a
+             phone it read as an apply button (system_3 #11006). -->
+        <AspButton class="btn-process" variant="primary" size="sm" @click="processNow" :disabled="processing">
+          <span v-if="processing">Processing...</span>
+          <span v-else>Process Transcriptions</span>
+        </AspButton>
+      </div>
       <div v-if="messagesLoading && messages.length === 0" class="loading-text">Loading messages...</div>
+      <div v-else-if="messagesUnreachable" class="not-loaded-text" data-test="messages-not-loaded">Not loaded</div>
       <div v-else-if="messagesError" class="error-text">{{ messagesError }}</div>
       <div v-else-if="messages.length === 0" class="empty-text">No voice messages yet.</div>
       <AspDataTable v-else class="messages-table" :columns="messageColumns" :rows="recentMessages" row-key="id">
@@ -104,10 +129,6 @@
             @input="debouncedFetch"
           />
         </div>
-        <AspButton class="btn-process" variant="primary" @click="processNow" :disabled="processing">
-          <span v-if="processing">Processing...</span>
-          <span v-else>Process Now</span>
-        </AspButton>
       </div>
     </div>
 
@@ -115,6 +136,7 @@
     <div class="tasks-card">
       <h3>Tasks</h3>
       <div v-if="tasksLoading && tasks.length === 0" class="loading-text">Loading tasks...</div>
+      <div v-else-if="tasksUnreachable" class="not-loaded-text" data-test="tasks-not-loaded">Not loaded</div>
       <div v-else-if="tasksError" class="error-text">{{ tasksError }}</div>
       <div v-else-if="tasks.length === 0" class="empty-text">No commander tasks yet.</div>
       <table v-else class="tasks-table">
@@ -216,6 +238,7 @@
     <div class="notes-card">
       <h3>Notes</h3>
       <div v-if="notesLoading && notes.length === 0" class="loading-text">Loading notes...</div>
+      <div v-else-if="notesUnreachable" class="not-loaded-text" data-test="notes-not-loaded">Not loaded</div>
       <div v-else-if="notesError" class="error-text">{{ notesError }}</div>
       <div v-else-if="notes.length === 0" class="empty-text">No diary notes yet.</div>
       <div v-else class="notes-list">
@@ -254,6 +277,7 @@
     <div class="vocabulary-card">
       <h3>Command Vocabulary Reference</h3>
       <div v-if="vocabularyLoading" class="loading-text">Loading vocabulary...</div>
+      <div v-else-if="vocabularyUnreachable" class="not-loaded-text" data-test="vocabulary-not-loaded">Not loaded</div>
       <div v-else-if="vocabularyError" class="error-text">{{ vocabularyError }}</div>
       <div v-else-if="!vocabulary" class="empty-text">No vocabulary data available.</div>
       <div v-else class="vocabulary-content">
@@ -310,6 +334,27 @@
 import { AspInput, AspButton, AspSelect, AspTooltip, AspDataTable } from '@aspirant/design-system';
 import axios from 'axios';
 
+// The API's own error is `{code, message}` (the structured shape used across
+// this codebase, e.g. `no-transport-strings.spec.ts`'s
+// `err.response?.data?.error?.message` convention) — never a bare string, so
+// joining `err.response?.data?.error` straight into a sentence renders
+// "[object Object]". This reads the API's own words and never the object or
+// axios's own `err.message` (system_3 #11006, UX walk AA4).
+function apiErrorMessage(err, fallback) {
+  const msg = err?.response?.data?.error?.message;
+  return typeof msg === 'string' && msg ? msg : fallback;
+}
+
+// "The service does not answer": no response came back at all, or the
+// gateway/service itself answered with a 5xx. A 4xx is the server answering,
+// just not with what was asked for, and keeps its own specific wording.
+function isUnreachable(err) {
+  return !err?.response || err.response.status >= 500;
+}
+
+const joinNames = (names) =>
+  names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
 export default {
   components: { AspInput, AspButton, AspSelect, AspTooltip, AspDataTable },
   data() {
@@ -337,12 +382,17 @@ export default {
       messages: [],
       messagesLoading: true,
       messagesError: null,
+      // True when the messages read did not merely fail, but the service did
+      // not answer at all (no response, or a 5xx). Drives the top banner and
+      // the card's "Not loaded" text (system_3 #11006, UX walk AA4).
+      messagesUnreachable: false,
       recentMessageLimit: 5,
 
       // Tasks state
       tasks: [],
       tasksLoading: true,
       tasksError: null,
+      tasksUnreachable: false,
       processing: false,
       statusFilter: '',
       priorityFilter: '',
@@ -357,6 +407,7 @@ export default {
       notes: [],
       notesLoading: true,
       notesError: null,
+      notesUnreachable: false,
       notesPage: 1,
       notesPageSize: 20,
       notesTotalPages: 1,
@@ -366,6 +417,7 @@ export default {
       vocabulary: null,
       vocabularyLoading: true,
       vocabularyError: null,
+      vocabularyUnreachable: false,
 
       // Timers
       messagesRefreshTimer: null,
@@ -397,6 +449,27 @@ export default {
         { value: 'high', label: 'High' },
         { value: 'critical', label: 'Critical' },
       ];
+    },
+    // Which of the four reads did not answer at all, named so the one top
+    // line can say what it covers rather than "something failed" (D2, D4;
+    // mirrors SystemHealth.vue's partialBanner, same UX walk, #11003).
+    unreachableSections() {
+      const sections = [];
+      if (this.messagesUnreachable) sections.push('messages');
+      if (this.tasksUnreachable) sections.push('tasks');
+      if (this.notesUnreachable) sections.push('notes');
+      if (this.vocabularyUnreachable) sections.push('vocabulary');
+      return sections;
+    },
+    serviceUnreachable() {
+      return this.unreachableSections.length > 0;
+    },
+    serviceBannerMessage() {
+      if (this.unreachableSections.length === 4) {
+        return 'The voice commander service is not responding.';
+      }
+      const list = joinNames(this.unreachableSections);
+      return `${list.charAt(0).toUpperCase()}${list.slice(1)} could not be read — the voice commander service is not responding.`;
     },
   },
   methods: {
@@ -474,7 +547,7 @@ export default {
 
         await this.fetchMessages();
       } catch (err) {
-        this.recordError = 'Upload failed: ' + (err.response?.data?.error || 'The recording could not be uploaded. Try again.');
+        this.recordError = 'Upload failed: ' + apiErrorMessage(err, 'The recording could not be uploaded. Try again.');
       }
       this.recordState = 'idle';
     },
@@ -486,9 +559,16 @@ export default {
         const resp = await axios.get('/api/voice-messages');
         this.messages = resp.data.items || [];
         this.messagesError = null;
+        this.messagesUnreachable = false;
       } catch (err) {
         if (this.messages.length === 0) {
-          this.messagesError = 'Failed to load messages: ' + (err.response?.data?.error || 'The voice messages could not be loaded.');
+          if (isUnreachable(err)) {
+            this.messagesUnreachable = true;
+            this.messagesError = null;
+          } else {
+            this.messagesUnreachable = false;
+            this.messagesError = 'Failed to load messages: ' + apiErrorMessage(err, 'The voice messages could not be loaded.');
+          }
         }
       }
       this.messagesLoading = false;
@@ -499,7 +579,7 @@ export default {
         await axios.delete(`/api/voice-messages/${id}`);
         this.messages = this.messages.filter(m => m.id !== id);
       } catch (err) {
-        this.messagesError = 'Delete failed: ' + (err.response?.data?.error || 'That could not be deleted. Try again.');
+        this.messagesError = 'Delete failed: ' + apiErrorMessage(err, 'That could not be deleted. Try again.');
       }
     },
 
@@ -530,9 +610,16 @@ export default {
         this.totalTasks = resp.data.total || 0;
         this.totalPages = Math.ceil(this.totalTasks / this.pageSize) || 1;
         this.tasksError = null;
+        this.tasksUnreachable = false;
       } catch (err) {
         if (this.tasks.length === 0) {
-          this.tasksError = 'Failed to load tasks: ' + (err.response?.data?.error || 'The tasks could not be loaded.');
+          if (isUnreachable(err)) {
+            this.tasksUnreachable = true;
+            this.tasksError = null;
+          } else {
+            this.tasksUnreachable = false;
+            this.tasksError = 'Failed to load tasks: ' + apiErrorMessage(err, 'The tasks could not be loaded.');
+          }
         }
       }
       this.tasksLoading = false;
@@ -544,7 +631,7 @@ export default {
         await axios.post('/api/commander/process');
         await this.fetchTasks();
       } catch (err) {
-        this.tasksError = 'Process failed: ' + (err.response?.data?.error || 'The process could not be started. Try again.');
+        this.tasksError = 'Process failed: ' + apiErrorMessage(err, 'The process could not be started. Try again.');
       }
       this.processing = false;
     },
@@ -554,7 +641,7 @@ export default {
         await axios.patch(`/api/commander/tasks/${id}`, { status: 'closed' });
         await this.fetchTasks();
       } catch (err) {
-        this.tasksError = 'Close failed: ' + (err.response?.data?.error || 'The task could not be closed. Try again.');
+        this.tasksError = 'Close failed: ' + apiErrorMessage(err, 'The task could not be closed. Try again.');
       }
     },
 
@@ -563,7 +650,7 @@ export default {
         await axios.patch(`/api/commander/tasks/${id}`, { status: 'open' });
         await this.fetchTasks();
       } catch (err) {
-        this.tasksError = 'Reopen failed: ' + (err.response?.data?.error || 'The task could not be reopened. Try again.');
+        this.tasksError = 'Reopen failed: ' + apiErrorMessage(err, 'The task could not be reopened. Try again.');
       }
     },
 
@@ -572,7 +659,7 @@ export default {
         await axios.delete(`/api/commander/tasks/${id}`);
         this.tasks = this.tasks.filter(t => t.id !== id);
       } catch (err) {
-        this.tasksError = 'Delete failed: ' + (err.response?.data?.error || 'That could not be deleted. Try again.');
+        this.tasksError = 'Delete failed: ' + apiErrorMessage(err, 'That could not be deleted. Try again.');
       }
     },
 
@@ -621,9 +708,16 @@ export default {
         this.notes = resp.data.items || [];
         this.notesTotalPages = resp.data.total_pages || 1;
         this.notesError = null;
+        this.notesUnreachable = false;
       } catch (err) {
         if (this.notes.length === 0) {
-          this.notesError = 'Failed to load notes: ' + (err.response?.data?.error || 'The notes could not be loaded.');
+          if (isUnreachable(err)) {
+            this.notesUnreachable = true;
+            this.notesError = null;
+          } else {
+            this.notesUnreachable = false;
+            this.notesError = 'Failed to load notes: ' + apiErrorMessage(err, 'The notes could not be loaded.');
+          }
         }
       }
       this.notesLoading = false;
@@ -634,7 +728,7 @@ export default {
         await axios.delete(`/api/commander/notes/${id}`);
         this.notes = this.notes.filter(n => n.id !== id);
       } catch (err) {
-        this.notesError = 'Delete failed: ' + (err.response?.data?.error || 'That could not be deleted. Try again.');
+        this.notesError = 'Delete failed: ' + apiErrorMessage(err, 'That could not be deleted. Try again.');
       }
     },
 
@@ -660,10 +754,26 @@ export default {
         const resp = await axios.get('/api/commander/vocabulary');
         this.vocabulary = resp.data;
         this.vocabularyError = null;
+        this.vocabularyUnreachable = false;
       } catch (err) {
-        this.vocabularyError = 'Failed to load vocabulary: ' + (err.response?.data?.error || 'The vocabulary could not be loaded.');
+        if (isUnreachable(err)) {
+          this.vocabularyUnreachable = true;
+          this.vocabularyError = null;
+        } else {
+          this.vocabularyUnreachable = false;
+          this.vocabularyError = 'Failed to load vocabulary: ' + apiErrorMessage(err, 'The vocabulary could not be loaded.');
+        }
       }
       this.vocabularyLoading = false;
+    },
+
+    // The top banner's one Retry: every read that can be stuck gets another
+    // try (system_3 #11006, UX walk AA4).
+    retryAll() {
+      this.fetchMessages();
+      this.fetchTasks();
+      this.fetchNotes();
+      this.fetchVocabulary();
     },
 
     // --- Formatting helpers ---
@@ -748,6 +858,54 @@ export default {
   font-size: var(--text-sm);
 }
 
+/* A read that failed because nothing loaded, not because of a specific
+   reason — the top banner already carries the alarm, so this stays a
+   neutral word rather than a second red line (system_3 #11006). */
+.not-loaded-text {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+  padding: var(--space-md) 0;
+}
+
+/* Status Banner — one line, in words, with a retry, when the service does
+   not answer (system_3 #11006; mirrors SystemHealth.vue's status-banner,
+   same UX walk #11003). */
+.status-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-xl);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-lg);
+  font-weight: 600;
+  flex-wrap: wrap;
+}
+
+.status-banner.degraded {
+  background-color: var(--surface-elevated);
+  background-image: linear-gradient(var(--feedback-warning-bg), var(--feedback-warning-bg));
+  border: 2px solid var(--feedback-warning);
+  color: var(--feedback-warning-text);
+}
+
+.status-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.status-dot {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  display: inline-block;
+}
+
+.status-dot.degraded {
+  background-color: var(--feedback-warning-text);
+}
+
 /* Record Card */
 .record-card {
   background-color: var(--surface-card);
@@ -785,6 +943,12 @@ export default {
   font-weight: 600;
 }
 
+.record-destination {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin: var(--space-sm) 0 0 0;
+}
+
 .pulse-dot {
   width: 10px;
   height: 10px;
@@ -814,6 +978,20 @@ export default {
 .messages-card h3 {
   color: var(--text-heading-card);
   font-size: var(--text-lg);
+  margin: 0 0 var(--space-md) 0;
+}
+
+/* Messages' own header row carries the Process button (moved off the
+   Filters card, system_3 #11006) beside its heading. */
+.card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.card-header-row h3 {
   margin: 0 0 var(--space-md) 0;
 }
 
@@ -933,10 +1111,6 @@ export default {
    --border-control box they used to hand-paint is what AspSelect's trigger
    already paints, which is why nothing replaces them. */
 
-/* Layout only — visuals from AspButton (variant="primary"). */
-.btn-process {
-  margin-left: auto;
-}
 
 /* Tasks Card */
 .tasks-card {
@@ -1376,8 +1550,8 @@ export default {
     align-items: stretch;
   }
 
-  .btn-process {
-    margin-left: 0;
+  .card-header-row .btn-process {
+    width: 100%;
   }
 
   .messages-table th:nth-child(2),
