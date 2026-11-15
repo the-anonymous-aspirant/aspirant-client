@@ -534,10 +534,12 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
       expect(control.y, `${txn}: controls under what`).toBeGreaterThanOrEqual(what.y + what.height - 1);
     }
     // #11019-A4: a phone payment card carries no select; it reads
-    // "{category} · {client}", and Edit payment is where they change.
+    // "{category} · {client}", and Edit payment is where they change. The
+    // space before "·" is a no-break space, so the separator never starts
+    // a line.
     const payment = page.locator('.payment-card[data-txn="PP-P2"]');
     await expect(payment.locator('[data-test="payment-category"], [data-test="payment-client"]')).toHaveCount(0);
-    await expect(payment.locator('[data-test="row-category-client"]')).toHaveText(/^\S.* · .+$/);
+    await expect(payment.locator('[data-test="row-category-client"]')).toHaveText(/^\S.* · .+$/);
     await expect(page.locator('.payment-card[data-txn="N26-E1"] [data-test="row-date-line"]')).toHaveText('2026-10-14 · N26');
     await expect(page.locator('.payment-card[data-txn="M-e2"] [data-test="row-date-line"]')).toHaveText('2026-09-28 · By hand');
     // No sideways scroll at 390.
