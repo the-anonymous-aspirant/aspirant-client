@@ -539,11 +539,55 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     // a line.
     const payment = page.locator('.payment-card[data-txn="PP-P2"]');
     await expect(payment.locator('[data-test="payment-category"], [data-test="payment-client"]')).toHaveCount(0);
-    await expect(payment.locator('[data-test="row-category-client"]')).toHaveText(/^\S.* · .+$/);
+    await expect(payment.locator('[data-test="row-category-client"]')).toHaveText(/^\S.*\u00a0· .+$/);
     await expect(page.locator('.payment-card[data-txn="N26-E1"] [data-test="row-date-line"]')).toHaveText('2026-10-14 · N26');
     await expect(page.locator('.payment-card[data-txn="M-e2"] [data-test="row-date-line"]')).toHaveText('2026-09-28 · By hand');
     // No sideways scroll at 390.
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
+  // #11019-A4, Design ack c69874 item 5: money in with no client reads
+  // "{category} · no client", and the line is muted except "Uncategorised",
+  // which takes the card's ink because it decides whether the payment still
+  // needs an invoice.
+  test('on a phone a payment card says "no client", and only "Uncategorised" leaves the muted ink', async ({ page }) => {
+    const viewport = page.viewportSize();
+    test.skip(!viewport || viewport.width >= 640, 'phone layout only');
+    await open(page, newFake({
+      payments: [
+        pay({
+          id: 1, transaction_id: 'U-1', source: 'paypal', entry: 'import', paid_on: '2026-10-03T00:00:00Z',
+          created_at: '2026-10-04T09:00:00Z', sender_name: 'Mara Esempio', note: 'Portrait', category: 'uncategorised', gross_cents: 45000,
+        }),
+        pay({
+          id: 2, transaction_id: 'O-2', source: 'paypal', entry: 'import', paid_on: '2026-08-10T00:00:00Z',
+          created_at: '2026-08-11T09:00:00Z', sender_name: 'Kiosk Esempio', note: 'Refund of a deposit', category: 'other', gross_cents: 2000,
+        }),
+      ],
+      expenses: [],
+    }));
+    const line = (txn: string) => page.locator(`.payment-card[data-txn="${txn}"] [data-test="row-category-client"]`);
+    await expect(line('U-1')).toHaveText('Uncategorised\u00a0· no client');
+    await expect(line('O-2')).toHaveText('Other\u00a0· no client');
+    // The probe sits on the card, not inside the muted line: the muted token
+    // is relative to the ink it inherits, so inside the line it would read
+    // muted twice over.
+    const ink = (sel: string, token: string) =>
+      page.locator(sel).first().evaluate((el, t) => {
+        const probe = document.createElement('span');
+        probe.style.color = `var(${t})`;
+        el.closest('.payment-card')!.appendChild(probe);
+        const want = getComputedStyle(probe).color;
+        probe.remove();
+        return { got: getComputedStyle(el).color, want };
+      }, token);
+    const open1 = await ink('.payment-card[data-txn="U-1"] [data-test="row-category"]', '--text-body');
+    expect(open1.got).toBe(open1.want);
+    const other = await ink('.payment-card[data-txn="O-2"] [data-test="row-category"]', '--text-muted');
+    expect(other.got).toBe(other.want);
+    const client = await ink('.payment-card[data-txn="U-1"] [data-test="row-client"]', '--text-muted');
+    expect(client.got).toBe(client.want);
+    expect(open1.got).not.toBe(other.got);
   });
 });
 
