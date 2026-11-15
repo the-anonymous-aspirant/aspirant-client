@@ -84,7 +84,7 @@ test.describe('#9960 Invoices — select and download as one PDF', () => {
     await expect(tick(page, '2026-003')).toBeVisible();
     await expect(tick(page, '2026-002')).toHaveCount(0);
     await expect(page.locator('[data-test="merge-left-out"]')).toHaveText(
-      "Drafts and cancelled invoices are left out: a draft has no PDF yet, and a cancelled invoice's PDF does not show it was cancelled.",
+      "Only issued invoices can be ticked for the PDF: a draft has no PDF yet, and a cancelled invoice's PDF does not show it was cancelled.",
     );
   });
 

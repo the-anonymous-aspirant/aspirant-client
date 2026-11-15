@@ -233,3 +233,46 @@ test.describe('#10818 the invoice list folds by month', () => {
     await expect(visibleRows(page)).toHaveCount(2);
   });
 });
+
+/** #11021, UX walk AM4: the card's only date used to be the unlabelled work
+ *  date, with no issue date even though the filters above work on it; a
+ *  draft read "Draft" twice (its number slot and its status badge). */
+test.describe('#11021 UX walk AM4: labelled dates and a draft named by its client', () => {
+  test('on a phone a card labels the work date, adds the issue date once issued, and names a draft by its client', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile-safari', 'cards are the phone layout; desktop shows a table');
+    const fake = newFake();
+    fake.invoices = [
+      inv(9, 'draft', null, null, 'Studio Erfunden'),
+      inv(7, 'issued', '2026-007', '2026-11-18'),
+    ];
+    await open(page, fake);
+    const draftRow = page.locator('[data-test="invoice-row"][data-invoice-id="9"]');
+    // The identity line is the client, once, not "Draft" repeated; the
+    // status badge is still the only place that reads "Draft".
+    await expect(draftRow).toContainText('Studio Erfunden');
+    await expect(draftRow.getByText('Draft', { exact: true })).toHaveCount(1);
+    await expect(draftRow).toContainText('Work done 2026-08-01');
+    await expect(draftRow).not.toContainText('Issued');
+
+    const issuedRow = page.locator('[data-test="invoice-row"][data-invoice-id="7"]');
+    await expect(issuedRow).toContainText('2026-007');
+    await expect(issuedRow).toContainText('Work done 2026-08-01 · Issued 2026-11-18');
+  });
+
+  test('on desktop the Number column names a draft by its client, and the date columns are Work done and Issued', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', 'tables are the desktop layout; a phone shows cards');
+    const fake = newFake();
+    fake.invoices = [
+      inv(9, 'draft', null, null, 'Studio Erfunden'),
+      inv(7, 'issued', '2026-007', '2026-11-18'),
+    ];
+    await open(page, fake);
+    const headings = await page.locator('[data-test="invoice-group"][data-group="drafts"] thead th').allInnerTexts();
+    expect(headings).toContain('Work done');
+    expect(headings).not.toContain('Service');
+    const draftRow = page.locator('[data-test="invoice-row"][data-invoice-id="9"]');
+    await expect(draftRow).toContainText('Studio Erfunden');
+    const issuedRow = page.locator('[data-test="invoice-row"][data-invoice-id="7"]');
+    await expect(issuedRow.locator('td').nth(1)).toHaveText('2026-007');
+  });
+});

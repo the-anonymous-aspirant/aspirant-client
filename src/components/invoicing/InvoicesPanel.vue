@@ -27,13 +27,6 @@
       </div>
     </div>
 
-    <!-- Only issued rows can be ticked for "Invoice list (single PDF)" below
-         (#9960, design ack c61576); this says why the others have no checkbox,
-         and shows only when one of them is on screen. -->
-    <p v-if="!loadError && hasUnselectable" class="caption" data-test="merge-left-out">
-      Drafts and cancelled invoices are left out: a draft has no PDF yet, and a cancelled invoice's PDF does not show it was cancelled.
-    </p>
-
     <p v-if="loadError" class="error" role="alert" data-test="invoices-error">{{ loadError }}</p>
     <AspEmptyState
       v-else-if="rows.length === 0 && !filtered"
@@ -65,6 +58,14 @@
         @update:model-value="selectAllShown"
       />
     </div>
+    <!-- Says what the tick governs, where the ticking happens, rather than a
+         statement about the list above it that the first rows contradict
+         (UX walk AM4, system_3 #11021): only issued rows can be ticked for
+         "Invoice list (single PDF)" below (#9960, design ack c61576). Shows
+         only when one of the other kinds is on screen. -->
+    <p v-if="!loadError && hasUnselectable" class="caption" data-test="merge-left-out">
+      Only issued invoices can be ticked for the PDF: a draft has no PDF yet, and a cancelled invoice's PDF does not show it was cancelled.
+    </p>
     <details
       v-for="group in groups"
       :key="group.key"
@@ -96,12 +97,14 @@
           @click="$emit('open', row.id)"
         >
           <span class="invoice-card__row">
-            <strong class="nowrap">{{ row.invoice_number || 'Draft' }}</strong>
+            <strong class="invoice-identity">{{ identityOf(row) }}</strong>
             <AspBadge :status="statusTone(row.status)">{{ statusLabel(row.status) }}</AspBadge>
           </span>
-          <span class="invoice-card__client">{{ row.client_name || '—' }}</span>
+          <!-- A draft has no number yet, so its identity above is already its
+               client (identityOf): this line would only repeat it. -->
+          <span v-if="row.invoice_number" class="invoice-card__client">{{ row.client_name || '—' }}</span>
           <span class="invoice-card__row">
-            <span class="muted nowrap">{{ serviceLabel(row) }}</span>
+            <span class="invoice-card__dates muted">{{ dateLineOf(row) }}</span>
             <span class="amount nowrap">{{ formatMoney(row.total_cents, row.currency) }}</span>
           </span>
         </button>
@@ -132,7 +135,7 @@
         </span>
       </template>
       <template #cell-invoice_number="{ row }">
-        <span class="nowrap">{{ row.invoice_number || 'Draft' }}</span>
+        <span class="invoice-identity">{{ identityOf(row) }}</span>
       </template>
       <template #cell-status="{ row }">
         <AspBadge :status="statusTone(row.status)">{{ statusLabel(row.status) }}</AspBadge>
@@ -263,7 +266,7 @@
           { key: 'invoice_number', label: 'Number', width: '14%' },
           { key: 'status', label: 'Status', width: '13%' },
           { key: 'client_name', label: 'Client', width: '27%' },
-          { key: 'service', label: 'Service', sortable: false, width: '19%' },
+          { key: 'service', label: 'Work done', sortable: false, width: '19%' },
           { key: 'issue_date', label: 'Issued', width: '13%' },
           { key: 'total_cents', label: 'Total', align: 'right', width: '14%' },
         ],
@@ -480,6 +483,20 @@
         const to = formatDay(row.service_date_to);
         return to && to !== from ? `${from} – ${to}` : from || '—';
       },
+      // A draft has no number yet; naming it by its client (UX walk AM4,
+      // system_3 #11021) replaces one "Draft" of the two the row used to
+      // read (the other is the status badge), with a client the rare one
+      // missing both falls back to.
+      identityOf(row) {
+        return row.invoice_number || row.client_name || 'Draft';
+      },
+      // The phone card's only date used to be the work date, unlabelled, with
+      // no issue date even though the filters above work on it (UX walk AM4).
+      // A draft has no issue date yet, so it reads as just the work date.
+      dateLineOf(row) {
+        const work = `Work done ${this.serviceLabel(row)}`;
+        return row.issue_date ? `${work} · Issued ${this.formatDay(row.issue_date)}` : work;
+      },
       statusLabel(s) {
         return STATUS_LABELS[s] || s;
       },
@@ -684,7 +701,24 @@
     font-weight: var(--font-weight-bold);
   }
 
+  /* An issued or cancelled number is always short; a draft's identity is
+     its client name instead (identityOf, UX walk AM4) and can be long. */
+  .invoice-identity {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
   .invoice-card__client {
+    overflow-wrap: anywhere;
+  }
+
+  /* Work done + issue date (UX walk AM4): longer than the old unlabelled
+     work date alone, so it wraps rather than pushing the amount off the
+     card; the amount (a flex sibling, not in flow with it) stays put. */
+  .invoice-card__dates {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow-wrap: anywhere;
   }
 
