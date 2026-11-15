@@ -18,6 +18,9 @@ const APPLICATIONS = [
   '/applications/constellations',
   '/games/wordweaver',
   '/quizzes/sql',
+  // Missed by #9599 and found by UX walk AG5 (system_3 #10997): it padded and
+  // centred its own root, and its title sat ~100px low on a phone.
+  '/quizzes/rbguesser',
   '/profile',
 ];
 
