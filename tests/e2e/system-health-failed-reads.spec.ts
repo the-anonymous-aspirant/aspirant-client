@@ -67,7 +67,9 @@ for (const theme of ['light', 'dark'] as const) {
       await open(page, { containers: 502, disk: 502 });
 
       const banner = page.locator('[data-test="status-banner-partial"]');
-      await expect(banner).toHaveText(
+      // The banner also carries Refresh now (system_3 #11007, beside the
+      // verdict); the wording lives in .status-label alone.
+      await expect(banner.locator('.status-label')).toHaveText(
         'Server and database OK. Containers and disk could not be read.'
       );
       await expect(banner).toHaveClass(/degraded/);
@@ -154,7 +156,7 @@ test('the server health read failed: the Server card says so, and the banner say
   await expect(page.locator('[data-test="read-failed-health"]')).toContainText(
     'Could not read server health: the server answered with an error (500).'
   );
-  await expect(page.locator('[data-test="status-banner-partial"]')).toHaveText(
+  await expect(page.locator('[data-test="status-banner-partial"] .status-label')).toHaveText(
     'Server health could not be read.'
   );
   await expect(page.locator('.container-card')).toHaveCount(1);
@@ -165,7 +167,7 @@ test('the database statistics read failed: the Database card says so', async ({ 
   await expect(page.locator('[data-test="read-failed-db"]')).toContainText(
     'Could not read database statistics: the server did not answer.'
   );
-  await expect(page.locator('[data-test="status-banner-partial"]')).toHaveText(
+  await expect(page.locator('[data-test="status-banner-partial"] .status-label')).toHaveText(
     'Server and database OK. Database statistics could not be read.'
   );
 });

@@ -98,7 +98,9 @@ test('each card reads its usage line, image size and readable name; controls onl
   const browser = card(page, 'aspirant-online-browser-1');
   await expect(browser.locator('.container-name')).toHaveText('browser');
   await expect(browser.locator('[data-test="usage-line"]')).toHaveText('Last used 11 Nov · 1,204 requests in 30 days, 37 by members');
-  await expect(browser.locator('[data-test="container-image"]')).toHaveText(/IMAGE\s*812\.4 MB/);
+  // formatMB joins the figure to its unit with a non-breaking space so it
+  // never splits across lines (system_3 #11007); \s matches that too.
+  await expect(browser.locator('[data-test="container-image"]')).toHaveText(/IMAGE\s*812\.4\s*MB/);
   await expect(browser.locator('[data-test="container-stop"]')).toHaveText('Stop');
   await expect(browser.locator('[data-test="container-start"]')).toHaveCount(0);
 
@@ -110,7 +112,7 @@ test('each card reads its usage line, image size and readable name; controls onl
   await expect(penpot.locator('.container-name')).toHaveText('penpot-frontend');
   await expect(penpot).toHaveClass(/stopped/);
   await expect(penpot.locator('[data-test="usage-line"]')).toHaveText('No requests in the last 30 days');
-  await expect(penpot.locator('[data-test="container-image"]')).toHaveText(/IMAGE\s*1\.3 GB/);
+  await expect(penpot.locator('[data-test="container-image"]')).toHaveText(/IMAGE\s*1\.3\s*GB/);
   await expect(penpot.locator('[data-test="container-start"]')).toHaveText('Start');
   // Not dimmed: it carries a usage line and a Start button (c65900, #10594).
   expect(await penpot.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');

@@ -168,7 +168,9 @@ test.describe('#5302 system health read states', () => {
     await expect(page.getByTestId('read-state-failed')).toHaveCount(0);
     // ...and it says which reads failed: a bare "OK" over three failed reads
     // read as all-clear (#11003, UX walk AA1).
-    await expect(page.locator('[data-test="status-banner-partial"]')).toHaveText(
+    // The banner also carries Refresh since system_3 #11007 (beside the
+    // verdict); the wording lives in .status-label alone.
+    await expect(page.locator('[data-test="status-banner-partial"] .status-label')).toHaveText(
       'Server and database OK. Containers, disk and database statistics could not be read.',
     );
     await expect(page.getByText('OK', { exact: true })).toHaveCount(0);
