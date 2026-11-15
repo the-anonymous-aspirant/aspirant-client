@@ -43,6 +43,9 @@
     >
       <span class="status-dot degraded"></span>
       <span class="status-label">{{ partialBanner }}</span>
+      <!-- Beside the verdict, not four phone screens below it (system_3
+           #11007, UX walk AA5). -->
+      <AspButton class="btn-refresh" variant="secondary" size="sm" @click="fetchAll">Refresh</AspButton>
     </div>
 
     <!-- Server: its read failed, so the card keeps its heading and says so. -->
@@ -67,6 +70,7 @@
       <div v-if="failedReads.length === 0" class="status-banner" :class="health.status || 'unknown'">
         <span class="status-dot" :class="health.status || 'unknown'"></span>
         <span class="status-label">{{ (health.status || 'unknown').toUpperCase() }}</span>
+        <AspButton class="btn-refresh" variant="secondary" size="sm" @click="fetchAll">Refresh</AspButton>
       </div>
 
       <!-- Server checks. `/health` serves `{status, service, checks}` and
@@ -87,7 +91,7 @@
 
         <div class="health-card" v-for="(value, name) in (health.checks || {})" :key="name">
           <h3>
-            {{ name }}
+            {{ capitalize(name) }}
             <span class="status-badge" :class="value">{{ value }}</span>
           </h3>
         </div>
@@ -251,7 +255,7 @@
       <div class="health-card wide">
         <h3>Volumes</h3>
         <div class="info-rows">
-          <div v-for="v in volumes" :key="v.name" class="info-row info-row--volume">
+          <div v-for="v in volumes" :key="v.name" class="info-row info-row--wrap">
             <span class="info-label mono">{{ v.name }}</span>
             <!-- A directory monitor cannot enter has no honest size; say so
                  rather than print a dash or a 0 (system_3 #10568, c65612). -->
@@ -272,20 +276,30 @@
       <div class="health-card wide">
         <h3>Database</h3>
         <div class="db-summary">
-          <span>{{ dbStats.table_count }} tables</span>
-          <span>{{ dbStats.total_rows?.toLocaleString() }} rows</span>
+          <span>{{ pluralize(dbStats.table_count, 'table') }}</span>
+          <span>{{ pluralize(dbStats.total_rows, 'row') }}</span>
           <span>{{ formatMB(dbStats.total_size_mb) }}</span>
         </div>
-        <div class="info-rows">
-          <div v-for="t in dbStats.tables" :key="t.name" class="info-row">
-            <span class="info-label mono">{{ t.name }}</span>
-            <span class="info-value">{{ t.rows?.toLocaleString() }} rows ({{ formatMB(t.size_mb) }})</span>
+        <!-- Folded behind a count, closed by default: 59 near-identical rows
+             used to push Refresh four phone screens down (system_3 #11007,
+             UX walk AA5). Largest first once opened (sortedDbTables), each
+             row's figure kept on one line (formatMB's own fix, plus the wrap
+             behaviour §3.133 already built for a long volume path). Native
+             <details> needs no open-state tracking of its own and survives
+             the 15s auto-refresh since this element itself is never re-created. -->
+        <details class="db-tables-disclosure">
+          <summary class="db-tables-summary" data-test="db-tables-summary">
+            {{ pluralize(dbStats.table_count, 'table') }}
+          </summary>
+          <div class="info-rows">
+            <div v-for="t in sortedDbTables" :key="t.name" class="info-row info-row--wrap">
+              <span class="info-label mono">{{ t.name }}</span>
+              <span class="info-value">{{ pluralize(t.rows, 'row') }} ({{ formatMB(t.size_mb) }})</span>
+            </div>
           </div>
-        </div>
+        </details>
       </div>
     </template>
-
-    <AspButton class="btn-refresh" variant="secondary" @click="fetchAll">Refresh</AspButton>
   </div>
 </template>
 
@@ -312,6 +326,16 @@ const POLL_FOR_MS = 30000;
 
 const DAY = { day: 'numeric', month: 'short', timeZone: 'UTC' };
 const formatDay = (iso) => new Date(iso).toLocaleDateString('en-GB', DAY);
+
+// A full date, time and zone, not "4:17:01 AM" with neither (system_3 #11007,
+// UX walk AA5): `dateStyle`/`timeStyle` cannot combine with `timeZoneName`
+// (throws), so every part is spelled out.
+const CHECKED_AT = {
+  year: 'numeric', month: 'short', day: 'numeric',
+  hour: 'numeric', minute: '2-digit', second: '2-digit',
+  timeZoneName: 'short',
+};
+const formatCheckedAt = (d) => d.toLocaleString(undefined, CHECKED_AT);
 
 // The reads that each have their own section. The usage read is an addition
 // to the containers, not a section, and keeps its own quiet failure.
@@ -413,12 +437,30 @@ export default {
       sentences.push(`${failed.charAt(0).toUpperCase()}${failed.slice(1)} could not be read.`);
       return sentences.join(' ');
     },
+    // Largest first (system_3 #11007): the question this card answers is "how
+    // big is the database", so the table worth noticing sorts to the top
+    // whether that is a lot of rows or a lot of bytes.
+    sortedDbTables() {
+      return [...(this.dbStats?.tables || [])].sort(
+        (a, b) => (b.size_mb || 0) - (a.size_mb || 0) || (b.rows || 0) - (a.rows || 0)
+      );
+    },
   },
   methods: {
     formatMB(mb) {
       if (mb == null) return '—';
-      if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
-      return mb.toFixed(1) + ' MB';
+      // A non-breaking space keeps the figure and its unit on one line
+      // (§3.122 P3): on a long table name this used to split as
+      // "0.1 / MB" (system_3 #11007, UX walk AA5).
+      if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
+      return mb.toFixed(1) + ' MB';
+    },
+    // "1 rows" (system_3 #11007): a count only pluralises past one.
+    pluralize(n, singular) {
+      return `${(n ?? 0).toLocaleString()} ${n === 1 ? singular : singular + 's'}`;
+    },
+    capitalize(s) {
+      return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
     },
     serviceName(name) {
       return serviceNameFromContainer(name);
@@ -529,7 +571,7 @@ export default {
           // the rows for the unserved fields are gone rather than printing
           // `undefined MB` at an operator.
           this.health = healthRes.value.data;
-          this.checkedAt = new Date().toLocaleTimeString();
+          this.checkedAt = formatCheckedAt(new Date());
         }
 
         if (containersRes.status === 'fulfilled') {
@@ -640,6 +682,7 @@ export default {
 .status-banner {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-xl);
   border-radius: var(--radius-lg);
@@ -680,6 +723,11 @@ export default {
   background-color: var(--surface-elevated);
   border: 2px solid var(--border-subtle);
   color: var(--text-muted);
+}
+
+.status-label {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .status-dot {
@@ -724,13 +772,20 @@ export default {
   text-transform: uppercase;
 }
 
-.status-badge.healthy {
+.status-badge.healthy,
+.status-badge.connected {
   background-color: var(--feedback-success);
   color: var(--text-on-dark);
 }
 
+/* `/health`'s only check (`database`) sends exactly "connected", "error" or
+   "unavailable" (aspirant-server handlers/misc.go). "error" had no rule, so
+   it fell through to the h3's own heading ink and read as a bare amber word,
+   not a status pill (system_3 #11007, folded in from design_agent c68758 on
+   #11003). */
 .status-badge.unhealthy,
-.status-badge.unavailable {
+.status-badge.unavailable,
+.status-badge.error {
   background-color: var(--feedback-error);
   color: var(--text-on-dark);
 }
@@ -1021,19 +1076,21 @@ export default {
   white-space: nowrap;
 }
 
-/* A volume row that cannot fit its path and its value on one line puts the
-   value on the next line, right-aligned, so neither breaks mid-word (390px,
-   c65622). */
-.info-row--volume {
+/* A row that cannot fit its label and its value on one line puts the value
+   on the next line, right-aligned, so neither breaks mid-word (390px,
+   c65622). Shared by Volumes (a long path) and the Database table list (a
+   long table name, system_3 #11007) — one rule, two call sites. */
+.info-row--wrap {
   flex-wrap: wrap;
   column-gap: var(--space-sm);
 }
 
-.info-row--volume .info-value {
+.info-row--wrap .info-value {
   margin-left: auto;
+  white-space: nowrap;
 }
 
-.info-row--volume .info-label {
+.info-row--wrap .info-label {
   color: var(--text-muted);
   overflow-wrap: anywhere;
 }
@@ -1054,10 +1111,47 @@ export default {
   border-bottom: 1px solid var(--surface-card-inner);
 }
 
-/* Refresh button */
-/* Layout only — visuals from AspButton (variant="secondary"). */
+/* Closed by default (system_3 #11007, §3.17's spirit): a native <details>
+   needs no script for keyboard, focus ring or the open/close state itself. */
+.db-tables-summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--text-on-dark);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+/* The native marker, replaced with a caret that rotates open (same disclosure
+   affordance as a details/summary elsewhere in the DS), so the row still
+   reads as clickable without the browser's own bullet. */
+.db-tables-summary::-webkit-details-marker {
+  display: none;
+}
+
+.db-tables-summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: var(--space-sm);
+  color: var(--text-muted);
+  transition: transform var(--transition-moderate);
+}
+
+.db-tables-disclosure[open] .db-tables-summary::before {
+  transform: rotate(90deg);
+}
+
+.db-tables-disclosure .info-rows {
+  margin-top: var(--space-sm);
+}
+
+/* Refresh button — beside the verdict banner now, not the page's last
+   element (system_3 #11007). Layout only — visuals from AspButton. */
 .btn-refresh {
-  margin-top: var(--space-md);
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 /* Mobile */
