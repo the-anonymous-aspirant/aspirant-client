@@ -1,6 +1,13 @@
 <template>
-  <div class="RBGuesser">
+  <!-- The page takes the shell's gutter and the shared title y, as its sibling
+       game and quiz pages do since #9599 (§3.121, §3.114); the cards keep their
+       centred interiors (UX walk AG5, system_3 #10997). -->
+  <div class="RBGuesser page">
     <h1>RGB Guessing Game</h1>
+    <p class="how-to" data-test="rgb-how-to">
+      Match the target colour with the R, G and B sliders. After each guess, every channel says
+      higher or lower. You have 10 guesses.
+    </p>
 
     <!-- Target Color Card -->
     <div class="target-card">
@@ -83,21 +90,14 @@
     </div>
 
     <!-- Guess History -->
+    <!-- Only the guesses made. Ten hidden placeholder slots used to keep their
+         space, which left ~900px of blank page under the game on a phone. -->
     <div class="guess-history">
-      <div
-        v-for="(guess, index) in displayGuesses"
-        :key="index"
-        class="guess-item"
-        :class="{ invisible: !guess.visible }"
-      >
+      <div v-for="(guess, index) in guesses" :key="index" class="guess-item">
         <p class="guess-number">Guess {{ index + 1 }}</p>
         <div
           class="color-circle guess-circle"
-          :style="{
-            backgroundColor: guess.visible
-              ? `rgb(${guess.r}, ${guess.g}, ${guess.b})`
-              : 'transparent',
-          }"
+          :style="{ backgroundColor: `rgb(${guess.r}, ${guess.g}, ${guess.b})` }"
         ></div>
         <p class="guess-rgb">RGB({{ guess.r }}, {{ guess.g }}, {{ guess.b }})</p>
       </div>
@@ -151,21 +151,6 @@
           newSeed: false,
         },
       };
-    },
-    computed: {
-      displayGuesses() {
-        const totalGuesses = 10;
-        const filledGuesses = this.guesses.map((guess) => ({ ...guess, visible: true }));
-        const emptyGuesses = Array(totalGuesses - filledGuesses.length)
-          .fill()
-          .map(() => ({
-            r: 0,
-            g: 0,
-            b: 0,
-            visible: false,
-          }));
-        return [...filledGuesses, ...emptyGuesses];
-      },
     },
     created() {
       this.initializeGame();
@@ -291,18 +276,17 @@
 </script>
 
 <style scoped>
+  /* No padding and no centring of its own: the gutter is the shell's
+     (#9192, #9599). A reading-width cap on the column, never a centring
+     margin. */
   .RBGuesser {
     max-width: 600px;
-    margin: 0 auto;
-    padding: var(--space-lg);
-    text-align: center;
   }
 
   h1 {
     font-family: var(--font-family-base);
     color: var(--text-on-light);
-    text-align: center;
-    margin-bottom: var(--space-lg);
+    margin-bottom: var(--space-xs);
   }
 
   p {
@@ -311,8 +295,15 @@
     color: var(--text-on-light);
   }
 
+  /* How to play: page text, so it starts at the gutter like the title. */
+  .how-to {
+    margin: 0 0 var(--space-lg);
+    text-align: start;
+  }
+
   /* Target Card */
   .target-card {
+    text-align: center;
     background: var(--surface-card);
     border: 2px solid var(--border-card);
     border-radius: var(--radius-xl);
@@ -340,6 +331,7 @@
 
   /* Controls Card */
   .controls-card {
+    text-align: center;
     background: var(--surface-card);
     border: 2px solid var(--border-card);
     border-radius: var(--radius-xl);
@@ -477,10 +469,6 @@
     background-color: var(--surface-elevated);
   }
 
-  .guess-item.invisible {
-    visibility: hidden;
-  }
-
   .guess-number {
     font-size: var(--text-xs);
     font-weight: 600;
@@ -521,55 +509,83 @@
 
   /* Responsive */
   @media (max-width: 768px) {
-    .RBGuesser {
-      padding: var(--space-md) var(--space-sm);
-      padding-top: 80px;
-    }
-
     h1 {
       font-size: var(--text-2xl);
+    }
+
+    .how-to {
+      margin-bottom: var(--space-md);
+      font-size: var(--text-sm);
+    }
+
+    /* The target, the three channels and Guess! share one phone screen
+       (system_3 #10997): tighter cards, and one row per channel. */
+    .target-card {
+      padding: var(--space-sm);
       margin-bottom: var(--space-md);
     }
 
+    .target-label {
+      margin-bottom: 0;
+    }
+
     .target-circle {
-      width: 120px;
-      height: 120px;
+      width: 100px;
+      height: 100px;
+    }
+
+    .controls-card {
+      padding: var(--space-md) var(--space-sm);
+      margin-bottom: var(--space-md);
+    }
+
+    .guesses-remaining {
+      margin: 0 0 var(--space-sm);
     }
 
     .color-inputs-container {
-      gap: var(--space-lg);
+      gap: var(--space-xs);
+      margin-bottom: var(--space-md);
     }
 
+    /* Label, slider, number on one row; the hint takes a row of its own
+       under them, and only once a guess has given one. */
     .color-input {
-      flex-direction: column;
-      align-items: stretch;
-      gap: var(--space-xs);
-      padding: var(--space-md);
+      display: grid;
+      grid-template-columns: 1.5rem minmax(0, 1fr) 72px;
+      align-items: center;
+      column-gap: var(--space-sm);
+      padding: var(--space-2xs) var(--space-sm);
       background-color: var(--surface-card-inner);
       border-radius: var(--radius-md);
     }
 
     .color-input label {
       width: auto;
-      text-align: center;
+      text-align: start;
       font-size: var(--text-base);
     }
 
     .color-input input[type='range'] {
       width: 100%;
       height: 40px;
-      margin: var(--space-sm) 0;
+      margin: 0;
     }
 
     .channel-field {
-      width: 80px;
-      margin: 0 auto;
+      width: 72px;
+      margin: 0;
     }
 
     .hint {
+      grid-column: 1 / -1;
       width: auto;
       text-align: center;
       font-size: var(--text-xs);
+    }
+
+    .hint:empty {
+      display: none;
     }
 
     .guess-button {
@@ -593,18 +609,8 @@
   }
 
   @media (max-width: 400px) {
-    .RBGuesser {
-      padding: var(--space-sm) var(--space-2xs);
-      padding-top: 80px;
-    }
-
     .guess-item {
       flex: 0 0 calc(50% - var(--space-sm));
-    }
-
-    .target-circle {
-      width: 100px;
-      height: 100px;
     }
 
     .guess-circle {
