@@ -159,11 +159,11 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
     expect(cut, 'select values cut off in the table').toEqual([]);
   });
 
-  // §3.122 P3, "never break before a separator", as UX walk AM9 applied it
-  // (system_3 #11027, PR 481): the "·" ends the item before it, so when the
-  // line wraps it stays at the end of the first line and no line starts with
-  // it. This test used to assert the opposite (the dot sits with the text after
-  // it), which #11027 deliberately reversed; aligned in system_3 #11281.
+  // system_3 #11027 (UX walk AM9, PR 481): "No line starts with a separator."
+  // §3.122 P3 wraps between whole phrases (§3.53), so the "·" ends the item
+  // before it: when the line wraps it stays at the end of the first line. This
+  // test used to assert the opposite (the dot sits with the text after it),
+  // which #11027 deliberately reversed; aligned in system_3 #11281.
   test('the "·" before "next invoice" never starts a line on its own', async ({ page }) => {
     await open(page, 'light', { steuernummer: '' });
     // Same line = vertical centres closer than half a line; separate flex
