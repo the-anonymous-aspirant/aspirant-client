@@ -1,6 +1,8 @@
 <template>
   <div class="token-view page">
-    <h1>Create an account</h1>
+    <!-- The heading says what the page holds (system_3 #10980): while
+         sign-up is closed there is no account to create here. -->
+    <h1>{{ state === 'closed' ? 'Sign-up is closed' : 'Create an account' }}</h1>
     <AspCard class="token-view-card" padding="md">
       <!-- Reading the kill-switch. Deliberately NOT rendered as "closed": not
            knowing and being closed are different states, and only one of them
@@ -16,8 +18,7 @@
              first draft did exactly that, with a sentence explaining that the
              red did not mean what red means. -->
         <p class="message message--notice" data-testid="signup-closed">
-          Sign-up is closed at the moment. It can be reopened, so it is worth trying again another
-          day.
+          Sign-up can be reopened, so it is worth trying again another day.
         </p>
         <RouterLink class="next" to="/login">Go to sign in</RouterLink>
       </template>
@@ -79,6 +80,7 @@
 
 <script>
   import { AspCard, AspInput, AspButton } from '@aspirant/design-system';
+  import { readSignupStatus } from '../signupStatus.js';
 
   // The public sign-up entry (system_3 #5338, under #5296).
   //
@@ -119,23 +121,13 @@
     },
     methods: {
       async readSignupStatus() {
-        try {
-          const response = await fetch('/api/signup/status');
-          if (response.status === 404) {
-            // The running server predates the kill-switch (#5289). That is not
-            // a failure and not a closed door — sign-up simply cannot be
-            // closed. Same reading UserAdmin.vue takes of the same 404.
-            this.state = 'ready';
-            return;
-          }
-          if (!response.ok) throw new Error(`status ${response.status}`);
-          const body = await response.json();
-          this.state = body.signup_enabled ? 'ready' : 'closed';
-        } catch (error) {
-          console.error('Could not read sign-up status:', error);
-          this.state = 'ready';
-          this.statusUnknown = true;
-        }
+        // One read per page load, shared with the sidebar's sign-in so the two
+        // never disagree (signupStatus.js). A server without the kill-switch
+        // (404, #5289) cannot be closed; a failed read is 'unknown', which
+        // shows the form with a hint rather than claiming "closed".
+        const reading = await readSignupStatus();
+        this.state = reading === 'closed' ? 'closed' : 'ready';
+        this.statusUnknown = reading === 'unknown';
       },
 
       async submit() {
