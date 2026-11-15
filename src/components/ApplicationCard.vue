@@ -3,8 +3,21 @@
     <img v-if="shownImageUrl" :src="shownImageUrl" :alt="title" class="app-image" />
     <div v-else class="app-image app-image-placeholder"></div>
     <div class="card-content">
-      <h2>{{ title }}</h2>
-      <p>
+      <!-- The title row is never clamped, so what changes a tap's outcome
+           lives here rather than at the end of the clamped description, where
+           "Opens in a new tab" used to be the part that got cut (UX walk AA7,
+           system_3 #11009). The title keeps its own span so a lookup by the
+           exact title still matches. -->
+      <h2>
+        <span class="card-title">{{ title }}</span>
+        <span v-if="newTab" class="new-tab-mark" data-test="new-tab-mark"><span aria-hidden="true">↗</span> new tab</span>
+      </h2>
+      <!-- A tile that can report trouble says so at rest (#11009). The words
+           carry the meaning; the dot only backs them up (§3.21). -->
+      <p v-if="status" class="card-status" :data-tone="status.tone || 'unknown'" data-test="card-status">
+        <span class="card-status__dot" aria-hidden="true"></span>{{ status.text }}
+      </p>
+      <p class="card-description">
         <em>{{ description }}</em>
       </p>
     </div>
@@ -32,6 +45,16 @@
       route: {
         type: String,
         required: true,
+      },
+      // The tap leaves the site for a page nginx serves outside the SPA.
+      newTab: {
+        type: Boolean,
+        default: false,
+      },
+      // `{ text, tone }`, tone one of ok | warn | unknown; null shows nothing.
+      status: {
+        type: Object,
+        default: null,
       },
     },
     data() {
@@ -157,7 +180,48 @@
     color: var(--text-heading-card);
   }
 
-  .card-content p {
+  /* The "↗ new tab" mark: part of the unclamped title row, in the card's own
+     ink rather than the amber heading ink, so it reads as a note on the title
+     and not as more of it. */
+  .new-tab-mark {
+    font-size: var(--text-xs);
+    font-weight: normal;
+    color: var(--text-on-dark);
+    white-space: nowrap;
+  }
+
+  /* State at rest, outside the clamp (#11009). The card is dark in both
+     themes, so the dot's fills are the fixed feedback solids; an unread
+     state is a hollow dot, never a colour that could pass for a reading. */
+  .card-status {
+    margin: 0;
+    color: var(--text-on-dark);
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-medium);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2xs);
+  }
+
+  .card-status__dot {
+    flex: 0 0 auto;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    border: 1.5px solid var(--text-on-dark);
+  }
+
+  .card-status[data-tone='ok'] .card-status__dot {
+    background: var(--feedback-success);
+    border-color: var(--feedback-success);
+  }
+
+  .card-status[data-tone='warn'] .card-status__dot {
+    background: var(--feedback-warning);
+    border-color: var(--feedback-warning);
+  }
+
+  .card-content .card-description {
     margin: 0;
     color: var(--text-on-dark);
     font-size: var(--text-xs);
