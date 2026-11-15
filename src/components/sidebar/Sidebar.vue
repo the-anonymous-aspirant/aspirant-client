@@ -178,7 +178,7 @@
       <div
         v-else
         class="aspiring-hand-logo logo-pending"
-        :class="{ collapsed: collapsed, 'rotate-side': !collapsed }"
+        :class="{ collapsed: collapsed, 'rotate-side': !collapsed, 'logo-failed': imagesLoaded }"
         aria-hidden="true"
       ></div>
     </div>
@@ -390,6 +390,14 @@
     border-radius: 10%;
     transition: all var(--transition-layout);
     width: 75px;
+  }
+
+  /* The asset batch settled with no logo url: permanently stuck, not
+     mid-load, so the pending amber (above) would read as broken (D8,
+     system_3 #10999, UX walk AG7). Same neutral token as SidebarLink's
+     failed-icon box. */
+  .logo-pending.logo-failed {
+    background-color: var(--surface-elevated);
   }
 
   .aspiring-hand-logo.collapsed {

@@ -133,6 +133,14 @@
     filter: invert(1);
   }
 
+  /* Both the card's own icon and the shared `default` fallback failed: an
+     empty box is worse than no box (system_3 #10999, UX walk AG7). Closes
+     up the space `.app-image` reserves rather than leaving it blank. */
+  .app-image-placeholder {
+    height: 0;
+    padding: 0;
+  }
+
   .card-content {
     padding: var(--space-sm);
     flex-grow: 1;
