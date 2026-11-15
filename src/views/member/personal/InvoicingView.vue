@@ -28,9 +28,17 @@
       <AspCard class="profile-card" padding="md" data-test="profile-card">
         <div class="profile-card__head">
           <h2>Issuer</h2>
-          <!-- md, not sm: sm drew 22px tall, under the 24px floor every
-               control clears (§3.99 tier 1; UX walk AM9). -->
-          <AspButton variant="secondary" size="md" data-test="profile-edit" @click="profileOpen = true">
+          <!-- sm, held at the 24px floor every control clears (§3.99 tier 1;
+               UX walk AM9). sm alone drew 22px; md drew 34px, which made this
+               card 10px taller and pushed the Book's first month line below a
+               phone's first screen (system_3 #11281, regression of #11027). -->
+          <AspButton
+            variant="secondary"
+            size="sm"
+            class="profile-card__edit"
+            data-test="profile-edit"
+            @click="profileOpen = true"
+          >
             Edit profile
           </AspButton>
         </div>
@@ -276,6 +284,13 @@
 
   .profile-card__head h2 {
     margin: 0;
+  }
+
+  /* The 24px floor on an sm button (#11281): min-height outranks the size's
+     own height, and the class lands on AspButton's root, which carries this
+     component's scope attribute. */
+  .profile-card__edit {
+    min-height: 24px;
   }
 
   .glance__line {
