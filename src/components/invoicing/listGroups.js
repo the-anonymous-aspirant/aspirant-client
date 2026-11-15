@@ -101,6 +101,33 @@ export function groupByMonth(rows, dateOf) {
     .map((key) => ({ key, label: key ? monthLabel(key) : 'No date', rows: months.get(key) }));
 }
 
+// The month groups from `groupByMonth` (newest first), with every month
+// between the oldest one and `throughKey` ("YYYY-MM", normally this month)
+// that has no rows added as `{ key, label, rows: [], empty: true }`. A month
+// with no entries is a real zero, and a missing one reads as no data at all
+// (D2; UX walk AM6, system_3 #11023). Nothing is added before the oldest
+// month with rows, and the undated group ('' key) stays last.
+export function fillEmptyMonths(groups, throughKey) {
+  const dated = groups.filter((g) => g.key);
+  if (!dated.length) return groups;
+  const have = new Map(dated.map((g) => [g.key, g]));
+  const oldest = dated[dated.length - 1].key;
+  const newest = throughKey && throughKey > dated[0].key ? throughKey : dated[0].key;
+  const out = [];
+  let [y, m] = newest.split('-').map(Number);
+  for (let guard = 0; guard < 1200; guard++) {
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    out.push(have.get(key) || { key, label: monthLabel(key), rows: [], empty: true });
+    if (key <= oldest) break;
+    m -= 1;
+    if (m < 1) {
+      m = 12;
+      y -= 1;
+    }
+  }
+  return [...out, ...groups.filter((g) => !g.key)];
+}
+
 // Which groups are open now, as a Set of keys (§3.145 Decision 3, §3.17):
 // - while a filter is active, every group, unless ze closed one (R2);
 // - otherwise zir own choice this visit (`chosen`, key -> open);
