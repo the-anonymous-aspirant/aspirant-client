@@ -1,8 +1,20 @@
 <script setup lang="js">
   import axios from 'axios';
   import { ref, onMounted } from 'vue';
+  import { AspButton } from '@aspirant/design-system';
   import { debugMode, toggleDebugMode } from '../global_state_manager.js';
   import assetManager from '../asset_manager.js';
+
+  // The doors (UX walk AP1, system_3 #10977). Below 768px the sidebar is a
+  // closed drawer, so the page itself offered nothing to do: the sign-in form
+  // and the links to Applications and Support sat behind an unlabelled tap.
+  // The page now shows those doors above the picture at phone width; from 768px
+  // the sidebar shows them and the row is not rendered (CSS below).
+  //
+  // Read once: the page remounts on sign-in and sign-out (App.vue keys the
+  // router-view on authVersion), as MemberView and GameHub rely on too. A cached
+  // name is display state, not a credential (router.js guard comment).
+  const signedOut = !localStorage.getItem('user_name');
 
   const status = ref(null);
   const version = ref(null);
@@ -66,6 +78,11 @@
   <div class="home page">
     <h1>The Aspirant</h1>
     <h2 class="page-subtitle">Just my little slice of the internet - feel free to look around :) </h2>
+    <nav class="home-doors" aria-label="Where to go" data-test="home-doors">
+      <AspButton v-if="signedOut" variant="primary" to="/login" data-test="home-door-sign-in">Sign in</AspButton>
+      <AspButton variant="secondary" to="/applications" data-test="home-door-applications">Applications</AspButton>
+      <AspButton variant="secondary" to="/support" data-test="home-door-support">Support</AspButton>
+    </nav>
     <img
       :src="aspiringHandImageUrl"
       alt="A hand reaching for a circle"
@@ -135,9 +152,27 @@
     filter: invert(1);
   }
 
+  /* The doors exist for the phone, where the sidebar is a closed drawer. From
+     768px the sidebar shows the same three, so a second set would be two homes
+     for one action (D5). display:none also takes them out of the
+     accessibility tree there. */
+  .home-doors {
+    display: none;
+  }
+
   @media (max-width: 767.98px) {
     .aspiring-hand {
       max-width: 70%;
+    }
+
+    /* One row that wraps as a group rather than clipping (§3.122 P3). The
+       sentence above keeps its own bottom margin, so the doors sit under it
+       and above the picture. */
+    .home-doors {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-xl);
     }
   }
 </style>
