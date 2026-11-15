@@ -30,7 +30,7 @@ async function recordLogins(page: Page): Promise<string[]> {
 async function fillAndSubmit(page: Page): Promise<void> {
   await page.locator('input[name="username"]').fill('e2e-admin');
   await page.locator('input[name="password"]').fill('hunter2');
-  await page.getByRole('button', { name: 'Login' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
 test.describe('Admin sign-in at /admin/login', () => {

@@ -292,6 +292,13 @@
     padding: var(--space-sm) var(--space-sm) 0;
     border-top: 1px solid var(--border-subtle);
     margin-top: var(--space-2xl);
+    /* .sidebar's own ambient color (App.vue) is --brand-primary, which the
+       sign-in form's labels inherit (AspInput's field__label is `color:
+       inherit` by design). AspCard, the other mount of the same form, sets
+       --text-on-dark (white); this section matches that so both mounts agree
+       (system_3 #10982, UX walk AP6). .user-detail/.user-role below keep
+       their own explicit ink regardless. */
+    color: var(--text-on-dark);
   }
 
   .user-info {

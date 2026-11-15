@@ -299,6 +299,7 @@ onMounted(async () => {
 .address-box code {
   display: block;
   color: var(--text-on-dark);
+  font-family: var(--font-family-mono);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }

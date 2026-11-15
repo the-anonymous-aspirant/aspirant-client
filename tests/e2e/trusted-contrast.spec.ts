@@ -141,7 +141,7 @@ test.describe('#4282 sidebar Login/Logout button contrast', () => {
   test('anonymous sidebar Login button clears WCAG AA', async ({ page }) => {
     await page.goto('/');
     await dismissMobileSidebarIfPresent(page);
-    const button = page.getByRole('button', { name: 'Login' }).locator('visible=true');
+    const button = page.getByRole('button', { name: 'Sign in' }).locator('visible=true');
     await expect(button.first()).toBeVisible();
     const ratio = await contrastRatio(button);
     expect(ratio, 'sidebar Login button contrast').toBeGreaterThanOrEqual(4.5);

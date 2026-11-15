@@ -43,7 +43,7 @@
             :surface="fieldSurface"
           />
         </div>
-        <AspButton type="submit" class="login-button">Login</AspButton>
+        <AspButton type="submit" class="login-button">Sign in</AspButton>
       </form>
       <!-- The way in for someone who has no account (#5338, under #5296).
            Placed in this SHARED component rather than on LoginView, and that
