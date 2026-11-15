@@ -179,8 +179,13 @@
     animation: pulse 1.5s infinite ease-in-out;
   }
 
+  /* Neutral, not status-red (D8: status colours mean status, system_3
+     #10999, UX walk AG7). Both attempts (the icon's own asset, then the
+     shared `default`) exhausted is a missing picture, not an error to flag.
+     --surface-elevated is the same neutral-box token AspInput's fields use
+     for their control background, right below in this sidebar. */
   .sidebar-image.error {
-    background: var(--feedback-error);
+    background: var(--surface-elevated);
   }
 
   @keyframes pulse {
