@@ -347,8 +347,12 @@
     width: 30px;
     height: 30px;
     border-radius: var(--radius-full);
+    /* --border-subtle is #cccccc in BOTH themes, a fixed light fill, so the
+       numeral takes the fixed-surface ink, not the theme's: --text-on-light
+       flips to #e0e0e0 in dark and read ~1.2:1 here (UX walk AG4, system_3
+       #10996). Same pairing as the active and completed steps below. */
     background-color: var(--border-subtle);
-    color: var(--text-on-light);
+    color: var(--text-on-fixed-light);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -364,8 +368,14 @@
     transform: scale(1.1);
   }
 
+  /* An opaque, theme-fixed tint (the brand ramp is not overridden in dark), so
+     the fixed-surface ink below holds in both themes. --brand-primary-alpha
+     (#ffb300 at ~51%) composited over the card: rgb(252, 213, 122) on the
+     light card but rgb(155, 116, 25) on the dark one, where #424242 measured
+     2.35:1 (system_3 #10996). #ffe082 is within a few levels of the old light
+     result. */
   .progress-step.completed {
-    background-color: var(--brand-primary-alpha);
+    background-color: var(--brand-primary-200);
     color: var(--text-on-fixed-light);
   }
 
