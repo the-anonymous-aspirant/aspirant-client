@@ -7,9 +7,20 @@
     <h2 class="page-subtitle ended" v-else-if="gameState && isLocked">
       The hunt is over!
     </h2>
-    <h2 class="page-subtitle" v-else>
-      <em>No active game right now</em>
-    </h2>
+    <!-- Between games and on a failed read, the page says which it is and what
+         happens next, above the tabs so either tab shows it (AG6, D2/S3/S4). -->
+    <div v-else-if="loadError" class="hunt-status hunt-status--error" role="alert" data-test="hunt-load-error">
+      <h2 class="page-subtitle">The hunt could not be loaded ({{ loadError }}).</h2>
+      <AspButton variant="secondary" size="sm" @click="retryLoad">Try again</AspButton>
+    </div>
+    <div v-else class="hunt-status" data-test="hunt-idle">
+      <h2 class="page-subtitle">No hunt is running right now.</h2>
+      <p class="hunt-status__next">
+        An admin opens each hunt. When the next one opens, its board appears here under Game on
+        its own. Leave this page open or come back later. To find out when, ask the person who sent
+        you the link.
+      </p>
+    </div>
 
     <!-- Tabs. Both members switch a named panel below, so the strip declares
          as="tabs" (§3.89 Q1) and the panels carry role="tabpanel" + the ids
@@ -35,7 +46,7 @@
           <li>This is a <strong>shared board</strong> &mdash; everyone sees the same grid. Coordinate or compete!</li>
           <li>The hunt ends when the timer runs out. At the end, every competitor gets to <strong>pick presents from a basket</strong>, in the order of how many eggs they collected.</li>
         </ul>
-        <p class="encouragement">Ready alex, jenny, maria, robert, vinoly? Let's go!</p>
+        <p class="encouragement">Ready? Let's go!</p>
       </div>
     </div>
 
@@ -269,6 +280,9 @@ export default {
   data() {
     return {
       gameState: null,
+      // A read that failed for any reason but "no game" (a 404 or a null
+      // body): shown as itself, with a retry, never as an idle hunt.
+      loadError: null,
       overlay: null,
       revealedSet: new Set(),
       revealedMap: {},
@@ -336,6 +350,11 @@ export default {
     async fetchState() {
       try {
         const res = await axios.get('/api/games/easter-hunt/state');
+        this.loadError = null;
+        if (!res.data?.data) {
+          this.gameState = null;
+          return;
+        }
         this.gameState = res.data.data;
         this.buildRevealedLookup();
         if (!this.overlay) {
@@ -346,8 +365,18 @@ export default {
       } catch (e) {
         if (e.response?.status === 404) {
           this.gameState = null;
+          this.loadError = null;
+        } else if (!this.gameState) {
+          // A running hunt keeps its last board through a failed poll; only a
+          // page with nothing to show reports the failure.
+          this.loadError = e.response?.status ? `server error ${e.response.status}` : 'no response';
         }
       }
+    },
+
+    async retryLoad() {
+      await this.fetchState();
+      await this.fetchBudget();
     },
 
     buildRevealedLookup() {
@@ -658,6 +687,27 @@ export default {
 .page-subtitle.ended {
   color: var(--feedback-error);
   font-weight: bold;
+}
+
+.hunt-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-lg);
+}
+
+.hunt-status .page-subtitle {
+  margin-bottom: 0;
+}
+
+.hunt-status--error .page-subtitle {
+  color: var(--feedback-error-text);
+}
+
+.hunt-status__next {
+  max-width: 36rem;
+  margin: 0;
 }
 
 /* ================================================
