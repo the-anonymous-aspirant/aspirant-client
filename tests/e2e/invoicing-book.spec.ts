@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import { openWaysIn } from './helpers/waysIn';
 
 /** The income-and-expenses book (system_3 #10414-C): payments and
  *  hand-entered expenses merged into one dated list, grouped by month, with
@@ -208,6 +209,7 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
     await expect(page.locator('[data-test="book-empty"]')).toBeVisible();
 
     await page.getByRole('tab', { name: 'Transactions' }).click();
+    await openWaysIn(page);
     await page.locator('[data-test="expense-new"]').click();
     await expect(page.getByRole('dialog', { name: 'Enter expense by hand' })).toBeVisible();
 
@@ -235,6 +237,7 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
   test('adding a category inline makes it usable on the same expense', async ({ page }) => {
     const fake = newFake();
     await openTransactions(page, fake);
+    await openWaysIn(page);
     await page.locator('[data-test="expense-new"]').click();
     await page.locator('[data-test="expense-add-category-link"]').click();
     await page.locator('[data-test="expense-new-category-name"]').fill('Guitar strings');
@@ -254,6 +257,7 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
   test('a duplicate category name is refused', async ({ page }) => {
     const fake = newFake();
     await openTransactions(page, fake);
+    await openWaysIn(page);
     await page.locator('[data-test="expense-new"]').click();
     await page.locator('[data-test="expense-add-category-link"]').click();
     await page.locator('[data-test="expense-new-category-name"]').fill('Travel');

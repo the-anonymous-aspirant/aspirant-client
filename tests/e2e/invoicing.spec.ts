@@ -4,6 +4,7 @@ import {
   seedTrustedSessionAs,
   dismissMobileSidebarIfPresent,
 } from './helpers/mockBackend';
+import { openWaysIn } from './helpers/waysIn';
 
 /** Invoices app for its owner vinoly (system_3 #8367-B3, #8633): issuer profile, clients,
  *  PayPal import and categorisation, over aspirant-server's /api/invoicing/*
@@ -468,6 +469,7 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
     const input = page.locator('[data-test="payments-file"]');
     await expect(input).toHaveAttribute('accept', /\.xlsx/);
     await expect(input).toHaveAttribute('aria-label', 'PayPal activity CSV or Excel file');
+    await openWaysIn(page);
     await expect(page.locator('[data-test="payments-import"]')).toHaveText('Import PayPal file');
     await input.setInputFiles(xlsxFile);
     const summary = page.locator('[data-test="import-summary"]');

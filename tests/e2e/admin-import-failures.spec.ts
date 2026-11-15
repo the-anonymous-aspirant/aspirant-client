@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { dismissMobileSidebarIfPresent, seedAdminSession, seedTrustedSessionAs } from './helpers/mockBackend';
+import { openWaysIn } from './helpers/waysIn';
 
 /** Failed invoice-import uploads (system_3 #10536/#10564): an Admin page that
  *  lists them and fetches a kept copy, and one line on the Payments tab that
@@ -112,6 +113,7 @@ test.describe('#10672 Transactions — no before-upload caption', () => {
     await page.goto('/member/personal/invoicing');
     await dismissMobileSidebarIfPresent(page);
     // Positive control: the ways-in row rendered, so the absences below are real.
+    await openWaysIn(page);
     await expect(page.locator('[data-test="n26-import"]')).toBeVisible();
     await expect(page.locator('[data-test="import-retention-note"]')).toHaveCount(0);
     await expect(page.getByText('may be kept for up to 7 days')).toHaveCount(0);

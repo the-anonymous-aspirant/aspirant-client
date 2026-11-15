@@ -6,7 +6,23 @@
            payment by hand, an expense by hand (moved here from the Book, so
            a movement has one place to be recorded), then the PayPal and N26
            imports (#9760, #10534). All stay secondary; Create invoice holds
-           the one primary slot. -->
+           the one primary slot.
+           Below 640px they fold behind one "Add or import" disclosure, so the
+           first screen goes to the payments (system_3 #11019-A2, UX walk AM2;
+           Design ack c69874 item 1, amending Decision 2 below 640). It opens
+           by itself while the list is empty, where adding is the only next
+           step. At 640px and up the wrapper is a plain div. The import-state
+           region below stays outside the fold, so a result or failure is
+           never folded away. -->
+      <component
+        :is="narrow ? 'details' : 'div'"
+        class="ways-in-fold"
+        :open="narrow ? foldOpen : undefined"
+        data-test="ways-in-fold"
+        @toggle="onFoldToggle"
+        @click.capture="onFoldClick"
+      >
+      <summary v-if="narrow" class="fold-summary ways-in-fold__summary" data-test="ways-in-summary">Add or import</summary>
       <div class="ways-in">
         <AspButton variant="secondary" class="block-on-phone" data-test="manual-new" @click="manualOpen = true">
           Enter payment by hand
@@ -60,6 +76,7 @@
         </AspButton>
       </div>
       </div>
+      </component>
     </div>
 
     <div v-if="needsDateOrder" class="date-order" role="group" aria-labelledby="date-order-label" data-test="date-order">
@@ -561,6 +578,11 @@
         saving: new Set(),
         rowError: '',
         narrow: false,
+        // The phone's "Add or import" fold (#11019-A2): it follows "the list
+        // is empty" until ze toggles it or uses a way in, and then stays as ze
+        // left it (foldUserOpen), so a first row never shuts it under zir.
+        foldTouched: false,
+        foldUserOpen: false,
         // Row keys (`p<id>` / `e<id>`, ledgerRows.js), never bare ids:
         // payment and expense ids share one number space (security c66333
         // on system_3 #10630, carried to #10631 in c66336).
@@ -668,6 +690,11 @@
       // Both directions in one list, newest first (§3.143 Decision 3).
       rows() {
         return transactionRows(this.incoming, this.expenses);
+      },
+      // Open while the list is empty, where adding is the only next step
+      // (Design ack c69874 item 1, D1); closed otherwise, until touched.
+      foldOpen() {
+        return this.foldTouched ? this.foldUserOpen : this.rows.length === 0;
       },
       shown() {
         return this.rows.filter(
@@ -949,6 +976,22 @@
       if (this.narrowQuery) this.narrowQuery.removeEventListener('change', this.onNarrowChange);
     },
     methods: {
+      // Any click inside the fold, its summary included, freezes the state it
+      // shows now; a toggle that differs from it is the person's own.
+      onFoldClick() {
+        if (this.foldTouched) return;
+        this.foldUserOpen = this.foldOpen;
+        this.foldTouched = true;
+      },
+      // `toggle` also fires when Vue sets `open` itself; that one matches
+      // foldOpen and changes nothing.
+      onFoldToggle(event) {
+        if (!this.narrow) return;
+        const open = event.target.open;
+        if (open === this.foldOpen) return;
+        this.foldTouched = true;
+        this.foldUserOpen = open;
+      },
       // The removed rows for the count, the ghost and the view. A failed read
       // shows no ghost and leaves the list as it is.
       async loadRemoved() {
@@ -1379,6 +1422,45 @@
     justify-content: flex-end;
     margin-bottom: var(--space-md);
     container: ways-in / inline-size;
+  }
+
+  /* The ways-in wrapper (#11019-A2). At 640px and up it is a plain div that
+     must not exist for layout: .ways-in stays the head row's flex item, as
+     the container states below assume. */
+  div.ways-in-fold {
+    display: contents;
+  }
+
+  /* Below 640px it is the "Add or import" disclosure: a full-width
+     secondary-button skin on the global .fold-summary, which gives the 44px
+     height and the caret that turns when open (§3.41, Design ack c69874
+     item 1). */
+  details.ways-in-fold {
+    width: 100%;
+  }
+
+  .ways-in-fold__summary {
+    justify-content: center;
+    padding: var(--space-xs) var(--space-md);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-elevated);
+    color: var(--text-body);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .ways-in-fold__summary:hover {
+    border-color: var(--brand-primary);
+    color: var(--brand-primary-hover);
+  }
+
+  .ways-in-fold__summary:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  details[open] > .ways-in-fold__summary {
+    margin-bottom: var(--space-xs);
   }
 
   /* The one-row state never wraps: the container query below guarantees its

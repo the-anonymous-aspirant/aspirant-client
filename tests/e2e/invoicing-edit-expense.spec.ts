@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import { openWaysIn } from './helpers/waysIn';
 
 /** Edit an expense in its hand-entry dialog, and name who was paid (system_3
  *  #10695, design §3.143 Decisions 3 and 5): "Paid to (optional)" on create
@@ -115,6 +116,7 @@ test.describe('#10695 Edit an expense, and name who was paid', () => {
   test('"Paid to" is offered on create, after the date and amount, and Save sends it as payee', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
+    await openWaysIn(page);
     await page.locator('[data-test="expense-new"]').click();
     const dialog = page.getByRole('dialog', { name: 'Enter expense by hand' });
     await expect(dialog).toBeVisible();

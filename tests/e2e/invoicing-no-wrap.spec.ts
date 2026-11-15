@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import { openWaysIn } from './helpers/waysIn';
 
 /** Invoices app (system_3 #9968/#9965, operator c61550): "make sure that
  *  buttons like (Set category of selected rows), and banuberviesning
@@ -55,6 +56,7 @@ for (const width of [1440, 1024, 768, 700, 390]) {
       expect(await lines(setCategory), 'Set category of selected rows').toBe(1);
       expect(await noSideScroll(page), 'payments: no side scroll').toBe(true);
 
+      await openWaysIn(page);
       await page.locator('[data-test="manual-new"]').click();
       const method = page.locator('[data-test="manual-form"] [role="combobox"]').filter({ hasText: 'Banküberweisung' });
       await expect(method).toContainText('Banküberweisung (Bank transfer)');
@@ -78,6 +80,7 @@ for (const width of [1440, 1024, 768, 700, 390]) {
     // so every option is checked, and the pair must not jump between them.
     test('every Method option fits on one line, and the Method box keeps one width', async ({ page }) => {
       await open(page);
+      await openWaysIn(page);
       await page.locator('[data-test="manual-new"]').click();
       const form = page.locator('[data-test="manual-form"]');
       const method = form.locator('.manual-form__pair--method [role="combobox"]');

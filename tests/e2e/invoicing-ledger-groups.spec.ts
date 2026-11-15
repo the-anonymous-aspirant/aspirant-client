@@ -1,6 +1,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 import { groupByMonth, landedRows, monthSpanLabel, openGroupKeys } from '../../src/components/invoicing/listGroups.js';
+import { openWaysIn } from './helpers/waysIn';
 
 /** Transactions and the Book fold by the month the money moved, newest first
  *  (design_conventions §3.145, system_3 #10555-E1 / #10636). The module half
@@ -187,6 +188,7 @@ test.describe('#10636 Transactions folds by month', () => {
     await ledgerSummary(page, '2026-11').click();
     expect(await states(ledgerGroups(page))).toEqual(['2026-11:folded', '2026-10:folded', '2026-09:folded']);
 
+    await openWaysIn(page);
     await page.locator('[data-test="expense-new"]').click();
     await page.locator('[data-test="expense-date"]').fill('2026-09-20');
     await page.locator('[data-test="expense-amount"]').fill('12,00');

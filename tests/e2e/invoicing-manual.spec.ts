@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import { openWaysIn } from './helpers/waysIn';
 
 /** Invoices app (system_3 #8409, #10539): a payment entered by hand, saved on
  *  its own (§3.142 Decision 1 — no draft is made here; an invoice is made
@@ -102,7 +103,9 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
   test('Enter payment by hand saves the payment only, with no client chosen, and the region says so', async ({ page }) => {
     const fake = newFake({ clients: [] });
     await open(page, fake);
+    await openWaysIn(page);
     await expect(page.locator('[data-test="manual-new"]')).toHaveText('Enter payment by hand');
+    await openWaysIn(page);
     await page.locator('[data-test="manual-new"]').click();
     await expect(page.locator('[data-test="manual-form"]')).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Enter payment by hand' })).toBeVisible();
@@ -137,6 +140,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
   test('Paid by: same, close (Use or Add as new), and new all read correctly, and Save refuses an open close choice', async ({ page }) => {
     const fake = newFake({ clients: [{ id: 1, name: 'Mara Esempio' }] });
     await open(page, fake);
+    await openWaysIn(page);
     await page.locator('[data-test="manual-new"]').click();
     const payer = page.locator('[data-test="manual-payer"]');
     const line = page.locator('[data-test="manual-payer-line"]');
@@ -182,6 +186,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
   // re-opens Decision 4 from scratch rather than keeping a stale resolution.
   test('typing again after "Add as new" re-opens the close choice', async ({ page }) => {
     await open(page, newFake({ clients: [{ id: 1, name: 'Mara Esempio' }] }));
+    await openWaysIn(page);
     await page.locator('[data-test="manual-new"]').click();
     const payer = page.locator('[data-test="manual-payer"]');
     await payer.fill('Mara E.');
@@ -204,6 +209,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await seedTrustedSessionAs(page, 'vinoly');
     await page.goto('/member/personal/invoicing');
     await dismissMobileSidebarIfPresent(page);
+    await openWaysIn(page);
     await page.locator('[data-test="manual-new"]').click();
     await page.locator('[data-test="manual-payer"]').fill('Mara Esempio');
     await page.locator('[data-test="manual-date"]').fill('2026-07-14');
@@ -217,6 +223,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
   test('a new payer saved by hand is named in the region, with the added-client clause', async ({ page }) => {
     const fake = newFake({ clients: [] });
     await open(page, fake);
+    await openWaysIn(page);
     await page.locator('[data-test="manual-new"]').click();
     await page.locator('[data-test="manual-payer"]').fill('Mara Esempio');
     await expect(page.locator('[data-test="manual-payer-line"]')).toHaveText('Not in your client book yet: Save adds it.');
@@ -295,6 +302,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
       await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
       await page.emulateMedia({ colorScheme: theme });
       await open(page, newFake({ payments: [manualRow()] }));
+      await openWaysIn(page);
       const [manual, imp] = await Promise.all(['manual-new', 'payments-import'].map((id) =>
         page.locator(`[data-test="${id}"]`).evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, primary: el.classList.contains('btn--primary') }; })));
       const narrow = await page.evaluate(() => window.matchMedia('(max-width: 640px)').matches);
@@ -310,6 +318,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
 
   test('the dialog footer: Save payment first on a phone, Cancel then Save payment at the right when wide', async ({ page }) => {
     await open(page, newFake());
+    await openWaysIn(page);
     await page.locator('[data-test="manual-new"]').click();
     const save = await page.locator('[data-test="manual-save"]').boundingBox();
     const cancel = await page.getByRole('button', { name: 'Cancel', exact: true }).boundingBox();
