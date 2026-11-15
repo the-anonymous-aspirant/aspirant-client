@@ -30,7 +30,7 @@ async function mockLoginSuccess(page: Page, role = 'Admin'): Promise<void> {
 async function fillAndSubmitLogin(page: Page): Promise<void> {
   await page.locator('input[name="username"]').fill('e2e-tester');
   await page.locator('input[name="password"]').fill('hunter2');
-  await page.getByRole('button', { name: 'Login' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
 test.describe('Dedicated /login page', () => {
@@ -39,7 +39,7 @@ test.describe('Dedicated /login page', () => {
     await dismissMobileSidebarIfPresent(page);
     await expect(page.locator('input[name="username"]')).toBeVisible();
     await expect(page.locator('input[name="password"]')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Login' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
   });
 
   test('already-logged-in visitor is bounced off /login to home', async ({ page }) => {

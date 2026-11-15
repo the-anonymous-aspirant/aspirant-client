@@ -65,11 +65,11 @@ const ADMIN = { minTier: TIER.admin };
 
 const routes = [
   { path: '/', component: HomeView },
-  { path: '/login', component: LoginView },
+  { path: '/login', component: LoginView, meta: { title: 'Sign in' } },
   // The admin sign-in (system_3 #8798, #9270). Public: whoever needs it has no
   // Admin session yet. It lives under /admin so the /admin Cloudflare Access
   // application puts the PIN in front of it.
-  { path: '/admin/login', component: LoginView, props: { admin: true } },
+  { path: '/admin/login', component: LoginView, props: { admin: true }, meta: { title: 'Admin sign-in' } },
   // The landing pages for the two links a sign-up email can carry (system_3
   // #5228). Public by definition: whoever follows them has no session yet, and
   // in the recovery case cannot get one. They exist as PAGES rather than the
@@ -77,18 +77,18 @@ const routes = [
   // follow links inside messages and both tokens are single-use — one prefetch
   // would spend the token and leave the person holding a link that reports
   // itself invalid.
-  { path: '/verify-email', component: VerifyEmailView },
-  { path: '/reset-password', component: ResetPasswordView },
+  { path: '/verify-email', component: VerifyEmailView, meta: { title: 'Verify email' } },
+  { path: '/reset-password', component: ResetPasswordView, meta: { title: 'Reset password' } },
   // The START of the same flow (#5338, under #5296). Public for the same
   // reason the two landings are: whoever needs it has no session. Note this
   // route carries NO minTier — a tier gate here would bounce exactly the
   // people it exists for. The site-wide kill-switch (#5289) is read by the
   // view and enforced by the server, not expressed as a route guard, because
   // a closed door should say so rather than 404.
-  { path: '/signup', component: SignupView },
+  { path: '/signup', component: SignupView, meta: { title: 'Sign up' } },
   // The start of recovery (#5339). Public for the same reason as the rest of
   // this flow: whoever needs it cannot sign in, which is the whole problem.
-  { path: '/forgot-password', component: ForgotPasswordView },
+  { path: '/forgot-password', component: ForgotPasswordView, meta: { title: 'Forgot password' } },
   { path: '/admin', component: AdminView, meta: ADMIN },
   { path: '/admin/users', component: UserAdmin, meta: ADMIN },
   { path: '/admin/assets', component: Assets, meta: ADMIN },
@@ -187,7 +187,7 @@ const routes = [
   { path: '/trusted/scratchpad', redirect: '/member/shared/scratchpad' },
   { path: '/applications/remarkable-pdfs', redirect: '/member/shared/remarkable-pdfs' },
 
-  { path: '/support', component: SupportView },
+  { path: '/support', component: SupportView, meta: { title: 'Support' } },
 
   // Own profile — any authenticated user (the three real roles). An anonymous
   // visitor has no cached user_role and is bounced to '/' by the guard below;
@@ -198,7 +198,7 @@ const routes = [
   // visitors see a graceful 404 instead of being silently redirected to /.
   // The nginx layer 301s known renames before they reach Vue (see
   // default.conf); this is the safety net for typos and unmapped paths.
-  { path: '/:pathMatch(.*)*', component: NotFound },
+  { path: '/:pathMatch(.*)*', component: NotFound, meta: { title: 'Page not found' } },
 ];
 
 const router = createRouter({
@@ -248,6 +248,14 @@ router.beforeEach((to) => {
     return '/';
   }
   return true;
+});
+
+// One static <title> (index.html) served every page alike, 404 included
+// (system_3 #10982, UX walk AP6). A route without its own meta.title keeps
+// that default, so this is additive: it does not change any page this task's
+// evidence did not name.
+router.afterEach((to) => {
+  document.title = to.meta.title ? `${to.meta.title} · The Aspirant` : 'The Aspirant';
 });
 
 export default router;
