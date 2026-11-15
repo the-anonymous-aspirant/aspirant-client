@@ -102,11 +102,14 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
     await expect(page.getByRole('heading', { name: 'Transactions', level: 2 })).toBeAttached();
   });
 
-  test('the page lead names money in and out, every source, and the invoices', async ({ page }) => {
+  // The lead shows only before first use since system_3 #11019-A1 (Design
+  // ack c69874 item 4). This fixture always has a client, so the book is in
+  // use and the lead is gone; its words are pinned on the first-use page in
+  // invoicing.spec.ts ('the intro shows only before first use').
+  test('a book in use shows no page lead', async ({ page }) => {
     await open(page, newFake());
-    await expect(page.locator('.page-subtitle')).toHaveText(
-      'Record money in and out from PayPal, N26 or by hand, mark what was for your work, and issue invoices for it.',
-    );
+    await expect(page.locator('[data-test="profile-card"]')).toBeVisible();
+    await expect(page.locator('.page-subtitle')).toHaveCount(0);
   });
 
   test('the head row holds the four ways in, in order, all secondary', async ({ page }) => {
