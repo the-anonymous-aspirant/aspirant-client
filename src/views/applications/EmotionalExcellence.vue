@@ -54,7 +54,7 @@
             selected: selectedEmotion === key,
             faded: selectedEmotion && selectedEmotion !== key,
           }"
-          :style="{ backgroundColor: emotion.color }"
+          :style="{ backgroundColor: emotion.color, color: inkFor(emotion.color) }"
           class="emotion-box"
         >
           <strong>{{ key }}</strong>
@@ -71,7 +71,7 @@
             selected: selectedSubEmotion === key,
             faded: selectedSubEmotion && selectedSubEmotion !== key,
           }"
-          :style="{ backgroundColor: subEmotion.color }"
+          :style="{ backgroundColor: subEmotion.color, color: inkFor(subEmotion.color) }"
           class="emotion-box"
         >
           <strong>{{ key }}</strong>
@@ -94,7 +94,7 @@
             selected: selectedSubSubEmotion === key,
             faded: selectedSubSubEmotion && selectedSubSubEmotion !== key,
           }"
-          :style="{ backgroundColor: subSubEmotion.color }"
+          :style="{ backgroundColor: subSubEmotion.color, color: inkFor(subSubEmotion.color) }"
           class="emotion-box"
         >
           <strong>{{ key }}</strong>
@@ -157,7 +157,12 @@
 
 <script>
   import emotions from '../../resources/games/emotions.js';
-  import { AspButton, AspSegmented } from '@aspirant/design-system';
+  import { AspButton, AspSegmented, deriveInk, parseColor, toRgbString } from '@aspirant/design-system';
+
+  // A fill-derived ink, cached per colour string: the emotion tree repeats a
+  // handful of colours across many nodes, and deriveInk's ramp is pure, so
+  // there is no reason to re-walk it on every render of every box.
+  const inkCache = new Map();
 
   export default {
     name: 'EmotionalExcellence',
@@ -328,6 +333,19 @@
       getMostGranularEmotion(entry) {
         return entry.lowLevelEmotion || entry.midLevelEmotion || entry.topLevelEmotion;
       },
+      // Each emotion box sets its own background fill inline; its label ink is
+      // derived from that same fill rather than inherited from the page, so it
+      // clears 4.5:1 in both themes regardless of which colour the node carries
+      // (UX walk AG2, system_3 #10994). `deriveInk` is the design system's
+      // derive-and-adjust algorithm — a plain light/dark pick can fail against
+      // both ends for some hues (e.g. #c063c0).
+      inkFor(hexColor) {
+        if (inkCache.has(hexColor)) return inkCache.get(hexColor);
+        const bg = parseColor(hexColor);
+        const ink = bg ? toRgbString(deriveInk(parseColor('#ffffff'), bg)) : undefined;
+        inkCache.set(hexColor, ink);
+        return ink;
+      },
     },
   };
 </script>
@@ -374,7 +392,7 @@
   /* Emotion boxes */
   .emotion-container {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: var(--space-lg);
     margin-bottom: var(--space-xl);
     margin-top: var(--space-md);
