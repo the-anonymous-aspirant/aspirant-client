@@ -307,6 +307,7 @@
 import axios from 'axios';
 import ReadState from '../../components/ReadState.vue';
 import { AspButton, AspModal } from '@aspirant/design-system';
+import { joinNames, serverVerdict } from './healthVerdict.js';
 
 // The rollup's readable service name for a container, by the same rule as
 // aspirant-server's serviceNameFromContainer (handlers/service_usage_rollup.go):
@@ -347,8 +348,6 @@ const READS = [
 ];
 const LABEL = { health: 'server health', containers: 'containers', disk: 'disk usage', db: 'database statistics' };
 
-const joinNames = (names) =>
-  names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 
 // Words for a failed read, keyed on what answered, never err.message (D2).
 // Containers and disk come through the server from the monitor, so a gateway
@@ -430,8 +429,7 @@ export default {
     partialBanner() {
       const sentences = [];
       if (this.health && !this.failures.health) {
-        const covers = ['Server', ...Object.keys(this.health.checks || {})];
-        sentences.push(`${joinNames(covers)} ${(this.health.status || 'unknown').toUpperCase()}.`);
+        sentences.push(`${serverVerdict(this.health)}.`);
       }
       const failed = joinNames(this.failedReads.map((r) => r.noun));
       sentences.push(`${failed.charAt(0).toUpperCase()}${failed.slice(1)} could not be read.`);

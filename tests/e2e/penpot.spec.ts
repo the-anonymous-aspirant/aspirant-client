@@ -38,10 +38,13 @@ test.describe('Penpot design service entry', () => {
     expect(new URL(popup.url()).pathname).toBe('/admin/penpot/');
   });
 
-  test('card copy flags the new-tab (no iframe embed) behavior', async ({ page }) => {
+  // The notice moved from the end of the clamped description, where it was
+  // cut at 390px, to the card's unclamped title row (system_3 #11009).
+  test('the card flags the new-tab behaviour in its title row', async ({ page }) => {
     await seedAdminSession(page);
     await page.goto('/admin');
     await dismissMobileSidebarIfPresent(page);
-    await expect(page.getByText(/Opens in a new tab \(full canvas, not an iframe embed\)/)).toBeVisible();
+    const card = page.locator('.application-card').filter({ has: page.locator('.card-title', { hasText: 'Penpot Design' }) });
+    await expect(card.locator('h2 [data-test="new-tab-mark"]')).toHaveText('↗ new tab');
   });
 });
