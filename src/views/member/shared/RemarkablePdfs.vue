@@ -207,26 +207,29 @@ export default {
   transform-origin: 0 0;
 }
 
+/* Phone-first base (§3.122 P1): stacked, full width. The two buttons'
+   natural widths plus the gap overflow the card's content box at 390px
+   (design_agent, c70728, on pre-existing main behaviour, not this PR's own
+   diff — fixed here because this PR already touches the view); stacking
+   avoids the clip (§3.122 P3 wraps rather than clips). The row returns at
+   640px and up (design_agent, c70739: a max-width override would still
+   stack at exactly 640px). */
 .actions {
   display: flex;
+  flex-direction: column;
   gap: var(--space-md);
   justify-content: center;
   margin-top: var(--space-lg);
+}
+
+@media (min-width: 640px) {
+  .actions {
+    flex-direction: row;
+  }
 }
 
 /* Open/Download are now AspButtons (secondary/primary); DS owns their visuals.
    The .actions flex row still positions them; the former `.actions button`,
    `.open-btn`, `.download-btn` visual rules are removed (that bare `.actions
    button` selector would otherwise reach the AspButton root and override DS). */
-
-/* Below 640px the two buttons' natural widths (plus the gap) exceed the
-   card's content box at 390px and overflow it (design_agent, c70728, on the
-   pre-existing main behaviour, not this PR's own diff — fixed here because
-   this PR already touches the view). Stacking them full-width avoids the
-   clip; §3.122 P3 wraps rather than clips. Unchanged from 640px up. */
-@media (max-width: 640px) {
-  .actions {
-    flex-direction: column;
-  }
-}
 </style>
