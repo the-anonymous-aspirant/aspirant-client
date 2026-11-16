@@ -384,3 +384,111 @@ test.describe('AG2 (#10994) — the emotion grid wraps at phone width; each labe
     expect(await readInk('dark')).toBe(await readInk('light'));
   });
 });
+
+/**
+ * Validator gate #11214 on #10994, filed as #10994-B2 (system_3 #11314). Two
+ * points still failed on the served client after PR 487:
+ * 1. At 390×844 no emotion button was on the first screen. The comment card,
+ *    which is the second step, sat above the picker and the grid started at
+ *    846px.
+ * 2. After a pick, `.faded { opacity: 0.3 }` blended every other label and its
+ *    fill toward the page, to 1.4–1.9:1 (§3.65, §3.24: de-emphasise by scale).
+ */
+
+/** Label contrast as PAINTED: ink and fill each composited over the page at
+ *  the box's effective opacity (its own times every ancestor's). Comparing the
+ *  unblended colours, as `contrastRatio` does, cannot see an opacity fade. */
+async function paintedLabelContrast(box: Locator): Promise<number> {
+  return box.evaluate((el) => {
+    const parse = (s: string) => {
+      const m = s.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+      return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
+    };
+    const lum = (c: { r: number; g: number; b: number }) => {
+      const f = (v: number) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+    };
+    let alpha = 1;
+    for (let n: Element | null = el; n; n = n.parentElement) alpha *= parseFloat(getComputedStyle(n).opacity);
+    // The page behind the box: the nearest opaque background above it.
+    let page = null;
+    for (let n: Element | null = el.parentElement; n && !page; n = n.parentElement) {
+      const c = parse(getComputedStyle(n).backgroundColor);
+      if (c && c.a === 1) page = c;
+    }
+    page = page || { r: 255, g: 255, b: 255, a: 1 };
+    const over = (c: { r: number; g: number; b: number }) => ({
+      r: c.r * alpha + page!.r * (1 - alpha),
+      g: c.g * alpha + page!.g * (1 - alpha),
+      b: c.b * alpha + page!.b * (1 - alpha),
+    });
+    const ink = over(parse(getComputedStyle(el).color)!);
+    const fill = over(parse(getComputedStyle(el).backgroundColor)!);
+    const [hi, lo] = [lum(ink), lum(fill)].sort((a, b) => b - a);
+    return (hi + 0.05) / (lo + 0.05);
+  });
+}
+
+async function openEE(page: Page, scheme: 'light' | 'dark') {
+  await page.emulateMedia({ colorScheme: scheme });
+  await page.addInitScript((t) => localStorage.setItem('theme', t), scheme);
+  await page.goto('/applications/emotional-excellence');
+  await dismissMobileSidebarIfPresent(page);
+  await expect(page.locator('.emotion-container .emotion-box')).toHaveCount(6);
+}
+
+test.describe('#11314 (#10994-B2): the picker on the first screen, and readable labels after a pick', () => {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`at 390×844 the first row of emotion buttons is on the first screen, in ${scheme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await openEE(page, scheme);
+      const first = page.locator('.emotion-container .emotion-box').first();
+      const box = (await first.boundingBox())!;
+      // Measured, not estimated (D16): the whole first box is on the screen.
+      expect(box.y + box.height, `first box bottom in ${scheme}`).toBeLessThanOrEqual(844);
+      const row = await page.locator('.emotion-container .emotion-box').evaluateAll((els) => {
+        const top = els[0].getBoundingClientRect().top;
+        return els.filter((e) => Math.abs(e.getBoundingClientRect().top - top) < 2).map((e) => e.getBoundingClientRect().bottom);
+      });
+      for (const bottom of row) expect(bottom, 'every box in the first row').toBeLessThanOrEqual(844);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    });
+
+    test(`after a pick at every level, every other label still clears 4.5:1 as painted, in ${scheme}`, async ({ page }) => {
+      await openEE(page, scheme);
+      const levels = ['.emotion-container', '.sub-emotion-container', '.sub-sub-emotion-container'];
+      for (const level of levels) {
+        const boxes = page.locator(`${level} .emotion-box`);
+        await expect(boxes.first()).toBeVisible();
+        await boxes.first().click();
+        // Let any transition settle: a mid-transition read is a real frame.
+        await page.waitForTimeout(400);
+        const n = await boxes.count();
+        expect(n, `${level} has more than the picked box`).toBeGreaterThan(1);
+        for (let i = 1; i < n; i += 1) {
+          const ratio = await paintedLabelContrast(boxes.nth(i));
+          expect(ratio, `${level} box ${i} in ${scheme}: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    });
+  }
+
+  test('a box is a button: it takes focus and Enter picks it', async ({ page }) => {
+    await openEE(page, 'light');
+    const second = page.locator('.emotion-container .emotion-box').nth(1);
+    await expect(second).toHaveAttribute('role', 'button');
+    await expect(second).toHaveAttribute('aria-pressed', 'false');
+    await second.focus();
+    await page.keyboard.press('Enter');
+    await expect(second).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.emotion-container .emotion-box').first()).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('.sub-emotion-container .emotion-box').first()).toBeVisible();
+  });
+
+  test('at 1440×900 the whole grid is still on the first screen', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openEE(page, 'light');
+    const bottoms = await page.locator('.emotion-container .emotion-box').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().bottom));
+    for (const b of bottoms) expect(b).toBeLessThanOrEqual(900);
+  });
+});
