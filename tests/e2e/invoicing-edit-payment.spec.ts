@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import { openWaysIn } from './helpers/waysIn';
 
 /** Edit a payment in its hand-entry dialog (system_3 #10694, design §3.143
  *  Decision 5): a hand-entered row changes in full, an imported one keeps
@@ -286,6 +287,7 @@ test.describe('#10694 Edit a payment', () => {
 
   test('a new payment by hand still opens as before', async ({ page }) => {
     await open(page, newFake());
+    await openWaysIn(page);
     await page.locator('[data-test="manual-new"]').click();
     const dialog = page.getByRole('dialog', { name: 'Enter payment by hand' });
     await expect(dialog).toBeVisible();

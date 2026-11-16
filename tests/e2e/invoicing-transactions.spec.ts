@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import { openWaysIn } from './helpers/waysIn';
 
 /** Invoices app, Transactions (system_3 #10627, design §3.143 Decisions 1
  *  and 2): four tabs, each with one job; Transactions takes Payments' place
@@ -131,6 +132,7 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
     const fake = newFake();
     await open(page, fake);
 
+    await openWaysIn(page);
     await page.locator('[data-test="manual-new"]').click();
     const payment = page.getByRole('dialog', { name: 'Enter payment by hand' });
     await expect(payment).toBeVisible();
@@ -139,6 +141,7 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
 
     // Categories load when the expense dialog opens, not with the panel.
     expect(fake.requests.some((r) => r.path === '/invoicing/expense-categories')).toBe(false);
+    await openWaysIn(page);
     await page.locator('[data-test="expense-new"]').click();
     const expense = page.getByRole('dialog', { name: 'Enter expense by hand' });
     await expect(expense).toBeVisible();
@@ -150,9 +153,11 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
 
     // The imports open the system file dialog, on their own inputs: PayPal
     // takes one CSV or Excel file, N26 several CSVs or PDFs.
+    await openWaysIn(page);
     const [paypal] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-test="payments-import"]').click()]);
     expect(await paypal.element().getAttribute('data-test')).toBe('payments-file');
     expect(paypal.isMultiple()).toBe(false);
+    await openWaysIn(page);
     const [n26] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-test="n26-import"]').click()]);
     expect(await n26.element().getAttribute('data-test')).toBe('n26-file-input');
     expect(n26.isMultiple()).toBe(true);
@@ -161,6 +166,7 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
   test('an expense entered on Transactions is confirmed there and lands in the Book', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
+    await openWaysIn(page);
     await page.locator('[data-test="expense-new"]').click();
     await page.locator('[data-test="expense-date"]').fill('2026-07-20');
     await page.locator('[data-test="expense-amount"]').fill('45,99');
@@ -769,4 +775,91 @@ test.describe('#10631 Transactions: selection actions for both directions', () =
     await expect.poll(() => txns(page)).toEqual(['PP-P5']);
     expect(fake.payments[0].removed_at).toBeNull();
   });
+});
+
+/** #11019-A2 (Design ack c69874 item 1, amending §3.143 Decision 2 below
+ *  640px): on a phone the four ways in fold behind one "Add or import"
+ *  disclosure, so the first screen goes to the payments. It is open by
+ *  itself only while the list is empty, and the import-state region stays
+ *  outside it. Invented records only. */
+test.describe('#11019-A2 on a phone the ways in fold behind "Add or import"', () => {
+  test.beforeEach(({ page }) => {
+    const viewport = page.viewportSize();
+    test.skip(!viewport || viewport.width >= 640, 'phone layout only');
+  });
+
+  test('with rows, the fold is closed: one full-width line, 44px or more, and the four ways in hidden', async ({ page }) => {
+    await open(page, mixedFake());
+    const fold = page.locator('details[data-test="ways-in-fold"]');
+    await expect(fold).not.toHaveAttribute('open', '');
+    const summary = fold.locator('[data-test="ways-in-summary"]');
+    await expect(summary).toHaveText('Add or import');
+    const box = (await summary.boundingBox())!;
+    const head = (await page.locator('.panel-head').boundingBox())!;
+    expect(box.height, 'summary at least 44px').toBeGreaterThanOrEqual(44);
+    expect(Math.abs(box.width - head.width), 'summary full width').toBeLessThanOrEqual(1);
+    for (const [id] of WAYS_IN) await expect(page.locator(`[data-test="${id}"]`)).toBeHidden();
+    // The caret turns when open: the global .fold-summary marker.
+    const caret = () => summary.evaluate((el) => getComputedStyle(el, '::before').transform);
+    const closedCaret = await caret();
+    await summary.click();
+    await expect(fold).toHaveAttribute('open', '');
+    await expect.poll(caret).not.toBe(closedCaret);
+    const buttons = fold.locator('.ways-in button');
+    await expect(buttons).toHaveText(WAYS_IN.map(([, label]) => label));
+    for (const [id] of WAYS_IN) await expect(page.locator(`[data-test="${id}"]`)).toBeVisible();
+  });
+
+  test('opened, each way in still reaches its dialog or its file input', async ({ page }) => {
+    await open(page, mixedFake());
+    await openWaysIn(page);
+    await page.locator('[data-test="manual-new"]').click();
+    await expect(page.getByRole('dialog', { name: 'Enter payment by hand' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Enter payment by hand' })).toBeHidden();
+    const [paypal] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-test="payments-import"]').click()]);
+    expect(await paypal.element().getAttribute('data-test')).toBe('payments-file');
+    const [n26] = await Promise.all([page.waitForEvent('filechooser'), page.locator('[data-test="n26-import"]').click()]);
+    expect(await n26.element().getAttribute('data-test')).toBe('n26-file-input');
+  });
+
+  test('with no rows at all, the fold renders open: adding is the only next step', async ({ page }) => {
+    await open(page, newFake());
+    await expect(page.locator('details[data-test="ways-in-fold"]')).toHaveAttribute('open', '');
+    for (const [id] of WAYS_IN) await expect(page.locator(`[data-test="${id}"]`)).toBeVisible();
+  });
+
+  test('the first row entered by hand does not shut the fold under the person', async ({ page }) => {
+    await open(page, newFake());
+    await page.locator('[data-test="expense-new"]').click();
+    await page.locator('[data-test="expense-date"]').fill('2026-07-20');
+    await page.locator('[data-test="expense-amount"]').fill('45,99');
+    await page.getByRole('combobox', { name: 'Category' }).click();
+    await page.getByRole('option', { name: 'materials and supplies' }).click();
+    await page.locator('[data-test="expense-save"]').click();
+    await expect(page.getByRole('dialog', { name: 'Enter expense by hand' })).toBeHidden();
+    await expect(page.locator('[data-test="expense-row"]')).toHaveCount(1);
+    await expect(page.locator('details[data-test="ways-in-fold"]')).toHaveAttribute('open', '');
+  });
+
+  test('an import failure shows with the fold closed: it is never folded away', async ({ page }) => {
+    await open(page, mixedFake());
+    const fold = page.locator('details[data-test="ways-in-fold"]');
+    await expect(fold).not.toHaveAttribute('open', '');
+    const pdf = (name: string) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 invented') });
+    await page.locator('[data-test="n26-file-input"]').setInputFiles(Array.from({ length: 11 }, (_, i) => pdf(`f${i}.pdf`)));
+    await expect(fold).not.toHaveAttribute('open', '');
+    await expect(page.locator('[data-test="import-error"]')).toBeVisible();
+    await expect(page.locator('[data-test="import-error"]')).toHaveText('N26: choose at most 10 files at a time.');
+    await expect(fold.locator('[data-test="import-error"]')).toHaveCount(0);
+  });
+});
+
+test('#11019-A2 at 640px and up the ways in are not folded', async ({ page }) => {
+  const viewport = page.viewportSize();
+  test.skip(!viewport || viewport.width < 640, 'desktop layout only');
+  await open(page, mixedFake());
+  await expect(page.locator('[data-test="ways-in-fold"]')).toHaveJSProperty('tagName', 'DIV');
+  await expect(page.locator('[data-test="ways-in-summary"]')).toHaveCount(0);
+  for (const [id] of WAYS_IN) await expect(page.locator(`[data-test="${id}"]`)).toBeVisible();
 });

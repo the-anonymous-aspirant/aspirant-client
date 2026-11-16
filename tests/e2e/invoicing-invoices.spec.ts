@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import { openWaysIn } from './helpers/waysIn';
 
 /** Invoices app, D1 (system_3 #8367-D1): create a draft from paid-work
  *  payments, edit it, issue it, cancel it (Storno). The fake below keeps a
@@ -454,6 +455,7 @@ test.describe('#10032 the invoicing fields explain themselves', () => {
     await page.setViewportSize({ width: 390, height: 900 });
     const fake = newFake();
     await open(page, fake);
+    await openWaysIn(page);
     await page.locator('[data-test="manual-new"]').click();
     const form = page.locator('[data-test="manual-form"]');
     await tapEach(page, form, {
