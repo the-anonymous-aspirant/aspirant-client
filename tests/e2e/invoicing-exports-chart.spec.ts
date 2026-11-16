@@ -119,8 +119,12 @@ test.describe('#9972 Invoices app: the statistics', () => {
     for (const id of ['stat-clients', 'stat-income', 'stat-invoices']) {
       await expect(page.locator(`[data-test="${id}"] .asp-chart[data-rendered="true"]`)).toHaveCount(1);
     }
-    await expect(page.locator('[data-test="stat-clients-range"]')).toHaveText('running total; each client counts from the month of the work on their first issued invoice');
-    await expect(page.locator('[data-test="stat-income-range"]')).toHaveText('issued invoices, by the month the work was done; this month so far');
+    await expect(page.locator('[data-test="stat-clients-range"]')).toHaveText(
+      'running total; each client counts from the month of the work on their first issued invoice; low 1 client in Jun · high 2 clients in Aug · Sep so far 2 clients',
+    );
+    await expect(page.locator('[data-test="stat-income-range"]')).toHaveText(
+      'issued invoices, by the month the work was done, cancelled invoices left out; low €0.00 in Sep so far · high €350.00 in Jun',
+    );
   });
 
   test('clients without an issued invoice leave the statistics empty', async ({ page }) => {
@@ -160,6 +164,65 @@ test.describe('#9972 Invoices app: the statistics', () => {
       totals.slice(1).forEach((v, k) => expect(v, 'the running total never drops').toBeGreaterThanOrEqual(totals[k]));
     });
   }
+});
+
+// UX walk AM7 (system_3 #11024): each caption states its own figures in
+// words — the low and high month, and the current month "so far" — and says
+// cancelled invoices are left out, so a count that excludes them (the chart
+// counts issued invoices only) no longer reads as disagreeing with a list
+// that also shows a cancelled one. Bars and the line get headroom so the
+// tallest mark no longer sits on the plot's edge.
+test.describe('#11024 UX walk AM7: chart captions state real figures and give headroom', () => {
+  // `open` fixes the clock at 2026-09-15 (set inside the helper, after any
+  // clock call a test makes first), so September is "the current month" in
+  // every fixture below.
+  test('a caption names the low and high month, the current month so far, and that cancelled invoices are left out', async ({ page }) => {
+    const fake = newFake();
+    fake.issued = [
+      inv(1, '2026-07-05'),
+      inv(2, '2026-09-10'),
+      inv(3, '2026-09-11'),
+      inv(4, '2026-09-12'),
+      inv(5, '2026-09-13'),
+      { ...inv(6, '2026-09-14'), status: 'cancelled' },
+    ];
+    await open(page, fake);
+    const chart = page.locator('[data-test="invoices-chart"]');
+    await expect(chart).toHaveAttribute('data-labels', 'Jul 2026,Aug 2026,Sep 2026');
+    // Six invoices are dated September on the list; the chart's "4" is the
+    // issued ones (the cancelled one left out), which the caption explains.
+    await expect(chart).toHaveAttribute('data-counts', '1,0,4');
+    await expect(page.locator('[data-test="stat-invoices-range"]')).toHaveText(
+      'per month, by issue date, cancelled invoices left out; low 0 in Aug · high 4 in Sep so far',
+    );
+  });
+
+  test('the tallest bar and the line keep clear of the plot edges', async ({ page }) => {
+    // Chart.js animates a bar/point to its final position over ~1s; reduced
+    // motion renders it there on the first frame, so afterRender's reading
+    // is the settled one, not a mid-animation one, with no timing wait.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const fake = newFake();
+    fake.issued = [served(1, 1, '2026-07-05', '2026-07-05', 35000), served(2, 2, '2026-09-10', '2026-09-10', 9000)];
+    await open(page, fake);
+    const probe = async (id: string) => {
+      const el = page.locator(`[data-test="${id}"] .asp-chart`);
+      await expect(el).toHaveAttribute('data-mark-top', /\d/);
+      return {
+        top: Number(await el.getAttribute('data-plot-top')),
+        bottom: Number(await el.getAttribute('data-plot-bottom')),
+        markTop: Number(await el.getAttribute('data-mark-top')),
+        markBottom: Number(await el.getAttribute('data-mark-bottom')),
+      };
+    };
+    for (const id of ['stat-income', 'stat-invoices']) {
+      const { top, markTop } = await probe(id);
+      expect(markTop - top, `${id}: the tallest bar clears the top edge`).toBeGreaterThan(2);
+    }
+    const line = await probe('stat-clients');
+    expect(line.markTop - line.top, 'the line clears the top edge').toBeGreaterThan(2);
+    expect(line.bottom - line.markBottom, 'the line clears the bottom edge').toBeGreaterThan(2);
+  });
 });
 
 // system_3 #9948 (operator c61373: "I seem to only get one item?"): each export
