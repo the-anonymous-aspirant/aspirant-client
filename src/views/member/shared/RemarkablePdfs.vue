@@ -218,4 +218,15 @@ export default {
    The .actions flex row still positions them; the former `.actions button`,
    `.open-btn`, `.download-btn` visual rules are removed (that bare `.actions
    button` selector would otherwise reach the AspButton root and override DS). */
+
+/* Below 640px the two buttons' natural widths (plus the gap) exceed the
+   card's content box at 390px and overflow it (design_agent, c70728, on the
+   pre-existing main behaviour, not this PR's own diff — fixed here because
+   this PR already touches the view). Stacking them full-width avoids the
+   clip; §3.122 P3 wraps rather than clips. Unchanged from 640px up. */
+@media (max-width: 640px) {
+  .actions {
+    flex-direction: column;
+  }
+}
 </style>

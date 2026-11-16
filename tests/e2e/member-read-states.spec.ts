@@ -275,9 +275,14 @@ test.describe('#11025/#11144 reMarkable planner', () => {
     await expect(page.locator('.preview-iframe')).toBeVisible();
 
     resolveCurrentYear?.();
-    // Give the dropped current-year response a turn to (wrongly) land.
+    // Give the dropped current-year response a turn to (wrongly) land. The
+    // radio never changes from the stale response (design_agent, c70728) —
+    // the bug this guards is the PREVIEW silently reverting to the old
+    // calendar under a checked 2027, so assert on the iframe's own content,
+    // not just the checked state.
     await page.waitForTimeout(200);
     await expect(nextYearRadio(page)).toBeChecked();
     await expect(currentYearRadio(page)).not.toBeChecked();
+    await expect(page.locator('.preview-iframe')).toHaveAttribute('srcdoc', /next year/);
   });
 });
