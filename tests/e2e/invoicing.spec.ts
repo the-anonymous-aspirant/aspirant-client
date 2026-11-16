@@ -158,8 +158,73 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await openInvoicing(page);
 
     await expect(page.locator('[data-test="profile-name"]')).toHaveText('Flower Example');
-    await expect(page.locator('[data-test="profile-next-number"]')).toHaveText('2026-001');
     await expect(page.locator('[data-test="steuernummer-missing"]')).toContainText('Missing: needed to issue');
+    // The invoice-number sequence lives in the profile editor (§3.114
+    // decision 5; Design ack c69874 item 3), not on the Issuer line.
+    await expect(page.locator('[data-test="profile-next-number"]')).toHaveCount(0);
+  });
+
+  // system_3 #11019-A1 (UX walk AM2): the Issuer is one line, and the line is
+  // the door to the profile editor. It names itself as that door.
+  test('the Issuer is one line that opens the profile editor', async ({ page }) => {
+    const fake = newFake();
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+
+    // c69874 item 3's accessible name, and a visible trailing "Edit".
+    const line = page.getByRole('button', { name: 'Edit profile: Flower Example', exact: true });
+    await expect(line).toHaveCount(1);
+    await expect(line).toContainText('Flower Example');
+    await expect(line).toContainText('Edit');
+    // One line on a phone: the whole card is the line's 44px plus its padding.
+    await page.setViewportSize({ width: 390, height: 844 });
+    const h = await page.locator('[data-test="profile-card"]').evaluate((el) => el.getBoundingClientRect().height);
+    expect(h, 'one-line Issuer card').toBeLessThanOrEqual(82);
+    await line.click();
+    await expect(page.locator('[data-test="profile-form"]')).toBeVisible();
+  });
+
+  // system_3 #11019-A1 (Design ack c69874 item 4): the intro shows only when
+  // every read answered and nothing is recorded, removed rows included.
+  test('the intro shows only before first use', async ({ page }) => {
+    await mockInvoicing(page, newFake({ clients: [], payments: [], expenses: [] }));
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+    // The lead names money in and out, every source, and the invoices (moved
+    // here from invoicing-transactions.spec.ts, whose fixture is never empty).
+    await expect(page.locator('[data-test="invoicing-intro"]')).toHaveText(
+      'Record money in and out from PayPal, N26 or by hand, mark what was for your work, and issue invoices for it.',
+    );
+
+    const used = await page.context().newPage();
+    await mockInvoicing(used, newFake());
+    await seedTrustedSessionAs(used, 'vinoly');
+    await openInvoicing(used);
+    await expect(used.locator('[data-test="profile-card"]')).toBeVisible();
+    await expect(used.locator('[data-test="invoicing-intro"]')).toHaveCount(0);
+  });
+
+  test('a removed transaction is a use: no intro', async ({ page }) => {
+    await mockInvoicing(page, newFake({ clients: [], payments: [], expenses: [] }));
+    // Only the removed read finds a row; the active list stays empty.
+    await page.route(/\/api\/invoicing\/payments\?.*removed=true/, (route) =>
+      json(route, 200, { payments: [{ id: 9, transaction_id: 'R1', removed_at: '2026-11-01T00:00:00Z', gross_cents: 100, currency: 'EUR' }] }));
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+    await expect(page.locator('[data-test="profile-card"]')).toBeVisible();
+    await expect(page.locator('[data-test="payments-empty"]')).toBeVisible();
+    await expect(page.locator('[data-test="invoicing-intro"]')).toHaveCount(0);
+  });
+
+  test('a failed read is not a first use: no intro', async ({ page }) => {
+    await mockInvoicing(page, newFake({ clients: [], payments: [], expenses: [] }));
+    await page.route(/\/api\/invoicing\/expenses$/, (route) =>
+      json(route, 500, { error: { code: 'internal', message: 'x' } }));
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+    await expect(page.locator('[data-test="profile-card"]')).toBeVisible();
+    await expect(page.locator('[data-test="invoicing-intro"]')).toHaveCount(0);
   });
 
   // #8401: a global `.card` rule in style.css matched AspCard's root and
@@ -184,9 +249,12 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
 
   test('editing the profile PUTs it; a server refusal stays in the dialog', async ({ page }) => {
     const fake = newFake();
+    // Start without a Steuernummer, so saving one visibly clears the badge.
+    fake.profile.steuernummer = '';
     await mockInvoicing(page, fake);
     await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
+    await expect(page.locator('[data-test="steuernummer-missing"]')).toBeVisible();
 
     await page.locator('[data-test="profile-edit"]').click();
     const form = page.locator('[data-test="profile-form"]');
@@ -199,7 +267,12 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await form.getByLabel(/^Steuernummer \(Tax number\)/).fill('98/765/43210');
     await page.locator('[data-test="profile-save"]').click();
     await expect(form).toBeHidden();
-    await expect(page.locator('[data-test="profile-steuernummer"]')).toHaveText('98/765/43210');
+    // The value lives in the editor since the Issuer became one line (system_3
+    // #11019-A1); the line shows only whether it is missing. Saving it clears
+    // the badge, and the editor shows the value saved.
+    await expect(page.locator('[data-test="steuernummer-missing"]')).toHaveCount(0);
+    await page.locator('[data-test="profile-edit"]').click();
+    await expect(form.getByLabel(/^Steuernummer \(Tax number\)/)).toHaveValue('98/765/43210');
     const put = fake.requests.filter((r) => r.method === 'PUT' && r.path === '/invoicing/profile').pop()!;
     expect(JSON.parse(put.body)).toMatchObject({ steuernummer: '98/765/43210', invoice_number_prefix: '2026', next_invoice_number: 1, is_kleinunternehmer: true });
   });
