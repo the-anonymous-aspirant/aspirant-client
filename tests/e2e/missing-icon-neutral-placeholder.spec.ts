@@ -39,14 +39,21 @@ for (const width of [390, 1440]) {
       // background, right below in the same sidebar's sign-in form.
       const referenceBox = page.locator('.sidebar input[name="username"]').locator('..');
       await expect(referenceBox).toBeVisible();
-      const [iconColor, logoColor, referenceColor] = await Promise.all([
-        errorIcon.evaluate((el) => getComputedStyle(el).backgroundColor),
-        logo.evaluate((el) => getComputedStyle(el).backgroundColor),
-        referenceBox.evaluate((el) => getComputedStyle(el).backgroundColor),
-      ]);
+      const bg = (el: Element) => getComputedStyle(el).backgroundColor;
+      const referenceColor = await referenceBox.evaluate(bg);
 
-      expect(iconColor, 'failed icon matches the neutral reference box').toBe(referenceColor);
-      expect(logoColor, 'stuck logo matches the neutral reference box').toBe(referenceColor);
+      // Poll, never read once: `.aspiring-hand-logo` carries
+      // `transition: all var(--transition-layout)` (Sidebar.vue), so the logo
+      // FADES from the pending amber to the neutral box. A single read caught it
+      // mid-fade and failed main intermittently at 1440 (rgb(252,215,128),
+      // rgb(249,244,230), rgb(249,247,243) on three runs; system_3 #11314).
+      // The assertion is about where the colour settles, not how fast.
+      await expect
+        .poll(() => errorIcon.evaluate(bg), { message: 'failed icon matches the neutral reference box' })
+        .toBe(referenceColor);
+      await expect
+        .poll(() => logo.evaluate(bg), { message: 'stuck logo matches the neutral reference box' })
+        .toBe(referenceColor);
 
       expect(await noSideways(page)).toBeLessThanOrEqual(0);
     });
