@@ -19,9 +19,9 @@
         <p>
           Filled in with your last used values, saved to your account on
           <span data-test="kvitto-saved-on">{{ savedOnLabel }}</span>.
-          <button type="button" class="kvitto__text-button" data-test="kvitto-forget" :disabled="busy" @click="forget">
+          <AspButton variant="link" class="kvitto__forget" data-test="kvitto-forget" :disabled="busy" @click="forget">
             Forget them
-          </button>
+          </AspButton>
         </p>
         <p v-if="forgetFailed" class="kvitto__status--alert" role="alert" data-test="kvitto-forget-failed">
           Your saved values were not deleted. Try again.
@@ -404,24 +404,14 @@
     margin: 0 0 var(--space-xs);
   }
 
-  /* `Forget them` reads as part of the sentence, in the page's own link ink
-     (the global `a` rule in style.css), at the 24px target floor (WCAG 2.5.8). */
-  .kvitto__text-button {
-    background: none;
-    border: 0;
-    padding: 0 var(--space-2xs);
-    min-height: 24px;
-    font: inherit;
+  /* `Forget them` is AspButton's link variant (§3.97), which inherits its ink
+     from the call site; this gives it the page's own link ink (the global `a`
+     rule in style.css), so it reads like the sentence's other links. */
+  .kvitto__forget {
+    margin-left: var(--space-2xs);
     font-weight: 500;
     color: color-mix(in srgb, var(--brand-accent-800) 30%, currentColor);
-    text-decoration: underline;
     text-underline-offset: 0.15em;
-    cursor: pointer;
-  }
-
-  .kvitto__text-button:focus-visible {
-    outline: 2px solid currentColor;
-    outline-offset: 2px;
   }
 
   .kvitto__choice,
