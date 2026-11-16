@@ -7,9 +7,9 @@
     </p>
     <!-- Each member switches a named panel below, so the strip declares
          as="tabs" (§3.89 Q1) and the panels carry role="tabpanel" + the ids
-         the members reference. The always-on comment/intensity card sits
-         between the tablist and its panels; aria-controls carries the
-         association that adjacency no longer does. -->
+         the members reference. The always-on comment/intensity card follows
+         the Current panel (so it sits between the tablist and the other two);
+         aria-controls carries the association that adjacency no longer does. -->
     <div class="tabs">
       <AspSegmented
         :options="tabOptions"
@@ -19,29 +19,6 @@
         @update:model-value="activeTab = $event"
       />
     </div>
-    <div class="comment-section" @click="focusComment">
-      <h2 v-if="selectedEmotionData">Selected Emotion: {{ selectedEmotionData.key }}</h2>
-      <textarea ref="commentBox" v-model="comment" placeholder="Enter your comment"></textarea>
-      <label for="intensity"><strong>Intensity:</strong></label>
-      <!-- Held deliberately as native buttons, not ported to AspSegmented
-           (#4446 decision H3): this is a 1-5 rating SCALE the user is entering
-           and saving, not a tab/mode/filter strip. AspSegmented mutes its
-           selected member on purpose so a mode choice does not spend the
-           accent budget (§3.89 Q1) - exactly backwards for the primary datum
-           on this card. The DS has no scale primitive; if one is wanted it
-           belongs in the DS lane, not in a consumer-side reinterpretation. -->
-      <div class="intensity-buttons">
-        <button
-          v-for="i in 5"
-          :key="i"
-          :class="{ active: intensity === i }"
-          @click="setIntensity(i)"
-        >
-          {{ i }}
-        </button>
-      </div>
-      <AspButton class="save-button" variant="primary" @click="saveEmotion">Save</AspButton>
-    </div>
     <div v-if="activeTab === 'current'" id="ee-panel-current" role="tabpanel" class="content-wrapper">
       <h2>Emotion Picker</h2>
       <p><i>You can only note down one value per emotion per day</i></p>
@@ -49,7 +26,12 @@
         <div
           v-for="(emotion, key) in emotions"
           :key="key"
+          role="button"
+          tabindex="0"
+          :aria-pressed="String(selectedEmotion === key)"
           @click="selectEmotion(key, emotion)"
+          @keydown.enter.prevent="selectEmotion(key, emotion)"
+          @keydown.space.prevent="selectEmotion(key, emotion)"
           :class="{
             selected: selectedEmotion === key,
             faded: selectedEmotion && selectedEmotion !== key,
@@ -66,7 +48,12 @@
         <div
           v-for="(subEmotion, key) in emotions[selectedEmotion].sub_emotions"
           :key="key"
+          role="button"
+          tabindex="0"
+          :aria-pressed="String(selectedSubEmotion === key)"
           @click="selectSubEmotion(key, subEmotion)"
+          @keydown.enter.prevent="selectSubEmotion(key, subEmotion)"
+          @keydown.space.prevent="selectSubEmotion(key, subEmotion)"
           :class="{
             selected: selectedSubEmotion === key,
             faded: selectedSubEmotion && selectedSubEmotion !== key,
@@ -89,7 +76,12 @@
           v-for="(subSubEmotion, key) in emotions[selectedEmotion].sub_emotions[selectedSubEmotion]
             .sub_sub_emotions"
           :key="key"
+          role="button"
+          tabindex="0"
+          :aria-pressed="String(selectedSubSubEmotion === key)"
           @click="selectSubSubEmotion(key, subSubEmotion)"
+          @keydown.enter.prevent="selectSubSubEmotion(key, subSubEmotion)"
+          @keydown.space.prevent="selectSubSubEmotion(key, subSubEmotion)"
           :class="{
             selected: selectedSubSubEmotion === key,
             faded: selectedSubSubEmotion && selectedSubSubEmotion !== key,
@@ -102,6 +94,34 @@
           <div class="tooltip">{{ subSubEmotion.description }}</div>
         </div>
       </transition-group>
+    </div>
+    <!-- After the Current panel, before the other two (system_3 #11314): picking
+         comes first and the comment card is the second step, so on the Current
+         tab the picker leads and its first row is on a 390x844 first screen.
+         Only one panel renders at a time, so on Collected Data and Emotion
+         Heatmap the card still sits directly under the tab strip, as before. -->
+    <div class="comment-section" @click="focusComment">
+      <h2 v-if="selectedEmotionData">Selected Emotion: {{ selectedEmotionData.key }}</h2>
+      <textarea ref="commentBox" v-model="comment" placeholder="Enter your comment"></textarea>
+      <label for="intensity"><strong>Intensity:</strong></label>
+      <!-- Held deliberately as native buttons, not ported to AspSegmented
+           (#4446 decision H3): this is a 1-5 rating SCALE the user is entering
+           and saving, not a tab/mode/filter strip. AspSegmented mutes its
+           selected member on purpose so a mode choice does not spend the
+           accent budget (§3.89 Q1) - exactly backwards for the primary datum
+           on this card. The DS has no scale primitive; if one is wanted it
+           belongs in the DS lane, not in a consumer-side reinterpretation. -->
+      <div class="intensity-buttons">
+        <button
+          v-for="i in 5"
+          :key="i"
+          :class="{ active: intensity === i }"
+          @click="setIntensity(i)"
+        >
+          {{ i }}
+        </button>
+      </div>
+      <AspButton class="save-button" variant="primary" @click="saveEmotion">Save</AspButton>
     </div>
     <div v-if="activeTab === 'data'" id="ee-panel-data" role="tabpanel" class="data-view">
       <h2>Collected Data</h2>
@@ -414,7 +434,7 @@
     border: 1px solid var(--border-subtle);
     cursor: pointer;
     border-radius: var(--radius-lg);
-    transition: background-color var(--transition-moderate), opacity var(--transition-moderate);
+    transition: background-color var(--transition-moderate), transform var(--transition-moderate);
     width: 140px;
     text-align: center;
     font-size: var(--text-lg);
@@ -473,8 +493,18 @@
     border: 4px solid var(--brand-primary) !important;
   }
 
+  /* The boxes not picked step back by SCALE, not opacity (system_3 #11314;
+     §3.24, §3.65). Opacity blended each label and its fill toward the page
+     together, to 1.4-1.9:1 on boxes a visitor still clicks to change their
+     mind. A scale keeps every label's derived ink on its own fill, and the
+     picked box carries the border and aria-pressed. */
   .faded {
-    opacity: 0.3;
+    transform: scale(0.9);
+  }
+
+  .emotion-box:focus-visible {
+    outline: 3px solid var(--brand-primary);
+    outline-offset: 2px;
   }
 
   /* Comment section */
