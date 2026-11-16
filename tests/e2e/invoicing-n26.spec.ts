@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import { openWaysIn } from './helpers/waysIn';
 
 /** N26 PDF import in the Invoices app (system_3 #9760-B1), over aspirant-server's
  *  /api/invoicing/payments/import-n26/{parse,confirm} (#9812). Parse stores
@@ -185,6 +186,7 @@ async function open(page: Page, fake: Fake): Promise<void> {
 }
 
 async function upload(page: Page, names: string[]): Promise<void> {
+  await openWaysIn(page);
   await expect(page.locator('[data-test="n26-import"]')).toBeVisible();
   await page.locator('[data-test="n26-file-input"]').setInputFiles(names.map(pdf));
   await expect(page.locator('[data-test="n26-review"]')).toBeVisible();
@@ -220,6 +222,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
   test('two files: every row is listed, confirmed rows land uncategorised in the payments table', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
+    await openWaysIn(page);
     await expect(page.locator('[data-test="n26-import"]')).toHaveClass(/btn--secondary/);
 
     await upload(page, ['conferma.pdf', 'statement.pdf']);
@@ -530,9 +533,11 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     const fake = newFake({ holdParse: new Promise<void>((resolve) => { release = resolve; }) });
     await open(page, fake);
     await page.locator('[data-test="n26-file-input"]').setInputFiles([pdf('conferma.pdf')]);
+    await openWaysIn(page);
     await expect(page.locator('[data-test="payments-import"]')).toBeDisabled();
     release();
     await expect(page.locator('[data-test="n26-review"]')).toBeVisible();
+    await openWaysIn(page);
     await expect(page.locator('[data-test="payments-import"]')).toBeEnabled();
   });
 
@@ -555,6 +560,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
 test.describe('#10534-C2 N26 button takes the CSV export too', () => {
   test('the button and picker name both formats', async ({ page }) => {
     await open(page, newFake());
+    await openWaysIn(page);
     await expect(page.locator('[data-test="n26-import"]')).toHaveText('Import N26 files');
     const input = page.locator('[data-test="n26-file-input"]');
     await expect(input).toHaveAttribute('aria-label', 'N26 CSV export or PDFs');

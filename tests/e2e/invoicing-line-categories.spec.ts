@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import { openWaysIn } from './helpers/waysIn';
 
 /** Invoices app (system_3 #9928, operator c61358): "What it was for" is one
  *  field that suggests categories (Tattoo, Tattoo (small), Tattoo (big), plus
@@ -38,6 +39,7 @@ async function openDialog(page: Page, fake: Fake): Promise<void> {
   await seedTrustedSessionAs(page, 'vinoly');
   await page.goto('/member/personal/invoicing');
   await dismissMobileSidebarIfPresent(page);
+  await openWaysIn(page);
   await page.locator('[data-test="manual-new"]').click();
   await expect(page.locator('[data-test="manual-form"]')).toBeVisible();
 }
@@ -119,6 +121,7 @@ test.describe('#9928 Invoices app — "What it was for" suggests categories and 
 
     await page.reload();
     await dismissMobileSidebarIfPresent(page);
+    await openWaysIn(page);
     await page.locator('[data-test="manual-new"]').click();
     await note(page).click();
     expect(await shown(page, note(page))).toEqual([...DEFAULTS, 'Cover-up']);
