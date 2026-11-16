@@ -103,12 +103,36 @@
     />
 
     <template v-else-if="book">
+      <!-- The period line heads the months (UX walk AM6, system_3 #11023):
+           "what did I earn this quarter, and this year?" was three month sums
+           added by hand, or the CSV. Same counted rows, same sum, same inks
+           as a month head. A period sum, not the running total report 886 §2
+           rules out. -->
+      <section class="period" aria-label="This quarter and the year so far" data-test="book-period">
+        <p v-for="p in periods" :key="p.key" class="period__line" :data-test="`book-period-${p.key}`">
+          <span class="period__label">{{ p.label }}</span>
+          <span class="month__totals">
+            <span class="in-amount">In {{ formatMoney(p.inCents) }}</span>
+            <span class="out-amount">Out {{ formatMoney(p.outCents) }}</span>
+            <span class="result" :class="{ negative: p.resultCents < 0 }">Result {{ formatSignedMoney(p.resultCents) }}</span>
+          </span>
+        </p>
+      </section>
+
       <!-- §3.145: months newest first, each a fold. The summary is the month
            line, so a folded month still shows its In, Out and Result
-           (Decision 4: the month's totals are its glance, and never fold). -->
+           (Decision 4: the month's totals are its glance, and never fold).
+           A month with no entries is its head alone, saying so, with no fold
+           to open (#11023). -->
+      <template v-for="month in months" :key="month.key">
+      <div v-if="month.empty" class="month month--empty" data-test="book-month-empty" :data-group="month.key">
+        <div class="month__head month__head--empty">
+          <h3 class="month__label">{{ month.label }}</h3>
+          <span class="muted">No entries</span>
+        </div>
+      </div>
       <details
-        v-for="month in months"
-        :key="month.key"
+        v-else
         class="month"
         :open="openKeys.has(month.key)"
         data-test="book-month"
@@ -191,6 +215,7 @@
           </template>
         </AspDataTable>
       </details>
+      </template>
 
       <BookChart :payments="countedPayments" :expenses="countedExpenses" />
     </template>
@@ -236,6 +261,7 @@
     deleteBookPreset,
     downloadBlob,
     errorOf,
+    formatBerlinDay,
     formatDay,
     formatMoney,
     listExpenseCategories,
@@ -243,7 +269,7 @@
     updateBookPreset,
   } from './api.js';
   import { expenseParts, newestFirst, paymentParts } from './ledgerRows.js';
-  import { groupByMonth, landedRows, monthKey, openGroupKeys } from './listGroups.js';
+  import { fillEmptyMonths, groupByMonth, landedRows, monthKey, openGroupKeys } from './listGroups.js';
   import { INCOME_ORDER, WORK_ONLY, countableExpenseNames, countingSentence, countsInBook, selectionName } from './bookSelection.js';
 
   // The income-and-expenses book (system_3 #10414-C): payments and
@@ -256,6 +282,18 @@
   // con carta"), which says nothing about who was paid. Income in the default
   // ink, expenses in red with a minus sign, so colour is never the only
   // signal (c63777).
+  // In, Out and Result over a set of rows: one sum for a month head and for
+  // the period line, so the two cannot add up differently.
+  function totalsOf(rows) {
+    let inCents = 0;
+    let outCents = 0;
+    for (const row of rows) {
+      if (row.type === 'in') inCents += row.amount_cents;
+      else outCents += row.amount_cents;
+    }
+    return { inCents, outCents, resultCents: inCents - outCents };
+  }
+
   export default {
     name: 'BookPanel',
     components: { AspButton, AspCheckbox, AspDataTable, AspEmptyState, AspInput, AspModal, AspSelect, BookChart, ExpenseReceiptDialog, ManualExpenseDialog, ManualPaymentDialog },
@@ -409,22 +447,43 @@
       },
       // By the month the money moved (§3.140 Decision 1), newest month first
       // (§3.145 Decision 1), each with its totals.
+      // A month with no entries, from the oldest month with any through this
+      // month, is a group of its own saying so (UX walk AM6, system_3
+      // #11023): a missing month reads as no data, an empty one is a zero.
       months() {
-        return groupByMonth(this.rows, (r) => r.paid_on).map((g) => {
-          let inCents = 0;
-          let outCents = 0;
-          for (const row of g.rows) {
-            if (row.type === 'in') inCents += row.amount_cents;
-            else outCents += row.amount_cents;
-          }
-          return { ...g, inCents, outCents, resultCents: inCents - outCents };
+        const grouped = groupByMonth(this.rows, (r) => r.paid_on);
+        return fillEmptyMonths(grouped, this.today.slice(0, 7)).map((g) => {
+          const t = totalsOf(g.rows);
+          return { ...g, ...t };
         });
       },
-      // Open now: zir own choice, else the newest month; a lone month is
-      // open (§3.145 Decision 3, §3.17 R3). The Book has no filter.
+      // Open now: zir own choice, else the newest month WITH entries; a lone
+      // month is open (§3.145 Decision 3, §3.17 R3). The Book has no filter.
+      // An empty month does not fold (there is nothing in it), so it is left
+      // out here; otherwise an empty current month would take the default
+      // and fold the newest month that has something to show.
       openKeys() {
-        const newest = this.months.length ? this.months[0].key : '';
-        return openGroupKeys(this.months, { chosen: this.openGroups, defaultOpen: (g) => g.key === newest });
+        const folding = this.months.filter((m) => !m.empty);
+        const newest = folding.length ? folding[0].key : '';
+        return openGroupKeys(folding, { chosen: this.openGroups, defaultOpen: (g) => g.key === newest });
+      },
+      // Today in zir calendar, "YYYY-MM-DD" (Berlin, as every day on the
+      // page is read).
+      today() {
+        return formatBerlinDay(new Date().toISOString());
+      },
+      // The period line (UX walk AM6, system_3 #11023): this quarter and the
+      // year, each so far, over the same counted rows as the months below.
+      periods() {
+        const year = this.today.slice(0, 4);
+        const quarter = Math.floor((Number(this.today.slice(5, 7)) - 1) / 3);
+        const sofar = this.rows.filter((r) => String(r.paid_on || '').slice(0, 10) <= this.today);
+        const inYear = sofar.filter((r) => monthKey(r.paid_on).slice(0, 4) === year);
+        const inQuarter = inYear.filter((r) => Math.floor((Number(monthKey(r.paid_on).slice(5, 7)) - 1) / 3) === quarter);
+        return [
+          { key: 'quarter', label: `This quarter, Q${quarter + 1} ${year}`, ...totalsOf(inQuarter) },
+          { key: 'year', label: `Year to date, ${year}`, ...totalsOf(inYear) },
+        ];
       },
     },
     watch: {
@@ -737,6 +796,35 @@
     margin: 0;
   }
 
+  /* A month with no entries (#11023): its head alone, no caret and nothing to
+     open. Its name starts where a folding month's name starts, past the
+     caret, so the column of month names stays straight. */
+  .month__head--empty {
+    display: flex;
+    padding-inline-start: calc(1em + var(--space-xs));
+  }
+
+  /* The period line (#11023): this quarter and the year so far, above the
+     months, in the month heads' own totals and inks. */
+  .period {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+    margin: var(--space-sm) 0 var(--space-md);
+  }
+
+  .period__line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: var(--space-sm);
+    margin: 0;
+  }
+
+  .period__label {
+    font-weight: var(--font-weight-bold);
+  }
+
   .month__totals {
     display: flex;
     flex-wrap: wrap;
@@ -826,6 +914,11 @@
       flex-basis: 100%;
       margin-left: calc(1em + var(--space-xs));
       padding-bottom: var(--space-2xs);
+    }
+
+    /* The period line has no caret to start past. */
+    .period .month__totals {
+      margin-left: 0;
     }
 
     .panel-head {
