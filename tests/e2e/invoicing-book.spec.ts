@@ -1,6 +1,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 import { openWaysIn } from './helpers/waysIn';
+import { fillEmptyMonths } from '../../src/components/invoicing/listGroups.js';
 
 /** The income-and-expenses book (system_3 #10414-C): payments and
  *  hand-entered expenses merged into one dated list, grouped by month, with
@@ -503,5 +504,87 @@ test.describe('#10459 Invoices app — the Book shows who was paid', () => {
     }));
     // Newest day first (§3.145): the 17th down to the 14th.
     await expect(descriptions(page)).toHaveText(['—', 'Mara Esempio', 'Cash at the market', 'Galerie Nord · Wandbild Juli']);
+  });
+});
+
+/* UX walk AM6 (system_3 #11023): "what did I earn this quarter, and this
+ * year?" took three month heads added by hand, or the CSV, and a month with
+ * nothing in it was missing rather than zero. The clock is the walk's own
+ * day, 2026-11-14, so "this quarter" is Q4 2026. */
+const AM6_DAY = new Date('2026-11-14T12:00:00Z');
+const emptyMonths = (page: Page) => page.locator('[data-test="book-month-empty"]');
+const groupKeys = (page: Page) =>
+  page.locator('[data-test="book-month"], [data-test="book-month-empty"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-group')));
+
+test.describe('#11023 the period line, and a month with no entries', () => {
+  test('the walk case: an empty current month shows as "No entries", and the newest month with entries stays open', async ({ page }) => {
+    await page.clock.setFixedTime(AM6_DAY);
+    await open(page, newFake({
+      payments: [incomeRow(), incomeRow({ id: 11, transaction_id: 'M-2', paid_on: '2026-09-05T00:00:00Z', gross_cents: 12000 })],
+      expenses: [expenseRow(101)],
+    }));
+    expect(await groupKeys(page)).toEqual(['2026-11', '2026-10', '2026-09', '2026-08', '2026-07']);
+    await expect(emptyMonths(page)).toHaveCount(3);
+    for (const key of ['2026-11', '2026-10', '2026-08']) {
+      const month = page.locator(`[data-test="book-month-empty"][data-group="${key}"]`);
+      await expect(month, key).toContainText('No entries');
+      // Nothing to open: no fold, no caret.
+      await expect(month.locator('details, summary'), key).toHaveCount(0);
+    }
+    await expect(page.locator('[data-test="book-month"][data-group="2026-09"]')).toHaveAttribute('open', '');
+    // Q4 had nothing: a real zero, said as one.
+    await expect(page.locator('[data-test="book-period-quarter"]')).toHaveText(/This quarter, Q4 2026\s*In €0\.00\s*Out €0\.00\s*Result €0\.00/);
+    await expect(page.locator('[data-test="book-period-year"]')).toHaveText(/Year to date, 2026\s*In €470\.00\s*Out €45\.99\s*Result €424\.01/);
+  });
+
+  test('the quarter and the year add up the counted rows, so far, and stop at the year', async ({ page }) => {
+    await page.clock.setFixedTime(AM6_DAY);
+    await open(page, newFake({
+      payments: [
+        incomeRow(), // 2026-07-14, €350.00
+        incomeRow({ id: 11, transaction_id: 'M-2', paid_on: '2026-09-05T00:00:00Z', gross_cents: 12000 }),
+        incomeRow({ id: 12, transaction_id: 'M-3', paid_on: '2026-10-02T00:00:00Z', gross_cents: 20000 }),
+        incomeRow({ id: 14, transaction_id: 'M-5', paid_on: '2025-12-10T00:00:00Z', gross_cents: 5000 }),
+      ],
+      expenses: [expenseRow(101), expenseRow(102, { paid_on: '2026-11-03T00:00:00Z', amount_cents: 1000 })],
+    }));
+    await expect(page.locator('[data-test="book-period-quarter"]')).toHaveText(/This quarter, Q4 2026\s*In €200\.00\s*Out €10\.00\s*Result €190\.00/);
+    // December 2025 is not this year's.
+    await expect(page.locator('[data-test="book-period-year"]')).toHaveText(/Year to date, 2026\s*In €670\.00\s*Out €55\.99\s*Result €614\.01/);
+    // Every month from the oldest with entries through this one, newest first;
+    // nothing before 2025-12.
+    expect(await groupKeys(page)).toEqual([
+      '2026-11', '2026-10', '2026-09', '2026-08', '2026-07', '2026-06', '2026-05',
+      '2026-04', '2026-03', '2026-02', '2026-01', '2025-12',
+    ]);
+    await expect(emptyMonths(page)).toHaveCount(7);
+    // The existing month heads still count only months with entries.
+    await expect(page.locator('[data-test="book-month"]')).toHaveCount(5);
+    await expect(page.locator('[data-test="book-month"]').first()).toHaveAttribute('open', '');
+  });
+
+  test('on a 390×844 phone the period line is on the first screen, with nothing sideways', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.clock.setFixedTime(AM6_DAY);
+    await open(page, newFake({ payments: [incomeRow()], expenses: [expenseRow(101)] }));
+    const year = page.locator('[data-test="book-period-year"]');
+    await expect(year).toBeVisible();
+    expect((await year.boundingBox())!.y + (await year.boundingBox())!.height, 'year line ends on the first screen').toBeLessThanOrEqual(844);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
+  test('fillEmptyMonths fills through this month, keeps gaps, adds nothing before the oldest, and keeps the undated group last', async () => {
+    const g = (key: string) => ({ key, label: key, rows: [{}] });
+    expect(fillEmptyMonths([g('2026-09'), g('2026-07')], '2026-11').map((m) => `${m.key}${m.empty ? '·' : ''}`)).toEqual([
+      '2026-11·', '2026-10·', '2026-09', '2026-08·', '2026-07',
+    ]);
+    // A "through" month older than the newest data adds nothing after it.
+    expect(fillEmptyMonths([g('2026-09')], '2026-06').map((m) => m.key)).toEqual(['2026-09']);
+    // Across a year end.
+    expect(fillEmptyMonths([g('2026-01'), g('2025-11')], '').map((m) => m.key)).toEqual(['2026-01', '2025-12', '2025-11']);
+    // The undated group stays last; no dated group means nothing to fill.
+    expect(fillEmptyMonths([g('2026-02'), g('')], '2026-03').map((m) => m.key)).toEqual(['2026-03', '2026-02', '']);
+    expect(fillEmptyMonths([g('')], '2026-03').map((m) => m.key)).toEqual(['']);
+    expect(fillEmptyMonths([], '2026-03')).toEqual([]);
   });
 });
