@@ -3,7 +3,12 @@
   <div class="invoicing-view page">
     <header class="page-head">
       <h1>Invoices</h1>
-      <p class="page-subtitle">
+      <!-- First use only (system_3 #11019-A1, UX walk AM2; Design ack c69874
+           item 4): once anything is recorded ze knows what the app is for,
+           and on a phone these three lines held the first transaction down.
+           `firstUse` is true only when every read answered and found nothing,
+           so a loading or failed read never claims an empty book. -->
+      <p v-if="firstUse" class="page-subtitle" data-test="invoicing-intro">
         Record money in and out from PayPal, N26 or by hand, mark what was for your work, and issue invoices for it.
       </p>
     </header>
@@ -25,42 +30,35 @@
     />
 
     <template v-else>
+      <!-- One line, and the line is the door (system_3 #11019-A1, UX walk AM2;
+           Design ack c69874 item 3, applying §3.114 decision 5): who issues,
+           and whether issuing is possible. Every field, the Steuernummer and
+           the invoice-number sequence included, is one tap away in the profile
+           editor; only the Steuernummer's absence stays here, because that is
+           what stops an invoice (D2). The card was 132px on a phone. -->
+      <!-- padding md, not sm: the card's text stays on the cards' shared
+           gutter, card edge + 2px border + 16px (§3.114 one gutter per
+           nesting level), and so does this line. -->
       <AspCard class="profile-card" padding="md" data-test="profile-card">
-        <div class="profile-card__head">
-          <h2>Issuer</h2>
-          <!-- sm, held at the 24px floor every control clears (§3.99 tier 1;
-               UX walk AM9). sm alone drew 22px; md drew 34px, which made this
-               card 10px taller and pushed the Book's first month line below a
-               phone's first screen (system_3 #11281, regression of #11027). -->
-          <AspButton
-            variant="secondary"
-            size="sm"
-            class="profile-card__edit"
-            data-test="profile-edit"
-            @click="profileOpen = true"
-          >
-            Edit profile
-          </AspButton>
-        </div>
-        <!-- A glance, not a read-out (§3.114 decision 5): who issues, and
-             whether issuing is possible. Every field stays one tap away in
-             the profile editor. -->
-        <p class="glance__line">
-          <span v-if="!profileSaved" class="muted" data-test="profile-unsaved">
-            No profile yet. It is printed at the top of every invoice.
+        <!-- The accessible name is c69874's "Edit profile: {name}", plus the
+             blocker when there is one: an aria-label replaces the content, and
+             the badge must not go silent for a screen reader (D2). -->
+        <button
+          type="button"
+          class="issuer-line"
+          data-test="profile-edit"
+          :aria-label="issuerLabel"
+          @click="profileOpen = true"
+        >
+          <span class="issuer-line__items">
+            <!-- The name wraps and is never clipped. The separator ends the
+                 name, so a wrapped line never starts with "·" (UX walk AM9,
+                 system_3 #11027). -->
+            <span class="issuer-line__name"><span v-if="!profileSaved" class="muted" data-test="profile-unsaved">No profile yet. Add who issues your invoices</span><span v-else data-test="profile-name">{{ profile.full_name || '—' }}</span><template v-if="!profile.steuernummer">&nbsp;<span class="muted" aria-hidden="true">·</span></template></span>
+            <AspBadge v-if="!profile.steuernummer" status="caution" data-test="steuernummer-missing">Missing: needed to issue</AspBadge>
           </span>
-          <span v-else data-test="profile-name">{{ profile.full_name || '—' }}</span>
-        </p>
-        <!-- The separator ends the first item: when the line wraps it stays at
-             the end of the first line, and no line starts with "·" (UX walk
-             AM9, system_3 #11027). Each item keeps its own words together. -->
-        <p class="glance__line glance__line--state">
-          <span v-if="profile.steuernummer" class="nowrap">
-            <span class="muted">Steuernummer (Tax number)</span> <span data-test="profile-steuernummer">{{ profile.steuernummer }}</span>&nbsp;<span class="muted" aria-hidden="true">·</span>
-          </span>
-          <span v-else class="nowrap"><AspBadge status="caution" data-test="steuernummer-missing">Missing: needed to issue</AspBadge>&nbsp;<span class="muted" aria-hidden="true">·</span></span>
-          <span class="nowrap"><span class="muted">next invoice</span> <span data-test="profile-next-number">{{ nextNumberLabel }}</span></span>
-        </p>
+          <span class="issuer-line__door muted" aria-hidden="true">Edit</span>
+        </button>
       </AspCard>
 
       <AspSegmented v-model="tab" :options="tabs" as="tabs" aria-label="Invoices sections" class="tabs" />
@@ -113,7 +111,7 @@
 </template>
 
 <script>
-  import { AspBadge, AspButton, AspCard, AspEmptyState, AspSegmented } from '@aspirant/design-system';
+  import { AspBadge, AspCard, AspEmptyState, AspSegmented } from '@aspirant/design-system';
   import ReadState from '../../../components/ReadState.vue';
   import ClientsPanel from '../../../components/invoicing/ClientsPanel.vue';
   import PaymentsPanel from '../../../components/invoicing/PaymentsPanel.vue';
@@ -121,7 +119,7 @@
   import BookPanel from '../../../components/invoicing/BookPanel.vue';
   import InvoiceEditor from '../../../components/invoicing/InvoiceEditor.vue';
   import ProfileEditor from '../../../components/invoicing/ProfileEditor.vue';
-  import { errorOf, getBookSelection, getProfile, listClients, listExpenses, listPayments } from '../../../components/invoicing/api.js';
+  import { errorOf, getBookSelection, getProfile, listClients, listExpenses, listPayments, listRemovedExpenses, listRemovedPayments } from '../../../components/invoicing/api.js';
 
   // The Invoices app (system_3 #8367): one person's invoicing. The server
   // gates every route to the owner + Admin
@@ -131,7 +129,6 @@
     name: 'InvoicingView',
     components: {
       AspBadge,
-      AspButton,
       AspCard,
       AspEmptyState,
       AspSegmented,
@@ -162,6 +159,9 @@
         // Uncategorised, once. Leaving the tab drops it.
         transactionsFilter: null,
         refreshKey: 0,
+        // True only when every read answered and nothing is recorded
+        // (readFirstUse); false while loading and after any failed read.
+        firstUse: false,
         profileOpen: false,
         editorOpen: false,
         editorInvoiceId: null,
@@ -175,6 +175,12 @@
       };
     },
     computed: {
+      // c69874 item 3: "Edit profile: {name}", and the blocker when present.
+      issuerLabel() {
+        const who = this.profileSaved ? this.profile.full_name || 'no name' : 'no profile yet';
+        const missing = this.profile.steuernummer ? '' : '. Steuernummer missing: needed to issue';
+        return `Edit profile: ${who}${missing}`;
+      },
       nextNumberLabel() {
         const n = String(this.profile.next_invoice_number || 1).padStart(3, '0');
         return this.profile.invoice_number_prefix ? `${this.profile.invoice_number_prefix}-${n}` : n;
@@ -189,6 +195,21 @@
       this.fetchAll();
     },
     methods: {
+      // c69874 item 4: nothing recorded means no transaction (removed ones
+      // included), no invoice and no client, and every read answered. An
+      // invoice needs a client, so no client means no invoice. The removed
+      // rows are read only when everything else is empty, the one case where
+      // they can decide it; any failed read means "not first use" (D2).
+      async readFirstUse(expensesOk) {
+        if (!expensesOk) return false;
+        if (this.clients.length || this.payments.length || this.expenses.length) return false;
+        try {
+          const [rp, re] = await Promise.all([listRemovedPayments(), listRemovedExpenses()]);
+          return !rp.some((r) => r.removed_at) && !re.some((r) => r.removed_at);
+        } catch {
+          return false;
+        }
+      },
       async fetchAll() {
         this.loadError = false;
         try {
@@ -211,11 +232,14 @@
         // does not stub it, so a hard dependency here 404s and blanks every
         // tab, not just Book (system_3 #10430-adjacent regression, caught
         // by the manager reading verify-aspirant-428's log live).
+        let expensesOk = true;
         try {
           this.expenses = await listExpenses();
         } catch {
           this.expenses = [];
+          expensesOk = false;
         }
+        this.firstUse = await this.readFirstUse(expensesOk);
         // Also never fatal: unread, the Book says so and counts nothing, and
         // Transactions flags no row, rather than guessing at what counts.
         try {
@@ -271,39 +295,66 @@
     color: var(--text-on-dark);
   }
 
-  .profile-card h2 {
-    color: var(--text-heading-card);
-  }
-
-  .profile-card__head {
+  /* The whole line is the door to the profile editor (#11019-A1). A native
+     button keeps keyboard, focus ring and the 44px phone target without
+     script; it inherits the card's ink, never the UA's button colours. */
+  .issuer-line {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-md);
+    gap: var(--space-sm);
+    width: 100%;
+    min-height: 44px;
+    /* No inline padding: the text sits on the card gutter (§3.114). */
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: var(--text-sm);
+    text-align: left;
+    cursor: pointer;
   }
 
-  .profile-card__head h2 {
-    margin: 0;
+  .issuer-line:hover {
+    background-color: var(--surface-card-inner);
   }
 
-  /* The 24px floor on an sm button (#11281): min-height outranks the size's
-     own height, and the class lands on AspButton's root, which carries this
-     component's scope attribute. */
-  .profile-card__edit {
-    min-height: 24px;
+  .issuer-line:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
   }
 
-  .glance__line {
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-
-  .glance__line--state {
+  .issuer-line__items {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-2xs) var(--space-xs);
-    font-size: var(--text-sm);
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* The name wraps and is never clipped (c69874 item 3); the separator is
+     joined to its last word by a no-break space, so it never starts a line. */
+  .issuer-line__name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .issuer-line__door {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .muted {

@@ -84,8 +84,10 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
       const edge = await leftOf(page, 'h1');
       expect(await leftOf(page, '[data-test="profile-card"]'), 'card').toBe(edge);
       expect(await leftOf(page, '.tabs'), 'tabs').toBe(edge);
+      // The Issuer is one line now (system_3 #11019-A1); its first text still
+      // sits on the cards' gutter.
       const inset = await page.locator('[data-test="profile-card"]').evaluate((card) =>
-        Math.round(card.querySelector('h2')!.getBoundingClientRect().left - card.getBoundingClientRect().left));
+        Math.round(card.querySelector('.issuer-line__items')!.getBoundingClientRect().left - card.getBoundingClientRect().left));
       expect(inset, 'card text at card.left + 2px border + 16px').toBe(18);
 
       for (const tab of ['Transactions', 'Invoices', 'Clients']) {
@@ -164,18 +166,25 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
   // before it: when the line wraps it stays at the end of the first line. This
   // test used to assert the opposite (the dot sits with the text after it),
   // which #11027 deliberately reversed; aligned in system_3 #11281.
-  test('the "·" before "next invoice" never starts a line on its own', async ({ page }) => {
+  test('every "·" on the Issuer line stays with the item it ends', async ({ page }) => {
+    // Missing Steuernummer: the one line with a separator (the name, then
+    // the badge; Design ack c69874 item 3), the likeliest to wrap at 390.
     await open(page, 'light', { steuernummer: '' });
     // Same line = vertical centres closer than half a line; separate flex
     // items on one line can differ by a pixel, a wrap moves a whole line.
-    const { gap, lineHeight } = await page.locator('[data-test="profile-card"]').evaluate((card) => {
+    const pairs = await page.locator('[data-test="profile-card"]').evaluate((card) => {
       const centre = (el: Element) => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
-      const dotEl = [...card.querySelectorAll('span')].find((s) => s.textContent!.trim() === '·')!;
-      // The item the dot follows: the tax number, or the badge saying it is missing.
-      const beforeEl = card.querySelector('[data-test="profile-steuernummer"], [data-test="steuernummer-missing"]')!;
-      return { gap: Math.abs(centre(dotEl) - centre(beforeEl)), lineHeight: dotEl.getBoundingClientRect().height };
+      return [...card.querySelectorAll('span')]
+        .filter((s) => s.textContent!.trim() === '·')
+        .map((dot) => ({
+          gap: Math.abs(centre(dot) - centre(dot.previousElementSibling!)),
+          lineHeight: dot.getBoundingClientRect().height,
+        }));
     });
-    expect(gap, 'the separator sits on the line of the text before it').toBeLessThan(lineHeight / 2);
+    expect(pairs.length, 'one separator, between the name and the badge').toBe(1);
+    for (const { gap, lineHeight } of pairs) {
+      expect(gap, 'the separator sits on the line of the item before it').toBeLessThan(lineHeight / 2);
+    }
   });
 
   // The list folds by month (§3.145, system_3 #10636), so the first group's
@@ -199,6 +208,8 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
     expect(top - summaryBottom, 'first card starts directly under the summary').toBeGreaterThanOrEqual(0);
     expect(top - summaryBottom, 'first card starts directly under the summary').toBeLessThanOrEqual(12);
     const cardHeight = await page.locator('[data-test="profile-card"]').evaluate((el) => el.getBoundingClientRect().height);
-    expect(cardHeight, 'Issuer card under 140px').toBeLessThan(140);
+    // One line since system_3 #11019-A1 (was 132px): 2px border + 16px +
+    // the 44px line + 16px + 2px = 80px.
+    expect(cardHeight, 'Issuer card one line, at most 82px').toBeLessThanOrEqual(82);
   });
 });

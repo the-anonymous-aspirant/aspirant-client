@@ -80,7 +80,8 @@ test.describe('#11027 the Invoices app', () => {
   test('at 390px no Issuer line starts with the separator', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openInvoicing(page);
-    const line = page.locator('.glance__line--state');
+    // The Issuer is one line since system_3 #11019-A1; the rule is the same.
+    const line = page.locator('.issuer-line__items');
     await expect(line).toBeVisible();
     const starts = await line.evaluate((p) => {
       // The first glyph of each rendered line, read from client rects of every text node.
