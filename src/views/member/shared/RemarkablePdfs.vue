@@ -3,16 +3,16 @@
     <h1>Remarkable PDFs</h1>
     <h2>Generate PDFs for your remarkable tablet</h2>
 
-    <!-- A label, not a control. This was a one-member "strip": `generators` has
-         exactly one key, `currentGenerator` initialises to it, and `mounted()`
-         has already loaded it — so the button was permanently in its `.active`
-         state and clicking it re-fetched what was on screen, blanking the
-         preview on the way. A one-member segmented control offers a choice the
-         user cannot make, so this is NOT an AspSegmented; it is the only text
-         naming which generator is showing, so it is not nothing either. The
-         `currentGenerator` / `loadGenerator(type)` seam stays for the second
-         generator. #4460. -->
-    <p class="generator-name">{{ generatorNames[currentGenerator] }}</p>
+    <!-- Two calendars, so a radiogroup strip (§3.89 Q1, #11144). -->
+    <div class="generator-picker">
+      <AspSegmented
+        :options="generatorOptions"
+        :model-value="currentGenerator"
+        size="sm"
+        aria-label="Calendar year"
+        @update:model-value="loadGenerator"
+      />
+    </div>
 
     <!-- Loading, and a load that failed, are said by the shared ReadState; the
          preview and the actions appear only once a generator is loaded. Before,
@@ -22,9 +22,9 @@
     <ReadState
       v-if="generatorState !== 'ready'"
       :state="generatorState"
-      heading="The generator could not be loaded"
+      heading="The calendar could not be loaded"
       :message="generatorError"
-      loading-label="Loading the generator"
+      loading-label="Loading the calendar"
       skeleton="block"
       height="20rem"
       data-test="generator-read-state"
@@ -52,7 +52,7 @@
 </template>
 
 <script>
-import { AspButton } from '@aspirant/design-system';
+import { AspButton, AspSegmented } from '@aspirant/design-system';
 import ReadState from '../../../components/ReadState.vue';
 import { readError } from '../../../components/readError.js';
 
@@ -60,25 +60,42 @@ export default {
   name: 'RemarkablePdfs',
   components: {
     AspButton,
+    AspSegmented,
     ReadState,
   },
   data() {
     return {
-      currentGenerator: 'planner',
-      // Display names, kept beside `generators` so a second generator adds one
-      // entry to each rather than a string literal in the template.
-      generatorNames: {
-        planner: 'Planner Generator',
-      },
+      currentGenerator: 'current_year',
       htmlContent: '',
       previewUrl: '',
       // 'loading' | 'failed' | 'ready', and why it failed, in words.
       generatorState: 'loading',
       generatorError: '',
+      // Pinned to a commit, not `main`: `generate_planner.html` 404'd silently
+      // for 7+ weeks after the upstream repo renamed it from under this page
+      // (system_3 #11144). Pinning to the commit that did the rename means a
+      // future upstream rename 404s a NEW pinned sha, never this one, so it
+      // can't happen silently again; bump the sha by hand if the repo adds a
+      // generator worth shipping.
       generators: {
-        planner: 'https://raw.githubusercontent.com/the-anonymous-aspirant/remarkable-pdf-journal/main/generate_planner.html'
+        current_year: 'https://raw.githubusercontent.com/the-anonymous-aspirant/remarkable-pdf-journal/4886037a9745d1061858201b7ae3acb923cdd224/current_calendar_year.html',
+        next_year: 'https://raw.githubusercontent.com/the-anonymous-aspirant/remarkable-pdf-journal/4886037a9745d1061858201b7ae3acb923cdd224/next_calendar_year.html',
       }
     };
+  },
+  computed: {
+    // Both pinned files title themselves from the browser clock
+    // (`new Date().getFullYear()`, +1 for the next-year file), so the option
+    // labels are built from the same expression rather than a fixed "this" /
+    // "next" — the button names the year its own preview shows, in the
+    // member's own timezone, across New Year too (design_agent, c70709).
+    generatorOptions() {
+      const year = new Date().getFullYear();
+      return [
+        { value: 'current_year', label: String(year), attrs: { 'data-test': 'calendar-year-current' } },
+        { value: 'next_year', label: String(year + 1), attrs: { 'data-test': 'calendar-year-next' } },
+      ];
+    },
   },
   methods: {
     async loadGenerator(type) {
@@ -90,13 +107,20 @@ export default {
 
       try {
         const response = await fetch(this.generators[type]);
+        // A stale response: the member picked again (arrow keys select as
+        // they move focus) before this one answered. Drop it — the request
+        // in flight for the CURRENT selection will write its own state
+        // (design_agent, c70709).
+        if (this.currentGenerator !== type) return;
         if (!response.ok) throw Object.assign(new Error('generator fetch'), { status: response.status });
 
         const html = await response.text();
+        if (this.currentGenerator !== type) return;
         this.htmlContent = html;
         this.previewUrl = this.generators[type];
         this.generatorState = 'ready';
       } catch (error) {
+        if (this.currentGenerator !== type) return;
         // The generator lives in a public repository, so a 401 or 403 here is
         // not about this member's access: it is a failed load like any other.
         console.error('Error loading generator:', error);
@@ -135,7 +159,7 @@ export default {
     }
   },
   mounted() {
-    this.loadGenerator('planner');
+    this.loadGenerator('current_year');
   }
 };
 </script>
@@ -148,16 +172,10 @@ export default {
   margin: 0;
 }
 
-/* Reads as the caption it is. The former selector's fill/hover/active rules are
-   gone with the button: an amber pill is the app's pressed-control treatment,
-   and wearing it here would keep promising the affordance the markup just
-   dropped. Ink is the ambient body ink so it stays legible on whatever surface
-   the page gives it, rather than pinning an absolute colour. */
-.generator-name {
+/* Layout only — the strip's own paint comes from AspSegmented (same pattern
+   as EasterHuntView's .tab-bar). */
+.generator-picker {
   margin: var(--space-lg) 0;
-  font-size: var(--text-lg);
-  font-weight: var(--font-weight-medium);
-  color: inherit;
 }
 
 .generator-card {
