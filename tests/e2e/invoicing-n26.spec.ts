@@ -258,7 +258,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     for (const txn of ['a1b2c3d4-0e15-4a6f-9bd0-000000000001', statementRow(1).transaction_id, statementRow(2).transaction_id]) {
       const row = page.locator(`[data-test="payment-row"][data-txn="${txn}"]`);
       await expect(row).toBeVisible();
-      await expect(row.locator('[data-test="payment-category"]')).toContainText('Uncategorised');
+      await expect(row.locator('[data-test="payment-category"], [data-test="row-category"]')).toContainText('Uncategorised');
     }
   });
 

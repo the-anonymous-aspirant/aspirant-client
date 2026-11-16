@@ -117,8 +117,8 @@ test.describe('#10633 Removed rows on Transactions', () => {
     await view.locator('[data-test="removed-back"]').click();
     const back = page.locator('[data-test="payment-row"][data-txn="PP-gone"]');
     await expect(back.locator('[data-test="row-amount"]')).toHaveText('€45.00');
-    await expect(back.locator('[data-test="payment-category"]')).toContainText('Gift');
-    await expect(back.locator('[data-test="payment-client"]')).toContainText('Galerie Nord');
+    await expect(back.locator('[data-test="payment-category"], [data-test="row-category"]')).toContainText('Gift');
+    await expect(back.locator('[data-test="payment-client"], [data-test="row-client"]')).toContainText('Galerie Nord');
     await expect(page.locator('[data-test="expense-row"][data-txn="M-exp-gone"] [data-test="row-amount"]')).toHaveText('-€89.00');
     await expect(page.locator('[data-test="removed-show"]')).toHaveText('Show 1 removed row');
   });
