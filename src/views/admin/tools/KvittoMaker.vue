@@ -431,4 +431,10 @@
     align-items: flex-start;
     gap: var(--space-xs);
   }
+
+  /* Generate PDF keeps the full width it had as a direct child of the form's
+     stretch column; only the lines under it are added. */
+  .kvitto__action {
+    align-items: stretch;
+  }
 </style>
