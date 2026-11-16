@@ -114,15 +114,17 @@ test.describe('#4842 GameHub registry', () => {
 });
 
 test.describe('#4842 AdminView registry', () => {
-  test('renders both grids — 11 app tiles and the two Tools tiles', async ({ page }) => {
+  // Failed imports moved from Tools to the first row of the app grid, beside
+  // System Health, so both tiles that report state lead (system_3 #11009).
+  test('renders both grids — 12 app tiles and the one Tools tile', async ({ page }) => {
     await seedAdminSession(page);
     await page.goto('/admin');
     await dismissMobileSidebarIfPresent(page);
 
     const grids = page.locator('.admin-view .application-list');
     await expect(grids).toHaveCount(2);
-    await expect(grids.nth(0).locator('.application-card')).toHaveCount(11);
-    await expect(grids.nth(1).locator('.application-card')).toHaveCount(2);
+    await expect(grids.nth(0).locator('.application-card')).toHaveCount(12);
+    await expect(grids.nth(1).locator('.application-card')).toHaveCount(1);
 
     for (const title of [...ADMIN_ROUTED_TITLES, ...ADMIN_NEW_TAB_TITLES, 'Kvitto Maker', 'Failed imports']) {
       await expect(page.locator('.application-card').filter({ hasText: title })).toHaveCount(1);

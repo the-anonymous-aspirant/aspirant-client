@@ -11,6 +11,8 @@
         :title="app.title"
         :description="app.description"
         :route="app.route"
+        :new-tab="!!app.newTab"
+        :status="app.statusKey ? statuses[app.statusKey] : null"
         @card-click="openApp(app)"
       />
     </div>
@@ -31,8 +33,10 @@
 </template>
 
 <script>
+  import axios from 'axios';
   import AssetManager from '../../asset_manager';
   import ApplicationCard from '../../components/ApplicationCard.vue';
+  import { serverVerdict } from './healthVerdict.js';
 
   // The Admin roster (#4842) — the ONE definition of the admin landing tiles,
   // lifted from the former inline <application-card> list so the two grids
@@ -46,8 +50,29 @@
   // marks a destination nginx serves OUTSIDE the SPA: Penpot's canvas, the
   // Histoire build, the system_3 console and the lake explorer are reverse-
   // proxied paths, not Vue routes, so they need a real browser tab rather than
-  // a router push or an iframe embed.
+  // a router push or an iframe embed; the card marks it "↗ new tab" in its
+  // unclamped title row.
+  //
+  // The two tiles that can report trouble come first and carry `statusKey`,
+  // so "does anything need me?" is answered on the first row at every width
+  // (UX walk AA7, system_3 #11009). Every description fits the card's 3-line
+  // clamp (§3.107) at 390px and at 1440px; admin-tiles-glance.spec.ts guards
+  // it, so a longer one fails a test rather than being cut on screen.
   const ADMIN_APPS = [
+    {
+      title: 'System Health',
+      description: 'Container metrics, disk usage, and database stats',
+      route: '/admin/system-health',
+      icon: 'system_health_icon',
+      statusKey: 'health',
+    },
+    {
+      title: 'Failed imports',
+      description: 'Uploads that could not be imported, kept for checking',
+      route: '/admin/import-failures',
+      icon: 'default',
+      statusKey: 'importFailures',
+    },
     {
       title: 'Assets',
       description: 'Image files and stuff',
@@ -67,12 +92,6 @@
       icon: 'default',
     },
     {
-      title: 'System Health',
-      description: 'Container metrics, disk usage, and database stats',
-      route: '/admin/system-health',
-      icon: 'system_health_icon',
-    },
-    {
       title: 'Advisor',
       description: 'Ask about contracts, insurance, and legal documents',
       route: '/admin/advisor',
@@ -80,7 +99,7 @@
     },
     {
       title: 'Browser Flows',
-      description: 'Server-rendered Selenium flow runner — proxy/geo/UA probes',
+      description: 'Selenium flow runs and their probes',
       route: '/admin/browser-flows',
       icon: 'default',
     },
@@ -88,14 +107,13 @@
       // The Constellations card editor (system_3 #8634 / #8645): admin-only by
       // operator decision 1; the server gates every /cardgen/* route too.
       title: 'Card Editor',
-      description: 'Templated Constellations cards: layouts with inheritance, version history, print sheets',
+      description: 'Constellations card layouts and print sheets',
       route: '/admin/cardgen',
       icon: 'default',
     },
     {
       title: 'Penpot Design',
-      description:
-        'Self-hosted design tool — mockups, tokens, component libraries. Opens in a new tab (full canvas, not an iframe embed)',
+      description: 'Design tool: mockups, tokens and components',
       route: '/admin/penpot/',
       icon: 'penpot_design_icon',
       newTab: true,
@@ -103,8 +121,7 @@
     {
       // Static Histoire build of the design system's stories (system_3 #2218).
       title: 'Histoire — Design System',
-      description:
-        'Component workbench — stories and variants for @aspirant/design-system. Opens in a new tab',
+      description: 'Stories and variants of the design system',
       route: '/admin/histoire/',
       icon: 'histoire_icon',
       newTab: true,
@@ -113,7 +130,7 @@
       // The system_3 fleet's Vue frontend, reverse-proxied to the backend on
       // the cell host (system_3 #2867).
       title: 'System 3',
-      description: 'Agent fleet console — tasks, agents, health, chat. Opens in a new tab',
+      description: 'Agent fleet: tasks, agents, health, chat',
       route: '/admin/apps/system_3/',
       icon: 'default',
       newTab: true,
@@ -121,7 +138,7 @@
     {
       // Encrypted data lake explorer (explorer over Garage + catalog).
       title: 'Data Lake',
-      description: 'Browse encrypted lake — explorer over Garage + catalog. Opens in a new tab',
+      description: 'Explorer over the encrypted lake',
       route: '/admin/explorer/',
       icon: 'default',
       newTab: true,
@@ -133,12 +150,6 @@
       title: 'Kvitto Maker',
       description: 'Generate 12-month rent receipt PDFs',
       route: '/admin/tools/kvitto',
-      icon: 'default',
-    },
-    {
-      title: 'Failed imports',
-      description: 'Uploads that could not be imported, kept for checking',
-      route: '/admin/import-failures',
       icon: 'default',
     },
   ];
@@ -157,9 +168,38 @@
         // the distinct `icon` values of the two registries, so a new tile needs
         // no second edit here.
         appImages: {},
+        // Per statusKey: `{ text, tone }`, or null while the read is in flight
+        // (the tile then shows nothing rather than a guess).
+        statuses: { health: null, importFailures: null },
       };
     },
     methods: {
+      // One read each, independent: one failing never blanks the other. A
+      // failed read says "Not read" and never a zero or an OK, which would
+      // read as a measurement (D2).
+      async loadStatuses() {
+        const [health, failures] = await Promise.allSettled([
+          axios.get('/api/health'),
+          axios.get('/api/admin/invoicing/import-failures'),
+        ]);
+        this.statuses.health =
+          health.status === 'fulfilled' && health.value.data
+            ? {
+                text: serverVerdict(health.value.data),
+                // Both spellings the server has sent; the page's own CSS
+                // treats each as the good state (.status-banner.ok/.healthy).
+                tone: ['ok', 'healthy'].includes(health.value.data.status) ? 'ok' : 'warn',
+              }
+            : { text: 'Not read', tone: 'unknown' };
+        const rows = failures.status === 'fulfilled' && failures.value.data && failures.value.data.data
+          ? failures.value.data.data.failures
+          : null;
+        this.statuses.importFailures = Array.isArray(rows)
+          ? rows.length === 0
+            ? { text: 'No failed uploads', tone: 'ok' }
+            : { text: `${rows.length} failed upload${rows.length === 1 ? '' : 's'}`, tone: 'warn' }
+          : { text: 'Not read', tone: 'unknown' };
+      },
       async loadImages() {
         const keys = [...new Set([...ADMIN_APPS, ...ADMIN_TOOLS].map((app) => app.icon))];
         await Promise.all(
@@ -184,6 +224,7 @@
     },
     mounted() {
       this.loadImages();
+      this.loadStatuses();
     },
   };
 </script>

@@ -86,11 +86,15 @@ test.describe('#10564 Admin — failed imports', () => {
     await expect(page.getByTestId('read-state-failed')).toContainText('Error reading import failures');
   });
 
-  test('the Admin landing lists the page among its Tools', async ({ page }) => {
+  // It moved from Tools, the last tile on the page, to the first row beside
+  // System Health, showing its count (system_3 #11009, UX walk AA7).
+  test('the Admin landing lists the page in its first row', async ({ page }) => {
     await seedAdminSession(page);
     await page.goto('/admin');
     await dismissMobileSidebarIfPresent(page);
     await expect(page.getByText('Failed imports', { exact: true })).toBeVisible();
+    const firstGrid = page.locator('.admin-view .application-list').first();
+    await expect(firstGrid.locator('.card-title').nth(1)).toHaveText('Failed imports');
   });
 });
 
