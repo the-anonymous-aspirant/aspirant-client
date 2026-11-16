@@ -299,33 +299,20 @@
         <span v-if="row.who && row.what" class="note" data-test="row-what">{{ row.what }}</span>
         <template v-if="row.payment">
           <span v-if="row.payment.entry === 'manual'" class="muted manual-line" data-test="payment-manual">{{ manualLine(row.payment) }}</span>
-          <div class="payment-card__fields full-select">
-            <div class="payment-card__field">
-              <span class="payment-card__caption" aria-hidden="true">Category</span>
-              <AspSelect
-                :model-value="row.payment.category"
-                :options="categoryOptionsFor(row.payment)"
-                :aria-label="`Category for ${row.transaction_id}`"
-                :disabled="saving.has(row.key)"
-                data-test="payment-category"
-                @update:model-value="patch(row.payment, { category: $event })"
-              />
-              <span v-if="isPayPalTransferIntoN26(row.payment)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
-            </div>
-            <div class="payment-card__field">
-              <span class="payment-card__caption" aria-hidden="true">Client</span>
-              <AspSelect
-                :model-value="row.payment.client_id ?? 0"
-                searchable
-                :options="clientOptions"
-                :aria-label="`Client for ${row.transaction_id}`"
-                :disabled="saving.has(row.key)"
-                data-test="payment-client"
-                @update:model-value="patch(row.payment, { client_id: $event || null })"
-              />
-              <span v-if="row.invoice" class="muted invoice-line" data-test="row-invoice">{{ row.invoice }}</span>
-            </div>
-          </div>
+          <!-- Read as text on a phone; tapping the card opens Edit payment,
+               which has both selects (§3.143 Decision 5). The two labelled
+               selects made each card about 310px, so a 390x844 screen held
+               fewer than three (system_3 #11019-A4, UX walk AM2; Design ack
+               c69874 item 5, amending §3.143 Decision 3's Phone clause).
+               Muted, except "Uncategorised", which is the value that decides
+               "does it still need an invoice?" (S2). The separator is joined
+               to the category by a no-break space, so it never starts a line. -->
+          <span class="category-line muted" data-test="row-category-client"><span
+            :class="{ 'category-line__open': row.payment.category === 'uncategorised' }"
+            data-test="row-category"
+          >{{ row.categoryLabel }}</span>&nbsp;· <span data-test="row-client">{{ clientNameOf(row.payment) || 'no client' }}</span></span>
+          <span v-if="isPayPalTransferIntoN26(row.payment)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
+          <span v-if="row.invoice" class="muted invoice-line" data-test="row-invoice">{{ row.invoice }}</span>
         </template>
         <!-- An expense's category reads as text here; it is set from the
              selection and the edit dialog (system_3 #10631, #10632). -->
@@ -1016,6 +1003,11 @@
       // an N26 row whose payer is PayPal. The PayPal payments it sums are
       // the paid work, so the transfer itself can never be (#9940-A1,
       // operator c61402).
+      // The phone card's client, as text (#11019-A4); '' when none is linked.
+      clientNameOf(payment) {
+        const c = payment.client_id ? this.clients.find((x) => x.id === payment.client_id) : null;
+        return c ? c.name : '';
+      },
       isPayPalTransferIntoN26(row) {
         return row.source === 'n26' && (row.sender_name || '').toLowerCase().includes('paypal');
       },
@@ -1751,22 +1743,18 @@
     margin-top: var(--space-2xs);
   }
 
-  .payment-card__field {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+  /* The phone card's "{category} · {client}" (#11019-A4). It wraps between
+     the two phrases, never inside the category's joined separator. */
+  .category-line {
+    overflow-wrap: anywhere;
   }
 
-  .payment-card__caption {
-    font-size: var(--text-sm);
-    color: var(--text-muted);
-  }
-
-  .payment-card__fields {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
-    margin-top: var(--space-xs);
+  /* "Uncategorised" decides "does it still need an invoice?", so it takes
+     the card's ink while the rest of the line stays muted (c69874 item 5).
+     The card paints no background and inherits the page's ink (§3.18), so
+     "card ink" is the body ink its amount already uses, in both themes. */
+  .category-line__open {
+    color: var(--text-body);
   }
 
   @media (max-width: 640px) {

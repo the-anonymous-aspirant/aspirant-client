@@ -381,11 +381,11 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     await expect(row(page, 'N26-P1').locator('[data-test="row-invoice"]')).toHaveText('Invoice 2026-014');
     await expect(row(page, 'PP-P2').locator('[data-test="row-invoice"]')).toHaveText('Draft');
     await expect(row(page, 'M-p3').locator('[data-test="row-invoice"]')).toHaveCount(0);
-    await expect(row(page, 'N26-P1').locator('[data-test="payment-client"]')).toContainText('Galerie Nord');
-    await expect(row(page, 'N26-P1').locator('[data-test="payment-category"]')).toContainText('Paid work');
+    await expect(row(page, 'N26-P1').locator('[data-test="payment-client"], [data-test="row-client"]')).toContainText('Galerie Nord');
+    await expect(row(page, 'N26-P1').locator('[data-test="payment-category"], [data-test="row-category"]')).toContainText('Paid work');
     // Money out has its category, and no client or invoice.
     await expect(row(page, 'N26-E1').locator('[data-test="row-category"]')).toHaveText('materials and supplies');
-    await expect(row(page, 'N26-E1').locator('[data-test="payment-client"], [data-test="row-invoice"]')).toHaveCount(0);
+    await expect(row(page, 'N26-E1').locator('[data-test="payment-client"], [data-test="row-client"], [data-test="row-invoice"]')).toHaveCount(0);
 
     // §3.140 Decision 2: in in body ink, out in the error text red.
     const ink = (sel: string, token: string) =>
@@ -522,7 +522,9 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
       const amount = await box('[data-test="row-amount"]');
       const dateLine = await box('[data-test="row-date-line"]');
       const what = await box('[data-test="row-what"]');
-      const control = await box(txn === 'PP-P2' ? '[data-test="payment-category"]' : '[data-test="row-category"]');
+      // Both directions read their category as text on a phone since
+      // system_3 #11019-A4 (Design ack c69874 item 5); payments add the client.
+      const control = await box('[data-test="row-category"]');
       expect(check.x, `${txn}: checkbox first`).toBeLessThan(who.x);
       expect(Math.abs(check.y + check.height / 2 - (who.y + who.height / 2)), `${txn}: checkbox beside who`).toBeLessThan(8);
       expect(amount.x + amount.width, `${txn}: amount at the right edge`).toBeGreaterThan(cardBox.x + cardBox.width - 40);
@@ -531,10 +533,61 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
       expect(what.y, `${txn}: what under the date line`).toBeGreaterThanOrEqual(dateLine.y + dateLine.height - 1);
       expect(control.y, `${txn}: controls under what`).toBeGreaterThanOrEqual(what.y + what.height - 1);
     }
+    // #11019-A4: a phone payment card carries no select; it reads
+    // "{category} · {client}", and Edit payment is where they change. The
+    // space before "·" is a no-break space, so the separator never starts
+    // a line.
+    const payment = page.locator('.payment-card[data-txn="PP-P2"]');
+    await expect(payment.locator('[data-test="payment-category"], [data-test="payment-client"]')).toHaveCount(0);
+    await expect(payment.locator('[data-test="row-category-client"]')).toHaveText(/^\S.*\u00a0· .+$/);
     await expect(page.locator('.payment-card[data-txn="N26-E1"] [data-test="row-date-line"]')).toHaveText('2026-10-14 · N26');
     await expect(page.locator('.payment-card[data-txn="M-e2"] [data-test="row-date-line"]')).toHaveText('2026-09-28 · By hand');
     // No sideways scroll at 390.
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
+  // #11019-A4, Design ack c69874 item 5: money in with no client reads
+  // "{category} · no client", and the line is muted except "Uncategorised",
+  // which takes the card's ink because it decides whether the payment still
+  // needs an invoice.
+  test('on a phone a payment card says "no client", and only "Uncategorised" leaves the muted ink', async ({ page }) => {
+    const viewport = page.viewportSize();
+    test.skip(!viewport || viewport.width >= 640, 'phone layout only');
+    await open(page, newFake({
+      payments: [
+        pay({
+          id: 1, transaction_id: 'U-1', source: 'paypal', entry: 'import', paid_on: '2026-10-03T00:00:00Z',
+          created_at: '2026-10-04T09:00:00Z', sender_name: 'Mara Esempio', note: 'Portrait', category: 'uncategorised', gross_cents: 45000,
+        }),
+        pay({
+          id: 2, transaction_id: 'O-2', source: 'paypal', entry: 'import', paid_on: '2026-08-10T00:00:00Z',
+          created_at: '2026-08-11T09:00:00Z', sender_name: 'Kiosk Esempio', note: 'Refund of a deposit', category: 'other', gross_cents: 2000,
+        }),
+      ],
+      expenses: [],
+    }));
+    const line = (txn: string) => page.locator(`.payment-card[data-txn="${txn}"] [data-test="row-category-client"]`);
+    await expect(line('U-1')).toHaveText('Uncategorised\u00a0· no client');
+    await expect(line('O-2')).toHaveText('Other\u00a0· no client');
+    // The probe sits on the card, not inside the muted line: the muted token
+    // is relative to the ink it inherits, so inside the line it would read
+    // muted twice over.
+    const ink = (sel: string, token: string) =>
+      page.locator(sel).first().evaluate((el, t) => {
+        const probe = document.createElement('span');
+        probe.style.color = `var(${t})`;
+        el.closest('.payment-card')!.appendChild(probe);
+        const want = getComputedStyle(probe).color;
+        probe.remove();
+        return { got: getComputedStyle(el).color, want };
+      }, token);
+    const open1 = await ink('.payment-card[data-txn="U-1"] [data-test="row-category"]', '--text-body');
+    expect(open1.got).toBe(open1.want);
+    const other = await ink('.payment-card[data-txn="O-2"] [data-test="row-category"]', '--text-muted');
+    expect(other.got).toBe(other.want);
+    const client = await ink('.payment-card[data-txn="U-1"] [data-test="row-client"]', '--text-muted');
+    expect(client.got).toBe(client.want);
+    expect(open1.got).not.toBe(other.got);
   });
 });
 
