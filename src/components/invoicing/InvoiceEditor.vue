@@ -1,8 +1,10 @@
 <template>
-  <AspModal :open="open" :title="title" size="lg" @update:open="close">
+  <!-- In a review the dialog cannot be dismissed while a write is in flight:
+       closing then would end the review before its outcome is counted. -->
+  <AspModal :open="open" :title="title" size="lg" :dismissible="!(reviewing && busy)" @update:open="close">
     <ReadState v-if="!detail" :state="loadError ? 'failed' : 'loading'" heading="The invoice could not be loaded" message="We could not reach the server. Try again." loading-label="Loading" retry-label="Try again" @retry="load" />
 
-    <div v-else class="editor" data-test="invoice-editor" :data-status="invoice.status">
+    <div v-else ref="editor" class="editor" data-test="invoice-editor" :data-status="invoice.status">
       <!-- Issued or cancelled: the record, read-only. -->
       <template v-if="!isDraft">
         <dl class="facts">
@@ -132,7 +134,17 @@
           <li v-for="w in detail.warnings" :key="w">{{ warningText(w) }}</li>
         </ul>
 
-        <div v-if="confirmingIssue" ref="confirm" class="confirm" role="alertdialog" aria-labelledby="issue-confirm-text" data-test="issue-confirm">
+        <!-- In a review (system_3 #11505) Accept is one press, so what it does
+             stands here for as long as the draft is open, not behind a first
+             press. Outside a review issuing keeps its two presses. -->
+        <div v-if="reviewing" class="confirm" data-test="review-accept-note">
+          <p>
+            Accept issues it as {{ nextNumber }} with today's date.
+            It can't be changed or deleted afterwards.
+            Reject deletes this draft: the payment stays without an invoice and is offered again next time.
+          </p>
+        </div>
+        <div v-else-if="confirmingIssue" ref="confirm" class="confirm" role="alertdialog" aria-labelledby="issue-confirm-text" data-test="issue-confirm">
           <p id="issue-confirm-text">
             Issuing gives it number {{ nextNumber }} and today's date.
             It can't be changed or deleted afterwards.
@@ -169,7 +181,22 @@
     </div>
 
     <template #footer>
-      <ModalActions v-if="detail && isDraft">
+      <!-- Review: Reject deletes the draft, Later keeps it, Accept issues it;
+           each one then opens the next (system_3 #11505, operator c70831:
+           "edit and click accept or reject easily"). -->
+      <!-- One row on a phone too, unlike ModalActions: three short labels fit
+           at 360px, and the same three places every time is what makes a run
+           of invoices quick. Reject is a ghost on the left, as the dialogs'
+           Remove is (§3.143 Decision 6); Accept, the one primary, is last
+           (design ack c70970). -->
+      <div v-if="detail && isDraft && reviewing" class="review-actions" data-test="review-actions">
+        <span class="review-actions__reject">
+          <AspButton variant="ghost" :disabled="busy || switching" data-test="review-reject" @click="reject">Reject</AspButton>
+        </span>
+        <AspButton variant="secondary" :disabled="busy || switching" data-test="review-later" @click="later">Later</AspButton>
+        <AspButton :loading="busy || switching" data-test="review-accept" @click="accept">Accept</AspButton>
+      </div>
+      <ModalActions v-else-if="detail && isDraft">
         <template #destructive>
           <AspButton variant="destructive" :disabled="busy" data-test="draft-delete" @click="remove">Delete draft</AspButton>
         </template>
@@ -183,9 +210,13 @@
           <AspButton v-else variant="destructive" :loading="busy" data-test="invoice-cancel-confirm" @click="cancel">Cancel this invoice</AspButton>
         </template>
         <AspButton variant="secondary" @click="close(false)">Close</AspButton>
+        <AspButton v-if="reviewing" data-test="review-next" @click="$emit('reviewed', 'later')">Next</AspButton>
       </ModalActions>
+      <!-- Not loaded, or cancelled. In a review a draft that is gone or no
+           longer a draft is passed over, never a dead end. -->
       <ModalActions v-else>
         <AspButton variant="secondary" @click="close(false)">Close</AspButton>
+        <AspButton v-if="reviewing" data-test="review-next" @click="$emit('reviewed', 'later')">Next</AspButton>
       </ModalActions>
     </template>
   </AspModal>
@@ -233,8 +264,13 @@
       // The issuer profile has no Steuernummer, so the server will refuse to
       // issue (§10); the editor says so before the attempt.
       steuernummerMissing: { type: Boolean, default: false },
+      // Set while the page walks a list of drafts one at a time (system_3
+      // #11505): `{ index, total }`, index from 1. The editor then shows the
+      // counter and Reject / Later / Accept, and reports each outcome with
+      // `reviewed` instead of closing; the page opens the next draft.
+      review: { type: Object, default: null },
     },
-    emits: ['update:open', 'changed'],
+    emits: ['update:open', 'changed', 'reviewed'],
     data() {
       return {
         detail: null,
@@ -243,6 +279,8 @@
         loadError: false,
         form: { client_id: 0, service_date_from: '', service_date_to: '', vat_percent: '19', lines: [] },
         busy: false,
+        // True while a review loads its next draft over the one just decided.
+        switching: false,
         error: '',
         confirmingIssue: false,
         cancelling: false,
@@ -271,7 +309,18 @@
       isDraft() {
         return this.invoice.status === 'draft';
       },
+      reviewing() {
+        return !!this.review;
+      },
       title() {
+        // The operator's own wording for the counter (c70806 on #10985).
+        // The total stays what it was when the review began, so ze never
+        // reads "2 / 6" after deciding 1 of 7; the client follows the counter.
+        if (this.reviewing) {
+          const counter = `Invoice ${this.review.index} / ${this.review.total}`;
+          const who = this.detail && this.isDraft ? this.chosenClientName : '';
+          return who ? `${counter} · ${who}` : counter;
+        }
         if (!this.detail) return 'Invoice';
         return this.isDraft ? 'Draft invoice' : `Invoice ${this.invoice.invoice_number}`;
       },
@@ -359,6 +408,11 @@
           if (isOpen) this.load();
         },
       },
+      // A review moves to the next draft while the dialog stays open. Declared
+      // after `open`, so opening on a new id loads once, not twice.
+      invoiceId(id) {
+        if (this.open && id !== this.loadingId) this.load();
+      },
     },
     methods: {
       formatDay,
@@ -366,16 +420,33 @@
       decimalFromMinor,
       async load() {
         this.clearPreview();
-        this.detail = null;
+        // Moving on inside a review keeps the draft just decided on screen
+        // until the next one arrives: with the form taken away in between, the
+        // footer was replaced under the button that had focus, and a keyboard
+        // user was left outside the dialog (Escape no longer closed it).
+        const keep = this.reviewing && !!this.detail && !!this.invoiceId;
+        if (!keep) this.detail = null;
+        this.switching = keep;
         this.loadError = false;
         this.error = '';
         this.confirmingIssue = false;
         this.cancelling = false;
         this.cancelReason = '';
-        if (!this.invoiceId) return;
+        const id = this.invoiceId;
+        this.loadingId = id;
+        if (!id) return;
         try {
-          this.setDetail(await getInvoice(this.invoiceId));
+          const detail = await getInvoice(id);
+          // The review moved on while this was in flight: the answer is for a
+          // draft no longer on screen.
+          if (id !== this.invoiceId) return;
+          this.setDetail(detail);
+          this.switching = false;
+          if (keep) this.$nextTick(() => this.holdFocus());
         } catch (err) {
+          if (id !== this.invoiceId) return;
+          this.detail = null;
+          this.switching = false;
           this.loadError = true;
         }
       },
@@ -472,6 +543,8 @@
       async run(action) {
         this.busy = true;
         this.error = '';
+        // The pressed button is about to be disabled; see holdFocus.
+        if (this.reviewing) this.$nextTick(() => this.holdFocus());
         try {
           await action();
           this.$emit('changed');
@@ -501,6 +574,38 @@
           this.close(false);
         });
       },
+      // A button that is disabled while its action runs loses focus to the
+      // page (the browser's focus fixup), and the dialog then no longer hears
+      // Escape or Tab. After each review step focus goes back to the dialog
+      // itself, never to Accept: a second press of Enter must not issue the
+      // next invoice. A screen reader then reads the new "Invoice x / y".
+      holdFocus() {
+        const panel = this.$refs.editor && this.$refs.editor.closest('[role="dialog"]');
+        if (panel && !panel.contains(document.activeElement)) panel.focus({ preventScroll: true });
+      },
+      // The three review outcomes. Each saves or removes exactly what is on
+      // screen, then tells the page, which opens the next draft. A refusal
+      // (run shows it) leaves this draft open to be fixed.
+      accept() {
+        return this.run(async () => {
+          const id = this.invoice.id;
+          await updateDraft(id, this.buildPatch());
+          await issueInvoice(id);
+          this.$emit('reviewed', 'accepted');
+        });
+      },
+      reject() {
+        return this.run(async () => {
+          await deleteDraft(this.invoice.id);
+          this.$emit('reviewed', 'rejected');
+        });
+      },
+      later() {
+        return this.run(async () => {
+          await updateDraft(this.invoice.id, this.buildPatch());
+          this.$emit('reviewed', 'later');
+        });
+      },
       cancel() {
         if (!this.cancelReason.trim()) {
           this.error = 'Give a reason for the cancellation.';
@@ -523,6 +628,17 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
+  }
+
+  .review-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    width: 100%;
+  }
+
+  .review-actions__reject {
+    margin-right: auto;
   }
 
   /* Draft header (#8399 spec §5.1): wide, an auto-fit grid; phone, the client
