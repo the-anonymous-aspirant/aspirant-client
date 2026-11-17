@@ -337,7 +337,11 @@
         // (§3.145 Decision 6). "Out" is wider: it carries the Receipt button.
         columns: [
           { key: 'paid_on', label: 'Date paid', width: '7.5rem' },
-          { key: 'description', label: 'What it was for', sortable: false },
+          // The header Transactions uses for the same "{who} · {what}" cell
+          // (§3.159 Decision 6, system_3 #11502). It read "What it was for"
+          // while the cell led with who paid, which the operator took for the
+          // wrong value in the column (c70806 on #10985).
+          { key: 'description', label: 'Who and what for', sortable: false },
           { key: 'category', label: 'Category', sortable: false, width: '11rem' },
           { key: 'in', label: 'In', align: 'right', sortable: false, width: '7.5rem' },
           { key: 'out', label: 'Out', align: 'right', sortable: false, width: '12rem' },

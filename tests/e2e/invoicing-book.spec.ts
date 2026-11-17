@@ -588,3 +588,27 @@ test.describe('#11023 the period line, and a month with no entries', () => {
     expect(fillEmptyMonths([], '2026-03')).toEqual([]);
   });
 });
+
+// §3.159 Decision 6 (system_3 #11502, epic #11497 item 6): a column that holds
+// the same thing has the same header on both tabs. The Book headed its
+// "{who} · {what}" cell "What it was for", so the payer in it read as the
+// wrong value; Transactions headed the same day "Date".
+test.describe('#11502 the Book and Transactions head the same columns the same way', () => {
+  test.skip(({ isMobile }) => isMobile, 'the tables and their headers are the desktop layout; a phone shows cards');
+
+  const headers = (page: Page) => page.getByRole('columnheader').allInnerTexts().then((all) => all.map((t) => t.trim()).filter(Boolean));
+
+  test('both read "Date paid" and "Who and what for"', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openTransactions(page, newFake({ payments: [incomeRow()], expenses: [expenseRow(101)] }));
+    const transactions = await headers(page);
+    expect(transactions.slice(0, 2), 'Transactions').toEqual(['Date paid', 'Who and what for']);
+    expect(transactions, 'Transactions has no bare "Date"').not.toContain('Date');
+
+    await showBook(page);
+    await expect(page.locator('[data-test="book-row-description"]').first()).toBeVisible();
+    const book = await headers(page);
+    expect(book.slice(0, 2), 'the Book').toEqual(['Date paid', 'Who and what for']);
+    expect(book, 'the Book has no "What it was for"').not.toContain('What it was for');
+  });
+});
