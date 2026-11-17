@@ -1,5 +1,5 @@
 // The "what does this field mean?" hints on the invoicing fields (operator
-// c61358, her two examples set the register; system_3 #10032, wording per
+// c61358, their two examples set the register; system_3 #10032, wording per
 // design_agent c62042). Shown by the DS AspLabelHint "?" beside each label:
 // a tap or keyboard focus opens one (aspirant-design-system #10033). A hint
 // never repeats a field's own always-visible hint line, and a field whose
