@@ -77,6 +77,15 @@
             @add-new="resolveAsNew"
           />
         </SuggestField>
+        <!-- A new name is added to zir client book with this payment, so
+             what ze knows about that client can be typed here once (system_3
+             #11507, Design ack c71154). Shown only while Save will add a
+             client; both are optional. No maxlength: the server's refusal is
+             the limit and the typed text stays in the field (D13). -->
+        <template v-if="addsNewClient">
+          <AspTextarea v-model="newClient.address" label="Address (optional)" :rows="2" data-test="manual-new-client-address" />
+          <AspInput v-model="newClient.email" type="email" label="Email (optional)" data-test="manual-new-client-email" />
+        </template>
       </template>
 
       <template v-if="editing && !issued">
@@ -156,7 +165,7 @@
 </template>
 
 <script>
-  import { AspButton, AspInput, AspModal, AspSelect } from '@aspirant/design-system';
+  import { AspButton, AspInput, AspModal, AspSelect, AspTextarea } from '@aspirant/design-system';
   import LineDescriptionInput from './LineDescriptionInput.vue';
   import PayerBookLine from './PayerBookLine.vue';
   import SuggestField from './SuggestField.vue';
@@ -202,7 +211,7 @@
   // one keeps what the bank recorded; one on an issued invoice only reads.
   export default {
     name: 'ManualPaymentDialog',
-    components: { AspButton, AspInput, AspModal, AspSelect, LineDescriptionInput, PayerBookLine, SuggestField, ModalActions },
+    components: { AspButton, AspInput, AspModal, AspSelect, AspTextarea, LineDescriptionInput, PayerBookLine, SuggestField, ModalActions },
     props: {
       open: { type: Boolean, default: false },
       clients: { type: Array, default: () => [] },
@@ -216,6 +225,8 @@
         error: '',
         hints: FIELD_HINTS,
         resolvedAsNew: false,
+        // The address and email typed for a client this save will add.
+        newClient: { address: '', email: '' },
         history: [],
         historyLoaded: false,
         historyError: '',
@@ -291,6 +302,16 @@
       payerMatch() {
         return matchPayer(this.form.sender_name, this.clients);
       },
+      // True while Save will add "Paid by" to the client book: a new name,
+      // or a close one ze chose to add as new. In edit mode only when the
+      // name was changed, as `editPatch` sends it only then.
+      addsNewClient() {
+        const name = this.form.sender_name.trim();
+        if (!name) return false;
+        if (this.editing && name === this.payment.sender_name) return false;
+        const m = this.payerMatch;
+        return m.state === 'new' || (m.state === 'close' && this.resolvedAsNew);
+      },
     },
     watch: {
       open(isOpen) {
@@ -298,6 +319,7 @@
         this.form = this.payment ? formFrom(this.payment) : blankForm();
         this.error = '';
         this.resolvedAsNew = false;
+        this.newClient = { address: '', email: '' };
         this.confirmingRemove = false;
         this.history = [];
         this.historyLoaded = false;
@@ -332,6 +354,16 @@
       },
       resolveAsNew() {
         this.resolvedAsNew = true;
+      },
+      // What was typed for the new client, as the request's fields; a blank
+      // one is left out.
+      newClientDetails() {
+        const out = {};
+        const address = this.newClient.address.trim();
+        const email = this.newClient.email.trim();
+        if (address) out.new_client_address = address;
+        if (email) out.new_client_email = email;
+        return out;
       },
       check() {
         if (this.editing && this.imported) return '';
@@ -372,6 +404,7 @@
             if (m.client.id !== was.client_id) patch.client_id = m.client.id;
           } else if (name && (m.state === 'new' || (m.state === 'close' && this.resolvedAsNew))) {
             patch.new_client_name = tidyName(name);
+            Object.assign(patch, this.newClientDetails());
           } else if (!name && was.client_id) {
             patch.client_id = null;
           }
@@ -394,7 +427,10 @@
         if (this.payerMatch.state === 'same') {
           payload.client_id = this.payerMatch.client.id;
         } else if (this.payerMatch.state === 'new' || (this.payerMatch.state === 'close' && this.resolvedAsNew)) {
-          if (payload.sender_name) payload.new_client_name = tidyName(payload.sender_name);
+          if (payload.sender_name) {
+            payload.new_client_name = tidyName(payload.sender_name);
+            Object.assign(payload, this.newClientDetails());
+          }
         }
         try {
           const { payment, client } = await createManualPayment(payload);

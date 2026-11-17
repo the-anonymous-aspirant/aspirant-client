@@ -21,6 +21,10 @@
               <span class="nowrap payer-row__total" data-test="payers-row-total">{{ totalLine(row) }}</span>
             </div>
             <span class="payer-row__muted" data-test="payers-row-dates">{{ datesLine(row) }}</span>
+            <!-- A hint, not a decision: the row keeps its place and stays
+                 unticked like every other (system_3 #11507, Design ack
+                 c71154). A plain company name is never flagged. -->
+            <span v-if="notAClient(row)" class="payer-row__muted" data-test="payers-row-not-client">Looks like a card payment or an online service, not a client.</span>
             <div v-if="stateOf(row).checked" class="payer-row__name">
               <SuggestField
                 :model-value="stateOf(row).name"
@@ -70,7 +74,7 @@
   import ModalActions from './ModalActions.vue';
   import PayerBookLine from './PayerBookLine.vue';
   import SuggestField from './SuggestField.vue';
-  import { matchPayer, normalizeName } from './payerMatch.js';
+  import { looksLikeCardPaymentOrService, matchPayer, normalizeName } from './payerMatch.js';
   import { addPayers, errorOf, formatDay, formatMoney } from './api.js';
 
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -149,6 +153,9 @@
       },
       setState(row, change) {
         this.rowState = { ...this.rowState, [row.key]: { ...this.stateOf(row), ...change } };
+      },
+      notAClient(row) {
+        return looksLikeCardPaymentOrService(row.payer);
       },
       matchOf(row) {
         return matchPayer(this.stateOf(row).name, this.clients);

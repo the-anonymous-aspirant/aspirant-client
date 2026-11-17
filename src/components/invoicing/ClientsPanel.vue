@@ -20,6 +20,19 @@
          this tab, so the line says what happened (design_agent c65575). It
          clears on the tab's next action. -->
     <p v-if="payersSummary" class="payers-status" role="status" data-test="clients-payers-summary">{{ payersSavedLine(payersSummary) }}</p>
+    <!-- What in the book looks worth a second look (system_3 #11507, Design
+         ack c71154): two clients that may be one person, or a client that may
+         be a card payment. Plain text, not role="status": it is there on
+         load, not news. It points only. Nothing is merged, renamed or
+         deleted: ze opens a row and acts by hand. -->
+    <p v-if="reviewLine.length" class="review-line" data-test="clients-review">
+      <!-- A space between the sentences and before the action is written
+           out: the template compiler drops whitespace between elements. -->
+      <template v-for="sentence in reviewLine" :key="sentence"><span data-test="clients-review-sentence">{{ sentence }}</span>{{ ' ' }}</template>
+      <AspButton variant="ghost" size="sm" class="review-line__action" data-test="clients-review-show" @click="reviewOnly = !reviewOnly">
+        {{ reviewOnly ? 'Show all clients' : 'Show them' }}
+      </AspButton>
+    </p>
 
     <AspEmptyState
       v-if="clients.length === 0"
@@ -51,6 +64,14 @@
           <strong>{{ row.name }}</strong>
           <AspButton variant="ghost" size="sm" :data-test="`client-edit-${row.id}`" @click="startEdit(row)">Edit</AspButton>
         </div>
+        <span v-for="other in lookAlikesOf(row)" :key="`alike-${other.id}`" class="review-flag" data-test="client-look-alike">
+          Looks like {{ other.name }}
+          <AspButton variant="ghost" size="sm" class="review-flag__clear" data-test="client-not-same" @click.stop="clearPair(row, other)">Not the same person (this device only)</AspButton>
+        </span>
+        <span v-if="isCardLike(row)" class="review-flag" data-test="client-card-like">
+          Looks like a card payment or an online service
+          <AspButton variant="ghost" size="sm" class="review-flag__clear" data-test="client-real" @click.stop="clearCard(row)">It's a real client (this device only)</AspButton>
+        </span>
         <span v-if="row.address" class="multiline">{{ row.address }}</span>
         <span v-else class="muted" data-test="client-no-address">No postal address</span>
         <span v-if="row.email" class="muted">{{ row.email }}</span>
@@ -93,6 +114,14 @@
            full text is in the editor. A client with no notes shows nothing. -->
       <template #cell-name="{ row }">
         <span class="client-name">{{ row.name }}</span>
+        <span v-for="other in lookAlikesOf(row)" :key="`alike-${other.id}`" class="review-flag" data-test="client-look-alike">
+          Looks like {{ other.name }}
+          <AspButton variant="ghost" size="sm" class="review-flag__clear" data-test="client-not-same" @click.stop="clearPair(row, other)">Not the same person (this device only)</AspButton>
+        </span>
+        <span v-if="isCardLike(row)" class="review-flag" data-test="client-card-like">
+          Looks like a card payment or an online service
+          <AspButton variant="ghost" size="sm" class="review-flag__clear" data-test="client-real" @click.stop="clearCard(row)">It's a real client (this device only)</AspButton>
+        </span>
         <span v-if="row.notes" class="client-notes" :title="row.notes" data-test="client-notes">{{ row.notes }}</span>
       </template>
       <template #cell-address="{ value }">
@@ -250,6 +279,7 @@
   import ModalActions from './ModalActions.vue';
   import PayersDialog from './PayersDialog.vue';
   import { groupByLetter, letterKey } from './listGroups.js';
+  import { loadDismissed, pairKey, reviewOf, reviewSentences, saveDismissed } from './clientReview.js';
   import { FIELD_REFUSALS, clientsCsvUrl, createClient, downloadBlob, errorOf, formatBerlinDay, formatDay, formatMoney, listInvoices, listPayerCandidates, payersSavedLine, safeSocialUrl, socialHandle, updateClient } from './api.js';
 
   // The longest book shown flat (§3.145 Decision 3, amended 2026-11-14).
@@ -271,6 +301,10 @@
     emits: ['changed'],
     data() {
       return {
+        // The review line's guesses ze cleared, from this browser's storage
+        // (clientReview.js), and whether the list is narrowed to the rest.
+        dismissed: loadDismissed(),
+        reviewOnly: false,
         narrow: false,
         editorOpen: false,
         editing: null,
@@ -306,13 +340,24 @@
       };
     },
     computed: {
+      // "Show them" narrows the list to the clients the review line is
+      // about; otherwise it is the whole book.
       rows() {
-        return this.clients.map((c) => ({ ...c, actions: '' }));
+        const shown = this.reviewOnly ? this.clients.filter((c) => this.review.ids.has(c.id)) : this.clients;
+        return shown.map((c) => ({ ...c, actions: '' }));
+      },
+      // Look-alike pairs and card-payment-like clients, less the guesses ze
+      // cleared on this device (clientReview.js).
+      review() {
+        return reviewOf(this.clients, this.dismissed);
+      },
+      reviewLine() {
+        return reviewSentences(this.review);
       },
       // Ten rows fit within about one phone screen below the tab's controls,
       // so a fold saves scrolling only above that (§3.145 Decision 3).
       flat() {
-        return this.clients.length <= FLAT_MAX;
+        return this.rows.length <= FLAT_MAX;
       },
       groups() {
         const byLetter = groupByLetter(this.rows, (r) => r.name);
@@ -351,6 +396,10 @@
       if (this.narrowQuery) this.narrowQuery.removeEventListener('change', this.onNarrowChange);
     },
     watch: {
+      // Once nothing is left to review, the list is the whole book again.
+      reviewLine(lines) {
+        if (!lines.length) this.reviewOnly = false;
+      },
       // A client added here or elsewhere can take payers off the list.
       clients() {
         this.refreshPayerCandidates();
@@ -368,6 +417,22 @@
       },
     },
     methods: {
+      lookAlikesOf(row) {
+        return this.review.others.get(row.id) || [];
+      },
+      isCardLike(row) {
+        return this.review.cardLike.some((c) => c.id === row.id);
+      },
+      // "Not the same person" and "It's a real client" clear one guess on
+      // this device. Nothing is sent: the client records are untouched.
+      clearPair(a, b) {
+        this.dismissed = { ...this.dismissed, pairs: [...this.dismissed.pairs, pairKey(a, b)] };
+        saveDismissed(this.dismissed);
+      },
+      clearCard(row) {
+        this.dismissed = { ...this.dismissed, cards: [...this.dismissed.cards, row.id] };
+        saveDismissed(this.dismissed);
+      },
       // A letter's count names its noun (§3.145 Decision 3, amended): "G · 1
       // client". The app's UI is English, so the noun is too.
       clientCount(n) {
@@ -712,6 +777,32 @@
   .client-form__stamp {
     margin: 0;
     font-size: var(--text-sm);
+  }
+
+  /* The review line sits where the payers line does, in the tab's status
+     region, and reads as a finding with one action after it. */
+  .review-line {
+    margin: 0 0 var(--space-md);
+    font-size: var(--text-sm);
+  }
+
+  /* A flag under a client's name: what it looks like, then the way to say
+     the guess is wrong. */
+  .review-flag {
+    display: block;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+
+  /* The clear button's label is longer than the name column is wide at
+     1440px (264px), so it takes its own line and wraps inside the cell
+     instead of running over the address beside it. */
+  .review-flag .review-flag__clear {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    white-space: normal;
+    text-align: left;
   }
 
   .client-notes {

@@ -100,7 +100,15 @@
         <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ paypalPrior.already }} already imported, {{ summary.skipped }} skipped<template v-if="paypalPrior.removed"> ·&nbsp;<span data-test="paypal-summary-removed">{{ paypalPrior.removed }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-in" @click="openRemoved('in')">restore it on Transactions</button></span></template><template v-if="paypalPrior.deleted"> ·&nbsp;<span data-test="paypal-summary-deleted">{{ deletedClause(paypalPrior.deleted) }}</span></template>.<template v-if="expenseParts(paypalExpenses).length">
           {{ ' ' }}<span data-test="paypal-summary-expenses"><template v-if="!paypalExpenses.added">Expenses: </template><template v-for="(part, i) in expenseParts(paypalExpenses)" :key="part.key"><template v-if="i"> ·&nbsp;</template><span :data-test="`paypal-summary-expenses-${part.key}`"><template v-if="part.key === 'removed'">{{ part.count }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-out" @click="openRemoved('out')">restore it on Transactions</button></template><template v-else>{{ part.text }}</template></span></template>.</span></template><template v-if="paypalCopyKept">
           {{ ' ' }}<span data-test="paypal-summary-copy-kept">{{ paypalCopyKept }}</span></template><template v-if="payerCandidates.length">
-          {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span>{{ ' ' }}<AspButton variant="ghost" size="sm" class="summary__action" data-test="payers-open" @click="payersOpen = true">Add payers…</AspButton></template>
+          {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span></template>
+      </p>
+      <!-- Its own line under the sentence, as a bordered button: at the end
+           of the sentence in text style it was easy to miss (operator c70806
+           on #10985; Design ack c71154 on system_3 #11507). No count on it:
+           rows start unticked, so a number would promise additions the dialog
+           does not make. The count is in the sentence above. -->
+      <p v-if="payerCandidates.length" class="summary__actions">
+        <AspButton variant="secondary" class="block-on-phone" data-test="payers-open" @click="payersOpen = true">Add payers…</AspButton>
       </p>
       <ul v-if="skippedReasons.length" class="summary__reasons">
         <li v-for="r in skippedReasons" :key="r.key">{{ r.count }} × {{ r.label }}</li>
@@ -118,7 +126,15 @@
           {{ ' ' }}<span data-test="n26-summary-failures">{{ n26FailureLine }}</span></template><template v-if="(n26Summary.unreadable || []).length">
           {{ ' ' }}<span data-test="n26-summary-unreadable">{{ n26UnreadableLine }}</span></template><template v-if="expenseParts(n26Expenses).length">
           {{ ' ' }}<span data-test="n26-summary-expenses"><template v-if="!n26Expenses.added">Expenses: </template><template v-for="(part, i) in expenseParts(n26Expenses)" :key="part.key"><template v-if="i"> ·&nbsp;</template><span :data-test="`n26-summary-expenses-${part.key}`"><template v-if="part.key === 'removed'">{{ part.count }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-out" @click="openRemoved('out')">restore it on Transactions</button></template><template v-else>{{ part.text }}</template></span></template>.</span></template><template v-if="payerCandidates.length">
-          {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span>{{ ' ' }}<AspButton variant="ghost" size="sm" class="summary__action" data-test="payers-open" @click="payersOpen = true">Add payers…</AspButton></template>
+          {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span></template>
+      </p>
+      <!-- Its own line under the sentence, as a bordered button: at the end
+           of the sentence in text style it was easy to miss (operator c70806
+           on #10985; Design ack c71154 on system_3 #11507). No count on it:
+           rows start unticked, so a number would promise additions the dialog
+           does not make. The count is in the sentence above. -->
+      <p v-if="payerCandidates.length" class="summary__actions">
+        <AspButton variant="secondary" class="block-on-phone" data-test="payers-open" @click="payersOpen = true">Add payers…</AspButton>
       </p>
     </AspCard>
 
@@ -1705,11 +1721,9 @@
     margin: 0;
   }
 
-  /* The card is dark in both themes, so its one action takes the card's ink
-     (§3.18), not the page's ghost ink. */
-  .summary .summary__action {
-    color: var(--text-on-dark);
-    vertical-align: baseline;
+  /* The card's one action, on its own line under the sentence. */
+  .summary__actions {
+    margin: var(--space-sm) 0 0;
   }
 
   .summary__reasons {
