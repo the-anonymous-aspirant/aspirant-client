@@ -182,9 +182,6 @@
               <span v-if="row.what" :class="{ muted: !!row.who }">{{ row.what }}</span>
               <template v-if="!row.who && !row.what">—</template>
             </span>
-            <!-- §3.143 Decision 7: a Book row opens the same edit dialog as on
-                 Transactions (system_3 #10729); removing lives in the dialog. -->
-            <AspButton variant="ghost" size="sm" class="manual-delete" data-test="book-row-edit" @click="openEdit(row)">Edit</AspButton>
           </template>
           <template #cell-category="{ row }"><span class="muted">{{ row.categoryLabel }}</span></template>
           <template #cell-in="{ row }">
@@ -192,11 +189,18 @@
           </template>
           <template #cell-out="{ row }">
             <span v-if="row.type === 'out'" class="nowrap out-amount">{{ formatSignedMoney(-row.amount_cents) }}</span>
-            <template v-if="row.type === 'out'">
-              <AspButton variant="ghost" size="sm" class="manual-delete" data-test="book-expense-receipt" @click="openReceipt(row)">
-                Receipt
-              </AspButton>
-            </template>
+          </template>
+          <!-- The row's door, in the last column on every tab (§3.159
+               Decision 3, system_3 #11501; #11497 item 7, operator c70806 on
+               #10985: "all the way to the right"). It opens the same edit
+               dialog as on Transactions (§3.143 Decision 7, system_3 #10729);
+               removing lives in the dialog. An expense's Receipt sits left
+               of it, so the Out column holds the amount alone. -->
+          <template #cell-actions="{ row }">
+            <span class="row-actions">
+              <AspButton v-if="row.type === 'out'" variant="secondary" size="sm" data-test="book-expense-receipt" @click="openReceipt(row)">Receipt</AspButton>
+              <AspButton variant="secondary" size="sm" data-test="book-row-edit" @click="openEdit(row)">Edit</AspButton>
+            </span>
           </template>
         </AspDataTable>
       </details>
@@ -354,7 +358,10 @@
           { key: 'description', label: 'Who and what for', sortable: false },
           { key: 'category', label: 'Category', sortable: false, width: '11rem' },
           { key: 'in', label: 'In', align: 'right', sortable: false, width: '7.5rem' },
-          { key: 'out', label: 'Out', align: 'right', sortable: false, width: '12rem' },
+          { key: 'out', label: 'Out', align: 'right', sortable: false, width: '7.5rem' },
+          // The row's door and, for an expense, Receipt left of it (§3.159
+          // Decision 3): the width Transactions gives the same column.
+          { key: 'actions', label: '', sortable: false, align: 'right', width: '10rem' },
         ],
         // Months ze opened or closed this visit, by key; a month not in here
         // takes the default. Kept through a refetch, never stored (§3.145
@@ -891,8 +898,18 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .manual-delete {
-    margin-left: var(--space-xs);
+  /* The row's last column: its actions on one line, the door last and flush
+     with the row's right edge (§3.159 Decision 3). */
+  .row-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-xs);
+  }
+
+  /* A button keeps its label whole: in a column too narrow for it, it would
+     otherwise shrink and cut its own text. */
+  .row-actions :deep(.btn) {
+    flex: none;
   }
 
   .book-card__expense-actions {
