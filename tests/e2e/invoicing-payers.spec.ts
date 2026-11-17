@@ -272,3 +272,147 @@ test.describe('#10550 Add payers to your client book', () => {
     expect(fits).toBe(true);
   });
 });
+
+// system_3 #11507 (epic #11497 item 5; Design ack c71154, amending §3.142
+// Decisions 4 and 5): the way in is easier to see, a payer that is not a
+// client says so, a middle name no longer hides a match, and Clients points
+// at what in the book deserves a second look. Nothing is merged, renamed or
+// deleted by any of it.
+test.describe('#11507 payers and clients worth a second look', () => {
+  const card = payer({ key: 'name:musterplatz.io 7c4e1a9b', payer: 'Musterplatz.io 7c4e1a9b', tidied_name: 'Musterplatz.io 7c4e1a9b', payment_ids: [51], payment_count: 1, totals: [{ currency: 'EUR', cents: 1800 }], first_paid_on: '2026-10-09', last_paid_on: '2026-10-09' });
+  const middleName = payer({ key: 'name:renee fittizio', payer: 'Renée Fittizio', tidied_name: 'Renée Fittizio', payment_ids: [61], payment_count: 1, totals: [{ currency: 'EUR', cents: 9000 }], first_paid_on: '2026-10-11', last_paid_on: '2026-10-11' });
+  const writes = (fake: Fake) => fake.requests.filter((r) => r.method !== 'GET');
+
+  test('after an import, "Add payers…" is a bordered button on its own line under the sentence, with no count', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await importN26(page);
+    const clause = page.locator('[data-test="payers-clause"]');
+    const button = page.locator('[data-test="payers-open"]');
+    await expect(clause).toHaveText('3 payers are not in your client book.');
+    await expect(button).toHaveText('Add payers…');
+    await expect(button).toHaveClass(/btn--secondary/);
+    const c = (await clause.boundingBox())!;
+    const b = (await button.boundingBox())!;
+    expect(b.y, 'the button is under the sentence, not in it').toBeGreaterThanOrEqual(c.y + c.height);
+    await button.click();
+    await expect(page.locator('[data-test="payers-dialog"]')).toBeVisible();
+  });
+
+  test('a payer that looks like a card payment says so; a person and a company do not; every row starts unticked', async ({ page }) => {
+    const fake = newFake({ payers: [card, payer(), payer({ key: 'email:galerie@example.org', payer: 'Galerie Nord', tidied_name: 'Galerie Nord', payment_ids: [41], payment_count: 1 })] });
+    await open(page, fake);
+    await openFromImport(page);
+    await expect(rows(page)).toHaveCount(3);
+    const flag = (i: number) => rows(page).nth(i).locator('[data-test="payers-row-not-client"]');
+    await expect(flag(0)).toHaveText('Looks like a card payment or an online service, not a client.');
+    await expect(flag(1)).toHaveCount(0);
+    await expect(flag(2)).toHaveCount(0);
+    // The hint decides nothing: the flagged row keeps its place and its box.
+    for (let i = 0; i < 3; i += 1) await expect(check(page, i)).not.toBeChecked();
+    await expect(rows(page).nth(0)).toContainText('Musterplatz.io 7c4e1a9b');
+  });
+
+  test('a middle name no longer hides a match: the dialog asks Use or Add', async ({ page }) => {
+    const fake = newFake({ clients: [{ id: 1, name: 'Renee Carla Fittizio', paypal_email: '' }], payers: [middleName] });
+    await open(page, fake);
+    await openFromImport(page);
+    await check(page, 0).check();
+    await expect(page.locator('[data-test="payers-row-book-use-1"]')).toBeVisible();
+    await expect(page.locator('[data-test="payers-row-book-add-new"]')).toBeVisible();
+    // Nothing is saved while that choice stands open.
+    await expect(save(page)).toBeDisabled();
+    await page.locator('[data-test="payers-row-book-use-1"]').click();
+    await expect(save(page)).toBeEnabled();
+    await save(page).click();
+    await expect(page.locator('[data-test="payers-dialog"]')).toHaveCount(0);
+    expect(JSON.parse(addRequests(fake)[0].body)).toEqual({ payers: [{ payment_ids: [61], client_id: 1 }] });
+  });
+
+  const book = [
+    { id: 1, name: 'Renée Fittizio', paypal_email: '' },
+    { id: 2, name: 'Galerie Nord', paypal_email: '' },
+    { id: 3, name: 'Renee Carla Fittizio', paypal_email: '' },
+    { id: 4, name: 'Musterplatz.io 7c4e1a9b', paypal_email: '' },
+  ];
+  async function openClients(page: Page, fake: Fake) {
+    await open(page, fake);
+    await page.getByRole('tab', { name: 'Clients' }).click();
+    await expect(page.locator('[data-test="clients-panel"]')).toBeVisible();
+  }
+  const review = (page: Page) => page.locator('[data-test="clients-review"]');
+  const sentences = (page: Page) => page.locator('[data-test="clients-review-sentence"]');
+  const clientRows = (page: Page) => page.locator('[data-test="client-row"]');
+
+  test('Clients names the look-alike pair and the card payment, "Show them" lists only those, and nothing is sent', async ({ page }) => {
+    const fake = newFake({ clients: book, payers: [] });
+    await openClients(page, fake);
+    await expect(sentences(page)).toHaveText([
+      '2 clients look like the same person: Renée Fittizio and Renee Carla Fittizio.',
+      '1 client looks like a card payment or an online service: Musterplatz.io 7c4e1a9b.',
+    ]);
+    // Two sentences, with a space between them and before the action.
+    await expect(review(page)).toContainText('Renee Carla Fittizio. 1 client looks like');
+    await expect(review(page)).toContainText('7c4e1a9b. Show them');
+    // There on load, so not announced as news.
+    await expect(review(page)).not.toHaveAttribute('role', 'status');
+    await expect(clientRows(page)).toHaveCount(4);
+    // A flag and its clear button stay inside the client's own name cell (or
+    // card): the button's label is longer than the column is wide.
+    for (const id of [1, 3, 4]) {
+      const flag = page.locator(`[data-test="client-row"][data-client-id="${id}"]`).locator('[data-test="client-not-same"], [data-test="client-real"]').first();
+      const container = (await flag.locator('xpath=ancestor::*[self::td or self::li][1]').boundingBox())!;
+      const b = (await flag.boundingBox())!;
+      expect(b.x + b.width, `client ${id}: the clear button ends inside its cell`).toBeLessThanOrEqual(container.x + container.width + 1);
+      expect(b.x, `client ${id}: and starts inside it`).toBeGreaterThanOrEqual(container.x - 1);
+    }
+
+    await page.locator('[data-test="clients-review-show"]').click();
+    await expect(clientRows(page)).toHaveCount(3);
+    await expect(page.locator('[data-test="client-row"][data-client-id="2"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="client-row"][data-client-id="1"] [data-test="client-look-alike"]')).toContainText('Looks like Renee Carla Fittizio');
+    await expect(page.locator('[data-test="client-row"][data-client-id="3"] [data-test="client-look-alike"]')).toContainText('Looks like Renée Fittizio');
+    await expect(page.locator('[data-test="client-row"][data-client-id="4"] [data-test="client-card-like"]')).toContainText('Looks like a card payment or an online service');
+    await expect(page.locator('[data-test="clients-review-show"]')).toHaveText('Show all clients');
+    await page.locator('[data-test="clients-review-show"]').click();
+    await expect(clientRows(page)).toHaveCount(4);
+    expect(writes(fake), 'looking writes nothing').toEqual([]);
+  });
+
+  test('a wrong guess is cleared on this device: it stays cleared after a reload, and no client is touched', async ({ page }) => {
+    const fake = newFake({ clients: book, payers: [] });
+    await openClients(page, fake);
+    await page.locator('[data-test="client-row"][data-client-id="1"] [data-test="client-not-same"]').click();
+    await expect(sentences(page)).toHaveText(['1 client looks like a card payment or an online service: Musterplatz.io 7c4e1a9b.']);
+    await expect(page.locator('[data-test="client-look-alike"]')).toHaveCount(0);
+
+    await page.reload();
+    await dismissMobileSidebarIfPresent(page);
+    await page.getByRole('tab', { name: 'Clients' }).click();
+    await expect(sentences(page)).toHaveText(['1 client looks like a card payment or an online service: Musterplatz.io 7c4e1a9b.']);
+
+    await page.locator('[data-test="client-row"][data-client-id="4"] [data-test="client-real"]').click();
+    await expect(review(page)).toHaveCount(0);
+    await expect(clientRows(page)).toHaveCount(4);
+    expect(writes(fake), 'clearing a guess writes nothing to the server').toEqual([]);
+    expect(fake.clients.map((c) => c.name)).toEqual(book.map((c) => c.name));
+  });
+
+  test('several pairs are counted, and a book with nothing to review shows no line', async ({ page }) => {
+    const fake = newFake({ payers: [], clients: [
+      { id: 1, name: 'Renée Fittizio', paypal_email: '' }, { id: 2, name: 'Renee Carla Fittizio', paypal_email: '' },
+      { id: 3, name: 'Mara Esempio', paypal_email: '' }, { id: 4, name: 'Esempio Mara', paypal_email: '' },
+    ] });
+    await openClients(page, fake);
+    await expect(sentences(page)).toHaveText(['2 pairs of clients look like the same person.']);
+  });
+
+  test('a book of different people and plain company names shows no review line', async ({ page }) => {
+    const fake = newFake({ payers: [], clients: [
+      { id: 1, name: 'Mara Esempio', paypal_email: '' }, { id: 2, name: 'Galerie Nord', paypal_email: '' }, { id: 3, name: 'Studio Erfunden GmbH', paypal_email: '' },
+    ] });
+    await openClients(page, fake);
+    await expect(clientRows(page)).toHaveCount(3);
+    await expect(review(page)).toHaveCount(0);
+  });
+});

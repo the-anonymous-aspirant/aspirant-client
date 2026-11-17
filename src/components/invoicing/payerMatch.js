@@ -47,6 +47,26 @@ function closeByPrefix(aWords, bWords, aLen, bLen) {
   return wholeMatch;
 }
 
+// (d) the first word and the last word are the same, and the longer name has
+// extra words between them ("Renée Fittizio" and "Renee Carla Fittizio":
+// system_3 #11507, Design ack c71154, amending §3.142 Decision 4). A middle
+// name the shorter one does carry must be among the longer one's, in order,
+// so "Ana Clara Beispiel" is not close to "Ana Maria Lucia Beispiel". A shared
+// first name alone is still not a match: the last word must match too.
+function closeByMiddleWords(aWords, bWords) {
+  const [shortWords, longWords] = aWords.length <= bWords.length ? [aWords, bWords] : [bWords, aWords];
+  if (shortWords.length < 2 || longWords.length <= shortWords.length) return false;
+  if (shortWords[0] !== longWords[0]) return false;
+  if (shortWords[shortWords.length - 1] !== longWords[longWords.length - 1]) return false;
+  let at = 1;
+  for (const word of shortWords.slice(1, -1)) {
+    at = longWords.indexOf(word, at);
+    if (at < 1 || at >= longWords.length - 1) return false;
+    at += 1;
+  }
+  return true;
+}
+
 // Plain Levenshtein edit distance (insert, delete, substitute), used by (c)
 // and to rank close candidates "closest first".
 export function editDistance(a, b) {
@@ -71,7 +91,7 @@ export function namesAreSame(a, b) {
   return !!na && na === normalizeName(b);
 }
 
-// Close, by Decision 4 (a)-(c). Never true when the names are the same
+// Close, by Decision 4 (a)-(d). Never true when the names are the same
 // (namesAreSame is the caller's first check) or either is empty. A shared
 // first name alone is not a match ("Mara Rossi" / "Mara Esempio"): rule (b)
 // needs every word to align, not just one.
@@ -83,6 +103,7 @@ export function namesAreClose(a, b) {
   const bw = wordsOf(nb);
   if (sameWordsAnyOrder(aw, bw)) return true;
   if (closeByPrefix(aw, bw, na.length, nb.length)) return true;
+  if (closeByMiddleWords(aw, bw)) return true;
   const letters = (s) => s.replace(/ /g, '').length;
   return letters(na) >= 6 && letters(nb) >= 6 && editDistance(na, nb) <= 2;
 }
@@ -95,7 +116,7 @@ function closenessRank(typed, name) {
   const nb = normalizeName(name);
   const aw = wordsOf(na);
   const bw = wordsOf(nb);
-  const tier = sameWordsAnyOrder(aw, bw) || closeByPrefix(aw, bw, na.length, nb.length) ? 0 : 1;
+  const tier = sameWordsAnyOrder(aw, bw) || closeByPrefix(aw, bw, na.length, nb.length) || closeByMiddleWords(aw, bw) ? 0 : 1;
   return [tier, editDistance(na, nb)];
 }
 
@@ -134,4 +155,50 @@ export function tidyName(raw) {
       .join(' ');
   }
   return trimmed;
+}
+
+// The endings a web domain in a payer's name carries. A fixed list, not "any
+// dot followed by letters": "Dr.Beispiel" and "St.Gallen" are names.
+const DOMAIN_ENDINGS = ['com', 'io', 'de', 'net', 'org', 'eu', 'co', 'app', 'shop', 'store', 'online', 'me', 'ai', 'tv', 'it', 'fr', 'es', 'nl', 'at', 'ch', 'uk'];
+const DOMAIN_IN_NAME = new RegExp(`(^|[\\s(*])[a-z0-9-]{2,}\\.(${DOMAIN_ENDINGS.join('|')})(?=$|[\\s/),])`, 'i');
+
+// A code of letters and digits, as a card payment's reference has it
+// ("7c4e1a9b"): one word of six or more characters that switches between
+// letters and digits at least twice. "Studio54" switches once and is a name.
+function hasMixedCode(name) {
+  for (const word of name.split(/\s+/)) {
+    if (word.length < 6 || !/^[a-z0-9]+$/i.test(word)) continue;
+    let switches = 0;
+    for (let i = 1; i < word.length; i += 1) {
+      if (/[0-9]/.test(word[i]) !== /[0-9]/.test(word[i - 1])) switches += 1;
+    }
+    if (switches >= 2) return true;
+  }
+  return false;
+}
+
+// True when a payer's or a client's name looks like a card payment or an
+// online service, not a client (system_3 #11507, Design ack c71154): it holds
+// a web domain ("Musterplatz.io") or a code of letters and digits ("7c4e1a9b").
+// A plain company name is never flagged: "Galerie Nord" is a client. It is a
+// hint for the owner to act on; nothing is decided by it.
+export function looksLikeCardPaymentOrService(name) {
+  const raw = (name || '').trim();
+  if (!raw) return false;
+  return DOMAIN_IN_NAME.test(raw) || hasMixedCode(raw);
+}
+
+// The pairs of clients that look like the same person: "the same" or "close"
+// by Decision 4. `clients` is the book ([{ id, name }, ...]); each pair comes
+// back once, as [a, b] in the book's order.
+export function lookAlikePairs(clients) {
+  const pairs = [];
+  for (let i = 0; i < clients.length; i += 1) {
+    for (let j = i + 1; j < clients.length; j += 1) {
+      const a = clients[i];
+      const b = clients[j];
+      if (namesAreSame(a.name, b.name) || namesAreClose(a.name, b.name)) pairs.push([a, b]);
+    }
+  }
+  return pairs;
 }
