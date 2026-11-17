@@ -189,6 +189,16 @@
       <template #cell-service="{ row }"><span class="nowrap">{{ serviceLabel(row) }}</span></template>
       <template #cell-issue_date="{ row }"><span class="nowrap">{{ formatDay(row.issue_date) || '—' }}</span></template>
       <template #cell-total_cents="{ row }"><span class="nowrap">{{ formatMoney(row.total_cents, row.currency) }}</span></template>
+      <!-- The row's door, in the last column on every tab (§3.159 Decision
+           3, system_3 #11501). "Open", not "Edit": an issued invoice opens
+           read-only. The whole row still opens it too, so the button stops
+           its own click and key, as the checkbox does, and the row opens
+           once. -->
+      <template #cell-actions="{ row }">
+        <span class="row-actions" @click.stop @keydown.stop>
+          <AspButton variant="secondary" size="sm" :aria-label="`Open ${identityOf(row)}`" data-test="invoice-open" @click="$emit('open', row.id)">Open</AspButton>
+        </span>
+      </template>
     </AspDataTable>
     </details>
     </template>
@@ -324,6 +334,8 @@
           { key: 'service', label: 'Work done', sortable: false, width: '19%' },
           { key: 'issue_date', label: 'Issued', width: '13%' },
           { key: 'total_cents', label: 'Total', align: 'right', width: '14%' },
+          // The row's door (§3.159 Decision 3, system_3 #11501).
+          { key: 'actions', label: '', sortable: false, align: 'right', width: '5.5rem' },
         ],
       };
     },
@@ -804,6 +816,19 @@
   .select-cell {
     display: inline-flex;
     align-items: center;
+  }
+
+  /* The row's last column: the door, flush with the row's right edge
+     (§3.159 Decision 3). */
+  .row-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  /* A button keeps its label whole: in a column too narrow for it, it would
+     otherwise shrink and cut its own text. */
+  .row-actions :deep(.btn) {
+    flex: none;
   }
 
   /* §3.145: one fold per group. The layout is fixed and every column has a

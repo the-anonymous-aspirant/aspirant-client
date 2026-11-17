@@ -219,8 +219,9 @@ test.describe('#10818 the invoice list folds by month', () => {
     const edges = (key: string) =>
       group(page, key).locator('thead th').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left * 10) / 10));
     const november = await edges('2026-11');
-    expect(november).toHaveLength(7);
-    expect(new Set(november).size).toBe(7);
+    // The row's door is the last column (§3.159 Decision 3, system_3 #11501).
+    expect(november).toHaveLength(8);
+    expect(new Set(november).size).toBe(8);
     expect(await edges('2026-10')).toEqual(november);
     expect(await edges('drafts')).toEqual(november);
   });

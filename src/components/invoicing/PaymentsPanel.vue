@@ -440,6 +440,10 @@
              selection and the edit dialog (system_3 #10631, #10632). -->
         <span v-else class="muted" data-test="row-category">{{ row.categoryLabel }}</span>
         <span v-if="!inBook(row)" class="muted not-in-book" data-test="row-not-in-book">Not in the Book</span>
+        <!-- The one button inside an expense card, as on the Book's card
+             (§3.159 Decision 3, system_3 #11501). A press opens the receipt
+             and not the card (`onCardTap`). -->
+        <AspButton v-if="row.expense" variant="ghost" size="sm" class="card-receipt" data-test="expense-receipt" @click="openReceipt(row)">Receipt</AspButton>
       </li>
     </ul>
     <AspDataTable
@@ -482,13 +486,7 @@
                payment. A payment with none says so, so a missing client is
                seen before a review opens (Design ack c71060, D2). -->
           <span class="client-line" :class="{ muted: !clientNameOf(row.payment) }" data-test="row-client">{{ clientNameOf(row.payment) || 'No client' }}</span>
-          <!-- §3.143 Decision 5 (D12): the row's Edit replaces its Delete;
-               removing moves into the dialog. An issued invoice's payment
-               opens read-only. An expense row's Edit, below, opens the
-               expense dialog the same way (system_3 #10695). -->
-          <AspButton variant="ghost" size="sm" class="manual-delete" data-test="payment-edit" @click="openEdit(row.payment)">Edit</AspButton>
         </template>
-        <AspButton v-else-if="row.expense" variant="ghost" size="sm" class="manual-delete" data-test="expense-edit" @click="openExpenseEdit(row.expense)">Edit</AspButton>
       </template>
       <template #cell-category="{ row }">
         <div v-if="row.payment" class="cell-select">
@@ -530,6 +528,23 @@
       <template #cell-amount="{ row }">
         <span class="nowrap amount" :class="row.direction === 'in' ? 'in-amount' : 'out-amount'" data-test="row-amount">{{ signedAmount(row) }}</span>
       </template>
+      <!-- The row's door, in the last column on every tab (§3.159 Decision 3,
+           system_3 #11501; operator c70806 on #10985: "all the way to the
+           right"). Edit replaced the row's Delete (§3.143 Decision 5, D12):
+           removing lives in the dialog, and an issued invoice's payment opens
+           read-only. An expense's other action, Receipt, sits left of it, so
+           a receipt is reachable for an expense the Book does not count. -->
+      <template #cell-actions="{ row }">
+        <span class="row-actions">
+          <template v-if="row.payment">
+            <AspButton variant="secondary" size="sm" data-test="payment-edit" @click="openEdit(row.payment)">Edit</AspButton>
+          </template>
+          <template v-else-if="row.expense">
+            <AspButton variant="secondary" size="sm" data-test="expense-receipt" @click="openReceipt(row)">Receipt</AspButton>
+            <AspButton variant="secondary" size="sm" data-test="expense-edit" @click="openExpenseEdit(row.expense)">Edit</AspButton>
+          </template>
+        </span>
+      </template>
     </AspDataTable>
     </details>
     </template>
@@ -562,6 +577,14 @@
       @changed="changed"
       @category-added="expenseCategories = [...expenseCategories, $event]"
     />
+    <!-- An expense's receipt, the dialog the Book opens (§3.159 Decision 3,
+         system_3 #11501). -->
+    <ExpenseReceiptDialog
+      v-model:open="receiptOpen"
+      :expense-id="receiptExpenseId"
+      :expense-label="receiptExpenseLabel"
+      @changed="changed"
+    />
     <N26ImportDialog v-model:open="n26Open" :files="n26Files" :payments="payments" @imported="onN26Imported" />
     <PayPalExpensesDialog v-model:open="paypalExpensesOpen" :candidates="paypalExpenseCandidates" @done="onPayPalExpensesDone" />
     <PayersDialog
@@ -576,6 +599,7 @@
 
 <script>
   import { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSegmented, AspSelect } from '@aspirant/design-system';
+  import ExpenseReceiptDialog from './ExpenseReceiptDialog.vue';
   import ManualExpenseDialog from './ManualExpenseDialog.vue';
   import ManualPaymentDialog from './ManualPaymentDialog.vue';
   import N26ImportDialog from './N26ImportDialog.vue';
@@ -631,7 +655,7 @@
   // payers, so they are only ever rendered as text interpolation.
   export default {
     name: 'PaymentsPanel',
-    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSegmented, AspSelect, ManualExpenseDialog, ManualPaymentDialog, N26ImportDialog, PayPalExpensesDialog, PayersDialog, RemovedRows },
+    components: { AspButton, AspCard, AspCheckbox, AspDataTable, AspEmptyState, AspSegmented, AspSelect, ExpenseReceiptDialog, ManualExpenseDialog, ManualPaymentDialog, N26ImportDialog, PayPalExpensesDialog, PayersDialog, RemovedRows },
     props: {
       payments: { type: Array, required: true },
       // Money out, in the same list (§3.143 Decision 3, system_3 #10630).
@@ -711,6 +735,10 @@
         editPayment: null,
         expenseEditOpen: false,
         editExpense: null,
+        // The expense whose receipt dialog is open (system_3 #11501).
+        receiptOpen: false,
+        receiptExpenseId: null,
+        receiptExpenseLabel: '',
         expenseOpen: false,
         expenseCategories: [],
         manualSummary: null,
@@ -757,8 +785,11 @@
           // directly generate the invoice for that entry" (c70806 on #10985;
           // Design ack c71060). The client reads as text under who.
           { key: 'invoice', label: 'Invoice', sortable: false, width: '10.25rem' },
-          // Last, as the row reads (§3.143 Decision 3).
+          // The last of the row's values, as the row reads (§3.143 Decision 3).
           { key: 'amount', label: 'Amount', align: 'right', sortable: false, width: '8rem' },
+          // The row's door and, for an expense, Receipt left of it (§3.159
+          // Decision 3). Wide enough for both `sm` buttons on one line.
+          { key: 'actions', label: '', sortable: false, align: 'right', width: '10rem' },
         ],
       };
     },
@@ -1271,6 +1302,13 @@
         this.expenseEditOpen = true;
         await this.loadExpenseCategories();
       },
+      // The dialog's lead names the expense as the Book's does: its day, its
+      // amount and who it went to.
+      openReceipt(row) {
+        this.receiptExpenseId = row.expense.id;
+        this.receiptExpenseLabel = `${formatDay(row.paid_on)} · ${formatMoney(row.amount_cents, row.currency)}${row.who ? ` · ${row.who}` : ''}`;
+        this.receiptOpen = true;
+      },
       // A phone card's body opens its row's dialog (§3.143 Decision 5); its
       // own controls (checkbox, selects, buttons) keep their own job.
       onCardTap(row, event) {
@@ -1748,12 +1786,18 @@
     font-size: var(--text-sm);
   }
 
-  /* The ghost button's own padding would indent its label; pull it back so
-     "Delete" lines up with the text above it. */
-  .manual-delete {
-    align-self: flex-start;
-    margin-top: var(--space-2xs);
-    margin-left: calc(-1 * var(--space-sm));
+  /* The row's last column: its actions on one line, the door last and flush
+     with the row's right edge (§3.159 Decision 3). */
+  .row-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-xs);
+  }
+
+  /* A button keeps its label whole: in a column too narrow for it, it would
+     otherwise shrink and cut its own text. */
+  .row-actions :deep(.btn) {
+    flex: none;
   }
 
   .upload__input {
@@ -2095,6 +2139,11 @@
   .card-generate {
     align-self: flex-start;
     margin-top: var(--space-xs);
+  }
+
+  /* An expense card's Receipt, at the card's start as on the Book's card. */
+  .card-receipt {
+    align-self: flex-start;
   }
 
   .error {

@@ -80,6 +80,17 @@ const row = (page: Page, name: string) => page.locator('[data-test="client-row"]
 const form = (page: Page) => page.locator('[data-test="client-form"]');
 const notesField = (page: Page) => form(page).getByLabel('Notes');
 
+// Open a client for editing the way the page offers it: the row's Edit on
+// desktop; below 640px a tap on the card, which has no Edit button
+// (§3.159 Decision 3, system_3 #11501).
+async function openClientEdit(page: Page, id: number | string): Promise<void> {
+  const row = page.locator(`[data-test="client-row"][data-client-id="${id}"]`);
+  await expect(row).toBeVisible();
+  const button = row.locator(`[data-test="client-edit-${id}"]`);
+  if (await button.count()) await button.click();
+  else await row.locator('strong').first().click();
+}
+
 test.describe('#9987 Clients — notes', () => {
   test('notes are saved with a new client, line breaks and all, and read back exactly', async ({ page }) => {
     const fake = newFake();
@@ -95,20 +106,20 @@ test.describe('#9987 Clients — notes', () => {
     await expect(row(page, 'Clara Example').locator('[data-test="client-notes"]')).toBeVisible();
 
     const clara = fake.clients.find((c) => c.name === 'Clara Example')!;
-    await page.locator(`[data-test="client-edit-${clara.id}"]`).click();
+    await openClientEdit(page, clara.id);
     await expect(notesField(page)).toHaveValue('Call before 10.\nPays by transfer.');
   });
 
   test('an edit to the notes is saved with PUT; Cancel discards one', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
-    await page.locator('[data-test="client-edit-2"]').click();
+    await openClientEdit(page, 2);
     await expect(notesField(page)).toHaveValue('Short.');
     await notesField(page).fill('Changed, then cancelled.');
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(form(page)).toBeHidden();
     expect(fake.requests.some((r) => r.method === 'PUT')).toBe(false);
-    await page.locator('[data-test="client-edit-2"]').click();
+    await openClientEdit(page, 2);
     await expect(notesField(page)).toHaveValue('Short.');
 
     await notesField(page).fill('Now kept.');
@@ -122,7 +133,7 @@ test.describe('#9987 Clients — notes', () => {
   test('more than 5000 characters shows the server refusal and keeps the text in the field', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
-    await page.locator('[data-test="client-edit-3"]').click();
+    await openClientEdit(page, 3);
     const tooLong = 'x'.repeat(5001);
     await notesField(page).fill(tooLong);
     // No maxlength: the field holds all 5001 characters.

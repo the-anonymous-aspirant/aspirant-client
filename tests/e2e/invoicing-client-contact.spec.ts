@@ -133,6 +133,17 @@ const row = (page: Page, name: string) => page.locator('[data-test="client-row"]
 const form = (page: Page) => page.locator('[data-test="client-form"]');
 const lastBody = (fake: Fake, method: string, path: RegExp) => JSON.parse(fake.requests.filter((r) => r.method === method && path.test(r.path)).pop()!.body);
 
+// Open a client for editing the way the page offers it: the row's Edit on
+// desktop; below 640px a tap on the card, which has no Edit button
+// (§3.159 Decision 3, system_3 #11501).
+async function openClientEdit(page: Page, id: number | string): Promise<void> {
+  const row = page.locator(`[data-test="client-row"][data-client-id="${id}"]`);
+  await expect(row).toBeVisible();
+  const button = row.locator(`[data-test="client-edit-${id}"]`);
+  if (await button.count()) await button.click();
+  else await row.locator('strong').first().click();
+}
+
 test.describe('#10003 Clients — phone and social links', () => {
   test('the list shows the phone as a tel: link and each social link as the stored URL, in a new tab', async ({ page }) => {
     const fake = newFake();
@@ -162,7 +173,7 @@ test.describe('#10003 Clients — phone and social links', () => {
     await expect(anna.locator('[data-test="client-social"], [data-test="client-instagram"], [data-test="client-telegram"]')).toHaveCount(0);
     expect(await page.locator('a[href^="javascript:"], a[href*="evil.example"]').count()).toBe(0);
     // The edit form still shows what is stored, so ze can correct it.
-    await page.locator('[data-test="client-edit-2"]').click();
+    await openClientEdit(page, 2);
     await expect(form(page).getByLabel('Instagram', { exact: true })).toHaveValue('javascript:alert(1)');
   });
 
@@ -182,7 +193,7 @@ test.describe('#10003 Clients — phone and social links', () => {
     await expect(clara.locator('[data-test="client-instagram"]')).toHaveAttribute('href', 'https://www.instagram.com/clara.ink/');
     await expect(clara.locator('[data-test="client-telegram"]')).toHaveAttribute('href', 'https://t.me/clara_ink');
     const id = fake.clients.find((c) => c.name === 'Clara Example')!.id;
-    await page.locator(`[data-test="client-edit-${id}"]`).click();
+    await openClientEdit(page, id);
     await expect(form(page).getByLabel('Instagram')).toHaveValue('https://www.instagram.com/clara.ink/');
   });
 
@@ -194,7 +205,7 @@ test.describe('#10003 Clients — phone and social links', () => {
     test(`a refused ${field} (${code}) shows on its own field, keeps the text and takes focus`, async ({ page }) => {
       const fake = newFake();
       await open(page, fake);
-      await page.locator('[data-test="client-edit-2"]').click();
+      await openClientEdit(page, 2);
       const input = form(page).getByLabel(field);
       await input.fill(value);
       await page.locator('[data-test="client-save"]').click();
@@ -216,14 +227,14 @@ test.describe('#10003 Clients — phone and social links', () => {
     // Added 23:30Z on 5 Nov is 00:30 on 6 Nov in Berlin (design_agent c62046).
     fake.clients.push({ id: 3, name: 'Late Example', address: '', email: '', paypal_email: '', notes: '', created_at: '2026-11-05T23:30:00Z', updated_at: '2026-11-05T23:45:00Z' });
     await open(page, fake);
-    await page.locator('[data-test="client-edit-1"]').click();
+    await openClientEdit(page, 1);
     await expect(page.locator('[data-test="client-stamp"]')).toHaveText('Added 2026-11-05 · updated 2026-11-06');
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     // Updated the same day it was added: no "updated".
-    await page.locator('[data-test="client-edit-2"]').click();
+    await openClientEdit(page, 2);
     await expect(page.locator('[data-test="client-stamp"]')).toHaveText('Added 2026-07-01');
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await page.locator('[data-test="client-edit-3"]').click();
+    await openClientEdit(page, 3);
     await expect(page.locator('[data-test="client-stamp"]')).toHaveText('Added 2026-11-06');
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     // A new client has no times yet.
@@ -324,7 +335,7 @@ test.describe("#10006 Clients — a client's figures", () => {
       inv(5, 2, 'issued', '2026-10-01', 9900),
     ];
     await open(page, fake);
-    await page.locator('[data-test="client-edit-1"]').click();
+    await openClientEdit(page, 1);
     await expect(page.locator('[data-test="client-stats-count"]')).toHaveText('2');
     await expect(page.locator('[data-test="client-stats-total"]')).toHaveText('€470.00');
     await expect(page.locator('[data-test="client-stats-last"]')).toHaveText('2026-09-21');
@@ -335,7 +346,7 @@ test.describe("#10006 Clients — a client's figures", () => {
     const fake = newFake();
     fake.invoices = [inv(3, 2, 'cancelled', '2026-08-10', 50000)];
     await open(page, fake);
-    await page.locator('[data-test="client-edit-2"]').click();
+    await openClientEdit(page, 2);
     await expect(page.locator('[data-test="client-stats-none"]')).toHaveText('No issued invoices.');
     await expect(page.locator('[data-test="client-stats"]')).toHaveCount(0);
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
@@ -348,7 +359,7 @@ test.describe("#10006 Clients — a client's figures", () => {
     const fake = newFake();
     fake.invoicesFail = true;
     await open(page, fake);
-    await page.locator('[data-test="client-edit-1"]').click();
+    await openClientEdit(page, 1);
     await expect(page.locator('[data-test="client-stats-failed"]')).toHaveText('Invoice figures could not be loaded.');
     await expect(page.locator('[data-test="client-stats"]')).toHaveCount(0);
     await page.locator('[data-test="client-form"]').getByLabel(/^Name/).fill('Galerie Nord GmbH');
@@ -370,7 +381,7 @@ test.describe("#10006 Clients — a client's figures", () => {
         setup(fake);
         fake.invoicesDelayMs = 800;
         await open(page, fake);
-        await page.locator('[data-test="client-edit-1"]').click();
+        await openClientEdit(page, 1);
         const name = page.locator('[data-test="client-form"]').getByLabel(/^Name/);
         await expect(name).toBeVisible();
         const before = (await name.boundingBox())!.y;
