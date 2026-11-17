@@ -131,7 +131,7 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await expect(page.locator('[data-test="create-invoice"]')).toBeDisabled();
     await page.getByRole('checkbox', { name: 'Select TX3' }).check();
     await expect(page.locator('[data-test="create-invoice"]')).toBeDisabled();
-    await expect(page.locator('[data-test="create-invoice-hint"]')).toHaveText('1 of the 1 selected is not Paid work. Only Paid work can be invoiced.');
+    await expect(page.locator('[data-test="create-invoice-hint"]')).toHaveText('1 of the 1 selected is not Paid work. Untick it to create or generate invoices.');
     await page.getByRole('checkbox', { name: 'Select TX3' }).uncheck();
     await createFromTwo(page);
 

@@ -144,6 +144,13 @@
       </p>
     </AspCard>
 
+    <!-- What a review started from these rows did (system_3 #11506), in the
+         same region and the same words as on Invoices (#11505). It goes when
+         ze ticks a row again or another result takes the region. -->
+    <AspCard v-if="reviewSummary" class="summary" padding="sm" data-test="review-summary">
+      <p class="summary__line" role="status">{{ reviewSummary }}</p>
+    </AspCard>
+
     <!-- §3.145 Decision 2: an import says where its rows went, so a back-fill
          into an old month is not hunted for. -->
     <p v-if="landedIn && (summary || n26Summary)" class="summary__where muted" data-test="summary-landed">
@@ -185,9 +192,12 @@
       </div>
       <!-- One selection feeds every action, each enabled by its own
            condition (§3.143 Decision 4, §3.129): Set category for rows of
-           one direction, Remove for any selected row, Create invoice for
-           Paid work only. Create invoice stays the panel's one primary,
-           rightmost. -->
+           one direction, Remove for any selected row, Create invoice and
+           Generate invoices for Paid work only. Generate invoices is the
+           panel's one primary, rightmost, and Create invoice is secondary
+           beside it (§3.159 Decision 4, system_3 #11506; operator c70831 on
+           #10985: "a button next to the current invoice button … our accent
+           color, as this will be the one that is used the most"). -->
       <div class="create">
         <div class="create__actions">
           <div class="set-category full-select">
@@ -216,7 +226,8 @@
             {{ removeLabel }}
           </AspButton>
           <AspButton
-            :disabled="!canCreate || removing"
+            variant="secondary"
+            :disabled="!canCreate || removing || generating"
             :loading="creating"
             :aria-describedby="createCaption ? 'create-invoice-hint' : undefined"
             class="block-on-phone"
@@ -224,6 +235,18 @@
             @click="createInvoice"
           >
             Create invoice{{ selected.length && !selectedExpenses.length ? ` from ${selected.length} payment${selected.length === 1 ? '' : 's'}` : '' }}
+          </AspButton>
+          <!-- One draft per ticked payment, then the one-at-a-time review
+               (system_3 #11505). Nothing is issued by this press. -->
+          <AspButton
+            :disabled="!generatable || removing || creating"
+            :loading="generating && generatingRow === null"
+            :aria-describedby="generateDescribedBy"
+            class="block-on-phone"
+            data-test="generate-selected"
+            @click="generateSelected"
+          >
+            {{ generateLabel }}
           </AspButton>
         </div>
         <!-- Why Set category cannot act on this selection, in terms the
@@ -235,15 +258,27 @@
         <p v-if="confirmingRemove && removeConsequence" id="bulk-remove-hint" class="create__hint" data-test="bulk-remove-consequence">
           {{ removeConsequence }}
         </p>
-        <!-- States why Create invoice cannot act, in terms the owner can fix
-             here; the server is still the rule (only paid work is invoiced). -->
+        <!-- States why Create invoice and Generate invoices cannot act, in
+             terms the owner can fix here; the server is still the rule (only
+             paid work is invoiced). One line for the pair. -->
         <p v-if="createCaption" id="create-invoice-hint" class="create__hint" data-test="create-invoice-hint">
           {{ createCaption }}
+        </p>
+        <!-- Generate's own reason, when the pair's line has nothing to say
+             (§3.114; Design ack c71060). -->
+        <p v-if="generateCaption" id="generate-hint" class="create__hint" data-test="generate-hint">
+          {{ generateCaption }}
+        </p>
+        <!-- With two or more ticked the two buttons do different things with
+             the same rows, so the line says which does what before a press. -->
+        <p v-else-if="pairHint" id="generate-pair-hint" class="create__hint" data-test="generate-pair-hint">
+          {{ pairHint }}
         </p>
       </div>
     </div>
     <p v-if="bulkError" class="error" role="alert" data-test="bulk-error">{{ bulkError }}</p>
     <p v-if="createError" class="error" role="alert" data-test="create-error">{{ createError }}</p>
+    <p v-if="generateError" class="error" role="alert" data-test="generate-error">{{ generateError }}</p>
 
     <AspEmptyState
       v-if="rows.length === 0"
@@ -330,6 +365,21 @@
           >{{ row.categoryLabel }}</span>&nbsp;· <span data-test="row-client">{{ clientNameOf(row.payment) || 'no client' }}</span></span>
           <span v-if="isPayPalTransferIntoN26(row.payment)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
           <span v-if="row.invoice" class="muted invoice-line" data-test="row-invoice">{{ row.invoice }}</span>
+          <!-- The card's one button (Design ack c71060 answer 4). A press
+               generates and does not open the card (`onCardTap`). -->
+          <AspButton
+            v-if="canGenerateRow(row)"
+            variant="secondary"
+            size="sm"
+            class="card-generate"
+            :disabled="generating || creating || removing"
+            :loading="generating && generatingRow === row.payment.id"
+            :aria-label="`Generate invoice for ${row.transaction_id}`"
+            data-test="row-generate"
+            @click="generateRow(row.payment)"
+          >
+            Generate invoice
+          </AspButton>
         </template>
         <!-- An expense's category reads as text here; it is set from the
              selection and the edit dialog (system_3 #10631, #10632). -->
@@ -373,6 +423,10 @@
           <!-- A hand-entered payment's method and reference; no extra column
                for Delete (the table fills 968px). -->
           <span v-if="row.payment.entry === 'manual'" class="muted manual-line" data-test="payment-manual">{{ manualLine(row.payment) }}</span>
+          <!-- The client as text, as on the phone card; changed in Edit
+               payment. A payment with none says so, so a missing client is
+               seen before a review opens (Design ack c71060, D2). -->
+          <span class="client-line" :class="{ muted: !clientNameOf(row.payment) }" data-test="row-client">{{ clientNameOf(row.payment) || 'No client' }}</span>
           <!-- §3.143 Decision 5 (D12): the row's Edit replaces its Delete;
                removing moves into the dialog. An issued invoice's payment
                opens read-only. An expense row's Edit, below, opens the
@@ -397,20 +451,24 @@
         <!-- §3.143 Decision 3: the row the Book does not count says so. -->
         <span v-if="!inBook(row)" class="muted not-in-book" data-test="row-not-in-book">Not in the Book</span>
       </template>
-      <template #cell-client_id="{ row }">
-        <div v-if="row.payment" class="cell-select">
-          <AspSelect
-            :model-value="row.payment.client_id ?? 0"
-            searchable
-            :options="clientOptions"
-            :aria-label="`Client for ${row.transaction_id}`"
-            :title="optionLabel(clientOptions, row.payment.client_id ?? 0)"
-            :disabled="saving.has(row.key)"
-            data-test="payment-client"
-            @update:model-value="patch(row.payment, { client_id: $event || null })"
-          />
-          <span v-if="row.invoice" class="muted invoice-line" data-test="row-invoice">{{ row.invoice }}</span>
-        </div>
+      <!-- One of three things (Design ack c71060): "Generate invoice" on a
+           row that can be invoiced, the invoice's line on a row that has one,
+           and nothing on any other row, because no action there would enable
+           the button (§3.159 Decision 1: absent, not disabled). -->
+      <template #cell-invoice="{ row }">
+        <AspButton
+          v-if="canGenerateRow(row)"
+          variant="secondary"
+          size="sm"
+          :disabled="generating || creating || removing"
+          :loading="generating && generatingRow === row.payment.id"
+          :aria-label="`Generate invoice for ${row.transaction_id}`"
+          data-test="row-generate"
+          @click="generateRow(row.payment)"
+        >
+          Generate invoice
+        </AspButton>
+        <span v-else-if="row.invoice" class="muted" data-test="row-invoice">{{ row.invoice }}</span>
       </template>
       <!-- §3.140 Decision 2: money in in body ink, money out in red with a
            minus sign, so colour is never the only signal. -->
@@ -528,8 +586,14 @@
       bookSelection: { type: Object, default: null },
       // `{ direction, category }` to open on, from the Book's "Review them".
       initialFilter: { type: Object, default: null },
+      // Generating from rows (system_3 #11506): the view makes the call and
+      // runs the review; the panel shows that it is under way, why it failed,
+      // and afterwards what the review did.
+      generating: { type: Boolean, default: false },
+      generateError: { type: String, default: '' },
+      reviewSummary: { type: String, default: '' },
     },
-    emits: ['changed', 'open-invoice'],
+    emits: ['changed', 'open-invoice', 'generate', 'status-seen'],
     data() {
       return {
         importing: false,
@@ -574,6 +638,9 @@
         // payment and expense ids share one number space (security c66333
         // on system_3 #10630, carried to #10631 in c66336).
         selected: [],
+        // The payment whose row button started the generation under way, or
+        // null when the toolbar's did (or none is).
+        generatingRow: null,
         confirmingRemove: false,
         removing: false,
         expenseCategoriesRequested: false,
@@ -627,7 +694,11 @@
           // Longer values end in an ellipsis with the whole label as the
           // trigger's title.
           { key: 'category', label: 'Category', sortable: false, width: '10.25rem' },
-          { key: 'client_id', label: 'Client', sortable: false, width: '10.25rem' },
+          // The row's Client select stood here until system_3 #11506: the
+          // operator asked for "a button replacing the client button … to
+          // directly generate the invoice for that entry" (c70806 on #10985;
+          // Design ack c71060). The client reads as text under who.
+          { key: 'invoice', label: 'Invoice', sortable: false, width: '10.25rem' },
           // Last, as the row reads (§3.143 Decision 3).
           { key: 'amount', label: 'Amount', align: 'right', sortable: false, width: '8rem' },
         ],
@@ -717,9 +788,6 @@
         if (expense.length) groups.push({ group: 'Out', options: expense });
         return [all, ...groups];
       },
-      clientOptions() {
-        return [{ value: 0, label: 'No client' }, ...this.clients.map((c) => ({ value: c.id, label: c.name }))];
-      },
       // A file that could not be read stays named after the dialog closes
       // (D2: a fold may hide detail, never a failure).
       // Transfers from PayPal the server left out of the N26 files (#9881).
@@ -804,14 +872,51 @@
       canCreate() {
         return this.selected.length > 0 && this.notPaidWork === 0;
       },
-      // Why Create invoice cannot act, in terms the owner can fix from the
-      // panel (§3.114); it never quietly invoices the Paid work subset (D13).
+      // Why Create invoice and Generate invoices cannot act, in terms the
+      // owner can fix from the panel (§3.114); neither quietly invoices the
+      // Paid work subset (D13). One line for the pair: both are disabled for
+      // the same reason, so both point at it (design_agent c71081 on #11506).
       createCaption() {
         const n = this.selected.length;
-        if (n === 0) return 'Select rows to set their category or remove them, or Paid work payments to create an invoice.';
+        if (n === 0) return 'Select rows to set their category or remove them, or paid-work payments to invoice them.';
         const k = this.notPaidWork;
         if (k === 0) return '';
-        return `${k} of the ${n} selected ${k === 1 ? 'is' : 'are'} not Paid work. Only Paid work can be invoiced.`;
+        return `${k} of the ${n} selected ${k === 1 ? 'is' : 'are'} not Paid work. Untick ${k === 1 ? 'it' : 'them'} to create or generate invoices.`;
+      },
+      // Any import, hand entry or payers result showing in the status region.
+      statusRegionBusy() {
+        return Boolean(this.summary || this.n26Summary || this.manualSummary || this.payersSummary);
+      },
+      // How many invoices the review will show for this selection (Design
+      // ack c71060): the ticked paid-work payments with no invoice yet, plus
+      // those whose draft is waiting. One on an issued invoice is skipped by
+      // the server and is not counted. 0 while a ticked row is not Paid work.
+      generatable() {
+        if (!this.canCreate) return 0;
+        return this.selectedPayments.filter((r) => !r.payment.invoice || r.payment.invoice.status === 'draft').length;
+      },
+      // "Generate 3 invoices": one per ticked payment, which is what sets it
+      // apart from "Create invoice from 3 payments" beside it.
+      generateLabel() {
+        const n = this.generatable;
+        if (n === 1) return 'Generate invoice';
+        return n ? `Generate ${n} invoices` : 'Generate invoices';
+      },
+      // Generate's own reason, the one case the pair's line does not cover:
+      // every ticked payment is Paid work, and each is already on an issued
+      // invoice.
+      generateCaption() {
+        return this.canCreate && !this.generatable ? 'Every ticked payment already has an invoice.' : '';
+      },
+      pairHint() {
+        const n = this.selected.length;
+        if (!this.generatable || n < 2) return '';
+        return `Generate makes one invoice per payment. Create invoice puts all ${n} on one.`;
+      },
+      generateDescribedBy() {
+        if (this.createCaption) return 'create-invoice-hint';
+        if (this.generateCaption) return 'generate-hint';
+        return this.pairHint ? 'generate-pair-hint' : undefined;
       },
       // The count in the trigger is what makes a one-pick bulk write safe
       // without a confirm step (design_agent c60951 rule 4).
@@ -882,6 +987,18 @@
       expenses() {
         this.loadRemoved();
       },
+      // The review's line has been read once another result takes the status
+      // region (a new tick clears it too, in `selected` below).
+      statusRegionBusy(busy) {
+        if (busy && this.reviewSummary) this.$emit('status-seen');
+      },
+      // A generation that went through leaves nothing ticked, like Create
+      // invoice; one that failed keeps the ticks, so ze can press again.
+      generating(now, was) {
+        if (!was || now) return;
+        if (this.generatingRow === null && !this.generateError) this.selected = [];
+        this.generatingRow = null;
+      },
       // The selection never holds a row the owner cannot see (§3.25): a
       // filter change, a reload or a folded month unselects rows that left
       // the view (§3.145 Decision 5).
@@ -924,8 +1041,10 @@
       },
       // An armed Remove names a count; any change to the selection disarms
       // it, so the second press always removes what the label said.
-      selected() {
+      // A new tick also means the last review's line has been read.
+      selected(keys) {
         this.confirmingRemove = false;
+        if (keys.length && this.reviewSummary) this.$emit('status-seen');
       },
       // Set category's money-out options: zir full expense category list,
       // asked for once, the first time the selection holds money out. Never
@@ -1076,12 +1195,6 @@
         if (event.target.closest('button, input, select, label, a, [role="combobox"], [role="listbox"], [role="option"], .select')) return;
         if (row.payment) this.openEdit(row.payment);
         else this.openExpenseEdit(row.expense);
-      },
-      // The whole label, as a tooltip on a table-cell select whose value may
-      // end in an ellipsis.
-      optionLabel(options, value) {
-        const option = options.find((o) => o.value === value);
-        return option ? option.label : '';
       },
       onFileChosen(event) {
         const file = event.target.files && event.target.files[0];
@@ -1372,6 +1485,27 @@
         } finally {
           this.creating = false;
         }
+      },
+      // The ticked payments, in the order ze ticked them; the view drafts one
+      // invoice each and opens the review.
+      generateSelected() {
+        const ids = this.selected.filter((key) => key.startsWith('p')).map((key) => Number(key.slice(1)));
+        if (!ids.length) return;
+        this.generatingRow = null;
+        this.$emit('generate', ids);
+      },
+      // A row "Generate invoice" is offered on: money in, marked Paid work,
+      // on no invoice. The server stays the rule; a row it would refuse has
+      // no button rather than a dead one.
+      canGenerateRow(row) {
+        const p = row.payment;
+        return Boolean(p) && row.direction === 'in' && p.category === 'paid_work' && !p.invoice && !this.isPayPalTransferIntoN26(p);
+      },
+      // One row's invoice, straight into the review at 1 / 1. The ticks on
+      // other rows are left as they are.
+      generateRow(payment) {
+        this.generatingRow = payment.id;
+        this.$emit('generate', [payment.id]);
       },
       async patch(row, change) {
         this.rowError = '';
@@ -1765,6 +1899,19 @@
   .note--cell {
     display: block;
     margin-top: var(--space-2xs);
+  }
+
+  /* The client under who and what, on its own line (system_3 #11506). */
+  .client-line {
+    display: block;
+    margin-top: var(--space-2xs);
+    font-size: var(--text-sm);
+  }
+
+  /* The card's one button sits at the card's start, under its text. */
+  .card-generate {
+    align-self: flex-start;
+    margin-top: var(--space-xs);
   }
 
   .error {

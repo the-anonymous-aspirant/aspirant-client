@@ -309,7 +309,11 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
       if (narrow) expect(manual.y, 'phone: Enter payment by hand above Import').toBeLessThan(imp.y);
       else expect(manual.x, 'wide: Enter payment by hand left of Import').toBeLessThan(imp.x);
       expect([manual.primary, imp.primary], 'no primary in the head row').toEqual([false, false]);
-      await expect(page.locator('[data-test="create-invoice"]')).toHaveClass(/btn--primary/);
+      // The panel's one primary is on the toolbar: Generate invoices since
+      // system_3 #11506, with Create invoice secondary beside it (§3.159
+      // Decision 4).
+      await expect(page.locator('[data-test="generate-selected"]')).toHaveClass(/btn--primary/);
+      await expect(page.locator('[data-test="create-invoice"]')).toHaveClass(/btn--secondary/);
     });
   }
 
