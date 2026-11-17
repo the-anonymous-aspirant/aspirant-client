@@ -42,7 +42,12 @@
       <AspCard class="profile-card" padding="md" data-test="profile-card">
         <!-- The accessible name is c69874's "Edit profile: {name}", plus the
              blocker when there is one: an aria-label replaces the content, and
-             the badge must not go silent for a screen reader (D2). -->
+             the badge must not go silent for a screen reader (D2).
+             The line stays native, not AspButton (system_3 #11473). Every
+             AspButton variant is a centred, single-line box with one label
+             slot. This is a full-width row: the name wraps, the badge sits
+             beside it and Edit is pushed to the far end, so a variant would
+             have its display, alignment, wrapping and padding all overridden. -->
         <button
           type="button"
           class="issuer-line"
