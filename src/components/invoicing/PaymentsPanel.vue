@@ -617,7 +617,9 @@
           // Every column has a width and the layout is fixed, so the columns
           // line up from one month's table to the next (§3.145 Decision 6).
           // "Who and what for" takes what the others leave.
-          { key: 'paid_on', label: 'Date', width: '7.5rem' },
+          // "Date paid", the Book's header for the same day (§3.159 Decision 6,
+          // system_3 #11502): the day the money moved (§3.145).
+          { key: 'paid_on', label: 'Date paid', width: '7.5rem' },
           { key: 'who', label: 'Who and what for', sortable: false },
           // Width measured at 1280 with the sidebar open, where the table has
           // 968px (#8407): the cell pads 12px a side and a table-cell trigger
