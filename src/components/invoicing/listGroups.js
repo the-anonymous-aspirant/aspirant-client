@@ -54,6 +54,42 @@ export function monthLabel(key) {
   return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 }
 
+// A payment the server will never invoice: an N26 row whose payer is PayPal is
+// the transfer of PayPal money already listed payment by payment
+// (aspirant-server isPayPalTransferIntoN26, system_3 #9881).
+const isPayPalTransferIntoN26 = (p) => p.source === 'n26' && String(p.sender_name || '').toLowerCase().includes('paypal');
+
+// The payments "Generate invoices" looks at for a month ("YYYY-MM"): money in,
+// marked Paid work, paid in that month (system_3 #11505). Mirrors
+// aspirant-server's monthCandidateIDs, which stays the authority; this only
+// lets the page say how many there are before the press. The listed payments
+// already leave out removed ones.
+export function invoiceCandidates(payments, month) {
+  return (payments || []).filter(
+    (p) => p.kind === 'incoming' && p.category === 'paid_work' && monthKey(p.paid_on) === month && !isPayPalTransferIntoN26(p),
+  );
+}
+
+// Of those, the ones no invoice covers yet. `payment.invoice` is the invoice a
+// payment is on now, a draft or an issued one (never a cancelled one).
+export const uninvoicedCandidates = (payments, month) => invoiceCandidates(payments, month).filter((p) => !p.invoice);
+
+// Every month ("YYYY-MM") that has a candidate payment, newest first.
+export function candidateMonths(payments) {
+  const months = new Set();
+  for (const p of payments || []) {
+    const key = monthKey(p.paid_on);
+    if (key && invoiceCandidates([p], key).length) months.add(key);
+  }
+  return [...months].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+}
+
+// The month an invoice belongs to in the month view: the month its work was
+// done (design ack c70970 on system_3 #11505). One with no work date falls
+// back to its issue date; one with neither has no month and shows only under
+// "All months".
+export const workMonth = (row) => monthKey(row.service_date_from) || monthKey(row.issue_date);
+
 export const DRAFTS_GROUP = 'drafts';
 
 // Invoices grouped for the list (§3.145 Decision 1): a "Drafts" group first,

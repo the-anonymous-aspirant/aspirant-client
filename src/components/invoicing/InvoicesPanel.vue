@@ -2,7 +2,44 @@
   <section class="invoices-panel" data-test="invoices-panel">
     <h2 class="visually-hidden">Invoices</h2>
 
-    <!-- Every control carries a visible caption so the four line up; the
+    <!-- What the last generation or review did, above the toolbar (§3.159
+         Decision 1: ways in, status, toolbar). -->
+    <p v-if="generateError" class="error" role="alert" data-test="generate-error">{{ generateError }}</p>
+    <p v-else-if="reviewSummary" class="status-line" role="status" data-test="review-summary">{{ reviewSummary }}</p>
+
+    <!-- §3.159 Decision 5: the period comes first in the filters, and what it
+         governs, "Generate invoices for {month}", sits on the toolbar's right
+         (system_3 #11505, operator c70806 on #10985). -->
+    <!-- Two rows, in keyboard order. First the month and what it governs:
+         the picker on the left, Generate on the right (stacked on a phone, so
+         Generate stays on the first screen). Then the other filters, in the
+         row they had before, so its wrapping rule (#9968) is untouched
+         (design ack c70970). -->
+    <div class="toolbar">
+    <div class="period">
+    <!-- "Work done in", not "Month": the two date fields below filter by
+         issue date, and this one does not. -->
+    <div class="filter-field filter-field--month full-select">
+      <span class="filter-field__caption" aria-hidden="true">Work done in</span>
+      <AspSelect v-model="month" :options="monthOptions" aria-label="Work done in" data-test="filter-month" />
+    </div>
+    <!-- The tab's one primary, always in this place (§3.159 Decision 1), so
+         ze learns where it lives. Its line says what the press will do before
+         the press, and when it cannot act, why. -->
+    <div class="generate">
+      <AspButton
+        :disabled="!month || generateCount === 0"
+        :loading="generating"
+        aria-describedby="generate-scope"
+        data-test="generate-invoices"
+        @click="$emit('generate', month)"
+      >
+        {{ generateLabel }}
+      </AspButton>
+      <p id="generate-scope" class="generate__scope muted" data-test="generate-scope">{{ generateScope }}</p>
+    </div>
+    </div>
+    <!-- Every control carries a visible caption so they line up; the
          aria-labels stay the accessible names. -->
     <div class="filters" role="group" aria-label="Filter invoices">
       <div class="filter-field filter-field--search">
@@ -26,16 +63,25 @@
         </label>
       </div>
     </div>
+    </div>
 
     <p v-if="loadError" class="error" role="alert" data-test="invoices-error">{{ loadError }}</p>
     <AspEmptyState
-      v-else-if="rows.length === 0 && !filtered"
+      v-else-if="monthRows.length === 0 && !filtered"
       heading="No invoices yet"
       message="Mark payments as Paid work, select them on the Payments tab and choose Create invoice."
       data-test="invoices-empty"
     />
+    <!-- A month with nothing in it yet is the usual state before the first
+         generation, so it names the month, not "these filters". -->
     <AspEmptyState
-      v-else-if="rows.length === 0"
+      v-else-if="monthRows.length === 0 && onlyMonthFilter"
+      :heading="`No invoices for ${monthName} yet`"
+      :message="generateCount ? 'Generate drafts one for each paid-work payment of the month.' : ''"
+      data-test="invoices-month-empty"
+    />
+    <AspEmptyState
+      v-else-if="monthRows.length === 0"
       variant="filtered"
       heading="No invoices match these filters"
       data-test="invoices-filtered-empty"
@@ -210,7 +256,7 @@
     formatMoney,
     listInvoices,
   } from './api.js';
-  import { DRAFTS_GROUP, groupInvoicesByMonth } from './listGroups.js';
+  import { DRAFTS_GROUP, candidateMonths, groupInvoicesByMonth, invoiceCandidates, monthLabel, workMonth } from './listGroups.js';
 
   // Every export goes through the validation screen first (spec §5).
   const EXPORTS = {
@@ -227,14 +273,23 @@
     props: {
       // Bumped by the page after any change, so the list reloads.
       refreshKey: { type: Number, default: 0 },
+      // The book's payments, already on the page: they say which months have
+      // paid work, and how many of a month's payments still have no invoice.
+      payments: { type: Array, default: () => [] },
+      // The page runs the generation and the review; these are its state.
+      generating: { type: Boolean, default: false },
+      generateError: { type: String, default: '' },
+      reviewSummary: { type: String, default: '' },
     },
-    emits: ['open'],
+    emits: ['open', 'generate', 'status-seen'],
     data() {
       return {
         rows: [],
         // Every invoice, unfiltered, for the export captions (null until read).
         allRows: null,
         loadError: '',
+        // "YYYY-MM", or '' for every month. Set in created().
+        month: '',
         status: '',
         issuedFrom: '',
         issuedTo: '',
@@ -274,10 +329,78 @@
     },
     computed: {
       filtered() {
-        return !!(this.status || this.issuedFrom || this.issuedTo || this.search.trim());
+        return !!(this.month || this.status || this.issuedFrom || this.issuedTo || this.search.trim());
+      },
+      onlyMonthFilter() {
+        return !!this.month && !(this.status || this.issuedFrom || this.issuedTo || this.search.trim());
+      },
+      // A month holds the invoices whose WORK was done in it, not the ones
+      // issued in it: an October payment invoiced in November is October's,
+      // and its draft has no issue date at all. Filtered here, on the rows
+      // the server sent, since the work date is on every row.
+      monthRows() {
+        if (!this.month) return this.rows;
+        return this.rows.filter((r) => workMonth(r) === this.month);
+      },
+      // "All months", then every month with paid work or an invoice, newest
+      // first. The chosen month stays listed even if its last row went.
+      monthOptions() {
+        const months = new Set(candidateMonths(this.payments));
+        for (const r of this.allRows || this.rows) {
+          const key = workMonth(r);
+          if (key) months.add(key);
+        }
+        if (this.month) months.add(this.month);
+        const sorted = [...months].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+        return [{ value: '', label: 'All months' }, ...sorted.map((key) => ({ value: key, label: monthLabel(key) }))];
+      },
+      monthName() {
+        return this.month ? monthLabel(this.month) : '';
+      },
+      monthCandidates() {
+        return this.month ? invoiceCandidates(this.payments, this.month) : [];
+      },
+      // What the press will do, counted before it (design ack c70970,
+      // change 1): payments it will draft, and the month's drafts already
+      // waiting, which it brings back for review. The server decides what is
+      // really drafted; these two only feed the button's line.
+      toDraft() {
+        return this.monthCandidates.filter((p) => !p.invoice).length;
+      },
+      draftsWaiting() {
+        if (!this.month) return 0;
+        // The month's drafts, from the invoice list once it is read; until
+        // then, the drafts its payments are on (one over two payments counts
+        // once).
+        if (this.allRows) return this.allRows.filter((r) => r.status === 'draft' && workMonth(r) === this.month).length;
+        return new Set(this.monthCandidates.filter((p) => p.invoice && p.invoice.status === 'draft').map((p) => p.invoice.id)).size;
+      },
+      generateCount() {
+        return this.toDraft + this.draftsWaiting;
+      },
+      generateLabel() {
+        if (!this.month) return 'Generate invoices';
+        const d = this.draftsWaiting;
+        if (this.toDraft === 0 && d > 0) return `Review ${d} draft${d === 1 ? '' : 's'} for ${this.monthName}`;
+        return `Generate invoices for ${this.monthName}`;
+      },
+      generateScope() {
+        if (!this.month) return 'Choose a month to generate its invoices.';
+        const n = this.toDraft;
+        const d = this.draftsWaiting;
+        if (n === 0 && d === 0) {
+          // A month with no paid work at all is not "every payment invoiced".
+          return this.monthCandidates.length
+            ? `Every paid-work payment in ${this.monthName} has an invoice.`
+            : `No paid-work payments in ${this.monthName}.`;
+        }
+        const parts = [];
+        if (n) parts.push(`${n} payment${n === 1 ? '' : 's'} to draft`);
+        if (d) parts.push(`${d} draft${d === 1 ? '' : 's'} waiting`);
+        return parts.join(' · ');
       },
       groups() {
-        return groupInvoicesByMonth(this.rows);
+        return groupInvoicesByMonth(this.monthRows);
       },
       // The groups that are open now. Filtered: every group, unless ze closed
       // one (§3.17 R2). Otherwise zir own choice, or the default: Drafts, the
@@ -354,6 +477,12 @@
         const kept = this.selected.filter((id) => visible.has(id));
         if (kept.length !== this.selected.length) this.selected = kept;
       },
+      // The month filters rows already here, so nothing is fetched; the folds
+      // start over as for any other filter (§3.17 R2).
+      month() {
+        this.filterOpen = {};
+        this.$emit('status-seen');
+      },
       status: 'onFilterChange',
       issuedFrom: 'onFilterChange',
       issuedTo: 'onFilterChange',
@@ -368,8 +497,19 @@
       search() {
         clearTimeout(this.searchTimer);
         this.filterOpen = {};
+        this.$emit('status-seen');
         this.searchTimer = setTimeout(() => this.load(), 250);
       },
+    },
+    // Opens on the newest month that still has paid work without an invoice,
+    // which is the question the page is asked ("is this month done?"); with
+    // nothing waiting it opens on every month, as it always did.
+    // Only when the tab loads: what ze picks afterwards holds until ze leaves
+    // the tab, and is never stored (design ack c70970). A draft waiting counts
+    // as work still to do.
+    created() {
+      const waiting = (p) => !p.invoice || p.invoice.status === 'draft';
+      this.month = candidateMonths(this.payments).find((m) => invoiceCandidates(this.payments, m).some(waiting)) || '';
     },
     mounted() {
       this.load();
@@ -408,6 +548,7 @@
       // clearing the last one brings back zir state from before.
       onFilterChange() {
         this.filterOpen = {};
+        this.$emit('status-seen');
         this.load();
       },
       groupOfRow() {
@@ -550,6 +691,54 @@
     flex-wrap: wrap;
     gap: var(--space-sm);
     align-items: end;
+  }
+
+  /* Phone first (§3.122 P1): the month at full width, then Generate at full
+     width with its line under it, then the other filters (design ack c70970).
+     From 640px the month keeps the left of its row and Generate takes the
+     right (§3.159 Decisions 4 and 5). The filter row below is as it was. */
+  .toolbar,
+  .period {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .generate {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+  }
+
+  .generate__scope,
+  .status-line {
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  @media (min-width: 640px) {
+    .period {
+      flex-direction: row;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+
+    /* Stands in for the picker's caption, so the button sits on the picker's
+       line and its scope hangs under it. */
+    .generate::before {
+      content: '\00a0';
+      font-size: var(--text-sm);
+    }
+
+    .filter-field--month {
+      flex: 0 0 auto;
+      width: 11rem;
+    }
+
+    .generate {
+      align-items: flex-end;
+      text-align: right;
+    }
   }
 
   .filter-field--search {

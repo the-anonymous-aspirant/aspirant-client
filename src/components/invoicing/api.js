@@ -317,6 +317,11 @@ export const listInvoices = (params = {}) =>
 export const getInvoice = (id) => axios.get(`${base}/invoices/${id}`).then((r) => r.data);
 export const createDraft = (paymentIds) =>
   axios.post(`${base}/invoices`, { payment_ids: paymentIds }).then((r) => r.data);
+// One draft per paid-work payment of a month ({ month: 'YYYY-MM' }) or of a
+// list ({ payment_ids }) that no invoice covers yet (system_3 #11504). Answers
+// `{ invoices: [detail], skipped: [{ payment_id, reason, invoice }] }`. It
+// never issues: a draft takes its number only through issueInvoice.
+export const generateInvoices = (body) => axios.post(`${base}/invoices/generate`, body).then((r) => r.data);
 export const updateDraft = (id, patch) => axios.put(`${base}/invoices/${id}`, patch).then((r) => r.data);
 export const deleteDraft = (id) => axios.delete(`${base}/invoices/${id}`);
 export const issueInvoice = (id) => axios.post(`${base}/invoices/${id}/issue`).then((r) => r.data);
