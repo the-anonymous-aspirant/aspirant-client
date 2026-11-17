@@ -258,13 +258,14 @@
         <p v-if="confirmingRemove && removeConsequence" id="bulk-remove-hint" class="create__hint" data-test="bulk-remove-consequence">
           {{ removeConsequence }}
         </p>
-        <!-- States why Create invoice cannot act, in terms the owner can fix
-             here; the server is still the rule (only paid work is invoiced). -->
+        <!-- States why Create invoice and Generate invoices cannot act, in
+             terms the owner can fix here; the server is still the rule (only
+             paid work is invoiced). One line for the pair. -->
         <p v-if="createCaption" id="create-invoice-hint" class="create__hint" data-test="create-invoice-hint">
           {{ createCaption }}
         </p>
-        <!-- Why Generate cannot act, in its own words (§3.114; Design ack
-             c71060). -->
+        <!-- Generate's own reason, when the pair's line has nothing to say
+             (§3.114; Design ack c71060). -->
         <p v-if="generateCaption" id="generate-hint" class="create__hint" data-test="generate-hint">
           {{ generateCaption }}
         </p>
@@ -869,14 +870,16 @@
       canCreate() {
         return this.selected.length > 0 && this.notPaidWork === 0;
       },
-      // Why Create invoice cannot act, in terms the owner can fix from the
-      // panel (§3.114); it never quietly invoices the Paid work subset (D13).
+      // Why Create invoice and Generate invoices cannot act, in terms the
+      // owner can fix from the panel (§3.114); neither quietly invoices the
+      // Paid work subset (D13). One line for the pair: both are disabled for
+      // the same reason, so both point at it (design_agent c71081 on #11506).
       createCaption() {
         const n = this.selected.length;
-        if (n === 0) return 'Select rows to set their category or remove them, or Paid work payments to create an invoice.';
+        if (n === 0) return 'Select rows to set their category or remove them, or paid-work payments to invoice them.';
         const k = this.notPaidWork;
         if (k === 0) return '';
-        return `${k} of the ${n} selected ${k === 1 ? 'is' : 'are'} not Paid work. Only Paid work can be invoiced.`;
+        return `${k} of the ${n} selected ${k === 1 ? 'is' : 'are'} not Paid work. Untick ${k === 1 ? 'it' : 'them'} to create or generate invoices.`;
       },
       // Any import, hand entry or payers result showing in the status region.
       statusRegionBusy() {
@@ -897,12 +900,11 @@
         if (n === 1) return 'Generate invoice';
         return n ? `Generate ${n} invoices` : 'Generate invoices';
       },
-      // Why Generate cannot act, naming what enables it (§3.114).
+      // Generate's own reason, the one case the pair's line does not cover:
+      // every ticked payment is Paid work, and each is already on an issued
+      // invoice.
       generateCaption() {
-        if (this.selected.length === 0) return 'Tick paid-work payments to generate their invoices.';
-        const k = this.notPaidWork;
-        if (k) return `Generate works on paid-work payments only. Untick the ${k === 1 ? '1 that is not' : `${k} that are not`}.`;
-        return this.generatable ? '' : 'Every ticked payment already has an invoice.';
+        return this.canCreate && !this.generatable ? 'Every ticked payment already has an invoice.' : '';
       },
       pairHint() {
         const n = this.selected.length;
@@ -910,6 +912,7 @@
         return `Generate makes one invoice per payment. Create invoice puts all ${n} on one.`;
       },
       generateDescribedBy() {
+        if (this.createCaption) return 'create-invoice-hint';
         if (this.generateCaption) return 'generate-hint';
         return this.pairHint ? 'generate-pair-hint' : undefined;
       },

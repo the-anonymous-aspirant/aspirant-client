@@ -498,6 +498,7 @@ const tick = (page: Page, id: number) => page.getByRole('checkbox', { name: `Sel
 const generateSelected = (page: Page) => page.locator('[data-test="generate-selected"]');
 const createInvoice = (page: Page) => page.locator('[data-test="create-invoice"]');
 const generateHint = (page: Page) => page.locator('[data-test="generate-hint"]');
+const pairCaption = (page: Page) => page.locator('[data-test="create-invoice-hint"]');
 // A Transactions row: a table row on desktop, a card on a phone.
 const txnRow = (page: Page, id: number) => page.locator(`[data-row-key="p${id}"]`);
 const rowGenerate = (page: Page, id: number) => txnRow(page, id).locator('[data-test="row-generate"]');
@@ -510,9 +511,12 @@ test.describe('#11506 Generate invoices for the ticked Transactions rows', () =>
     await expect(generateSelected(page)).toHaveText('Generate invoices');
     await expect(generateSelected(page)).toBeDisabled();
     await expect(createInvoice(page)).toBeDisabled();
-    // Disabled, with the words for what enables it (§3.114).
-    await expect(generateHint(page)).toHaveText('Tick paid-work payments to generate their invoices.');
-    await expect(generateSelected(page)).toHaveAttribute('aria-describedby', 'generate-hint');
+    // Disabled for one reason, said once: both buttons point at the same line
+    // (§3.114; design_agent c71081).
+    await expect(pairCaption(page)).toHaveText('Select rows to set their category or remove them, or paid-work payments to invoice them.');
+    await expect(generateSelected(page)).toHaveAttribute('aria-describedby', 'create-invoice-hint');
+    await expect(createInvoice(page)).toHaveAttribute('aria-describedby', 'create-invoice-hint');
+    await expect(generateHint(page)).toHaveCount(0);
     // Create invoice, then Generate invoices: the primary is last in reading
     // order, on a row or stacked.
     const create = (await createInvoice(page).boundingBox())!;
@@ -523,14 +527,16 @@ test.describe('#11506 Generate invoices for the ticked Transactions rows', () =>
     await tick(page, 1);
     await tick(page, 5);
     await expect(generateSelected(page)).toBeDisabled();
-    await expect(page.locator('[data-test="create-invoice-hint"]')).toHaveText('1 of the 2 selected is not Paid work. Only Paid work can be invoiced.');
-    await expect(generateHint(page)).toHaveText('Generate works on paid-work payments only. Untick the 1 that is not.');
+    await expect(pairCaption(page)).toHaveText('1 of the 2 selected is not Paid work. Untick it to create or generate invoices.');
+    await expect(generateSelected(page)).toHaveAttribute('aria-describedby', 'create-invoice-hint');
+    await expect(generateHint(page)).toHaveCount(0);
     await tick(page, 6);
-    await expect(generateHint(page)).toHaveText('Generate works on paid-work payments only. Untick the 2 that are not.');
+    await expect(pairCaption(page)).toHaveText('2 of the 3 selected are not Paid work. Untick them to create or generate invoices.');
     // Unticked, the one Paid work row left is enough and the caption goes.
     await page.getByRole('checkbox', { name: 'Select M-5', exact: true }).uncheck();
     await page.getByRole('checkbox', { name: 'Select M-6', exact: true }).uncheck();
     await expect(generateSelected(page)).toBeEnabled();
+    await expect(pairCaption(page)).toHaveCount(0);
     await expect(generateHint(page)).toHaveCount(0);
   });
 
@@ -543,7 +549,10 @@ test.describe('#11506 Generate invoices for the ticked Transactions rows', () =>
     await openTransactions(page, fake);
     await tick(page, 3);
     await expect(generateSelected(page)).toBeDisabled();
+    // Generate's own reason keeps its own line, and Generate points at it.
     await expect(generateHint(page)).toHaveText('Every ticked payment already has an invoice.');
+    await expect(generateSelected(page)).toHaveAttribute('aria-describedby', 'generate-hint');
+    await expect(pairCaption(page)).toHaveCount(0);
     await tick(page, 1);
     await expect(generateSelected(page)).toHaveText('Generate invoice');
     await expect(generateSelected(page)).toBeEnabled();
