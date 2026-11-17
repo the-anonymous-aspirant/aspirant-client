@@ -68,6 +68,7 @@ function newFake(): Fake {
       payment(3, '2026-10-28'),
       payment(4, '2026-09-05', { on_invoice: true, on_issued_invoice: true, invoice: { id: 1, status: 'issued', invoice_number: '2026-001' } }),
       payment(5, '2026-10-20', { category: 'gift' }),
+      payment(6, '2026-10-21', { category: 'other', client_id: null, sender_name: 'Unbekannt' }),
     ],
     invoices: [issuedSeptember()],
     next: 2,
@@ -91,12 +92,14 @@ function detailOf(fake: Fake, inv: Json): Json {
   };
 }
 
-/** The server's side of #11504, for a month: one draft per candidate that no
- *  live invoice covers; the others come back as skipped. */
-function generate(fake: Fake, month: string): Json {
+/** The server's side of #11504, for a month or for named payments: one draft
+ *  per candidate that no live invoice covers, in paid-on order; the others
+ *  come back as skipped. */
+function generate(fake: Fake, body: { month?: string; payment_ids?: number[] }): Json {
   const out: Json = { invoices: [], skipped: [] };
-  for (const p of fake.payments) {
-    if (p.kind !== 'incoming' || p.category !== 'paid_work' || !p.paid_on.startsWith(month)) continue;
+  const wanted = body.payment_ids ? new Set(body.payment_ids) : null;
+  for (const p of [...fake.payments].sort((a, b) => (a.paid_on < b.paid_on ? -1 : a.paid_on > b.paid_on ? 1 : a.id - b.id))) {
+    if (wanted ? !wanted.has(p.id) : p.kind !== 'incoming' || p.category !== 'paid_work' || !p.paid_on.startsWith(body.month!)) continue;
     if (p.invoice) {
       out.skipped.push({ payment_id: p.id, reason: 'already_on_invoice', invoice: p.invoice });
       continue;
@@ -134,7 +137,7 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     }
     if (path === '/invoicing/invoices/generate' && method === 'POST') {
       const body = JSON.parse(req.postData() || '{}');
-      const out = generate(fake, body.month);
+      const out = generate(fake, body);
       return json(route, out.invoices.length ? 201 : 200, out);
     }
     const m = path.match(/^\/invoicing\/invoices\/(\d+)(\/issue)?$/);
@@ -477,4 +480,261 @@ test.describe('#11505 on a wide screen', () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     });
   }
+});
+
+/** Generating from Transactions (system_3 #11506, epic #11497 items 2a and
+ *  2c; §3.159 Decision 4): the ticked rows, or one row, go to the same
+ *  endpoint as payment ids and into the same review. */
+async function openTransactions(page: Page, fake: Fake): Promise<void> {
+  await page.clock.setFixedTime(new Date('2026-11-16T12:00:00Z'));
+  await mock(page, fake);
+  await seedTrustedSessionAs(page, 'vinoly');
+  await page.goto('/member/personal/invoicing');
+  await dismissMobileSidebarIfPresent(page);
+  await expect(page.locator('[data-test="create-invoice"]')).toBeVisible();
+}
+
+const tick = (page: Page, id: number) => page.getByRole('checkbox', { name: `Select M-${id}`, exact: true }).check();
+const generateSelected = (page: Page) => page.locator('[data-test="generate-selected"]');
+const createInvoice = (page: Page) => page.locator('[data-test="create-invoice"]');
+const generateHint = (page: Page) => page.locator('[data-test="generate-hint"]');
+// A Transactions row: a table row on desktop, a card on a phone.
+const txnRow = (page: Page, id: number) => page.locator(`[data-row-key="p${id}"]`);
+const rowGenerate = (page: Page, id: number) => txnRow(page, id).locator('[data-test="row-generate"]');
+
+test.describe('#11506 Generate invoices for the ticked Transactions rows', () => {
+  test('it is the toolbar\'s one primary, after Create invoice, and both wait for a Paid work selection', async ({ page }) => {
+    await openTransactions(page, newFake());
+    await expect(generateSelected(page)).toHaveClass(/btn--primary/);
+    await expect(createInvoice(page)).toHaveClass(/btn--secondary/);
+    await expect(generateSelected(page)).toHaveText('Generate invoices');
+    await expect(generateSelected(page)).toBeDisabled();
+    await expect(createInvoice(page)).toBeDisabled();
+    // Disabled, with the words for what enables it (§3.114).
+    await expect(generateHint(page)).toHaveText('Tick paid-work payments to generate their invoices.');
+    await expect(generateSelected(page)).toHaveAttribute('aria-describedby', 'generate-hint');
+    // Create invoice, then Generate invoices: the primary is last in reading
+    // order, on a row or stacked.
+    const create = (await createInvoice(page).boundingBox())!;
+    const gen = (await generateSelected(page).boundingBox())!;
+    expect(gen.x + gen.y * 10000).toBeGreaterThan(create.x + create.y * 10000);
+
+    // A gift in the selection: neither acts, and the line says why.
+    await tick(page, 1);
+    await tick(page, 5);
+    await expect(generateSelected(page)).toBeDisabled();
+    await expect(page.locator('[data-test="create-invoice-hint"]')).toHaveText('1 of the 2 selected is not Paid work. Only Paid work can be invoiced.');
+    await expect(generateHint(page)).toHaveText('Generate works on paid-work payments only. Untick the 1 that is not.');
+    await tick(page, 6);
+    await expect(generateHint(page)).toHaveText('Generate works on paid-work payments only. Untick the 2 that are not.');
+    // Unticked, the one Paid work row left is enough and the caption goes.
+    await page.getByRole('checkbox', { name: 'Select M-5', exact: true }).uncheck();
+    await page.getByRole('checkbox', { name: 'Select M-6', exact: true }).uncheck();
+    await expect(generateSelected(page)).toBeEnabled();
+    await expect(generateHint(page)).toHaveCount(0);
+  });
+
+  // The count is what the review will show (Design ack c71060). A payment on
+  // an issued invoice has no checkbox, so this needs a list that lags the
+  // server: the row says it is on an issued invoice, the flag does not yet.
+  test('a ticked payment that already has an issued invoice is not counted, and alone it disables Generate with the reason', async ({ page }) => {
+    const fake = newFake();
+    Object.assign(fake.payments.find((p) => p.id === 3)!, { on_invoice: true, on_issued_invoice: false, invoice: { id: 99, status: 'issued', invoice_number: '2026-099' } });
+    await openTransactions(page, fake);
+    await tick(page, 3);
+    await expect(generateSelected(page)).toBeDisabled();
+    await expect(generateHint(page)).toHaveText('Every ticked payment already has an invoice.');
+    await tick(page, 1);
+    await expect(generateSelected(page)).toHaveText('Generate invoice');
+    await expect(generateSelected(page)).toBeEnabled();
+  });
+
+  test('the label counts the invoices, and with two or more the line tells the pair apart', async ({ page }) => {
+    await openTransactions(page, newFake());
+    await tick(page, 2);
+    await expect(generateSelected(page)).toHaveText('Generate invoice');
+    await expect(page.locator('[data-test="generate-pair-hint"]')).toHaveCount(0);
+    await tick(page, 1);
+    await tick(page, 3);
+    await expect(generateSelected(page)).toHaveText('Generate 3 invoices');
+    await expect(createInvoice(page)).toHaveText('Create invoice from 3 payments');
+    await expect(page.locator('[data-test="generate-pair-hint"]')).toHaveText('Generate makes one invoice per payment. Create invoice puts all 3 on one.');
+  });
+
+  test('two ticked rows become two drafts, reviewed one at a time; the line says what happened and nothing stays ticked', async ({ page }) => {
+    const fake = newFake();
+    await openTransactions(page, fake);
+    await tick(page, 3);
+    await tick(page, 1);
+    await generateSelected(page).click();
+
+    // The ids in the order ze ticked them; the server orders the drafts.
+    expect(fake.requests[0]).toMatchObject({ method: 'POST', path: '/invoicing/invoices/generate', body: JSON.stringify({ payment_ids: [3, 1] }) });
+    await expect(dialog(page)).toContainText('Invoice 1 / 2 · Galerie Nord');
+    await expect(description(page)).toHaveValue('Work 1');
+    // Drafts only: no number is drawn by the press.
+    expect(fake.invoices.filter((i) => i.status === 'draft')).toHaveLength(2);
+    expect(fake.next).toBe(2);
+    // The October payment that was not ticked got nothing.
+    expect(fake.payments.find((p) => p.id === 2)!.invoice).toBeNull();
+
+    fake.requests.length = 0;
+    await page.locator('[data-test="review-accept"]').click();
+    await expect(dialog(page)).toContainText('Invoice 2 / 2');
+    await expect(description(page)).toHaveValue('Work 3');
+    expect(writes(fake)).toEqual(['PUT /invoices/10', 'POST /invoices/10/issue']);
+    await page.locator('[data-test="review-later"]').click();
+    await expect(dialog(page)).toBeHidden();
+
+    await expect(summary(page)).toHaveText('2 invoices: 1 issued, 1 left as a draft.');
+    await expect(page.getByRole('checkbox', { name: 'Select M-3', exact: true })).not.toBeChecked();
+    await expect(generateSelected(page)).toHaveText('Generate invoices');
+    // The line is about the last review: the next tick clears it.
+    await tick(page, 2);
+    await expect(summary(page)).toHaveCount(0);
+  });
+
+  test('a ticked payment already on a draft is not drafted twice: its draft joins the review', async ({ page }) => {
+    const fake = newFake();
+    fake.invoices.push({
+      id: 7, status: 'draft', client_id: 1, client_name: 'Galerie Nord', invoice_number: null, number: null, issue_date: null,
+      service_date_from: '2026-10-12T00:00:00Z', service_date_to: '2026-10-12T00:00:00Z', vat_rate_bp: 1900, total_cents: 20000, currency: 'EUR', payment_ids: [2],
+    });
+    Object.assign(fake.payments.find((p) => p.id === 2)!, { on_invoice: true, invoice: { id: 7, status: 'draft', invoice_number: null } });
+    await openTransactions(page, fake);
+    await tick(page, 1);
+    await tick(page, 2);
+    await generateSelected(page).click();
+    await expect(dialog(page)).toContainText('Invoice 1 / 2');
+    // One new draft, for payment 1; payment 2 keeps the draft it had.
+    expect(fake.invoices.filter((i) => i.status === 'draft').map((i) => i.id).sort((a, b) => a - b)).toEqual([7, 10]);
+    await page.locator('[data-test="review-later"]').click();
+    await expect(dialog(page)).toContainText('Invoice 2 / 2');
+    await expect(description(page)).toHaveValue('Work 2');
+  });
+
+  test('a generation the server fails says so, opens nothing and keeps the ticks', async ({ page }) => {
+    const fake = newFake();
+    await openTransactions(page, fake);
+    await page.route(/\/api\/invoicing\/invoices\/generate$/, (route) => json(route, 500, { error: { code: 'server_error', message: 'Error generating invoices' } }));
+    await tick(page, 1);
+    await generateSelected(page).click();
+    await expect(page.locator('[data-test="generate-error"]')).toContainText('The invoices could not be generated');
+    await expect(dialog(page)).toBeHidden();
+    await expect(page.getByRole('checkbox', { name: 'Select M-1', exact: true })).toBeChecked();
+    await expect(generateSelected(page)).toBeEnabled();
+  });
+});
+
+test.describe('#11506 Generate invoice on a Transactions row', () => {
+  test('a Paid work payment with no invoice carries the button; a row with an invoice shows it; any other row shows nothing', async ({ page }) => {
+    await openTransactions(page, newFake());
+    for (const id of [1, 2, 3]) {
+      await expect(rowGenerate(page, id)).toHaveText('Generate invoice');
+      await expect(rowGenerate(page, id)).toHaveClass(/btn--secondary/);
+      await expect(txnRow(page, id).locator('[data-test="row-invoice"]')).toHaveCount(0);
+    }
+    // Already invoiced: the invoice, and no button.
+    await expect(rowGenerate(page, 4)).toHaveCount(0);
+    await expect(txnRow(page, 4).locator('[data-test="row-invoice"]')).toContainText('2026-001');
+    // A gift and an "other": neither, because nothing on the row would enable it.
+    for (const id of [5, 6]) {
+      await expect(rowGenerate(page, id)).toHaveCount(0);
+      await expect(txnRow(page, id).locator('[data-test="row-invoice"]')).toHaveCount(0);
+    }
+    // The row's Client select is gone on every row.
+    await expect(page.getByRole('combobox', { name: /^Client for / })).toHaveCount(0);
+  });
+
+  test('one press drafts that payment only and opens the review at 1 / 1; the ticks elsewhere stay', async ({ page }) => {
+    const fake = newFake();
+    await openTransactions(page, fake);
+    await tick(page, 3);
+    await rowGenerate(page, 2).click();
+    expect(fake.requests[0]).toMatchObject({ method: 'POST', path: '/invoicing/invoices/generate', body: JSON.stringify({ payment_ids: [2] }) });
+    await expect(dialog(page)).toContainText('Invoice 1 / 1 · Galerie Nord');
+    await expect(description(page)).toHaveValue('Work 2');
+    expect(fake.invoices.filter((i) => i.status === 'draft').map((i) => i.payment_ids)).toEqual([[2]]);
+    expect(fake.next).toBe(2);
+
+    fake.requests.length = 0;
+    await page.locator('[data-test="review-accept"]').click();
+    await expect(dialog(page)).toBeHidden();
+    expect(writes(fake)).toEqual(['PUT /invoices/10', 'POST /invoices/10/issue']);
+    // One invoice needs no count repeated.
+    await expect(summary(page)).toHaveText('1 invoice: issued.');
+    // The row now shows its invoice where the button was.
+    await expect(rowGenerate(page, 2)).toHaveCount(0);
+    await expect(txnRow(page, 2).locator('[data-test="row-invoice"]')).toContainText('2026-002');
+    // The row ze had ticked for something else is still ticked.
+    await expect(page.getByRole('checkbox', { name: 'Select M-3', exact: true })).toBeChecked();
+  });
+
+  test('rejected, the payment is free again and its row offers the button again', async ({ page }) => {
+    const fake = newFake();
+    await openTransactions(page, fake);
+    await rowGenerate(page, 1).click();
+    await expect(dialog(page)).toContainText('Invoice 1 / 1');
+    await page.locator('[data-test="review-reject"]').click();
+    await expect(dialog(page)).toBeHidden();
+    await expect(summary(page)).toHaveText('1 invoice: rejected.');
+    expect(fake.invoices.filter((i) => i.status === 'draft')).toHaveLength(0);
+    await expect(rowGenerate(page, 1)).toBeVisible();
+  });
+});
+
+test.describe('#11506 the client on a desktop row', () => {
+  test.skip(({ isMobile }) => isMobile, 'the phone card already reads the client as text (#11019-A4)');
+
+  test('reads as text under who, and a payment with none says "No client" in muted ink', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openTransactions(page, newFake());
+    await expect(txnRow(page, 1).locator('[data-test="row-client"]')).toHaveText('Galerie Nord');
+    await expect(txnRow(page, 1).locator('[data-test="row-client"]')).not.toHaveClass(/muted/);
+    await expect(txnRow(page, 6).locator('[data-test="row-client"]')).toHaveText('No client');
+    await expect(txnRow(page, 6).locator('[data-test="row-client"]')).toHaveClass(/muted/);
+    await expect(page.getByRole('columnheader', { name: 'Invoice', exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Client', exact: true })).toHaveCount(0);
+  });
+
+  for (const width of [1280, 1440]) {
+    test(`at ${width} with three ticked no button label wraps and the pair ends with the primary`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openTransactions(page, newFake());
+      for (const id of [1, 2, 3]) await tick(page, id);
+      await expect(generateSelected(page)).toHaveText('Generate 3 invoices');
+      const oneLine = async (sel: string) => {
+        const box = (await page.locator(sel).first().boundingBox())!;
+        return box.height;
+      };
+      // One text line each: a wrapped label would double the button's height.
+      const heights = [await oneLine('[data-test="create-invoice"]'), await oneLine('[data-test="generate-selected"]'), await oneLine('[data-test="bulk-remove"]')];
+      expect(Math.max(...heights) - Math.min(...heights), 'all three buttons one line high').toBeLessThanOrEqual(1);
+      const create = (await createInvoice(page).boundingBox())!;
+      const gen = (await generateSelected(page).boundingBox())!;
+      expect(gen.y, 'the pair shares a row').toBe(create.y);
+      expect(gen.x, 'the primary is rightmost').toBeGreaterThan(create.x + create.width - 1);
+      expect(await rowGenerate(page, 1).evaluate((el) => el.scrollWidth <= el.clientWidth), 'the row button fits its column').toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  }
+});
+
+test.describe('#11506 on a phone', () => {
+  test('at 390×844 the card\'s button generates and does not open the card; the toolbar stacks with the primary last', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const fake = newFake();
+    await openTransactions(page, fake);
+    const create = (await createInvoice(page).boundingBox())!;
+    const gen = (await generateSelected(page).boundingBox())!;
+    expect(gen.y, 'Generate under Create invoice').toBeGreaterThanOrEqual(create.y + create.height);
+    expect(Math.abs(gen.width - create.width), 'both full width').toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+    await rowGenerate(page, 1).click();
+    await expect(dialog(page)).toContainText('Invoice 1 / 1');
+    // The review, not Edit payment.
+    await expect(editor(page)).toBeVisible();
+    expect(writes(fake)).toEqual(['POST /invoices/generate']);
+  });
 });
