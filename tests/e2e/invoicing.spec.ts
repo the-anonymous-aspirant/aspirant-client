@@ -545,6 +545,12 @@ async function setBulkCategory(page: Page, label: string): Promise<void> {
   await page.getByRole('option', { name: label }).click();
 }
 
+// Below 640px the trigger's visible text is the short form ("Set category
+// (N)"); above it, the words stay ("Set category of N selected"). These
+// tests are about the count a write touches, not the phone bar's own
+// layout (system_3 #11371's own suite covers that), so either form passes.
+const setCategoryText = (n: number) => new RegExp(`Set category \\(?(?:of )?${n}(?: selected|\\))`);
+
 test.describe('#9873 Payments: PayPal Excel, set the category of several at once', () => {
   test('an Excel file is offered, uploaded, and named on every PayPal line', async ({ page }) => {
     const fake = newFake({
@@ -592,16 +598,20 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
     await expect(page.locator('[data-test="import-summary"]')).toHaveCount(0);
   });
 
-  test('Set category writes every selected row, names the count, and clears the selection', async ({ page }) => {
+  test('Set category writes every selected row, names the count, and clears the selection', async ({ page, isMobile }) => {
     const fake = threeIncoming();
     await mockInvoicing(page, fake);
     await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
 
-    await expect(bulk(page)).toContainText('Set category of selected rows');
-    await expect(bulk(page)).toBeDisabled();
+    // Below 640px the bar that holds this trigger is not on the page while
+    // nothing is ticked (system_3 #11371), so there is nothing to read here.
+    if (!isMobile) {
+      await expect(bulk(page)).toContainText('Set category of selected rows');
+      await expect(bulk(page)).toBeDisabled();
+    }
     for (const txn of ['TX1', 'TX2', 'TX3']) await page.getByRole('checkbox', { name: `Select ${txn}` }).check();
-    await expect(bulk(page)).toContainText('Set category of 3 selected');
+    await expect(bulk(page)).toContainText(setCategoryText(3));
     await setBulkCategory(page, 'Other');
 
     // The writes go one after another; wait for the third before reading them.
@@ -614,7 +624,7 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
       await expect(categoryOf(page, txn)).toContainText('Other');
       await expect(page.getByRole('checkbox', { name: `Select ${txn}` })).not.toBeChecked();
     }
-    await expect(bulk(page)).toContainText('Set category of selected rows');
+    if (!isMobile) await expect(bulk(page)).toContainText('Set category of selected rows');
     await expect(page.locator('[data-test="bulk-error"]')).toHaveCount(0);
   });
 
@@ -636,10 +646,10 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
     await expect(page.getByRole('checkbox', { name: 'Select TX3' })).not.toBeChecked();
     await expect(categoryOf(page, 'TX1')).toContainText('Other');
     await expect(categoryOf(page, 'TX2')).toContainText('Gift');
-    await expect(bulk(page)).toContainText('Set category of 1 selected');
+    await expect(bulk(page)).toContainText(setCategoryText(1));
   });
 
-  test('Create invoice says why it cannot act, and acts once every selected row is Paid work', async ({ page }) => {
+  test('Create invoice says why it cannot act, and acts once every selected row is Paid work', async ({ page, isMobile }) => {
     const fake = threeIncoming();
     await mockInvoicing(page, fake);
     await seedTrustedSessionAs(page, 'vinoly');
@@ -647,7 +657,8 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
 
     const create = page.locator('[data-test="create-invoice"]');
     const caption = page.locator('[data-test="create-invoice-hint"]');
-    await expect(caption).toHaveText('Select rows to set their category or remove them, or paid-work payments to invoice them.');
+    // Below 640px nothing of the bar is on the page while nothing is ticked.
+    if (!isMobile) await expect(caption).toHaveText('Select rows to set their category or remove them, or paid-work payments to invoice them.');
     await page.getByRole('checkbox', { name: 'Select TX1' }).check();
     await page.getByRole('checkbox', { name: 'Select TX3' }).check();
     await expect(create).toBeDisabled();
@@ -657,11 +668,13 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
     await page.getByRole('checkbox', { name: 'Select TX1' }).check();
     await page.getByRole('checkbox', { name: 'Select TX3' }).check();
     await expect(create).toBeEnabled();
-    await expect(create).toHaveText('Create invoice from 2 payments');
+    // Below 640px, two or more ticked rows put Create invoice in the pair
+    // ("As 1 invoice"); above it, the label names the payments (#11371).
+    await expect(create).toHaveText(isMobile ? 'As 1 invoice' : 'Create invoice from 2 payments');
     await expect(caption).toHaveCount(0);
   });
 
-  test('select all acts on the shown rows; a filter change unselects rows it hides', async ({ page }) => {
+  test('select all acts on the shown rows; a filter change unselects rows it hides', async ({ page, isMobile }) => {
     const fake = threeIncoming();
     await mockInvoicing(page, fake);
     await seedTrustedSessionAs(page, 'vinoly');
@@ -673,16 +686,17 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
     expect(await all.evaluate((el) => (el as HTMLInputElement).indeterminate), 'some selected: indeterminate').toBe(true);
     await all.check();
     expect(await all.evaluate((el) => (el as HTMLInputElement).indeterminate)).toBe(false);
-    await expect(bulk(page)).toContainText('Set category of 3 selected');
+    await expect(bulk(page)).toContainText(setCategoryText(3));
 
     // Filter to Uncategorised: the gift (TX2) leaves the view and the selection.
     await page.locator('[data-test="category-filter"]').click();
     await page.getByRole('option', { name: 'Uncategorised' }).click();
     await expect(page.locator('[data-test="payment-row"]')).toHaveCount(2);
-    await expect(bulk(page)).toContainText('Set category of 2 selected');
+    await expect(bulk(page)).toContainText(setCategoryText(2));
     await expect(all).toBeChecked();
     await all.uncheck();
-    await expect(bulk(page)).toContainText('Set category of selected rows');
+    // Below 640px nothing of the bar is on the page once nothing is ticked.
+    if (!isMobile) await expect(bulk(page)).toContainText('Set category of selected rows');
   });
 
   test('on a phone the stacked toolbar buttons wrap instead of overflowing', async ({ page }) => {

@@ -1,5 +1,5 @@
 <template>
-  <section class="payments-panel" data-test="payments-panel">
+  <section class="payments-panel" data-test="payments-panel" :style="barShown && barHeight ? { paddingBottom: `${barHeight}px` } : null">
     <div class="panel-head">
       <h2 class="visually-hidden">Transactions</h2>
       <!-- The four ways in, equal (§3.143 Decision 2, system_3 #10555): a
@@ -214,14 +214,38 @@
            beside it (§3.159 Decision 4, system_3 #11506; operator c70831 on
            #10985: "a button next to the current invoice button … our accent
            color, as this will be the one that is used the most"). -->
-      <div class="create">
+      <!-- Below 640px the group is not in the toolbar: it is a bar pinned to
+           the bottom of the screen, there only while a row is ticked, so the
+           list never moves under the finger that ticked (§3.157 Decision 2,
+           system_3 #11371). It is teleported to <body> because the toolbar is
+           a size container, and a contained ancestor would pin a fixed child
+           to itself, not to the screen. From 640px it renders here, as before. -->
+      <Teleport to="body" :disabled="!narrow">
+      <component
+        :is="narrow ? 'AspCard' : 'div'"
+        v-if="!narrow || selected.length"
+        ref="selectionBar"
+        v-bind="narrow ? { padding: 'sm', class: 'selection-bar', 'data-test': 'selection-bar', role: 'region', 'aria-label': 'Actions for the ticked rows' } : { class: 'create' }"
+      >
+        <!-- §3.129 Decision 5's failure line leads the bar: the rows that
+             failed stay ticked, so the bar and the line stay together. -->
+        <template v-if="narrow">
+          <p v-if="bulkError" class="error selection-bar__error" role="alert" data-test="bulk-error">{{ bulkError }}</p>
+          <p v-if="createError" class="error selection-bar__error" role="alert" data-test="create-error">{{ createError }}</p>
+          <p v-if="generateError" class="error selection-bar__error" role="alert" data-test="generate-error">{{ generateError }}</p>
+        </template>
         <div class="create__actions">
-          <div class="set-category full-select">
+          <!-- In the phone's bar an armed Remove takes the first row alone
+               until it is confirmed or disarmed: beside it Set category's
+               count would be cut, and the count is what makes its one-tap
+               write safe (ruling c71227 on system_3 #11019). -->
+          <div v-if="!(narrow && confirmingRemove)" class="set-category full-select">
             <AspSelect
               :model-value="null"
               :searchable="selectedExpenses.length > 0"
               :options="setCategoryOptions"
               :placeholder="setCategoryPlaceholder"
+              :aria-label="setCategoryName"
               :disabled="!canSetCategory || bulkSaving || removing"
               :aria-describedby="mixedSelection ? 'set-category-hint' : undefined"
               data-test="bulk-category"
@@ -235,22 +259,31 @@
             :disabled="selected.length === 0 || bulkSaving || creating"
             :loading="removing"
             :aria-describedby="confirmingRemove && removeConsequence ? 'bulk-remove-hint' : undefined"
-            class="block-on-phone"
+            class="block-on-phone bar-remove"
             data-test="bulk-remove"
             @click="removeSelected"
           >
             {{ removeLabel }}
           </AspButton>
+          <!-- The phone's bar says the pair as one sentence, because the
+               desktop labels cannot fit half a row on any phone: "Invoice
+               the 4 selected:" then "As 1 invoice" and "As 4 invoices". With
+               one row ticked both would make the same single invoice, so
+               only the primary shows (ruling c71227 on system_3 #11019). -->
+          <p v-if="barPair" id="bar-pair-lead" class="bar-lead muted" data-test="bar-pair-lead">Invoice the {{ selected.length }} selected:</p>
           <AspButton
+            v-if="!narrow || barPair"
             variant="secondary"
             :disabled="!canCreate || removing || generating"
             :loading="creating"
             :aria-describedby="createCaption ? 'create-invoice-hint' : undefined"
-            class="block-on-phone"
+            :aria-label="barPair ? `Create one invoice from the ${selected.length} selected payments` : undefined"
+            class="block-on-phone bar-pair"
             data-test="create-invoice"
             @click="createInvoice"
           >
-            Create invoice{{ selected.length && !selectedExpenses.length ? ` from ${selected.length} payment${selected.length === 1 ? '' : 's'}` : '' }}
+            <template v-if="barPair">As 1 invoice</template>
+            <template v-else>Create invoice{{ selected.length && !selectedExpenses.length ? ` from ${selected.length} payment${selected.length === 1 ? '' : 's'}` : '' }}</template>
           </AspButton>
           <!-- One draft per ticked payment, then the one-at-a-time review
                (system_3 #11505). Nothing is issued by this press. -->
@@ -258,11 +291,12 @@
             :disabled="!generatable || removing || creating"
             :loading="generating && generatingRow === null"
             :aria-describedby="generateDescribedBy"
-            class="block-on-phone"
+            :aria-label="barPair ? `Generate one invoice for each of the ${selected.length} selected payments` : undefined"
+            class="block-on-phone bar-pair"
             data-test="generate-selected"
             @click="generateSelected"
           >
-            {{ generateLabel }}
+            {{ barPair ? `As ${selected.length} invoices` : generateLabel }}
           </AspButton>
         </div>
         <!-- Why Set category cannot act on this selection, in terms the
@@ -290,11 +324,16 @@
         <p v-else-if="pairHint" id="generate-pair-hint" class="create__hint" data-test="generate-pair-hint">
           {{ pairHint }}
         </p>
-      </div>
+      </component>
+      </Teleport>
     </div>
-    <p v-if="bulkError" class="error" role="alert" data-test="bulk-error">{{ bulkError }}</p>
-    <p v-if="createError" class="error" role="alert" data-test="create-error">{{ createError }}</p>
-    <p v-if="generateError" class="error" role="alert" data-test="generate-error">{{ generateError }}</p>
+    <!-- On a phone these lead the bar while it shows (above); with nothing
+         ticked there is no bar, so a failure is said here. -->
+    <template v-if="!barShown">
+      <p v-if="bulkError" class="error" role="alert" data-test="bulk-error">{{ bulkError }}</p>
+      <p v-if="createError" class="error" role="alert" data-test="create-error">{{ createError }}</p>
+      <p v-if="generateError" class="error" role="alert" data-test="generate-error">{{ generateError }}</p>
+    </template>
 
     <AspEmptyState
       v-if="rows.length === 0"
@@ -645,6 +684,9 @@
         saving: new Set(),
         rowError: '',
         narrow: false,
+        // The phone's selection bar, measured, so the list can scroll its
+        // last card fully above it (§3.157 Decision 2).
+        barHeight: 0,
         // The phone's "Add or import" fold (#11019-A2): it follows "the list
         // is empty" until ze toggles it or uses a way in, and then stays as ze
         // left it (foldUserOpen), so a first row never shuts it under zir.
@@ -899,6 +941,16 @@
         if (k === 0) return '';
         return `${k} of the ${n} selected ${k === 1 ? 'is' : 'are'} not Paid work. Untick ${k === 1 ? 'it' : 'them'} to create or generate invoices.`;
       },
+      // Below 640px the selection's actions are a bar at the bottom of the
+      // screen, there only while a row is ticked (§3.157 Decision 2).
+      barShown() {
+        return this.narrow && this.selected.length > 0;
+      },
+      // In the phone's bar, two or more ticked rows offer the pair under its
+      // lead line; one ticked row offers the primary alone.
+      barPair() {
+        return this.narrow && this.selected.length > 1;
+      },
       // Any import, hand entry or payers result showing in the status region.
       statusRegionBusy() {
         return Boolean(this.summary || this.n26Summary || this.manualSummary || this.payersSummary);
@@ -926,7 +978,8 @@
       },
       pairHint() {
         const n = this.selected.length;
-        if (!this.generatable || n < 2) return '';
+        // On a phone the bar's lead line and labels already say it.
+        if (this.narrow || !this.generatable || n < 2) return '';
         return `Generate makes one invoice per payment. Create invoice puts all ${n} on one.`;
       },
       generateDescribedBy() {
@@ -938,7 +991,15 @@
       // without a confirm step (design_agent c60951 rule 4).
       setCategoryPlaceholder() {
         const n = this.selected.length;
+        // In the phone's bar the trigger sits beside Remove, where the long
+        // form needs 216px and has 156px: "Set category (12)", the count in
+        // the same form as "Remove (12)" (ruling c71232 on system_3 #11019).
+        if (this.narrow && n) return `Set category (${n})`;
         return n ? `Set category of ${n} selected` : 'Set category of selected rows';
+      },
+      // What the trigger is called when its visible text is the short form.
+      setCategoryName() {
+        return this.narrow && this.selected.length ? `Set category of ${this.selected.length} selected` : undefined;
       },
       // "Remove (N)", armed "Remove N rows" (§3.143 Decision 4).
       removeLabel() {
@@ -1007,6 +1068,11 @@
       // region (a new tick clears it too, in `selected` below).
       statusRegionBusy(busy) {
         if (busy && this.reviewSummary) this.$emit('status-seen');
+      },
+      // The bar's height follows its content (a caption, an armed Remove, a
+      // failure line), and the list's bottom padding follows the bar.
+      barShown(shown) {
+        this.watchBar(shown);
       },
       // A generation that went through leaves nothing ticked, like Create
       // invoice; one that failed keeps the ticks, so ze can press again.
@@ -1098,6 +1164,7 @@
     },
     beforeUnmount() {
       if (this.narrowQuery) this.narrowQuery.removeEventListener('change', this.onNarrowChange);
+      this.watchBar(false);
     },
     methods: {
       // Any click inside the fold, its summary included, freezes the state it
@@ -1504,6 +1571,30 @@
       },
       // The ticked payments, in the order ze ticked them; the view drafts one
       // invoice each and opens the review.
+      // Keeps `barHeight` equal to the bar's rendered height while it shows.
+      watchBar(shown) {
+        if (this.barObserver) {
+          this.barObserver.disconnect();
+          this.barObserver = null;
+        }
+        if (!shown) {
+          this.barHeight = 0;
+          return;
+        }
+        this.$nextTick(() => {
+          const bar = this.$refs.selectionBar;
+          const el = bar && (bar.$el || bar);
+          if (!el || !el.getBoundingClientRect) return;
+          const measure = () => {
+            this.barHeight = Math.ceil(el.getBoundingClientRect().height);
+          };
+          measure();
+          if (typeof ResizeObserver !== 'undefined') {
+            this.barObserver = new ResizeObserver(measure);
+            this.barObserver.observe(el);
+          }
+        });
+      },
       generateSelected() {
         const ids = this.selected.filter((key) => key.startsWith('p')).map((key) => Number(key.slice(1)));
         if (!ids.length) return;
@@ -1853,6 +1944,84 @@
     .set-category {
       width: 100%;
     }
+  }
+
+  /* Below 640px: the selection's actions as a bar pinned to the bottom of
+     the screen (§3.157 Decision 2, system_3 #11371). On the card surface with
+     its own ink, a top border, and room for the phone's home indicator. It
+     is teleported to <body>, so these rules reach it by its class alone. */
+  .selection-bar {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom));
+  }
+
+  /* AspCard draws a border and rounded corners all round; pinned to the
+     screen's bottom the bar has a top edge only. Its own class twice, so
+     these win over the card's without !important. */
+  .selection-bar.selection-bar {
+    border-width: 1px 0 0;
+    border-radius: 0;
+  }
+
+  /* Two rows of controls (ruling c71227 on system_3 #11019). Row 1: "Set
+     category of {n} selected" takes the room, Remove sits beside it at its
+     own width. Row 2: a lead line, then the pair in two equal columns, the
+     primary on the right. */
+  .selection-bar .create__actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    gap: var(--space-xs);
+  }
+
+  .selection-bar .set-category {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+  }
+
+  .selection-bar .block-on-phone {
+    width: auto;
+  }
+
+  .selection-bar .bar-remove {
+    flex: 0 0 auto;
+  }
+
+  /* Armed, Remove has the row to itself. */
+  .selection-bar .bar-remove:first-child {
+    flex: 1 1 100%;
+  }
+
+  .selection-bar .bar-lead {
+    flex: 0 0 100%;
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  .selection-bar .bar-pair {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* One row ticked: the primary alone, at full width on its own row. */
+  .selection-bar .bar-remove + .bar-pair {
+    flex: 1 1 100%;
+  }
+
+  .selection-bar .create__hint,
+  .selection-bar__error {
+    margin: 0;
+    text-align: left;
   }
 
   /* The invisible checkbox on an issued invoice's row: its box keeps the
