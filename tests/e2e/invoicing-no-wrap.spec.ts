@@ -51,8 +51,12 @@ for (const width of [1440, 1024, 768, 700, 390]) {
 
     test('Set category, the Method select and the Status filter each fit on one line', async ({ page }) => {
       await open(page);
+      // Below 640px the toolbar is a bar pinned to the bottom of the screen,
+      // there only once a row is ticked (system_3 #11371), and its text is
+      // the short form, "Set category (1)".
+      if (width < 640) await page.getByRole('checkbox', { name: 'Select TX1' }).check();
       const setCategory = page.locator('.set-category [role="combobox"]');
-      await expect(setCategory).toContainText('Set category of selected rows');
+      await expect(setCategory).toContainText(width < 640 ? 'Set category (1)' : 'Set category of selected rows');
       expect(await lines(setCategory), 'Set category of selected rows').toBe(1);
       expect(await noSideScroll(page), 'payments: no side scroll').toBe(true);
 

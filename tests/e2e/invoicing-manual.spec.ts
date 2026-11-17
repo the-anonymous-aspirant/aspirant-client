@@ -292,7 +292,11 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
       const all = page.locator('[data-test="select-all-shown"]').locator('input[type="checkbox"]').first();
       await all.check();
       await expect(page.locator('[data-test="payment-select"] input[type="checkbox"]:checked, input[type="checkbox"][data-test="payment-select"]:checked')).toHaveCount(2);
-      await expect(page.getByRole('button', { name: /Create invoice from 2 payments/ })).toBeVisible();
+      // Below 640px, two or more ticked rows put Create invoice in the pair,
+      // where its visible text is "As 1 invoice" (system_3 #11371).
+      const create = page.locator('[data-test="create-invoice"]');
+      await expect(create).toBeVisible();
+      await expect(create).toHaveText(width < 640 ? 'As 1 invoice' : 'Create invoice from 2 payments');
     });
   }
 
@@ -301,7 +305,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     test(`the head row reads Enter payment by hand, then Import, with no primary (${theme})`, async ({ page }) => {
       await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
       await page.emulateMedia({ colorScheme: theme });
-      await open(page, newFake({ payments: [manualRow()] }));
+      await open(page, newFake({ payments: [manualRow(), manualRow({ id: 42, transaction_id: 'M-0011223344556678' })] }));
       await openWaysIn(page);
       const [manual, imp] = await Promise.all(['manual-new', 'payments-import'].map((id) =>
         page.locator(`[data-test="${id}"]`).evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, primary: el.classList.contains('btn--primary') }; })));
@@ -311,7 +315,13 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
       expect([manual.primary, imp.primary], 'no primary in the head row').toEqual([false, false]);
       // The panel's one primary is on the toolbar: Generate invoices since
       // system_3 #11506, with Create invoice secondary beside it (§3.159
-      // Decision 4).
+      // Decision 4). Below 640px those sit in the phone's bar, shown only
+      // once a row is ticked (system_3 #11371); two rows put both buttons
+      // in it (one alone offers Generate only).
+      if (narrow) {
+        await page.getByRole('checkbox', { name: 'Select M-0011223344556677' }).check();
+        await page.getByRole('checkbox', { name: 'Select M-0011223344556678' }).check();
+      }
       await expect(page.locator('[data-test="generate-selected"]')).toHaveClass(/btn--primary/);
       await expect(page.locator('[data-test="create-invoice"]')).toHaveClass(/btn--secondary/);
     });
