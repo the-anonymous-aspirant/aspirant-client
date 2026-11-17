@@ -227,7 +227,7 @@
 
     <!-- Stop asks first, naming the service and what stops working; Start is
          the undo and asks nothing (security c65887). The usage line is in the
-         dialog so the evidence is in front of her when she decides. -->
+         dialog so the evidence is in front of them when they decide. -->
     <AspModal
       :open="Boolean(stopTarget)"
       :title="stopTarget ? `Stop ${serviceName(stopTarget.name)}?` : 'Stop?'"

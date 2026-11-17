@@ -97,7 +97,7 @@ _New entries are files in [changelog.d/](changelog.d/README.md), one per PR; `sc
   Admin-only by operator decision; the server gates every `/cardgen/*` route.
 - **Invoices card owner: `flowah` → `vinoly`** (system_3 #8633). The user's
   existing login is `vinoly`, which also owns Jobs, and the operator confirmed
-  it is hers (c53249). The Invoices card in `src/views/member/apps.js` moves to
+  it is zirs (c53249). The Invoices card in `src/views/member/apps.js` moves to
   `vinoly` with aspirant-server's `invoicesOwnerUsername`, so `vinoly` now sees
   Jobs and Invoices on `/member`. The Jobs card, including its `person` note,
   is unchanged. The invoicing specs now seed `vinoly`, and the entitlement spec
