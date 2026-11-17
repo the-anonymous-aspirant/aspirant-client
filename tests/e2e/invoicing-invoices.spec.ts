@@ -358,7 +358,14 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await expect(page.locator('[data-test="invoice-editor"]')).toHaveCount(0);
     expect(fake.requests.some((r) => r.method === 'DELETE' && r.path === '/invoicing/invoices/100')).toBe(true);
 
+    // The tab opens on the month whose paid work is still to invoice
+    // (system_3 #11505), so the empty list is that month's; under All months
+    // it is the book's, as before.
     await page.getByRole('tab', { name: 'Invoices' }).click();
+    await expect(page.locator('[data-test="invoices-month-empty"]')).toBeVisible();
+    await expect(page.locator('[data-test="invoice-row"]')).toHaveCount(0);
+    await page.getByRole('combobox', { name: 'Work done in' }).click();
+    await page.getByRole('option', { name: 'All months', exact: true }).click();
     await expect(page.locator('[data-test="invoices-empty"]')).toBeVisible();
   });
 

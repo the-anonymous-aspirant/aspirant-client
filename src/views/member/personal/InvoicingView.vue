@@ -64,7 +64,17 @@
       <AspSegmented v-model="tab" :options="tabs" as="tabs" aria-label="Invoices sections" class="tabs" />
 
       <ClientsPanel v-if="tab === 'clients'" :clients="clients" @changed="fetchAll" />
-      <InvoicesPanel v-else-if="tab === 'invoices'" :refresh-key="refreshKey" @open="openInvoice" />
+      <InvoicesPanel
+        v-else-if="tab === 'invoices'"
+        :refresh-key="refreshKey"
+        :payments="payments"
+        :generating="generating"
+        :generate-error="generateError"
+        :review-summary="reviewSummary"
+        @open="openInvoice"
+        @generate="generate"
+        @status-seen="reviewSummary = ''"
+      />
       <BookPanel
         v-else-if="tab === 'book'"
         :payments="payments"
@@ -96,7 +106,9 @@
         :kleinunternehmer="profile.is_kleinunternehmer !== false"
         :next-number="nextNumberLabel"
         :steuernummer-missing="!profile.steuernummer"
+        :review="review ? { index: review.index + 1, total: review.ids.length } : null"
         @changed="fetchAll"
+        @reviewed="onReviewed"
       />
 
       <ProfileEditor
@@ -119,7 +131,8 @@
   import BookPanel from '../../../components/invoicing/BookPanel.vue';
   import InvoiceEditor from '../../../components/invoicing/InvoiceEditor.vue';
   import ProfileEditor from '../../../components/invoicing/ProfileEditor.vue';
-  import { errorOf, getBookSelection, getProfile, listClients, listExpenses, listPayments, listRemovedExpenses, listRemovedPayments } from '../../../components/invoicing/api.js';
+  import { errorOf, generateInvoices, getBookSelection, getProfile, listClients, listExpenses, listInvoices, listPayments, listRemovedExpenses, listRemovedPayments } from '../../../components/invoicing/api.js';
+  import { monthLabel, workMonth } from '../../../components/invoicing/listGroups.js';
 
   // The Invoices app (system_3 #8367): one person's invoicing. The server
   // gates every route to the owner + Admin
@@ -165,6 +178,14 @@
         profileOpen: false,
         editorOpen: false,
         editorInvoiceId: null,
+        // A month's drafts being walked one at a time (system_3 #11505):
+        // `{ month, ids, index, accepted, rejected, later }`, or null. The
+        // editor shows `ids[index]` and reports each outcome.
+        review: null,
+        generating: false,
+        generateError: '',
+        // What the last review did, said on the Invoices tab until the next one.
+        reviewSummary: '',
         tab: 'transactions',
         tabs: [
           { value: 'transactions', label: 'Transactions' },
@@ -189,6 +210,12 @@
     watch: {
       tab(next) {
         if (next !== 'transactions') this.transactionsFilter = null;
+      },
+      // The review ends when the dialog closes, whether the last draft was
+      // decided or ze closed it part way; whatever was not decided stays a
+      // draft, and the line says how many.
+      editorOpen(open) {
+        if (!open && this.review) this.finishReview();
       },
     },
     mounted() {
@@ -255,8 +282,76 @@
         this.tab = 'transactions';
       },
       openInvoice(id) {
+        this.review = null;
+        this.reviewSummary = '';
         this.editorInvoiceId = id;
         this.editorOpen = true;
+      },
+      // "Generate invoices for {month}" (operator c70806, c70831 on #10985):
+      // the server drafts one invoice for each paid-work payment of the month
+      // that has none, and the review walks them in date order. Drafts an
+      // earlier press left undecided come back with them, so a review ze
+      // stopped half way picks up where it stopped. Nothing is issued here:
+      // only Accept in the review does that, one invoice at a time.
+      async generate(month) {
+        if (this.generating) return;
+        this.generating = true;
+        this.generateError = '';
+        this.reviewSummary = '';
+        try {
+          const res = await generateInvoices({ month });
+          // The queue is what the server says (design ack c70970, change 5):
+          // the drafts it just made, the drafts it skipped over, and the
+          // month's other drafts, read from the invoice list. Never the
+          // page's own count of candidates.
+          const paidOn = new Map(this.payments.map((p) => [p.id, String(p.paid_on || '')]));
+          const queue = new Map();
+          for (const d of res.invoices || []) queue.set(d.invoice.id, String(d.invoice.service_date_from || ''));
+          for (const s of res.skipped || []) {
+            if (s.invoice && s.invoice.status === 'draft' && !queue.has(s.invoice.id)) queue.set(s.invoice.id, paidOn.get(s.payment_id) || '');
+          }
+          for (const row of await listInvoices({ status: 'draft' })) {
+            if (workMonth(row) === month && !queue.has(row.id)) queue.set(row.id, String(row.service_date_from || row.issue_date || ''));
+          }
+          const ids = [...queue.entries()].sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : a[0] - b[0])).map(([id]) => id);
+          await this.fetchAll();
+          if (!ids.length) {
+            this.reviewSummary = (res.skipped || []).length
+              ? `${monthLabel(month)}: every paid-work payment already has an invoice.`
+              : `${monthLabel(month)}: no paid-work payments to invoice.`;
+            return;
+          }
+          this.review = { month, ids, index: 0, accepted: 0, rejected: 0, later: 0 };
+          this.editorInvoiceId = ids[0];
+          this.editorOpen = true;
+        } catch (err) {
+          this.generateError = `The invoices could not be generated: ${errorOf(err).message}`;
+        } finally {
+          this.generating = false;
+        }
+      },
+      // One draft decided (accepted, rejected or left for later): the next
+      // one opens in the same dialog, and the last one closes it.
+      onReviewed(outcome) {
+        const r = this.review;
+        if (!r) return;
+        r[outcome] += 1;
+        if (r.index + 1 < r.ids.length) {
+          r.index += 1;
+          this.editorInvoiceId = r.ids[r.index];
+        } else {
+          this.editorOpen = false;
+        }
+      },
+      finishReview() {
+        const r = this.review;
+        this.review = null;
+        const left = r.ids.length - r.accepted - r.rejected;
+        const parts = [];
+        if (r.accepted) parts.push(`${r.accepted} issued`);
+        if (r.rejected) parts.push(`${r.rejected} rejected`);
+        if (left) parts.push(`${left} left as ${left === 1 ? 'a draft' : 'drafts'}`);
+        this.reviewSummary = `${monthLabel(r.month)}: ${parts.join(', ')}.`;
       },
       onProfileSaved(profile) {
         this.profile = profile;
