@@ -1,24 +1,9 @@
 <template>
   <section class="book-panel" data-test="book-panel">
-    <div class="panel-head">
-      <h2 class="visually-hidden">Book</h2>
-      <!-- "Enter expense by hand" moved to Transactions (§3.143 Decision 2,
-           system_3 #10555): a movement has one place to be recorded. -->
-      <!-- §3.143 Decision 7: the head row keeps only the CSV, captioned with
-           the selection it counts by (the server names the file after it). -->
-      <div class="report block-on-phone">
-        <AspButton
-          variant="secondary"
-          class="block-on-phone"
-          :loading="reportDownloading"
-          data-test="book-report-csv"
-          @click="downloadBookReport"
-        >
-          Bookkeeping report (CSV)
-        </AspButton>
-        <span v-if="book" class="muted report__caption" data-test="book-report-caption">Uses {{ name }}</span>
-      </div>
-    </div>
+    <!-- No head row: the Book has no ways in ("Enter expense by hand" sits
+         on Transactions, §3.143 Decision 2), and its one export is the last
+         part of the tab (§3.159 Decisions 1 and 2, system_3 #11500). -->
+    <h2 class="visually-hidden">Book</h2>
 
     <p v-if="rowError" class="error" role="alert" data-test="book-error">{{ rowError }}</p>
     <p v-if="bookError" class="error" role="alert" data-test="book-selection-error">{{ bookError }}</p>
@@ -220,6 +205,30 @@
       <BookChart :payments="countedPayments" :expenses="countedExpenses" />
     </template>
 
+    <!-- Export is the last part of every tab that exports, below the list and
+         the chart, built like Invoices' and Clients' groups (§3.159 Decision
+         2, system_3 #11500; operator c70816 on #10985: "the export
+         functionality should consistently be found in the same place").
+         Outside the branches above, so it renders with no book loaded and
+         with nothing counted yet. The caption names the selection because the
+         file's totals depend on it (§3.143 Decision 7). -->
+    <section class="export-group" aria-labelledby="book-export-heading" data-test="book-export">
+      <h3 id="book-export-heading">Export</h3>
+      <div class="export">
+        <AspButton
+          variant="secondary"
+          :loading="reportDownloading"
+          :aria-describedby="book ? 'book-report-caption' : undefined"
+          data-test="book-report-csv"
+          @click="downloadBookReport"
+        >
+          Bookkeeping report (CSV)
+        </AspButton>
+        <p v-if="book" id="book-report-caption" class="export__scope muted" data-test="book-report-caption">The entries counted with {{ name }}, by month and category</p>
+      </div>
+      <p v-if="reportError" class="error" role="alert" data-test="book-report-error">{{ reportError }}</p>
+    </section>
+
     <AspModal :open="presetDialogOpen" size="sm" title="Save as preset" @update:open="presetDialogOpen = $event">
       <AspInput v-model="presetName" label="Name" maxlength="60" data-test="book-preset-name" @keydown.enter.prevent="savePreset" />
       <p v-if="presetError" class="error" role="alert" data-test="book-preset-error">{{ presetError }}</p>
@@ -319,6 +328,7 @@
         editExpense: null,
         expenseCategories: [],
         reportDownloading: false,
+        reportError: '',
         receiptOpen: false,
         receiptExpenseId: null,
         receiptExpenseLabel: '',
@@ -547,11 +557,13 @@
       async downloadBookReport() {
         if (this.reportDownloading) return;
         this.reportDownloading = true;
-        this.rowError = '';
+        this.reportError = '';
         try {
           await downloadBlob(bookReportCsvUrl(), 'Buchhaltung.csv');
         } catch (err) {
-          this.rowError = errorOf(err).message;
+          // Said beside the button: the tab's shared error line is at its
+          // top, a screen or more above the Export group (system_3 #11500).
+          this.reportError = errorOf(err).message;
         } finally {
           this.reportDownloading = false;
         }
@@ -699,28 +711,36 @@
     white-space: nowrap;
   }
 
-  .panel-head {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: var(--space-sm);
-    margin-bottom: var(--space-md);
-  }
-
   .error {
     color: var(--feedback-error);
     margin: 0 0 var(--space-sm);
   }
 
-  .report {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: var(--space-2xs);
+  /* The Export group, with the same rules as InvoicesPanel's: a heading,
+     then the button and its caption as one column. */
+  .export-group {
+    margin-top: var(--space-lg);
   }
 
-  .report__caption {
+  .export-group h3 {
+    margin: 0 0 var(--space-sm);
+  }
+
+  .export {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2xs);
+    max-width: 22rem;
+  }
+
+  .export__scope {
+    margin: 0;
     font-size: var(--text-sm);
+  }
+
+  .export-group > .error {
+    margin-top: var(--space-sm);
   }
 
   .counting {
@@ -925,17 +945,5 @@
       margin-left: 0;
     }
 
-    .panel-head {
-      flex-direction: column;
-      justify-content: stretch;
-    }
-
-    .block-on-phone {
-      width: 100%;
-    }
-
-    .report {
-      align-items: stretch;
-    }
   }
 </style>

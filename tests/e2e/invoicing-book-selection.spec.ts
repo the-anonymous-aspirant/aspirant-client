@@ -197,7 +197,7 @@ test.describe('#10635 the Book counts what ze chose', () => {
 
     await showBook(page);
     await expect(countingLine(page)).toHaveText('Counting with Work only: payments marked Paid work, and every expense except Private.');
-    await expect(page.locator('[data-test="book-report-caption"]')).toHaveText('Uses Work only');
+    await expect(page.locator('[data-test="book-report-caption"]')).toHaveText('The entries counted with Work only, by month and category');
     await expect(bookRows(page)).toHaveCount(2);
     await expect(page.locator('[data-test="book-panel"]')).not.toContainText('Birthday');
     await expect(page.locator('[data-test="book-panel"]')).not.toContainText('Groceries');
@@ -270,7 +270,7 @@ test.describe('#10635 the Book counts what ze chose', () => {
     const create = fake.requests.find((r) => r.method === 'POST' && r.path === '/invoicing/book/presets');
     expect(JSON.parse(create!.body)).toEqual({ name: 'Jobcenter', income: ['paid_work', 'gift'], expense_all: false, expense: COUNTABLE });
     await expect(page.locator('[data-test="book-preset"]')).toContainText('Jobcenter');
-    await expect(page.locator('[data-test="book-report-caption"]')).toHaveText('Uses Jobcenter');
+    await expect(page.locator('[data-test="book-report-caption"]')).toHaveText('The entries counted with Jobcenter, by month and category');
 
     await page.reload();
     await dismissMobileSidebarIfPresent(page);
