@@ -218,8 +218,9 @@ test.describe('#10636 Transactions folds by month', () => {
     const edges = (key: string) =>
       ledgerGroup(page, key).locator('thead th').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left * 10) / 10));
     const november = await edges('2026-11');
-    expect(november).toHaveLength(6);
-    expect(new Set(november).size).toBe(6);
+    // The row's door is the last column (§3.159 Decision 3, system_3 #11501).
+    expect(november).toHaveLength(7);
+    expect(new Set(november).size).toBe(7);
     expect(await edges('2026-10')).toEqual(november);
   });
 });
@@ -268,8 +269,9 @@ test.describe('#10636 the Book folds by month', () => {
     const edges = (key: string) =>
       bookMonth(page, key).locator('thead th').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left * 10) / 10));
     const november = await edges('2026-11');
-    expect(november).toHaveLength(5);
-    expect(new Set(november).size).toBe(5);
+    // The row's door is the last column (§3.159 Decision 3, system_3 #11501).
+    expect(november).toHaveLength(6);
+    expect(new Set(november).size).toBe(6);
     expect(await edges('2026-10')).toEqual(november);
   });
 });

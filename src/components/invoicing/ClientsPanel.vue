@@ -56,13 +56,15 @@
       @toggle="!flat && onToggle(group.key, $event)"
     >
     <summary v-if="!flat" class="fold-summary client-group__summary" data-test="client-group-summary">{{ group.key }} · {{ clientCount(group.rows.length) }}</summary>
-    <!-- Below 640px each client is a card (§3.114 decision 6): name and Edit
-         on one row, then the address and emails at the card's edge. -->
+    <!-- Below 640px each client is a card (§3.114 decision 6): the name,
+         then the address and emails at the card's edge. A tap on the card's
+         body opens Edit client, as a card opens on the other three tabs, so
+         the card has no Edit button; its links and the review flags' buttons
+         keep their own job (§3.159 Decision 3, system_3 #11501). -->
     <ul v-if="narrow" class="client-cards" :aria-label="flat ? 'Clients' : `Clients: ${group.key}`">
-      <li v-for="row in group.rows" :key="row.id" class="client-card" data-test="client-row" :data-client-id="row.id">
+      <li v-for="row in group.rows" :key="row.id" class="client-card client-card--tap" data-test="client-row" :data-client-id="row.id" @click="onCardTap(row, $event)">
         <div class="client-card__top">
           <strong>{{ row.name }}</strong>
-          <AspButton variant="ghost" size="sm" :data-test="`client-edit-${row.id}`" @click="startEdit(row)">Edit</AspButton>
         </div>
         <span v-for="other in lookAlikesOf(row)" :key="`alike-${other.id}`" class="review-flag" data-test="client-look-alike">
           Looks like {{ other.name }}
@@ -157,8 +159,10 @@
           </span>
         </span>
       </template>
+      <!-- The row's door: bordered, in the last column, as on every tab
+           (§3.159 Decision 3, system_3 #11501). -->
       <template #cell-actions="{ row }">
-        <AspButton variant="ghost" size="sm" :data-test="`client-edit-${row.id}`" @click="startEdit(row)">Edit</AspButton>
+        <AspButton variant="secondary" size="sm" :data-test="`client-edit-${row.id}`" @click="startEdit(row)">Edit</AspButton>
       </template>
     </AspDataTable>
     </component>
@@ -529,6 +533,12 @@
           if (this.editing && this.editing.id === clientId) this.statsState = 'failed';
         }
       },
+      // A phone card's body opens Edit client; a link or a button inside it
+      // keeps its own job (the guard Transactions' cards use).
+      onCardTap(row, event) {
+        if (event.target.closest('button, input, select, label, a, [role="combobox"], [role="listbox"], [role="option"]')) return;
+        this.startEdit(row);
+      },
       startEdit(row) {
         this.payersSummary = null;
         this.editing = row;
@@ -648,6 +658,11 @@
     border: 1px solid var(--border-subtle, currentColor);
     border-radius: var(--radius-lg);
     overflow-wrap: anywhere;
+  }
+
+  /* A client card's body opens Edit client (§3.159 Decision 3). */
+  .client-card--tap {
+    cursor: pointer;
   }
 
   .client-card__top {
