@@ -202,6 +202,40 @@ for (const theme of ['light', 'dark'] as const) {
         expect(ratio, `${name} @ ${theme}: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(NON_TEXT_AA);
       }
     });
+
+    // system_3 #11455: the floor above passed in dark while the legend still
+    // wore its light-page fills, because those clear 3:1 on the dark page too.
+    // The dark selectors were `:global([data-theme='dark']) .legend …`, which a
+    // scoped style compiles to a bare `[data-theme=dark]` rule on <html>. So
+    // this names the fill itself: each swatch wears the token of its theme.
+    test('each legend swatch wears the fill of the page it sits on', async ({ page }) => {
+      await open(page, '/admin/browser-flows');
+      const legend = page.locator('[data-test="browser-flows-legend"]');
+      await expect(legend).toBeVisible();
+      const series: Record<string, number> = { success: 3, running: 1, blocked: 5, failed: 4, cancelled: 2, unknown: 9 };
+      const fills = await legend.evaluate((el, [names, polarity]) => {
+        const resolve = (token: string) => {
+          const probe = document.createElement('span');
+          probe.style.background = `var(${token})`;
+          el.appendChild(probe);
+          const colour = getComputedStyle(probe).backgroundColor;
+          probe.remove();
+          return colour;
+        };
+        return Object.entries(names as Record<string, number>).map(([name, n]) => ({
+          name,
+          swatch: getComputedStyle(el.querySelector(`.cell-${name}`)!).backgroundColor,
+          own: resolve(`--chart-series-${n}-on-${polarity}`),
+          other: resolve(`--chart-series-${n}-on-${polarity === 'dark' ? 'light' : 'dark'}`),
+        }));
+      }, [series, theme] as const);
+      expect(fills).toHaveLength(6);
+      for (const { name, swatch, own, other } of fills) {
+        // The two polarities differ, or equality with one would prove nothing.
+        expect(own, `${name}: the two tokens differ`).not.toBe(other);
+        expect(swatch, `${name} @ ${theme}: the swatch is ${swatch}, its -on-${theme} token is ${own}`).toBe(own);
+      }
+    });
   });
 }
 
