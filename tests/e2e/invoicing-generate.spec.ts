@@ -491,7 +491,10 @@ async function openTransactions(page: Page, fake: Fake): Promise<void> {
   await seedTrustedSessionAs(page, 'vinoly');
   await page.goto('/member/personal/invoicing');
   await dismissMobileSidebarIfPresent(page);
-  await expect(page.locator('[data-test="create-invoice"]')).toBeVisible();
+  // Not Create invoice: below 640px the selection's actions are absent until
+  // a row is ticked (§3.157 Decision 2, system_3 #11371).
+  await expect(page.locator('[data-test="payments-panel"]')).toBeVisible();
+  await expect(page.locator('[data-row-key="p1"]')).toBeVisible();
 }
 
 const tick = (page: Page, id: number) => page.getByRole('checkbox', { name: `Select M-${id}`, exact: true }).check();
@@ -504,6 +507,11 @@ const txnRow = (page: Page, id: number) => page.locator(`[data-row-key="p${id}"]
 const rowGenerate = (page: Page, id: number) => txnRow(page, id).locator('[data-test="row-generate"]');
 
 test.describe('#11506 Generate invoices for the ticked Transactions rows', () => {
+  // The toolbar as it is from 640px. Below that the same actions are a bar at
+  // the bottom of the screen with its own labels: '#11371 the phone's
+  // selection bar', further down, covers that.
+  test.skip(({ isMobile }) => isMobile, 'the desktop toolbar; the phone has its own bar (#11371)');
+
   test('it is the toolbar\'s one primary, after Create invoice, and both wait for a Paid work selection', async ({ page }) => {
     await openTransactions(page, newFake());
     await expect(generateSelected(page)).toHaveClass(/btn--primary/);
@@ -730,20 +738,184 @@ test.describe('#11506 the client on a desktop row', () => {
 });
 
 test.describe('#11506 on a phone', () => {
-  test('at 390×844 the card\'s button generates and does not open the card; the toolbar stacks with the primary last', async ({ page }) => {
+  test('at 390×844 the card\'s button generates and does not open the card', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const fake = newFake();
     await openTransactions(page, fake);
-    const create = (await createInvoice(page).boundingBox())!;
-    const gen = (await generateSelected(page).boundingBox())!;
-    expect(gen.y, 'Generate under Create invoice').toBeGreaterThanOrEqual(create.y + create.height);
-    expect(Math.abs(gen.width - create.width), 'both full width').toBeLessThanOrEqual(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-
     await rowGenerate(page, 1).click();
     await expect(dialog(page)).toContainText('Invoice 1 / 1');
     // The review, not Edit payment.
     await expect(editor(page)).toBeVisible();
     expect(writes(fake)).toEqual(['POST /invoices/generate']);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
+
+// system_3 #11371 (§3.157 Decision 2 as ruled in c71227 and c71232 on #11019):
+// below 640px the selection's actions are a bar pinned to the bottom of the
+// screen, there only while a row is ticked.
+test.describe('#11371 the phone\'s selection bar', () => {
+  const bar = (page: Page) => page.locator('[data-test="selection-bar"]');
+  const remove = (page: Page) => page.locator('[data-test="bulk-remove"]');
+  const lead = (page: Page) => page.locator('[data-test="bar-pair-lead"]');
+  const many = () => {
+    const fake = newFake();
+    for (let i = 21; i <= 32; i += 1) fake.payments.push(payment(i, `2026-10-${String(i - 10).padStart(2, '0')}`));
+    return fake;
+  };
+  const barBox = async (page: Page) => (await bar(page).boundingBox())!;
+  // A quarter of the screen height (§3.122 P6).
+  const cap = (height: number) => Math.floor(height / 4);
+
+  for (const [width, height] of [[390, 844], [360, 740]] as const) {
+    test(`at ${width}×${height} nothing shows until a row is ticked, and ticking does not move the row`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await openTransactions(page, newFake());
+      await expect(bar(page)).toHaveCount(0);
+      // With nothing ticked the actions and their caption are not on the page.
+      for (const id of ['bulk-category', 'bulk-remove', 'create-invoice', 'generate-selected', 'create-invoice-hint']) {
+        await expect(page.locator(`[data-test="${id}"]`), id).toHaveCount(0);
+      }
+      const row = page.locator('[data-row-key="p3"]');
+      await row.scrollIntoViewIfNeeded();
+      const before = (await row.boundingBox())!.y;
+      await tick(page, 3);
+      await expect(bar(page)).toBeVisible();
+      expect(Math.abs((await row.boundingBox())!.y - before), 'the ticked row stays under the finger').toBeLessThanOrEqual(1);
+      // Pinned: the bar's bottom edge is the screen's.
+      const b = await barBox(page);
+      expect(Math.abs(b.y + b.height - height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(b.width - width)).toBeLessThanOrEqual(1);
+      // Unticked, it goes.
+      await page.getByRole('checkbox', { name: 'Select M-3', exact: true }).uncheck();
+      await expect(bar(page)).toHaveCount(0);
+    });
+
+    test(`at ${width}×${height} every steady state fits a quarter of the screen`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await openTransactions(page, many());
+
+      // One row ticked: the primary alone, at full width, with no lead line.
+      await tick(page, 21);
+      await expect(generateSelected(page)).toHaveText('Generate invoice');
+      await expect(generateSelected(page)).toHaveClass(/btn--primary/);
+      await expect(createInvoice(page)).toHaveCount(0);
+      await expect(lead(page)).toHaveCount(0);
+      const one = await barBox(page);
+      const gen1 = (await generateSelected(page).boundingBox())!;
+      expect(gen1.width, 'the lone primary takes the row').toBeGreaterThan(one.width - 40);
+      expect(one.height, 'one ticked').toBeLessThanOrEqual(cap(height));
+
+      // Row 1: the count stays whole, in the short form, beside Remove.
+      const trigger = page.locator('[data-test="selection-bar"] .set-category [role="combobox"]');
+      await expect(trigger).toContainText('Set category (1)');
+      await expect(trigger).toHaveAccessibleName('Set category of 1 selected');
+      const t = (await trigger.boundingBox())!;
+      const r = (await remove(page).boundingBox())!;
+      expect(Math.abs(t.y - r.y), 'Set category and Remove share a row').toBeLessThanOrEqual(2);
+      expect(await trigger.evaluate((el) => [...el.querySelectorAll('*')].every((n) => (n as HTMLElement).scrollWidth <= (n as HTMLElement).clientWidth + 1) && el.getBoundingClientRect().height < 40), 'the text is not cut or wrapped').toBe(true);
+
+      // Twelve ticked: the pair under its lead line, two-digit labels on one line.
+      for (let id = 22; id <= 32; id += 1) await tick(page, id);
+      await expect(trigger).toContainText('Set category (12)');
+      await expect(lead(page)).toHaveText('Invoice the 12 selected:');
+      await expect(createInvoice(page)).toHaveText('As 1 invoice');
+      await expect(createInvoice(page)).toHaveClass(/btn--secondary/);
+      await expect(createInvoice(page)).toHaveAccessibleName('Create one invoice from the 12 selected payments');
+      await expect(generateSelected(page)).toHaveText('As 12 invoices');
+      await expect(generateSelected(page)).toHaveAccessibleName('Generate one invoice for each of the 12 selected payments');
+      const c = (await createInvoice(page).boundingBox())!;
+      const g = (await generateSelected(page).boundingBox())!;
+      expect(Math.abs(c.y - g.y), 'the pair shares a row').toBeLessThanOrEqual(1);
+      expect(g.x, 'the primary is on the right').toBeGreaterThan(c.x);
+      expect(Math.abs(c.width - g.width), 'two equal columns').toBeLessThanOrEqual(1);
+      expect(Math.max(c.height, g.height), 'neither label wraps').toBeLessThan(40);
+      expect(await trigger.evaluate((el) => el.getBoundingClientRect().height < 40 && [...el.querySelectorAll('*')].every((n) => (n as HTMLElement).scrollWidth <= (n as HTMLElement).clientWidth + 1)), 'the two-digit count is not cut').toBe(true);
+      expect((await barBox(page)).height, 'twelve ticked').toBeLessThanOrEqual(cap(height));
+
+      // Remove armed: it takes row 1 alone until confirmed or disarmed.
+      await remove(page).click();
+      await expect(remove(page)).toHaveText('Remove 12 rows');
+      await expect(page.locator('[data-test="bulk-category"]')).toHaveCount(0);
+      const armed = (await remove(page).boundingBox())!;
+      expect(armed.width).toBeGreaterThan((await barBox(page)).width - 40);
+      expect((await barBox(page)).height, 'Remove armed').toBeLessThanOrEqual(cap(height));
+      // A change of selection disarms it, and Set category is back.
+      await page.getByRole('checkbox', { name: 'Select M-32', exact: true }).uncheck();
+      await expect(remove(page)).toHaveText('Remove (11)');
+      await expect(page.locator('[data-test="bulk-category"]')).toHaveCount(1);
+
+      // The longest caption: a row that is not Paid work among the ticked.
+      await tick(page, 5);
+      await expect(page.locator('[data-test="selection-bar"] [data-test="create-invoice-hint"]')).toHaveText('1 of the 12 selected is not Paid work. Untick it to create or generate invoices.');
+      await expect(generateSelected(page)).toBeDisabled();
+      await expect(createInvoice(page)).toBeDisabled();
+      expect((await barBox(page)).height, 'with the two-line caption').toBeLessThanOrEqual(cap(height));
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  }
+
+  test('the pair\'s primary generates for the ticked rows and the bar goes when the review opens', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const fake = newFake();
+    await openTransactions(page, fake);
+    await tick(page, 1);
+    await tick(page, 2);
+    await tick(page, 3);
+    await expect(generateSelected(page)).toHaveText('As 3 invoices');
+    await generateSelected(page).click();
+    expect(fake.requests[0]).toMatchObject({ method: 'POST', path: '/invoicing/invoices/generate', body: JSON.stringify({ payment_ids: [1, 2, 3] }) });
+    await expect(dialog(page)).toContainText('Invoice 1 / 3');
+    // The generation went through, so nothing stays ticked and the bar is gone.
+    await expect(bar(page)).toHaveCount(0);
+  });
+
+  test('a failure is said at the top of the bar, the ticks stay, and the list can scroll its last card above the bar', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const fake = newFake();
+    await openTransactions(page, fake);
+    await page.route(/\/api\/invoicing\/invoices\/generate$/, (route) => json(route, 500, { error: { code: 'server_error', message: 'Error generating invoices' } }));
+    await tick(page, 1);
+    await tick(page, 2);
+    await generateSelected(page).click();
+    const error = page.locator('[data-test="selection-bar"] [data-test="generate-error"]');
+    await expect(error).toContainText('The invoices could not be generated');
+    await expect(error).toHaveAttribute('role', 'alert');
+    await expect(error).toBeInViewport();
+    // It leads the bar: above the controls.
+    expect((await error.boundingBox())!.y).toBeLessThan((await remove(page).boundingBox())!.y);
+    await expect(page.getByRole('checkbox', { name: 'Select M-1', exact: true })).toBeChecked();
+    // No second copy of the line outside the bar.
+    await expect(page.locator('[data-test="generate-error"]')).toHaveCount(1);
+
+    // The list is padded by the bar's height, so its last card clears the bar.
+    const b = await barBox(page);
+    const padding = await page.locator('[data-test="payments-panel"]').evaluate((el) => parseFloat(getComputedStyle(el).paddingBottom));
+    expect(Math.abs(padding - b.height), 'the list\'s bottom padding is the bar\'s height').toBeLessThanOrEqual(1);
+    // Scrolled to its end, the list's last month ends above the bar. (The
+    // month groups are measured, not the cards: a folded month's cards keep
+    // a box although nothing of them shows.)
+    const lastBottom = await page.locator('[data-test="payments-panel"]').evaluate((panel) => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      const groups = panel.querySelectorAll('.ledger-group');
+      return groups[groups.length - 1].getBoundingClientRect().bottom;
+    });
+    expect(lastBottom, 'the list ends above the bar').toBeLessThanOrEqual((await barBox(page)).y + 1);
+  });
+
+  test('from 640px nothing changes: the actions sit in the toolbar with nothing ticked, and there is no bar', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'a desktop width on a desktop browser');
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openTransactions(page, newFake());
+    await expect(bar(page)).toHaveCount(0);
+    await expect(createInvoice(page)).toBeVisible();
+    await expect(generateSelected(page)).toHaveText('Generate invoices');
+    await tick(page, 1);
+    await tick(page, 2);
+    await expect(bar(page)).toHaveCount(0);
+    await expect(createInvoice(page)).toHaveText('Create invoice from 2 payments');
+    await expect(generateSelected(page)).toHaveText('Generate 2 invoices');
+    await expect(page.locator('[data-test="bulk-category"]')).toContainText('Set category of 2 selected');
+    await expect(lead(page)).toHaveCount(0);
   });
 });

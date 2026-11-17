@@ -75,6 +75,21 @@ async function mockAll(page: Page, fake: Fake): Promise<void> {
       fake.items[id] = ps.map((p, i) => ({ id: i + 1, position: i + 1, description: p.note, quantity_milli: 1000, unit_price_cents: p.gross_cents, line_total_cents: p.gross_cents }));
       return json(route, 201, detail(fake, inv));
     }
+    // One ticked row on a phone (system_3 #11371): the bar's Generate
+    // invoice offers the same draft through the one-at-a-time review.
+    if (path === '/invoicing/invoices/generate' && method === 'POST') {
+      const ids: number[] = JSON.parse(body).payment_ids;
+      const out = ids.map((pid) => {
+        const p = fake.payments.find((pp) => pp.id === pid)!;
+        const id = 100 + fake.invoices.length;
+        const inv = { id, status: 'draft', client_id: p.client_id, service_date_from: p.paid_on, service_date_to: p.paid_on, vat_rate_bp: 1900, currency: fake.currency || 'EUR', invoice_number: null, issue_date: null, total_cents: p.gross_cents };
+        fake.invoices.push(inv);
+        fake.links[id] = [pid];
+        fake.items[id] = [{ id: 1, position: 1, description: p.note, quantity_milli: 1000, unit_price_cents: p.gross_cents, line_total_cents: p.gross_cents }];
+        return detail(fake, inv);
+      });
+      return json(route, out.length ? 201 : 200, { invoices: out, skipped: [] });
+    }
     const m = path.match(/^\/invoicing\/invoices\/(\d+)(\/issue|\/cancel)?$/);
     if (m) {
       const inv = fake.invoices.find((i) => i.id === Number(m[1]))!;
@@ -120,17 +135,31 @@ async function createFromTwo(page: Page): Promise<void> {
   await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
 }
 
+// Below 640px one ticked row has no Create invoice (system_3 #11371): the
+// bar offers Generate invoice alone, which opens the same draft through the
+// one-at-a-time review instead of the plain POST /invoicing/invoices path.
+async function createFromOne(page: Page, isMobile: boolean, txn: string): Promise<void> {
+  await page.getByRole('checkbox', { name: `Select ${txn}` }).check();
+  await page.locator(isMobile ? '[data-test="generate-selected"]' : '[data-test="create-invoice"]').click();
+  await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
+}
+
 test.describe('#8367 Invoices app — draft, issue, Storno', () => {
   // #9873: every row has a checkbox (it also feeds Set category); a
   // selection holding a gift cannot create an invoice, and the caption says
   // why (design_agent c60951 rule 6).
-  test('selecting paid-work payments creates a prefilled draft; a selected gift blocks it with a caption', async ({ page }) => {
+  test('selecting paid-work payments creates a prefilled draft; a selected gift blocks it with a caption', async ({ page, isMobile }) => {
     const fake = newFake();
     await open(page, fake);
 
-    await expect(page.locator('[data-test="create-invoice"]')).toBeDisabled();
+    // Below 640px nothing of the bar is on the page while nothing is ticked,
+    // and one ticked row never offers Create invoice at all (system_3
+    // #11371); above it the button is always there, just disabled.
+    if (isMobile) await expect(page.locator('[data-test="create-invoice"]')).toHaveCount(0);
+    else await expect(page.locator('[data-test="create-invoice"]')).toBeDisabled();
     await page.getByRole('checkbox', { name: 'Select TX3' }).check();
-    await expect(page.locator('[data-test="create-invoice"]')).toBeDisabled();
+    if (isMobile) await expect(page.locator('[data-test="create-invoice"]')).toHaveCount(0);
+    else await expect(page.locator('[data-test="create-invoice"]')).toBeDisabled();
     await expect(page.locator('[data-test="create-invoice-hint"]')).toHaveText('1 of the 1 selected is not Paid work. Untick it to create or generate invoices.');
     await page.getByRole('checkbox', { name: 'Select TX3' }).uncheck();
     await createFromTwo(page);
@@ -229,17 +258,23 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
   });
 
-  test('a client without an address: a small invoice issues', async ({ page }) => {
+  test('a client without an address: a small invoice issues', async ({ page, isMobile }) => {
     const fake = newFake();
     fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];
     await open(page, fake);
-    await page.getByRole('checkbox', { name: 'Select TX2' }).check();
-    await page.locator('[data-test="create-invoice"]').click();
-    await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
+    await createFromOne(page, isMobile, 'TX2');
 
     const note = page.locator('[data-test="draft-no-address"]');
     await expect(note).toHaveAttribute('data-level', 'neutral');
     await expect(note).toContainText('Needed over €250.00 gross. Add it under Clients.');
+    // draft-issue is a normal-draft action; one row's draft on a phone opens
+    // in the review instead (system_3 #11371), so leave it for later first
+    // and reopen it from the Invoices tab to reach the same controls.
+    if (isMobile) {
+      await page.locator('[data-test="review-later"]').click();
+      await page.getByRole('tab', { name: 'Invoices' }).click();
+      await page.locator('[data-test="invoice-row"][data-status="draft"]').click();
+    }
     await page.locator('[data-test="draft-issue"]').click();
     await page.locator('[data-test="issue-confirm-button"]').click();
     await expect(page.locator('[data-test="invoice-editor"][data-status="issued"]')).toBeVisible();
@@ -247,12 +282,11 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
 
   // #9949 (operator c61373): the note follows the draft's own gross as ze
   // edits, before any save, computed the way the server computes it at issue.
-  test('a client without an address: the note turns into a warning as the draft crosses 250 €', async ({ page }) => {
+  test('a client without an address: the note turns into a warning as the draft crosses 250 €', async ({ page, isMobile }) => {
     const fake = newFake();
     fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];
     await open(page, fake);
-    await page.getByRole('checkbox', { name: 'Select TX2' }).check();
-    await page.locator('[data-test="create-invoice"]').click();
+    await createFromOne(page, isMobile, 'TX2');
     const note = page.locator('[data-test="draft-no-address"]');
     const price = page.getByLabel('Unit price, line 1');
     await expect(note).toHaveAttribute('data-level', 'neutral');
@@ -270,13 +304,12 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     expect(fake.requests.slice(sent).filter((r) => r.method !== 'GET'), 'nothing is saved while ze types').toEqual([]);
   });
 
-  test('with VAT charged, the warning counts the gross, not the net', async ({ page }) => {
+  test('with VAT charged, the warning counts the gross, not the net', async ({ page, isMobile }) => {
     const fake = newFake();
     fake.kleinunternehmer = false;
     fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];
     await open(page, fake);
-    await page.getByRole('checkbox', { name: 'Select TX2' }).check();
-    await page.locator('[data-test="create-invoice"]').click();
+    await createFromOne(page, isMobile, 'TX2');
     const note = page.locator('[data-test="draft-no-address"]');
     const price = page.getByLabel('Unit price, line 1');
     await price.fill('210');
@@ -286,13 +319,12 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await expect(page.locator('[data-test="draft-no-address-text"]')).toContainText('totals €251.09 gross');
   });
 
-  test('an invoice in another currency needs the address at any total', async ({ page }) => {
+  test('an invoice in another currency needs the address at any total', async ({ page, isMobile }) => {
     const fake = newFake();
     fake.currency = 'USD';
     fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];
     await open(page, fake);
-    await page.getByRole('checkbox', { name: 'Select TX2' }).check();
-    await page.locator('[data-test="create-invoice"]').click();
+    await createFromOne(page, isMobile, 'TX2');
     await expect(page.locator('[data-test="draft-no-address"]')).toHaveAttribute('data-level', 'caution');
     await expect(page.locator('[data-test="draft-no-address-text"]')).toHaveText(
       "An invoice in USD must name Galerie Nord's postal address. Save the draft, then add it under Clients.",
@@ -314,11 +346,10 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await expect(page.locator('.issue-blocked .badge--status-caution')).toHaveCount(2);
   });
 
-  test('a client with an address gets no note at any total', async ({ page }) => {
+  test('a client with an address gets no note at any total', async ({ page, isMobile }) => {
     const fake = newFake();
     await open(page, fake);
-    await page.getByRole('checkbox', { name: 'Select TX2' }).check();
-    await page.locator('[data-test="create-invoice"]').click();
+    await createFromOne(page, isMobile, 'TX2');
     await page.getByLabel('Unit price, line 1').fill('9000');
     await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
     await expect(page.locator('[data-test="draft-no-address"]')).toHaveCount(0);

@@ -100,11 +100,15 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
     });
   }
 
-  test('the guardrail states are visible: missing Steuernummer on the card and in the draft, the Create invoice caption', async ({ page }) => {
+  test('the guardrail states are visible: missing Steuernummer on the card and in the draft, the Create invoice caption', async ({ page, isMobile }) => {
     await open(page, 'light', { steuernummer: '' });
     await expect(page.locator('[data-test="steuernummer-missing"]')).toContainText('Missing: needed to issue');
-    await expect(page.locator('[data-test="create-invoice-hint"]')).toHaveText('Select rows to set their category or remove them, or paid-work payments to invoice them.');
-    await expect(page.locator('[data-test="create-invoice"]')).toHaveAttribute('aria-describedby', 'create-invoice-hint');
+    // Below 640px nothing of the bar is on the page while nothing is ticked
+    // (system_3 #11371), so this caption only shows once a row is ticked.
+    if (!isMobile) {
+      await expect(page.locator('[data-test="create-invoice-hint"]')).toHaveText('Select rows to set their category or remove them, or paid-work payments to invoice them.');
+      await expect(page.locator('[data-test="create-invoice"]')).toHaveAttribute('aria-describedby', 'create-invoice-hint');
+    }
 
     // TX1 is Paid work; the list runs newest first, so it is named, not taken by position.
     await page.getByRole('checkbox', { name: 'Select TX1' }).click();

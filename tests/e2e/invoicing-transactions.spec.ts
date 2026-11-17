@@ -511,7 +511,7 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     const viewport = page.viewportSize();
     if (viewport && viewport.width < 640) await expect(page.locator('[data-test="select-all-shown"]')).toContainText('Select all 6 shown');
     await page.locator('[data-test="select-all-shown"]').getByRole('checkbox').check();
-    await expect(page.locator('[data-test="bulk-category"]')).toContainText('Set category of 6 selected');
+    await expect(page.locator('[data-test="bulk-category"]')).toContainText(setCategoryText(6));
   });
 
   // §3.114 card, in §3.143 Decision 3's order: the checkbox first, who
@@ -609,6 +609,11 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
 
 const bulkCategory = (page: Page) => page.locator('[data-test="bulk-category"]');
 const bulkRemove = (page: Page) => page.locator('[data-test="bulk-remove"]');
+// Below 640px the trigger's visible text is the short form ("Set category
+// (N)"); above it, the words stay ("Set category of N selected"). These
+// tests are about the count a write touches, not the phone bar's own
+// layout (system_3 #11371's own suite covers that), so either form passes.
+const setCategoryText = (n: number) => new RegExp(`Set category \\(?(?:of )?${n}(?: selected|\\))`);
 const select = (page: Page, txn: string) => row(page, txn).locator('[data-test="payment-select"]').getByRole('checkbox');
 // The list folds by month, newest open (§3.145, system_3 #10636). These cases
 // are about the selection across the whole fixture, so they open every month.
@@ -663,12 +668,16 @@ test.describe('#10631 Transactions: selection actions for both directions', () =
     await expect(select(page, 'M-e2')).not.toBeChecked();
   });
 
-  test('Remove (N) arms to "Remove N rows", then removes both directions in one go', async ({ page }) => {
+  test('Remove (N) arms to "Remove N rows", then removes both directions in one go', async ({ page, isMobile }) => {
     const fake = mixedFake();
     await open(page, fake);
     await openAllMonths(page);
-    await expect(bulkRemove(page)).toHaveText('Remove');
-    await expect(bulkRemove(page)).toBeDisabled();
+    // Below 640px nothing of the bar is on the page while nothing is ticked
+    // (system_3 #11371).
+    if (!isMobile) {
+      await expect(bulkRemove(page)).toHaveText('Remove');
+      await expect(bulkRemove(page)).toBeDisabled();
+    }
 
     // PP-P2 is on a draft: the armed button says it comes off.
     await select(page, 'PP-P2').check();
@@ -694,7 +703,7 @@ test.describe('#10631 Transactions: selection actions for both directions', () =
     expect(expenses.path).toBe('/invoicing/expenses/remove');
     expect(JSON.parse(expenses.body)).toEqual({ ids: [102] });
     await expect.poll(() => txns(page)).toEqual(['N26-E1', 'N26-P1', 'M-p3', 'PP-P4', 'N26-E3']);
-    await expect(bulkRemove(page)).toHaveText('Remove');
+    if (!isMobile) await expect(bulkRemove(page)).toHaveText('Remove');
     await expect(page.locator('[data-test="bulk-error"]')).toHaveCount(0);
   });
 
@@ -759,7 +768,7 @@ test.describe('#10631 Transactions: selection actions for both directions', () =
 
     await select(page, 'N26-E5').check();
     await expect(select(page, 'PP-P5')).not.toBeChecked();
-    await expect(bulkCategory(page)).toContainText('Set category of 1 selected');
+    await expect(bulkCategory(page)).toContainText(setCategoryText(1));
     await expect(page.locator('[data-test="set-category-hint"]')).toHaveCount(0);
     await bulkCategory(page).click();
     await page.getByRole('option', { name: 'materials and supplies', exact: true }).click();
