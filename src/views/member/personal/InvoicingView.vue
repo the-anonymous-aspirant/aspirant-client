@@ -68,11 +68,11 @@
         v-else-if="tab === 'invoices'"
         :refresh-key="refreshKey"
         :payments="payments"
-        :generating="generating"
-        :generate-error="generateError"
-        :review-summary="reviewSummary"
+        :generating="generating && reviewOrigin === 'invoices'"
+        :generate-error="reviewOrigin === 'invoices' ? generateError : ''"
+        :review-summary="reviewOrigin === 'invoices' ? reviewSummary : ''"
         @open="openInvoice"
-        @generate="generate"
+        @generate="generate({ month: $event })"
         @status-seen="reviewSummary = ''"
       />
       <BookPanel
@@ -95,8 +95,13 @@
         :clients="clients"
         :book-selection="book && book.selection"
         :initial-filter="transactionsFilter"
+        :generating="generating && reviewOrigin === 'transactions'"
+        :generate-error="reviewOrigin === 'transactions' ? generateError : ''"
+        :review-summary="reviewOrigin === 'transactions' ? reviewSummary : ''"
         @changed="fetchAll"
         @open-invoice="openInvoice"
+        @generate="generate({ paymentIds: $event })"
+        @status-seen="reviewSummary = ''"
       />
 
       <InvoiceEditor
@@ -178,14 +183,17 @@
         profileOpen: false,
         editorOpen: false,
         editorInvoiceId: null,
-        // A month's drafts being walked one at a time (system_3 #11505):
+        // Drafts being walked one at a time (system_3 #11505, #11506):
         // `{ month, ids, index, accepted, rejected, later }`, or null. The
-        // editor shows `ids[index]` and reports each outcome.
+        // editor shows `ids[index]` and reports each outcome. `month` is ''
+        // for a review started from Transactions rows.
         review: null,
         generating: false,
         generateError: '',
-        // What the last review did, said on the Invoices tab until the next one.
+        // What the last review did, said until the next one on the tab that
+        // started it: 'invoices' (a month) or 'transactions' (rows).
         reviewSummary: '',
+        reviewOrigin: 'invoices',
         tab: 'transactions',
         tabs: [
           { value: 'transactions', label: 'Transactions' },
@@ -293,13 +301,19 @@
       // earlier press left undecided come back with them, so a review ze
       // stopped half way picks up where it stopped. Nothing is issued here:
       // only Accept in the review does that, one invoice at a time.
-      async generate(month) {
+      //
+      // From Transactions (system_3 #11506, epic #11497 items 2a and 2c) the
+      // same call takes payment ids, one row's or the ticked rows', and the
+      // review is the same one. A payment already on a draft is not drafted
+      // again: the server skips it and its draft joins the review.
+      async generate({ month = '', paymentIds = null }) {
         if (this.generating) return;
         this.generating = true;
+        this.reviewOrigin = month ? 'invoices' : 'transactions';
         this.generateError = '';
         this.reviewSummary = '';
         try {
-          const res = await generateInvoices({ month });
+          const res = await generateInvoices(month ? { month } : { payment_ids: paymentIds });
           // The queue is what the server says (design ack c70970, change 5):
           // the drafts it just made, the drafts it skipped over, and the
           // month's other drafts, read from the invoice list. Never the
@@ -310,15 +324,20 @@
           for (const s of res.skipped || []) {
             if (s.invoice && s.invoice.status === 'draft' && !queue.has(s.invoice.id)) queue.set(s.invoice.id, paidOn.get(s.payment_id) || '');
           }
-          for (const row of await listInvoices({ status: 'draft' })) {
-            if (workMonth(row) === month && !queue.has(row.id)) queue.set(row.id, String(row.service_date_from || row.issue_date || ''));
+          if (month) {
+            for (const row of await listInvoices({ status: 'draft' })) {
+              if (workMonth(row) === month && !queue.has(row.id)) queue.set(row.id, String(row.service_date_from || row.issue_date || ''));
+            }
           }
           const ids = [...queue.entries()].sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : a[0] - b[0])).map(([id]) => id);
           await this.fetchAll();
           if (!ids.length) {
-            this.reviewSummary = (res.skipped || []).length
-              ? `${monthLabel(month)}: every paid-work payment already has an invoice.`
-              : `${monthLabel(month)}: no paid-work payments to invoice.`;
+            if (!month) this.reviewSummary = 'Nothing to review: every one of those payments already has an invoice.';
+            else {
+              this.reviewSummary = (res.skipped || []).length
+                ? `${monthLabel(month)}: every paid-work payment already has an invoice.`
+                : `${monthLabel(month)}: no paid-work payments to invoice.`;
+            }
             return;
           }
           this.review = { month, ids, index: 0, accepted: 0, rejected: 0, later: 0 };
@@ -351,7 +370,13 @@
         if (r.accepted) parts.push(`${r.accepted} issued`);
         if (r.rejected) parts.push(`${r.rejected} rejected`);
         if (left) parts.push(`${left} left as ${left === 1 ? 'a draft' : 'drafts'}`);
-        this.reviewSummary = `${monthLabel(r.month)}: ${parts.join(', ')}.`;
+        // From rows the line leads with how many invoices there were, and one
+        // invoice needs no count repeated: "1 invoice: issued." (Design ack
+        // c71060 answer 5).
+        const n = r.ids.length;
+        if (r.month) this.reviewSummary = `${monthLabel(r.month)}: ${parts.join(', ')}.`;
+        else if (n === 1) this.reviewSummary = `1 invoice: ${r.accepted ? 'issued' : r.rejected ? 'rejected' : 'left as a draft'}.`;
+        else this.reviewSummary = `${n} invoices: ${parts.join(', ')}.`;
       },
       onProfileSaved(profile) {
         this.profile = profile;

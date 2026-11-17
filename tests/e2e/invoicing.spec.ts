@@ -647,11 +647,11 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
 
     const create = page.locator('[data-test="create-invoice"]');
     const caption = page.locator('[data-test="create-invoice-hint"]');
-    await expect(caption).toHaveText('Select rows to set their category or remove them, or Paid work payments to create an invoice.');
+    await expect(caption).toHaveText('Select rows to set their category or remove them, or paid-work payments to invoice them.');
     await page.getByRole('checkbox', { name: 'Select TX1' }).check();
     await page.getByRole('checkbox', { name: 'Select TX3' }).check();
     await expect(create).toBeDisabled();
-    await expect(caption).toHaveText('2 of the 2 selected are not Paid work. Only Paid work can be invoiced.');
+    await expect(caption).toHaveText('2 of the 2 selected are not Paid work. Untick them to create or generate invoices.');
     await setBulkCategory(page, 'Paid work');
     // The rows that changed leave the selection; select them again.
     await page.getByRole('checkbox', { name: 'Select TX1' }).check();

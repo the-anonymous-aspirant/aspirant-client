@@ -390,11 +390,11 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     await expect(row(page, 'N26-P1').locator('[data-test="row-invoice"]')).toHaveText('Invoice 2026-014');
     await expect(row(page, 'PP-P2').locator('[data-test="row-invoice"]')).toHaveText('Draft');
     await expect(row(page, 'M-p3').locator('[data-test="row-invoice"]')).toHaveCount(0);
-    await expect(row(page, 'N26-P1').locator('[data-test="payment-client"], [data-test="row-client"]')).toContainText('Galerie Nord');
+    await expect(row(page, 'N26-P1').locator('[data-test="row-client"]')).toContainText('Galerie Nord');
     await expect(row(page, 'N26-P1').locator('[data-test="payment-category"], [data-test="row-category"]')).toContainText('Paid work');
     // Money out has its category, and no client or invoice.
     await expect(row(page, 'N26-E1').locator('[data-test="row-category"]')).toHaveText('materials and supplies');
-    await expect(row(page, 'N26-E1').locator('[data-test="payment-client"], [data-test="row-client"], [data-test="row-invoice"]')).toHaveCount(0);
+    await expect(row(page, 'N26-E1').locator('[data-test="row-client"], [data-test="row-invoice"]')).toHaveCount(0);
 
     // §3.140 Decision 2: in in body ink, out in the error text red.
     const ink = (sel: string, token: string) =>
@@ -547,7 +547,7 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     // space before "·" is a no-break space, so the separator never starts
     // a line.
     const payment = page.locator('.payment-card[data-txn="PP-P2"]');
-    await expect(payment.locator('[data-test="payment-category"], [data-test="payment-client"]')).toHaveCount(0);
+    await expect(payment.locator('[data-test="payment-category"]')).toHaveCount(0);
     await expect(payment.locator('[data-test="row-category-client"]')).toHaveText(/^\S.*\u00a0· .+$/);
     await expect(page.locator('.payment-card[data-txn="N26-E1"] [data-test="row-date-line"]')).toHaveText('2026-10-14 · N26');
     await expect(page.locator('.payment-card[data-txn="M-e2"] [data-test="row-date-line"]')).toHaveText('2026-09-28 · By hand');
