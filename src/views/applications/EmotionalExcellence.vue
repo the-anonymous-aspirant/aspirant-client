@@ -38,6 +38,8 @@
           }"
           :style="{ backgroundColor: emotion.color, color: inkFor(emotion.color) }"
           class="emotion-box"
+          @mouseenter="positionTooltip"
+          @focus="positionTooltip"
         >
           <strong>{{ key }}</strong>
           <div class="emotion-description">{{ emotion.description }}</div>
@@ -60,6 +62,8 @@
           }"
           :style="{ backgroundColor: subEmotion.color, color: inkFor(subEmotion.color) }"
           class="emotion-box"
+          @mouseenter="positionTooltip"
+          @focus="positionTooltip"
         >
           <strong>{{ key }}</strong>
           <div class="emotion-description">{{ subEmotion.description }}</div>
@@ -88,6 +92,8 @@
           }"
           :style="{ backgroundColor: subSubEmotion.color, color: inkFor(subSubEmotion.color) }"
           class="emotion-box"
+          @mouseenter="positionTooltip"
+          @focus="positionTooltip"
         >
           <strong>{{ key }}</strong>
           <div class="emotion-description">{{ subSubEmotion.description }}</div>
@@ -366,6 +372,23 @@
         inkCache.set(hexColor, ink);
         return ink;
       },
+      // At 390px the leftmost and rightmost boxes centre a tooltip wider than
+      // the room on one side, running it off the screen (system_3 #11477).
+      // `.tooltip` is still centred on its box in CSS; this only nudges it
+      // back onto the viewport when centring alone would not fit. Reading
+      // the rect forces layout, which is safe here: it runs once per hover
+      // or focus, not per frame.
+      positionTooltip(event) {
+        const tooltip = event.currentTarget.querySelector('.tooltip');
+        if (!tooltip) return;
+        tooltip.style.transform = 'translateX(-50%)';
+        const rect = tooltip.getBoundingClientRect();
+        const margin = 8;
+        let shift = 0;
+        if (rect.left < margin) shift = margin - rect.left;
+        else if (rect.right > window.innerWidth - margin) shift = window.innerWidth - margin - rect.right;
+        if (shift) tooltip.style.transform = `translateX(calc(-50% + ${shift}px))`;
+      },
     },
   };
 </script>
@@ -466,18 +489,23 @@
     position: absolute;
     bottom: 100%;
     left: 50%;
-    transform: translateX(-50%) !important;
+    transform: translateX(-50%);
     background-color: rgba(0, 0, 0, 0.7);
     color: var(--text-on-dark);
     padding: var(--space-2xs);
     border-radius: var(--radius-sm);
-    white-space: nowrap;
+    /* Below 390px, the narrowest box plus its gutters leaves less than
+       220px either side of centre; wrapping (not nowrap) is what keeps a
+       long description's text inside that width once `positionTooltip`
+       has nudged it back onto the screen (system_3 #11477). */
+    max-width: min(220px, calc(100vw - 2 * var(--space-md)));
     z-index: 10;
     opacity: 0;
     transition: opacity var(--transition-moderate);
   }
 
   .emotion-box:hover .tooltip,
+  .emotion-box:focus .tooltip,
   .heatmap-box:hover .tooltip {
     display: block;
     opacity: 1;

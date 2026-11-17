@@ -492,3 +492,64 @@ test.describe('#11314 (#10994-B2): the picker on the first screen, and readable 
     for (const b of bottoms) expect(b).toBeLessThanOrEqual(900);
   });
 });
+
+/**
+ * system_3 #11477: found posting #11314's dogfood. At 390×844, hovering the
+ * first emotion box (Sad) showed its `.tooltip` from x = -148px to 320px —
+ * centred on a 140px box and wider than the room to its left, so the first
+ * 148px of the description ran off the screen. On a phone a tap triggers the
+ * hover state, so a tap on any left-column box cut the sentence the same way.
+ */
+test.describe('#11477: every tooltip stays on screen, at all three picker levels', () => {
+  const LEVELS = ['.emotion-container', '.sub-emotion-container', '.sub-sub-emotion-container'];
+
+  for (const [width, height] of [[390, 844], [1440, 900]] as const) {
+    for (const scheme of ['light', 'dark'] as const) {
+      test(`at ${width}×${height}, every box's tooltip at every level has both edges on screen, in ${scheme}`, async ({ page }) => {
+        await page.setViewportSize({ width, height });
+        await openEE(page, scheme);
+
+        for (const level of LEVELS) {
+          const boxes = page.locator(`${level} .emotion-box`);
+          const n = await boxes.count();
+          expect(n, `${level} has boxes`).toBeGreaterThan(0);
+          for (let i = 0; i < n; i += 1) {
+            const box = boxes.nth(i);
+            await box.hover();
+            const tooltip = box.locator('.tooltip');
+            await expect(tooltip).toBeVisible();
+            const rect = (await tooltip.boundingBox())!;
+            expect(rect.x, `${level} box ${i} left edge`).toBeGreaterThanOrEqual(0);
+            expect(rect.x + rect.width, `${level} box ${i} right edge`).toBeLessThanOrEqual(width);
+            // Nothing is cut off: the content box (no padding) still holds
+            // every line, which `scrollWidth`/`scrollHeight` would exceed if
+            // the text overflowed its own wrapped box.
+            const overflow = await tooltip.evaluate((el) => ({
+              w: el.scrollWidth > el.clientWidth + 1,
+              h: el.scrollHeight > el.clientHeight + 1,
+            }));
+            expect(overflow, `${level} box ${i} tooltip text not clipped`).toEqual({ w: false, h: false });
+          }
+          // Advance to the next level: pick the first box so its children render.
+          if (level !== LEVELS[LEVELS.length - 1]) {
+            await boxes.first().click();
+            await page.waitForTimeout(400);
+          }
+        }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth), 'no sideways scroll').toBeLessThanOrEqual(width);
+      });
+    }
+  }
+
+  test('keyboard focus shows the tooltip too, clamped the same way', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openEE(page, 'light');
+    const first = page.locator('.emotion-container .emotion-box').first();
+    await first.focus();
+    const tooltip = first.locator('.tooltip');
+    await expect(tooltip).toBeVisible();
+    const rect = (await tooltip.boundingBox())!;
+    expect(rect.x).toBeGreaterThanOrEqual(0);
+    expect(rect.x + rect.width).toBeLessThanOrEqual(390);
+  });
+});
