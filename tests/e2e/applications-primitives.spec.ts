@@ -508,6 +508,9 @@ test.describe('#11477: every tooltip stays on screen, at all three picker levels
       test(`at ${width}×${height}, every box's tooltip at every level has both edges on screen, in ${scheme}`, async ({ page }) => {
         await page.setViewportSize({ width, height });
         await openEE(page, scheme);
+        // The page's own content box: left of it, at 1440, is the sidebar,
+        // which paints over anything that runs under it.
+        const content = (await page.locator('.emotional-excellence').boundingBox())!;
 
         for (const level of LEVELS) {
           const boxes = page.locator(`${level} .emotion-box`);
@@ -519,8 +522,8 @@ test.describe('#11477: every tooltip stays on screen, at all three picker levels
             const tooltip = box.locator('.tooltip');
             await expect(tooltip).toBeVisible();
             const rect = (await tooltip.boundingBox())!;
-            expect(rect.x, `${level} box ${i} left edge`).toBeGreaterThanOrEqual(0);
-            expect(rect.x + rect.width, `${level} box ${i} right edge`).toBeLessThanOrEqual(width);
+            expect(rect.x, `${level} box ${i} left edge`).toBeGreaterThanOrEqual(Math.max(0, content.x) - 0.5);
+            expect(rect.x + rect.width, `${level} box ${i} right edge`).toBeLessThanOrEqual(Math.min(width, content.x + content.width) + 0.5);
             // Nothing is cut off: the content box (no padding) still holds
             // every line, which `scrollWidth`/`scrollHeight` would exceed if
             // the text overflowed its own wrapped box.
@@ -544,12 +547,13 @@ test.describe('#11477: every tooltip stays on screen, at all three picker levels
   test('keyboard focus shows the tooltip too, clamped the same way', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openEE(page, 'light');
+    const content = (await page.locator('.emotional-excellence').boundingBox())!;
     const first = page.locator('.emotion-container .emotion-box').first();
     await first.focus();
     const tooltip = first.locator('.tooltip');
     await expect(tooltip).toBeVisible();
     const rect = (await tooltip.boundingBox())!;
-    expect(rect.x).toBeGreaterThanOrEqual(0);
-    expect(rect.x + rect.width).toBeLessThanOrEqual(390);
+    expect(rect.x).toBeGreaterThanOrEqual(content.x - 0.5);
+    expect(rect.x + rect.width).toBeLessThanOrEqual(content.x + content.width + 0.5);
   });
 });

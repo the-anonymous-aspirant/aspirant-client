@@ -372,21 +372,23 @@
         inkCache.set(hexColor, ink);
         return ink;
       },
-      // At 390px the leftmost and rightmost boxes centre a tooltip wider than
-      // the room on one side, running it off the screen (system_3 #11477).
-      // `.tooltip` is still centred on its box in CSS; this only nudges it
-      // back onto the viewport when centring alone would not fit. Reading
-      // the rect forces layout, which is safe here: it runs once per hover
-      // or focus, not per frame.
+      // The leftmost and rightmost boxes centre a tooltip wider than the room
+      // on one side: at 390px it ran off the screen, and at 1440 it ran under
+      // the sidebar (system_3 #11477). `.tooltip` is still centred on its box
+      // in CSS; this only nudges it back inside the page's own content box
+      // when centring alone would not fit. Reading the rect forces layout,
+      // which is safe here: it runs once per hover or focus, not per frame.
       positionTooltip(event) {
         const tooltip = event.currentTarget.querySelector('.tooltip');
         if (!tooltip) return;
         tooltip.style.transform = 'translateX(-50%)';
         const rect = tooltip.getBoundingClientRect();
-        const margin = 8;
+        const page = this.$el.getBoundingClientRect();
+        const lo = Math.max(8, page.left);
+        const hi = Math.min(window.innerWidth - 8, page.right);
         let shift = 0;
-        if (rect.left < margin) shift = margin - rect.left;
-        else if (rect.right > window.innerWidth - margin) shift = window.innerWidth - margin - rect.right;
+        if (rect.left < lo) shift = lo - rect.left;
+        else if (rect.right > hi) shift = Math.max(hi - rect.right, lo - rect.left);
         if (shift) tooltip.style.transform = `translateX(calc(-50% + ${shift}px))`;
       },
     },
@@ -494,11 +496,13 @@
     color: var(--text-on-dark);
     padding: var(--space-2xs);
     border-radius: var(--radius-sm);
-    /* Below 390px, the narrowest box plus its gutters leaves less than
-       220px either side of centre; wrapping (not nowrap) is what keeps a
-       long description's text inside that width once `positionTooltip`
-       has nudged it back onto the screen (system_3 #11477). */
-    max-width: min(220px, calc(100vw - 2 * var(--space-md)));
+    /* One line wherever it fits, as before; on a phone a description wider
+       than the screen wraps at the screen's width instead, and
+       `positionTooltip` then nudges it onto the screen (system_3 #11477).
+       `max-content` because a box at `left: 50%` would otherwise shrink to
+       its longest word. */
+    width: max-content;
+    max-width: calc(100vw - 2 * var(--space-md));
     z-index: 10;
     opacity: 0;
     transition: opacity var(--transition-moderate);
