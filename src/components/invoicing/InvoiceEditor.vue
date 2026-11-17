@@ -106,7 +106,7 @@
         </div>
 
         <div class="lines" data-test="draft-lines">
-          <div v-for="(line, i) in form.lines" :key="line.key" class="line" data-test="draft-line">
+          <div v-for="(line, i) in form.lines" :key="line.key" class="line" :class="{ 'line--captioned': captioned(i) }" data-test="draft-line">
             <!-- The first-line-only caption reads as a table header, which a
                  phone's stacked blocks are not: there every line is captioned. -->
             <!-- AspInput forwards class to its <input>, not its root, so each
@@ -732,6 +732,53 @@
 
   .line__remove {
     justify-self: end;
+  }
+
+  /* Above the phone layout a line reads across: the three inputs level with
+     each other, the total and Remove beside them (system_3 #11508, Design ack
+     c71195; operator c70806 on #10985). The row aligned to its bottom edge
+     before, so the "Save as a category on this device" link under
+     Description lifted that input one line above the other two. Aligned to
+     the top, the link hangs under its own field and moves nothing. */
+  @media (min-width: 641px) {
+    .line {
+      /* Quantity and Unit price never get narrower than their captions,
+         measured at the field's caption size: "Quantity" 56px; "Unit price
+         (€)" 98px plus its 18px hint and the gap. At the narrowest desktop
+         dialog (641px wide) Description is then 161px, still the widest. */
+      grid-template-columns: minmax(0, 3fr) minmax(4.25rem, 1fr) minmax(7.75rem, 1.2fr) 7rem 5rem;
+      align-items: start;
+      /* The caption block above an input, as AspInput lays it out: one line
+         of caption text and the gap under it. None on a line without
+         captions. */
+      --line-caption: 0px;
+      /* AspInput's control height (its --asp-input-height). */
+      --line-control: 2.125rem;
+    }
+
+    .line--captioned {
+      --line-caption: calc(var(--text-sm) * 1.3 + var(--space-2xs));
+    }
+
+    /* One line per caption, so the three inputs start level. */
+    .line :deep(.field__label) {
+      white-space: nowrap;
+    }
+
+    /* The total and Remove take the input's height and centre in it, on the
+       inputs' line whether or not the line has captions. */
+    .line__total,
+    .line__remove {
+      display: flex;
+      align-items: center;
+      height: var(--line-control);
+      margin-top: var(--line-caption);
+    }
+
+    .line__total {
+      justify-content: flex-end;
+      padding-bottom: 0;
+    }
   }
 
   @media (max-width: 640px) {

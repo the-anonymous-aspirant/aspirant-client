@@ -509,3 +509,75 @@ test.describe('#10032 the invoicing fields explain themselves', () => {
     }
   });
 });
+
+// system_3 #11508 (epic #11497 item 9; Design ack c71195): above the phone
+// layout an invoice line reads across. The row used to align to its bottom
+// edge, so the "Save as a category on this device" link under Description
+// lifted that input a line above Quantity and Unit price.
+test.describe('#11508 an invoice line\'s inputs sit on one line', () => {
+  test.skip(({ isMobile }) => isMobile, 'the phone keeps its stacked block per line (§3.114)');
+
+  type Box = { x: number; y: number; width: number; height: number };
+  // One line's geometry: its three inputs, the caption rows, the total and
+  // Remove. Tops are measured from the line's own top edge: the dialog is
+  // centred in the screen, so its height changing moves everything in it.
+  const lineBoxes = (page: Page, n: number) => page.locator('[data-test="draft-line"]').nth(n).evaluate((line) => {
+    const top = line.getBoundingClientRect().y;
+    const box = (el: Element): Box => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y - top, width: r.width, height: r.height }; };
+    return {
+      inputs: [...line.querySelectorAll('input')].map(box),
+      captions: [...line.querySelectorAll('.field__label-row')].map(box),
+      total: box(line.querySelector('.line__total')!),
+      remove: box(line.querySelector('.line__remove')!),
+    };
+  });
+  const middle = (b: Box) => b.y + b.height / 2;
+
+  // 641 is the narrowest desktop layout, where the dialog and not the
+  // viewport sets the columns and field text is 16px (§3.135).
+  for (const width of [641, 1280, 1440]) {
+    test(`at ${width} the three inputs are level, with the link under Description shown or not`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await open(page, newFake());
+      await createFromTwo(page);
+      const link = page.locator('[data-test="draft-line"]').first().locator('.line-desc__action');
+      await expect(link, 'the fixture\'s description offers the link').toBeVisible();
+
+      const withLink = await lineBoxes(page, 0);
+      const [desc, qty, price] = withLink.inputs;
+      expect(Math.abs(desc.y - qty.y), 'Description and Quantity start level').toBeLessThanOrEqual(1);
+      expect(Math.abs(desc.y - price.y), 'Description and Unit price start level').toBeLessThanOrEqual(1);
+      // Every caption is one line high, "Unit price (€)" with its hint included.
+      expect(withLink.captions).toHaveLength(3);
+      for (const c of withLink.captions) expect(c.height, 'a caption of one line').toBeLessThan(24);
+      expect(desc.width, 'Description stays the widest input').toBeGreaterThan(Math.max(qty.width, price.width));
+      // The total and Remove centre on the inputs' height.
+      expect(Math.abs(middle(withLink.total) - middle(desc)), 'the total is on the inputs\' line').toBeLessThanOrEqual(1);
+      expect(Math.abs(middle(withLink.remove) - middle(desc)), 'Remove is on the inputs\' line').toBeLessThanOrEqual(1);
+
+      // Without the link nothing but its own cell changes.
+      await page.getByRole('combobox', { name: 'Description, line 1' }).fill('');
+      // Leave the field, so its list of suggestions closes.
+      await page.getByRole('combobox', { name: 'Description, line 1' }).blur();
+      await expect(link).toHaveCount(0);
+      const without = await lineBoxes(page, 0);
+      without.inputs.forEach((b, i) => expect(Math.abs(b.y - withLink.inputs[i].y), `input ${i + 1} does not move`).toBeLessThanOrEqual(1));
+      expect(Math.abs(without.total.y - withLink.total.y), 'the total does not move').toBeLessThanOrEqual(1);
+      expect(Math.abs(without.remove.y - withLink.remove.y), 'Remove does not move').toBeLessThanOrEqual(1);
+
+      // A line after the first has no captions and aligns the same way.
+      await page.locator('[data-test="draft-add-line"]').click();
+      const last = (await page.locator('[data-test="draft-line"]').count()) - 1;
+      const next = await lineBoxes(page, last);
+      expect(next.captions).toHaveLength(0);
+      expect(Math.abs(next.inputs[0].y - next.inputs[1].y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(next.inputs[0].y - next.inputs[2].y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(middle(next.total) - middle(next.inputs[0]))).toBeLessThanOrEqual(1);
+      expect(Math.abs(middle(next.remove) - middle(next.inputs[0]))).toBeLessThanOrEqual(1);
+      // The columns line up down the lines.
+      expect(Math.abs(next.inputs[1].x - withLink.inputs[1].x), 'Quantity in one column').toBeLessThanOrEqual(1);
+      expect(Math.abs(next.inputs[2].x - withLink.inputs[2].x), 'Unit price in one column').toBeLessThanOrEqual(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  }
+});
