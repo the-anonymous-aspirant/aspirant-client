@@ -2179,6 +2179,13 @@
       align-items: stretch;
     }
 
+    /* 12px, not 16px, under "Add or import": one of the four gaps above the
+       list that §3.157's budget trims on a phone (design_agent c71509 on
+       system_3 #11019, built as #11576). */
+    .panel-head {
+      margin-bottom: var(--space-sm);
+    }
+
     .filter,
     .create,
     .set-category {
