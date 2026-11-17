@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { namesAreClose, namesAreSame, matchPayer, tidyName } from '../../src/components/invoicing/payerMatch.js';
+import { namesAreClose, namesAreSame, matchPayer, tidyName, looksLikeCardPaymentOrService, lookAlikePairs } from '../../src/components/invoicing/payerMatch.js';
 
 /** §3.142 Decision 4 (design_agent c65348 on #10539): "the same" and "close"
  *  are defined once, for both hand entry (#10549) and the payers dialog
@@ -85,5 +85,57 @@ test.describe('§3.142 Decision 6 — tidying a new payer name', () => {
 
   test('trims and collapses spaces either way', () => {
     expect(tidyName('  MARA   ESEMPIO  ')).toBe('Mara Esempio');
+  });
+});
+
+// system_3 #11507 (Design ack c71154, amending §3.142 Decision 4): rule (d),
+// and the hint for a payer that is not a client. Logic only, as above.
+test.describe('#11507 a middle name, and a payer that is not a client', () => {
+  test('close (d): the first and last words match and the longer name has words between them', () => {
+    // A first and last name, and the same name with a middle name added.
+    expect(namesAreClose('Renée Fittizio', 'Renee Carla Fittizio')).toBe(true);
+    expect(namesAreClose('Renee Carla Fittizio', 'Renée Fittizio')).toBe(true);
+    expect(namesAreClose('Mara Esempio', 'Mara Lucia Anna Esempio')).toBe(true);
+    // A middle name the shorter one carries must be among the longer one's.
+    expect(namesAreClose('Ana Maria Beispiel', 'Ana Maria Lucia Beispiel')).toBe(true);
+    expect(namesAreClose('Ana Clara Beispiel', 'Ana Maria Lucia Beispiel')).toBe(false);
+  });
+
+  test('not close under (d): a shared first name alone, a shared last name alone, or one word', () => {
+    expect(namesAreClose('Mara Rossi', 'Mara Lucia Esempio')).toBe(false);
+    expect(namesAreClose('Lia Esempio', 'Mara Lucia Esempio')).toBe(false);
+    expect(namesAreClose('Fittizio', 'Renee Carla Fittizio')).toBe(false);
+  });
+
+  test('matchPayer asks about a middle-name match, ranked with the other word matches', () => {
+    const clients = [{ id: 1, name: 'Renee Carla Fittizio' }, { id: 2, name: 'Someone Else' }];
+    const m = matchPayer('Renée Fittizio', clients);
+    expect(m.state).toBe('close');
+    expect(m.candidates.map((c: any) => c.id)).toEqual([1]);
+  });
+
+  test('a web domain or a code of letters and digits looks like a card payment or an online service', () => {
+    for (const name of ['Musterplatz.io 7c4e1a9b', 'Musterplatz.io', 'ZAHLUNG *MUSTERDIENST.COM', 'Kartenzahlung 9f3a71bc', 'musterladen.de', 'Bestellung x7k2m9p4 Shop']) {
+      expect(looksLikeCardPaymentOrService(name), name).toBe(true);
+    }
+  });
+
+  test('a person, a company, an initial with a dot and a name with a number are not flagged', () => {
+    for (const name of ['Mara Esempio', 'Galerie Nord', 'Studio Erfunden GmbH', 'Dr.Beispiel', 'M. Esempio', 'St.Gallen Atelier', 'Studio54', 'Haus 12', 'Agentur 2000 Berlin', '', '   ']) {
+      expect(looksLikeCardPaymentOrService(name), JSON.stringify(name)).toBe(false);
+    }
+  });
+
+  test('lookAlikePairs: each look-alike pair once, in the book\'s order, and nothing for a book with none', () => {
+    const book = [
+      { id: 1, name: 'Renée Fittizio' },
+      { id: 2, name: 'Galerie Nord' },
+      { id: 3, name: 'Renee Carla Fittizio' },
+      { id: 4, name: 'Mara Esempio' },
+      { id: 5, name: 'Mara Esmepio' },
+    ];
+    expect(lookAlikePairs(book).map(([a, b]: any[]) => [a.id, b.id])).toEqual([[1, 3], [4, 5]]);
+    expect(lookAlikePairs([book[0], book[1], book[3]])).toEqual([]);
+    expect(lookAlikePairs([])).toEqual([]);
   });
 });

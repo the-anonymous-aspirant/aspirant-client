@@ -339,3 +339,62 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     expect(scrollWidth - clientWidth, 'no sideways scroll').toBeLessThanOrEqual(0);
   });
 });
+
+// system_3 #11507 (epic #11497 item 5; Design ack c71154): when Save will add
+// "Paid by" to the client book, what ze knows about that client can be typed
+// once, here. The fields exist only while a client is about to be added.
+test.describe('#11507 a new client\'s address and email, typed with the payment', () => {
+  const address = (page: Page) => page.locator('[data-test="manual-new-client-address"]');
+  const email = (page: Page) => page.locator('[data-test="manual-new-client-email"]');
+
+  test('the two fields show for a new name only, and reach the request with it', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await openWaysIn(page);
+    await page.locator('[data-test="manual-new"]').click();
+    await expect(page.locator('[data-test="manual-form"]')).toBeVisible();
+    // Nothing typed yet: no client would be added, so no fields.
+    await expect(address(page)).toHaveCount(0);
+    await expect(email(page)).toHaveCount(0);
+
+    // A name already in the book links that client: still no fields.
+    await page.locator('[data-test="manual-payer"]').fill('Galerie Nord');
+    await expect(address(page)).toHaveCount(0);
+
+    // A new name: both appear, optional by their labels.
+    await page.locator('[data-test="manual-payer"]').fill('Mara Esempio');
+    await expect(page.getByLabel('Address (optional)')).toBeVisible();
+    await expect(page.getByLabel('Email (optional)')).toHaveAttribute('type', 'email');
+
+    await page.locator('[data-test="manual-date"]').fill('2026-07-14');
+    await page.locator('[data-test="manual-amount"]').fill('350,00');
+    await page.getByLabel('Address (optional)').fill('Via Esempio 3\n00100 Roma');
+    await page.getByLabel('Email (optional)').fill('mara@example.test');
+    await page.locator('[data-test="manual-save"]').click();
+    await expect(page.locator('[data-test="manual-form"]')).toHaveCount(0);
+
+    const posts = fake.requests.filter((r) => r.method === 'POST');
+    expect(posts.map((r) => r.path)).toEqual(['/invoicing/payments/manual']);
+    expect(JSON.parse(posts[0].body)).toMatchObject({
+      sender_name: 'Mara Esempio', new_client_name: 'Mara Esempio',
+      new_client_address: 'Via Esempio 3\n00100 Roma', new_client_email: 'mara@example.test',
+    });
+  });
+
+  test('left blank they are not sent, and a name already in the book sends neither', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await openWaysIn(page);
+    await page.locator('[data-test="manual-new"]').click();
+    await page.locator('[data-test="manual-date"]').fill('2026-07-14');
+    await page.locator('[data-test="manual-amount"]').fill('90');
+    await page.locator('[data-test="manual-payer"]').fill('Mara Esempio');
+    await expect(address(page)).toBeVisible();
+    await page.locator('[data-test="manual-save"]').click();
+    await expect(page.locator('[data-test="manual-form"]')).toHaveCount(0);
+    const body = JSON.parse(fake.requests.filter((r) => r.method === 'POST')[0].body);
+    expect(body.new_client_name).toBe('Mara Esempio');
+    expect(body).not.toHaveProperty('new_client_address');
+    expect(body).not.toHaveProperty('new_client_email');
+  });
+});
