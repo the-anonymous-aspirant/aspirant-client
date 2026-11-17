@@ -415,7 +415,12 @@ test.describe('#10414-E Invoices app — the bookkeeping report export', () => {
     const fake = newFake({ reportStatus: 500 });
     await open(page, fake);
     await page.locator('[data-test="book-report-csv"]').click();
-    await expect(page.locator('[data-test="book-error"]')).toContainText('could not build the report');
+    // Beside the button, in the Export group, not on the tab's top line
+    // (system_3 #11500): the button is the last thing on the tab now.
+    const error = page.locator('[data-test="book-export"] [data-test="book-report-error"]');
+    await expect(error).toContainText('could not build the report');
+    await expect(error).toBeInViewport();
+    await expect(page.locator('[data-test="book-error"]')).toHaveCount(0);
   });
 });
 
@@ -610,5 +615,53 @@ test.describe('#11502 the Book and Transactions head the same columns the same w
     const book = await headers(page);
     expect(book.slice(0, 2), 'the Book').toEqual(['Date paid', 'Who and what for']);
     expect(book, 'the Book has no "What it was for"').not.toContain('What it was for');
+  });
+});
+
+// §3.159 Decisions 1 and 2 (system_3 #11500, epic #11497 item 8): Export is
+// the last part of every tab that exports. The Book's "Bookkeeping report
+// (CSV)" stood first, in a head row; it now closes the tab, below the chart,
+// built like the groups on Invoices and Clients.
+test.describe('#11500 the Book ends with its Export group', () => {
+  for (const [width, height] of [[390, 844], [1440, 900]] as const) {
+    test(`at ${width}×${height} nothing stands above the counting line, and Export is last, below the chart`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await open(page, newFake({ payments: [incomeRow()], expenses: [expenseRow(101)] }));
+      const panel = page.locator('[data-test="book-panel"]');
+      const group = page.locator('[data-test="book-export"]');
+      const button = page.locator('[data-test="book-report-csv"]');
+      const caption = page.locator('[data-test="book-report-caption"]');
+
+      // The tab opens on the counting line: the first thing ze sees in it.
+      const top = (await panel.boundingBox())!.y;
+      const counting = (await page.locator('[data-test="book-counting"]').boundingBox())!;
+      expect(counting.y - top, 'the counting line starts the tab').toBeLessThanOrEqual(2);
+
+      // Export: a heading, then the button with its caption directly under it.
+      await expect(group.getByRole('heading', { name: 'Export', level: 3 })).toBeVisible();
+      await expect(button).toHaveText('Bookkeeping report (CSV)');
+      await expect(button).toHaveClass(/btn--secondary/);
+      await expect(caption).toHaveText('The entries counted with Work only, by month and category');
+      await expect(button).toHaveAttribute('aria-describedby', 'book-report-caption');
+      const b = (await button.boundingBox())!;
+      const c = (await caption.boundingBox())!;
+      expect(c.y, 'the caption is under the button').toBeGreaterThanOrEqual(b.y + b.height);
+      expect(Math.abs(c.x - b.x), 'and starts where the button starts').toBeLessThanOrEqual(1);
+
+      // Last on the tab, below the chart.
+      const chart = (await page.locator('[data-test="book-chart"]').boundingBox())!;
+      const g = (await group.boundingBox())!;
+      const p = (await panel.boundingBox())!;
+      expect(g.y, 'below the chart').toBeGreaterThanOrEqual(chart.y + chart.height);
+      expect(Math.abs(g.y + g.height - (p.y + p.height)), 'nothing follows it in the tab').toBeLessThanOrEqual(2);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  }
+
+  test('with nothing recorded the group still renders, and the button still downloads', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await expect(page.locator('[data-test="book-export"]')).toBeVisible();
+    await expect(page.locator('[data-test="book-report-csv"]')).toBeEnabled();
   });
 });
