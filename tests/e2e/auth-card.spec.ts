@@ -62,6 +62,36 @@ const SCENARIOS: Scenario[] = [
   { name: 'verify, no token', path: '/verify-email', ready: '.message--error' },
   { name: 'verify', path: '/verify-email?token=t', ready: '.lede' },
   {
+    name: 'verify, link dead',
+    path: '/verify-email?token=t',
+    ready: '[data-test="verify-link-dead"]',
+    routes: (page) => page.route('**/api/verify-email', json(400, { error: { code: 'bad_request', message: 'bad token' } })),
+    act: async (page) => {
+      await page.locator('.card button').click();
+    },
+  },
+  { name: 'resend', path: '/resend-verification', ready: 'input[name=email]' },
+  {
+    name: 'resend, rejected',
+    path: '/resend-verification',
+    ready: '[data-test="resend-error"]',
+    routes: (page) => page.route('**/api/verify-email/resend', json(400, { error: { message: 'That does not look like an email address' } })),
+    act: async (page) => {
+      await page.locator('.card input[name=email]').fill('a@b.c');
+      await page.locator('.card [data-test="resend-submit"]').click();
+    },
+  },
+  {
+    name: 'resend, sent',
+    path: '/resend-verification',
+    ready: '[data-test="resend-done"]',
+    routes: (page) => page.route('**/api/verify-email/resend', json(200, { message: 'If that address has an account waiting for confirmation, a new link is on its way.' })),
+    act: async (page) => {
+      await page.locator('.card input[name=email]').fill('a@b.c');
+      await page.locator('.card [data-test="resend-submit"]').click();
+    },
+  },
+  {
     name: 'signup, closed',
     path: '/signup',
     ready: '[data-testid=signup-closed]',

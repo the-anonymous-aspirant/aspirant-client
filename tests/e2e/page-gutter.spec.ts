@@ -18,12 +18,13 @@ const ROUTES = [
   '/reset-password',
   '/signup',
   '/forgot-password',
+  '/resend-verification',
   '/support',
   '/no-such-page',
 ];
 
 /** Routes whose content fits a 900 px (desktop) and 844 px (phone) window. */
-const FITS = ['/login', '/verify-email', '/reset-password', '/signup', '/forgot-password', '/no-such-page'];
+const FITS = ['/login', '/verify-email', '/reset-password', '/signup', '/forgot-password', '/resend-verification', '/no-such-page'];
 
 
 for (const theme of ['light', 'dark'] as const) {

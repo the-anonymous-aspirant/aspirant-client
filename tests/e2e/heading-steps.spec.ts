@@ -17,6 +17,7 @@ const ROUTES = [
   '/reset-password',
   '/signup',
   '/forgot-password',
+  '/resend-verification',
   '/support',
   '/no-such-page',
 ];
