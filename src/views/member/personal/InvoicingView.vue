@@ -495,4 +495,24 @@
   .tabs :deep(.segmented__item) {
     flex: 1;
   }
+
+  /* On a phone the spacing above the list is tighter, so two cards end above
+     the fold at 390×844, the second card's "Generate invoice" included
+     (§3.157's budget; design_agent c71509 on system_3 #11019, built as
+     #11576). The gate #11373 measured the second card 25px under the fold.
+     These take spacing and no content: 12px between the page's blocks, which
+     is what the list's own cards sit apart, and 8px above and below the
+     Issuer line, which stays a 44px target. The card's side padding stays on
+     the shared gutter (§3.114). From 641px up nothing changes. */
+  @media (max-width: 640px) {
+    .invoicing-view {
+      gap: var(--space-sm);
+    }
+
+    /* Two classes on this side: AspCard's own padding rule is scoped too, so
+       at equal weight the one loaded last would win. */
+    .invoicing-view .profile-card :deep(.card__body) {
+      padding-block: var(--space-xs);
+    }
+  }
 </style>

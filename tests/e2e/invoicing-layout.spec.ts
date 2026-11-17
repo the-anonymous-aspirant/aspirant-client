@@ -17,12 +17,13 @@ const issued = { id: 100, status: 'issued', client_id: 1, client_name: 'Galerie 
 const draft = { ...issued, id: 102, status: 'draft', invoice_number: null, issue_date: null, total_cents: 5000 };
 const item = { id: 1, position: 1, description: 'Wandbild Juli, Acryl auf Leinwand, 120 × 80 cm', quantity_milli: 1000, unit_price_cents: 35000, line_total_cents: 35000 };
 
-async function mock(page: Page, { steuernummer = '12/345/67890' } = {}): Promise<void> {
+async function mock(page: Page, { steuernummer = '12/345/67890', payments = null as Json[] | null } = {}): Promise<void> {
   await page.route(/\/api\//, (route) => json(route, 404, { error: { code: 'not_found', message: 'not stubbed' } }));
   await page.route(/\/api\/invoicing\//, (route) => {
     const path = new URL(route.request().url()).pathname.replace(/^\/api/, '');
     if (path === '/invoicing/profile') return json(route, 200, { saved: true, profile: { full_name: 'Flower Example', address: 'Beispielstraße 1\n10117 Berlin', steuernummer, email: '', is_kleinunternehmer: true, invoice_number_prefix: '2026', next_invoice_number: 2 } });
     if (path === '/invoicing/clients') return json(route, 200, { clients: [{ id: 1, name: 'Galerie Nord', address: 'Nordweg 2\n13353 Berlin', email: 'info@galerie.test', paypal_email: 'pay@galerie.test' }] });
+    if (path === '/invoicing/payments' && payments) return json(route, 200, { payments });
     if (path === '/invoicing/payments') {
       return json(route, 200, {
         payments: [
@@ -40,7 +41,7 @@ async function mock(page: Page, { steuernummer = '12/345/67890' } = {}): Promise
   });
 }
 
-async function open(page: Page, theme: 'light' | 'dark', opts?: { steuernummer?: string }): Promise<void> {
+async function open(page: Page, theme: 'light' | 'dark', opts?: { steuernummer?: string; payments?: Json[] }): Promise<void> {
   await mock(page, opts);
   await seedTrustedSessionAs(page, 'vinoly');
   await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
@@ -212,8 +213,74 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
     expect(top - summaryBottom, 'first card starts directly under the summary').toBeGreaterThanOrEqual(0);
     expect(top - summaryBottom, 'first card starts directly under the summary').toBeLessThanOrEqual(12);
     const cardHeight = await page.locator('[data-test="profile-card"]').evaluate((el) => el.getBoundingClientRect().height);
-    // One line since system_3 #11019-A1 (was 132px): 2px border + 16px +
-    // the 44px line + 16px + 2px = 80px.
-    expect(cardHeight, 'Issuer card one line, at most 82px').toBeLessThanOrEqual(82);
+    // One line since system_3 #11019-A1 (was 132px). On a phone its padding
+    // above and below the 44px line is 8px since #11576: 2px border + 8px +
+    // 44px + 8px + 2px = 64px.
+    expect(cardHeight, 'Issuer card one line, at most 66px on a phone').toBeLessThanOrEqual(66);
+  });
+
+  // The brief's target for #11019 (§3.157, "The budget"): two cards whole on
+  // a 390×844 first screen. The measurement gate (system_3 #11373, report
+  // 1102) found the second card's box 9.8px under the fold, and 25px under it
+  // when both cards still need an invoice, where the "Generate invoice" button
+  // was cut. design_agent's ruling c71509 on #11019 takes spacing from above
+  // the list, on a phone only (system_3 #11576): 32px as built, four gaps of
+  // 4px and 16px of the Issuer card's padding.
+  const needInvoice = [7, 6].map((n) => ({
+    id: n, kind: 'incoming', entry: 'manual', source: 'manual', method: 'bank_transfer', reference: `E2E-00${n}`,
+    transaction_id: `M-e2e-${n}`, paid_on: `2026-09-${n === 7 ? '28' : '12'}T00:00:00Z`, created_at: '2026-09-29T09:00:00Z',
+    currency: 'EUR', gross_cents: 6000 * n, sender_name: 'Galerie Nord', sender_email: '', note: 'Wandbild (klein)',
+    category: 'paid_work', client_id: 1, on_invoice: false, on_issued_invoice: false, invoice: null,
+  }));
+  const boxOf = (page: Page, selector: string) =>
+    page.locator(selector).first().evaluate((el) => { const r = el.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, height: r.height, left: r.left }; });
+
+  for (const theme of ['light', 'dark'] as const) {
+    test(`on a 390×844 phone two cards that still need an invoice end above the fold, ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await open(page, theme, { payments: needInvoice });
+      const cards = page.locator('[data-test="payment-row"]');
+      await expect(cards).toHaveCount(2);
+      const second = cards.nth(1);
+      const button = second.locator('[data-test="row-generate"]');
+      await expect(button).toHaveText('Generate invoice');
+      const cardBottom = await second.evaluate((el) => el.getBoundingClientRect().bottom);
+      const buttonBottom = await button.evaluate((el) => el.getBoundingClientRect().bottom);
+      expect(buttonBottom, `the second card's Generate invoice ends at ${buttonBottom.toFixed(1)}px`).toBeLessThanOrEqual(844);
+      expect(cardBottom, `the second card ends at ${cardBottom.toFixed(1)}px`).toBeLessThanOrEqual(844);
+
+      // Where the room came from: 12px, not 16px, at each of the four gaps
+      // above the list, and 8px, not 16px, above and below the Issuer line.
+      const head = await boxOf(page, '.page-head');
+      const card = await boxOf(page, '[data-test="profile-card"]');
+      const line = await boxOf(page, '[data-test="profile-edit"]');
+      const tabs = await boxOf(page, '.tabs');
+      const fold = await boxOf(page, '[data-test="ways-in-summary"]');
+      const filters = await boxOf(page, '[data-test="category-filter"]');
+      const gaps = { 'title to Issuer': card.top - head.bottom, 'Issuer to tabs': tabs.top - card.bottom, 'tabs to Add or import': fold.top - tabs.bottom, 'Add or import to the filters': filters.top - fold.bottom };
+      for (const [name, gap] of Object.entries(gaps)) expect(Math.abs(gap - 12), `${name}: ${gap.toFixed(1)}px`).toBeLessThanOrEqual(0.5);
+      // 2px border + 8px + the 44px line + 8px + 2px.
+      expect(Math.abs(card.height - 64), `Issuer card ${card.height.toFixed(1)}px`).toBeLessThanOrEqual(0.5);
+      // What the trim must not take (c71509): the two 44px targets and the
+      // page's 16px side inset.
+      expect(line.height, 'the Issuer line is a 44px target').toBeGreaterThanOrEqual(44);
+      expect(fold.height, '"Add or import" is a 44px target').toBeGreaterThanOrEqual(44);
+      expect(Math.round(card.left), 'the 16px page inset').toBe(16);
+      expect(await noSideScroll(page)).toBe(true);
+    });
+  }
+
+  test('at desktop width the spacing above the list is unchanged', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', 'the desktop layout; a phone has the tighter spacing above');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open(page, 'light', { payments: needInvoice });
+    const head = await boxOf(page, '.page-head');
+    const card = await boxOf(page, '[data-test="profile-card"]');
+    const tabs = await boxOf(page, '.tabs');
+    const waysIn = await boxOf(page, '[data-test="manual-new"]');
+    expect(Math.abs(card.top - head.bottom - 16), 'title to Issuer').toBeLessThanOrEqual(0.5);
+    expect(Math.abs(tabs.top - card.bottom - 16), 'Issuer to tabs').toBeLessThanOrEqual(0.5);
+    expect(Math.abs(waysIn.top - tabs.bottom - 16), 'tabs to the ways in').toBeLessThanOrEqual(0.5);
+    expect(Math.abs(card.height - 80), `Issuer card ${card.height.toFixed(1)}px`).toBeLessThanOrEqual(0.5);
   });
 });
