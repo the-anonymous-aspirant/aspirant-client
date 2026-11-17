@@ -179,25 +179,110 @@ test.describe('#11025 Translator', () => {
   });
 });
 
-test.describe('#11025 reMarkable planner', () => {
-  const GENERATOR = /raw\.githubusercontent\.com\/.*generate_planner\.html$/;
+test.describe('#11025/#11144 reMarkable planner', () => {
+  // system_3 #11144: the upstream repo renamed `generate_planner.html` to
+  // `current_calendar_year.html` and added `next_calendar_year.html`
+  // (2025-12-30), so the page now offers both, pinned to that rename's own
+  // commit rather than `main`. The option labels are the year itself
+  // (`new Date().getFullYear()`, +1 for next), so the suite selects by the
+  // stable `data-test` hooks rather than by label text.
+  const CURRENT_YEAR = /raw\.githubusercontent\.com\/.*current_calendar_year\.html$/;
+  const NEXT_YEAR = /raw\.githubusercontent\.com\/.*next_calendar_year\.html$/;
+  const ANY_GENERATOR = /raw\.githubusercontent\.com\/.*_calendar_year\.html$/;
+  const currentYearRadio = (page: Page) => page.locator('[data-test="calendar-year-current"]');
+  const nextYearRadio = (page: Page) => page.locator('[data-test="calendar-year-next"]');
 
   test('a failed generator load says so, offers a retry, and offers no Download', async ({ page }) => {
     await base(page);
-    await page.route(GENERATOR, (route) => route.fulfill({ status: 500, body: '' }));
+    await page.route(ANY_GENERATOR, (route) => route.fulfill({ status: 500, body: '' }));
     await go(page, '/member/shared/remarkable-pdfs');
-    await expect(failed(page)).toContainText('The generator could not be loaded');
+    await expect(failed(page)).toContainText('The calendar could not be loaded');
     await expect(page.locator('body')).not.toContainText('Loading generator');
     await expect(page.getByRole('button', { name: 'Download as PDF' })).toHaveCount(0);
     await expect(retry(page)).toBeVisible();
   });
 
-  test('a loaded generator shows its preview and its actions', async ({ page }) => {
+  test('loads the current year calendar by default, named by the year, with its preview and actions', async ({ page }) => {
     await base(page);
-    await page.route(GENERATOR, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<p>planner</p>' }));
+    await page.route(CURRENT_YEAR, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<p>this year</p>' }));
+    await page.route(NEXT_YEAR, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<p>next year</p>' }));
     await go(page, '/member/shared/remarkable-pdfs');
+    const year = new Date().getFullYear();
+    await expect(currentYearRadio(page)).toHaveText(String(year));
+    await expect(nextYearRadio(page)).toHaveText(String(year + 1));
+    await expect(currentYearRadio(page)).toBeChecked();
+    await expect(nextYearRadio(page)).not.toBeChecked();
     await expect(page.locator('.preview-iframe')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Download as PDF' })).toBeEnabled();
     await expect(failed(page)).toHaveCount(0);
+  });
+
+  test('switches to the next year calendar and back, loading each generator', async ({ page }) => {
+    await base(page);
+    let currentYearHits = 0;
+    let nextYearHits = 0;
+    await page.route(CURRENT_YEAR, (route) => {
+      currentYearHits += 1;
+      return route.fulfill({ status: 200, contentType: 'text/html', body: '<p>this year</p>' });
+    });
+    await page.route(NEXT_YEAR, (route) => {
+      nextYearHits += 1;
+      return route.fulfill({ status: 200, contentType: 'text/html', body: '<p>next year</p>' });
+    });
+    await go(page, '/member/shared/remarkable-pdfs');
+    await expect(page.locator('.preview-iframe')).toBeVisible();
+    expect(currentYearHits).toBe(1);
+
+    await nextYearRadio(page).click();
+    await expect(nextYearRadio(page)).toBeChecked();
+    await expect(page.locator('.preview-iframe')).toBeVisible();
+    expect(nextYearHits).toBe(1);
+
+    await currentYearRadio(page).click();
+    await expect(currentYearRadio(page)).toBeChecked();
+    expect(currentYearHits).toBe(2);
+  });
+
+  test('a missing generator still says so in words, per generator', async ({ page }) => {
+    await base(page);
+    await page.route(CURRENT_YEAR, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<p>this year</p>' }));
+    await page.route(NEXT_YEAR, (route) => route.fulfill({ status: 404, body: '' }));
+    await go(page, '/member/shared/remarkable-pdfs');
+    await expect(page.locator('.preview-iframe')).toBeVisible();
+
+    await nextYearRadio(page).click();
+    await expect(failed(page)).toContainText('The calendar could not be loaded');
+    await expect(page.getByRole('button', { name: 'Download as PDF' })).toHaveCount(0);
+  });
+
+  test('drops a stale response: switching before the first answers keeps the LATEST pick checked', async ({ page }) => {
+    await base(page);
+    let resolveCurrentYear: (() => void) | undefined;
+    await page.route(CURRENT_YEAR, async (route) => {
+      // Holds the current-year request open past the next-year pick, so it
+      // resolves AFTER the next-year request below — the race design_agent
+      // flagged (c70709).
+      await new Promise<void>((resolve) => {
+        resolveCurrentYear = resolve;
+      });
+      return route.fulfill({ status: 200, contentType: 'text/html', body: '<p>this year</p>' });
+    });
+    await page.route(NEXT_YEAR, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<p>next year</p>' }));
+
+    await go(page, '/member/shared/remarkable-pdfs');
+    await nextYearRadio(page).click();
+    await expect(nextYearRadio(page)).toBeChecked();
+    await expect(page.locator('.preview-iframe')).toBeVisible();
+
+    resolveCurrentYear?.();
+    // Give the dropped current-year response a turn to (wrongly) land. The
+    // radio never changes from the stale response (design_agent, c70728) —
+    // the bug this guards is the PREVIEW silently reverting to the old
+    // calendar under a checked 2027, so assert on the iframe's own content,
+    // not just the checked state.
+    await page.waitForTimeout(200);
+    await expect(nextYearRadio(page)).toBeChecked();
+    await expect(currentYearRadio(page)).not.toBeChecked();
+    await expect(page.locator('.preview-iframe')).toHaveAttribute('srcdoc', /next year/);
   });
 });
