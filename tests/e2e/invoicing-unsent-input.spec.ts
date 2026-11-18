@@ -316,3 +316,47 @@ test.describe('#11668 the payment form asks before an exit throws away what was 
     });
   }
 });
+
+// system_3 #11685 (found on #11668's dogfood walk, c72270): Keep editing after
+// an ask that began on the footer's Cancel left focus on the page body,
+// outside the dialog, which then no longer heard Esc or Tab. Focus now goes
+// to the restored Cancel. The scrim case was not broken (focus stays in the
+// field); its test guards the dialog fallback the fix adds.
+test.describe('#11685 Keep editing keeps focus inside the dialog', () => {
+  for (const [label, start, field, cancel] of [
+    ['expense', newExpense, '[data-test="expense-payee"]', '[data-test="expense-cancel"]'],
+    ['payment', newPayment, '[data-test="manual-amount"]', '[data-test="manual-cancel"]'],
+  ] as const) {
+    test(`${label}: after Cancel and Keep editing, focus is on Cancel and Esc asks again`, async ({ page }) => {
+      const fake = newFake();
+      await open(page, fake);
+      await start(page);
+      await dialog(page).locator(field).fill(label === 'payment' ? '12,50' : 'Papierladen');
+      await dialog(page).locator(cancel).click();
+      await expect(ask(page)).toBeVisible();
+      await page.locator('[data-test="unsent-keep"]').click();
+      await expect(ask(page)).toHaveCount(0);
+      await expect(dialog(page).locator(cancel)).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(ask(page)).toBeVisible();
+      await page.locator('[data-test="unsent-discard"]').click();
+      await expect(dialog(page)).toHaveCount(0);
+      expect(writes(fake)).toEqual([]);
+    });
+  }
+
+  test('after the scrim and Keep editing, focus is inside the dialog and Esc asks again', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'below 768px the dialog is a sheet with no scrim');
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await open(page, newFake());
+    await newExpense(page);
+    await dialog(page).locator('[data-test="expense-payee"]').fill('Papierladen');
+    await page.mouse.click(5, 5);
+    await expect(ask(page)).toBeVisible();
+    await page.locator('[data-test="unsent-keep"]').click();
+    await expect(ask(page)).toHaveCount(0);
+    expect(await dialog(page).evaluate((d) => d.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(ask(page)).toBeVisible();
+  });
+});
