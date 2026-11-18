@@ -393,7 +393,9 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     await expect(row(page, 'N26-P1').locator('[data-test="row-client"]')).toContainText('Galerie Nord');
     await expect(row(page, 'N26-P1').locator('[data-test="payment-category"], [data-test="row-category"]')).toContainText('Paid work');
     // Money out has its category, and no client or invoice.
-    await expect(row(page, 'N26-E1').locator('[data-test="row-category"]')).toHaveText('materials and supplies');
+    // An expense's category is a select on a wide screen (system_3 #11567)
+    // and text on a phone card, as a payment's.
+    await expect(row(page, 'N26-E1').locator('[data-test="table-expense-category"], [data-test="row-category"]')).toContainText('materials and supplies');
     await expect(row(page, 'N26-E1').locator('[data-test="row-client"], [data-test="row-invoice"]')).toHaveCount(0);
 
     // §3.140 Decision 2: in in body ink, out in the error text red.
@@ -658,7 +660,8 @@ test.describe('#10631 Transactions: selection actions for both directions', () =
     await select(page, 'PP-P4').uncheck();
     await select(page, 'M-e2').check();
     await expect(bulkCategory(page)).toBeEnabled();
-    await expect.poll(() => bulkOptions(page)).toEqual(['materials and supplies', 'other', 'travel']);
+    // In the server's order, the Edit expense dialog's (system_3 #11567).
+    await expect.poll(() => bulkOptions(page)).toEqual(['materials and supplies', 'travel', 'other']);
     await bulkCategory(page).click();
     await page.getByRole('option', { name: 'other', exact: true }).click();
     await expect.poll(() => sent(fake, 'PATCH', /^\/invoicing\/(payments|expenses)\//).length).toBe(1);
