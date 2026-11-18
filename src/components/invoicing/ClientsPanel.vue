@@ -63,8 +63,14 @@
          keep their own job (§3.159 Decision 3, system_3 #11501). -->
     <ul v-if="narrow" class="client-cards" :aria-label="flat ? 'Clients' : `Clients: ${group.key}`">
       <li v-for="row in group.rows" :key="row.id" class="client-card client-card--tap" data-test="client-row" :data-client-id="row.id" @click="onCardTap(row, $event)">
+        <!-- The card says at rest that it opens (system_3 #11022, UX walk AM5;
+             design ack c72063): the tab's own door word, muted, at the end
+             of a line the card already has, so no card grows. It is part of
+             the card's one tap, not a second door (§3.159 Decision 3); a
+             screen reader and a keyboard are #11661's. -->
         <div class="client-card__top">
           <strong>{{ row.name }}</strong>
+          <span class="muted card-door" aria-hidden="true" data-test="card-door">Edit</span>
         </div>
         <span v-for="other in lookAlikesOf(row)" :key="`alike-${other.id}`" class="review-flag" data-test="client-look-alike">
           Looks like {{ other.name }}
@@ -681,9 +687,14 @@
     cursor: pointer;
   }
 
+  .card-door {
+    flex: none;
+    white-space: nowrap;
+  }
+
   .client-card__top {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
     gap: var(--space-sm);
   }

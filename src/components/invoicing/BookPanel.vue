@@ -156,7 +156,15 @@
                 <span v-if="row.what" :class="{ muted: !!row.who }">{{ row.what }}</span>
                 <template v-if="!row.who && !row.what">—</template>
               </span>
-              <span class="muted">{{ row.categoryLabel }}</span>
+              <!-- The card says at rest that it opens (system_3 #11022, UX walk AM5;
+                 design ack c72063): the tab's own door word, muted, at the end
+                 of a line the card already has, so no card grows. It is part of
+                 the card's one tap, not a second door (§3.159 Decision 3); a
+                 screen reader and a keyboard are #11661's. -->
+              <span class="card-line">
+                <span class="muted">{{ row.categoryLabel }}</span>
+                <span class="muted card-door" aria-hidden="true" data-test="card-door">Edit</span>
+              </span>
               <div v-if="row.type === 'out'" class="book-card__expense-actions">
                 <AspButton variant="ghost" size="sm" data-test="book-expense-receipt" @click="openReceipt(row)">
                   Receipt
@@ -932,6 +940,19 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);
+  }
+
+  /* A card line with the door word at its end (system_3 #11022). */
+  .card-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-sm);
+  }
+
+  .card-door {
+    flex: none;
+    white-space: nowrap;
   }
 
   .book-card {
