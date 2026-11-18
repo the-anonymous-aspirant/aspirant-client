@@ -367,7 +367,10 @@ export const allInvoicesCsvUrl = () => `${base}/export/invoices.csv`;
 // Zir client list as Kunden.csv (system_3 #10012).
 export const clientsCsvUrl = () => `${base}/export/clients.csv`;
 // The Book tab's income-and-expenses bookkeeping grid (system_3 #10414-E).
-export const bookReportCsvUrl = () => `${base}/export/book-report.csv`;
+// With a month ("YYYY-MM") the file holds that month alone (aspirant-server
+// #11634); without one, the whole book.
+export const bookReportCsvUrl = (month = '') =>
+  `${base}/export/book-report.csv${month ? `?month=${encodeURIComponent(month)}` : ''}`;
 
 // What the Book counts, and zir presets (§3.143 Decision 8, system_3
 // #10555-A3). A counting is `{ income: [...], expense_all, expense: [...] }`;
