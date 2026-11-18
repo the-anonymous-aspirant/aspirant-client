@@ -258,6 +258,134 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
   });
 
+  // system_3 #11554 (#11497 item 14; operator c71213 on #10985; design ack
+  // on #11554): the draft shows, before Accept, the address the invoice will
+  // print. It is the client's record as the PDF's recipient block prints it
+  // under the name. The client's email is saved with the invoice and not
+  // printed, so it is not shown.
+  test.describe('#11554 the draft shows the address the invoice will print', () => {
+    const block = (page: Page) => page.locator('[data-test="draft-client-address"]');
+    const lines = (page: Page) => page.locator('[data-test="draft-client-address-line"]');
+    const clientSelect = (page: Page) => page.locator('[data-test="invoice-editor"]').getByRole('combobox', { name: 'Client' });
+    const withClients = (clients: Json[]) => {
+      const fake = newFake();
+      fake.clients = clients;
+      return fake;
+    };
+    const nord = { id: 1, name: 'Galerie Nord', address: '  Nordweg 2  \n\n13353 Berlin\n', email: 'buero@galerie.test', paypal_email: '' };
+
+    test('a client with an address: its lines under the Client select, trimmed, empty lines dropped, and no email', async ({ page }) => {
+      const fake = withClients([nord]);
+      await open(page, fake);
+      await createFromTwo(page);
+      await expect(block(page)).toBeVisible();
+      await expect(block(page).locator('span').first()).toHaveText('Address on the invoice');
+      // The PDF's recipient block under the name: the same lines, in order.
+      await expect(lines(page)).toHaveText(['Nordweg 2', '13353 Berlin']);
+      await expect(block(page).locator('span').last()).toHaveText('To change it, edit the client under Clients.');
+      await expect(block(page)).not.toContainText('buero@galerie.test');
+      await expect(block(page).locator('a, button, input')).toHaveCount(0);
+      // An address is there, so the lines about a missing one are not.
+      await expect(page.locator('[data-test="draft-no-address"]')).toHaveCount(0);
+    });
+
+    test('a client with an email and no address: no block, and the existing line', async ({ page }) => {
+      const fake = withClients([{ id: 1, name: 'Galerie Nord', address: '  \n ', email: 'buero@galerie.test', paypal_email: '' }]);
+      await open(page, fake);
+      await createFromTwo(page);
+      await expect(block(page)).toHaveCount(0);
+      await expect(page.locator('[data-test="draft-no-address"]')).toBeVisible();
+      await expect(page.locator('[data-test="invoice-editor"]')).not.toContainText('buero@galerie.test');
+    });
+
+    test('switching the client changes the block at once, with no request', async ({ page }) => {
+      const fake = withClients([nord, { id: 2, name: 'Atelier Süd', address: 'Südring 9\n04107 Leipzig', email: '', paypal_email: '' }, { id: 3, name: 'Ohne Adresse', address: '', email: '', paypal_email: '' }]);
+      await open(page, fake);
+      await createFromTwo(page);
+      await expect(lines(page)).toHaveText(['Nordweg 2', '13353 Berlin']);
+      const before = fake.requests.length;
+      await clientSelect(page).click();
+      await page.getByRole('option', { name: 'Atelier Süd', exact: true }).click();
+      await expect(lines(page)).toHaveText(['Südring 9', '04107 Leipzig']);
+      await clientSelect(page).click();
+      await page.getByRole('option', { name: 'Ohne Adresse', exact: true }).click();
+      await expect(block(page)).toHaveCount(0);
+      expect(fake.requests.length, 'the client list is already in the editor').toBe(before);
+    });
+
+    test('after the address is changed under Clients, the reopened draft shows the new one', async ({ page }) => {
+      const fake = withClients([nord]);
+      await open(page, fake);
+      await createFromTwo(page);
+      await expect(lines(page)).toHaveText(['Nordweg 2', '13353 Berlin']);
+      await page.locator('[data-test="draft-save"]').click();
+      await expect(page.locator('[data-test="invoice-editor"]')).toBeHidden();
+      // The record changes (as an edit under Clients does), and the page is
+      // read again.
+      fake.clients = [{ ...nord, address: 'Neue Straße 5\n10115 Berlin' }];
+      await page.reload();
+      await dismissMobileSidebarIfPresent(page);
+      await page.getByRole('tab', { name: 'Invoices' }).click();
+      await page.locator('[data-test="invoice-row"]').first().click();
+      await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
+      await expect(lines(page)).toHaveText(['Neue Straße 5', '10115 Berlin']);
+    });
+
+    test('at 1440×900 the block is under the select, no wider, and the fields keep one top edge with and without it', async ({ page }, info) => {
+      test.skip(info.project.name !== 'chromium', 'a desktop width');
+      await page.setViewportSize({ width: 1440, height: 900 });
+      const tops = async () => {
+        const client = (await clientSelect(page).boundingBox())!;
+        const from = (await page.locator('[data-test="draft-from"]').boundingBox())!;
+        const to = (await page.locator('[data-test="draft-to"]').boundingBox())!;
+        return { client, from, to };
+      };
+      const fake = withClients([nord, { id: 3, name: 'Ohne Adresse', address: '', email: '', paypal_email: '' }]);
+      await open(page, fake);
+      await createFromTwo(page);
+      const withBlock = await tops();
+      const b = (await block(page).boundingBox())!;
+      expect(Math.abs(b.x - withBlock.client.x), 'left-aligned with the select').toBeLessThanOrEqual(1);
+      expect(b.x + b.width, 'no wider than the select').toBeLessThanOrEqual(withBlock.client.x + withBlock.client.width + 1);
+      expect(b.y, 'under the select').toBeGreaterThanOrEqual(withBlock.client.y + withBlock.client.height);
+      // The inputs' lower edges line up, with the block there.
+      const bottom = (r: { y: number; height: number }) => Math.round(r.y + r.height);
+      expect([bottom(withBlock.from), bottom(withBlock.to)]).toEqual([bottom(withBlock.client), bottom(withBlock.client)]);
+      await clientSelect(page).click();
+      await page.getByRole('option', { name: 'Ohne Adresse', exact: true }).click();
+      await expect(block(page)).toHaveCount(0);
+      const without = await tops();
+      // One top edge for the select and the two dates, with the block and
+      // without it. (The dialog is centred, so the row's own position on the
+      // screen follows the dialog's height; the fields' edges relative to
+      // each other are what the block must not disturb.)
+      const oneTop = (t: typeof withBlock) => new Set([t.client.y, t.from.y, t.to.y].map(Math.round)).size;
+      expect(oneTop(withBlock), 'with the block').toBe(1);
+      expect(oneTop(without), 'without the block').toBe(1);
+      expect([without.client.height, without.from.height].map(Math.round)).toEqual([withBlock.client.height, withBlock.from.height].map(Math.round));
+    });
+
+    test('at 360px a long address line wraps and nothing scrolls sideways', async ({ page }, info) => {
+      test.skip(info.project.name !== 'mobile-safari', 'a phone width');
+      await page.setViewportSize({ width: 360, height: 780 });
+      const long = 'Hinterhaus, dritter Stock links, Eingang über den Hof der Kulturbrauerei-Nebengebäude';
+      const fake = withClients([{ ...nord, address: `${long}\n10435 Berlin` }]);
+      await open(page, fake);
+      await createFromOne(page, true, 'TX1');
+      await expect(lines(page)).toHaveText([long, '10435 Berlin']);
+      const first = lines(page).first();
+      const rects = await first.evaluate((el) => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        return new Set(Array.from(range.getClientRects()).map((r) => Math.round(r.top))).size;
+      });
+      expect(rects, 'the long line wraps').toBeGreaterThan(1);
+      const b = (await block(page).boundingBox())!;
+      expect(b.x + b.width).toBeLessThanOrEqual(360);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  });
+
   test('a client without an address: a small invoice issues', async ({ page, isMobile }) => {
     const fake = newFake();
     fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];

@@ -320,6 +320,18 @@ test.describe('#11505 generate, then review one at a time', () => {
     await expect(summary(page)).toHaveCount(0);
   });
 
+  // system_3 #11554: a review is the same draft editor, so the address the
+  // invoice will print is read here too, before Accept.
+  test('a review shows the address the invoice will print, with Reject, Later and Accept below', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await generateButton(page).click();
+    await expect(editor(page)).toHaveAttribute('data-status', 'draft');
+    await expect(page.locator('[data-test="draft-client-address"] span').first()).toHaveText('Address on the invoice');
+    await expect(page.locator('[data-test="draft-client-address-line"]')).toHaveText(['Nordweg 2', '13353 Berlin']);
+    await expect(page.locator('[data-test="review-actions"]')).toBeVisible();
+  });
+
   test('a draft of the month that no listed payment points at is reviewed too', async ({ page }) => {
     const fake = newFake();
     // Started by hand; its payment was removed since, so no payment names it.
