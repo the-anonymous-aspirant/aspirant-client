@@ -219,8 +219,18 @@
     <section class="export-group" aria-labelledby="book-export-heading" data-test="book-export">
       <h3 id="book-export-heading">Export</h3>
       <div class="export">
+        <!-- One month or the whole book (system_3 #11635, #11497 item 12;
+             operator c70883 on #10985; design ack on #11635). It scopes the
+             file and filters nothing on the page, so it sits with the file.
+             "Paid in": the Book's one calendar is the day the money moved
+             (§3.140 Decision 1). One button follows it: a second button
+             would be a second name for the same report. -->
+        <div class="export__month" :style="{ '--export-month-ch': `${exportMonthChars}ch` }">
+          <AspSelect v-model="exportMonth" :options="exportMonthOptions" label="Paid in" data-test="book-report-month" />
+        </div>
         <AspButton
           variant="secondary"
+          class="export__button"
           :loading="reportDownloading"
           :aria-describedby="book ? 'book-report-caption' : undefined"
           data-test="book-report-csv"
@@ -228,7 +238,7 @@
         >
           Bookkeeping report (CSV)
         </AspButton>
-        <p v-if="book" id="book-report-caption" class="export__scope muted" data-test="book-report-caption">The entries counted with {{ name }}, by month and category</p>
+        <p v-if="book" id="book-report-caption" class="export__scope muted" data-test="book-report-caption">{{ reportCaption }}</p>
       </div>
       <p v-if="reportError" class="error" role="alert" data-test="book-report-error">{{ reportError }}</p>
     </section>
@@ -282,7 +292,7 @@
     updateBookPreset,
   } from './api.js';
   import { expenseParts, newestFirst, paymentParts } from './ledgerRows.js';
-  import { fillEmptyMonths, groupByMonth, landedRows, monthKey, openGroupKeys } from './listGroups.js';
+  import { fillEmptyMonths, groupByMonth, landedRows, monthKey, monthLabel, openGroupKeys } from './listGroups.js';
   import { INCOME_ORDER, WORK_ONLY, countableExpenseNames, countingSentence, countsInBook, selectionName } from './bookSelection.js';
 
   // The income-and-expenses book (system_3 #10414-C): payments and
@@ -333,6 +343,11 @@
         expenseCategories: [],
         reportDownloading: false,
         reportError: '',
+        // The month the export is scoped to, "YYYY-MM", or '' for the whole
+        // book. Not remembered between visits: an export scoped by a
+        // forgotten choice would be a wrong file that looks right. It stays
+        // after a download, so the same month can be exported again.
+        exportMonth: '',
         receiptOpen: false,
         receiptExpenseId: null,
         receiptExpenseLabel: '',
@@ -478,6 +493,33 @@
           return { ...g, ...t };
         });
       },
+      // "All months", then every month the Book shows, newest first, named as
+      // its month heads are. A month the Book marks "No entries" says so. A
+      // chosen month the Book has stopped showing (what counts changed) stays
+      // in the list, as the Invoices tab keeps its chosen month.
+      exportMonthOptions() {
+        const shown = this.months.map((m) => ({ key: m.key, label: m.label, empty: !!m.empty }));
+        if (this.exportMonth && !shown.some((m) => m.key === this.exportMonth)) {
+          shown.push({ key: this.exportMonth, label: monthLabel(this.exportMonth), empty: true });
+          shown.sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : 0));
+        }
+        return [{ value: '', label: 'All months' }, ...shown.map((m) => ({ value: m.key, label: m.empty ? `${m.label} · no entries` : m.label }))];
+      },
+      // The longest option's length, so the select is as wide as its longest
+      // option and does not change width with the choice (the house face is
+      // monospaced, so `ch` is exact).
+      exportMonthChars() {
+        return Math.max(...this.exportMonthOptions.map((o) => o.label.length));
+      },
+      // What the file will hold, said before the click (§3.132 Decision 7).
+      // No count: the file is a grid of sums, not a list of entries.
+      reportCaption() {
+        if (!this.exportMonth) return `The entries counted with ${this.name}, by month and category`;
+        const month = this.months.find((m) => m.key === this.exportMonth);
+        const label = monthLabel(this.exportMonth);
+        if (month && !month.empty) return `The entries counted with ${this.name} that were paid in ${label}, by category`;
+        return `Nothing counted with ${this.name} was paid in ${label}. Every amount in the file is zero.`;
+      },
       // Open now: zir own choice, else the newest month WITH entries; a lone
       // month is open (§3.145 Decision 3, §3.17 R3). The Book has no filter.
       // An empty month does not fold (there is nothing in it), so it is left
@@ -566,7 +608,7 @@
         this.reportDownloading = true;
         this.reportError = '';
         try {
-          await downloadBlob(bookReportCsvUrl(), 'Buchhaltung.csv');
+          await downloadBlob(bookReportCsvUrl(this.exportMonth), 'Buchhaltung.csv');
         } catch (err) {
           // Said beside the button: the tab's shared error line is at its
           // top, a screen or more above the Export group (system_3 #11500).
@@ -751,6 +793,18 @@
   .export__scope {
     margin: 0;
     font-size: var(--text-sm);
+  }
+
+  /* The month select sits above the button with a little more room than
+     the button has to its caption. */
+  .export__month {
+    margin-bottom: var(--space-xs);
+  }
+
+  /* As wide as its longest option, whatever is chosen: the option's text
+     plus the trigger's own padding and caret. */
+  .export__month :deep(.select__trigger) {
+    min-width: calc(var(--export-month-ch, 10ch) + 3.5rem);
   }
 
   .export-group > .error {
@@ -956,6 +1010,26 @@
   }
 
   @media (max-width: 640px) {
+    /* On a phone the month select and the button each take the full width,
+       the select first (§3.122 P5; design ack on system_3 #11635). */
+    .export {
+      max-width: none;
+      align-items: stretch;
+    }
+
+    .export__month :deep(.select) {
+      display: flex;
+      width: 100%;
+    }
+
+    .export__month :deep(.select__trigger) {
+      min-width: 0;
+    }
+
+    .export__button {
+      width: 100%;
+    }
+
     /* The totals take their own line under the month name, starting where
        the name starts (past the caret). */
     .month__totals {

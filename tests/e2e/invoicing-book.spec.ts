@@ -21,7 +21,7 @@ interface Fake {
   payments: Json[];
   expenses: Json[];
   categories: Json[];
-  requests: Array<{ method: string; path: string; body: string }>;
+  requests: Array<{ method: string; path: string; body: string; search?: string }>;
   nextExpenseId: number;
   nextCategoryId: number;
   reportStatus?: number;
@@ -62,7 +62,7 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     const req = route.request();
     const path = new URL(req.url()).pathname.replace(/^\/api/, '');
     const method = req.method();
-    fake.requests.push({ method, path, body: req.postData() || '' });
+    fake.requests.push({ method, path, body: req.postData() || '', search: new URL(req.url()).search });
     if (path === '/invoicing/profile') return json(route, 200, { saved: true, profile: { full_name: 'Flower Example', address: 'A', steuernummer: '12/345/67890', is_kleinunternehmer: true, invoice_number_prefix: '2026', next_invoice_number: 1 } });
     if (path === '/invoicing/clients') return json(route, 200, { clients: fake.clients });
     if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: fake.payments });
@@ -663,5 +663,148 @@ test.describe('#11500 the Book ends with its Export group', () => {
     await open(page, fake);
     await expect(page.locator('[data-test="book-export"]')).toBeVisible();
     await expect(page.locator('[data-test="book-report-csv"]')).toBeEnabled();
+  });
+});
+
+// system_3 #11635 (#11497 item 12; operator c70883 on #10985; design ack on
+// #11635): the Book's Export group offers one month as well as the whole
+// book. One select, "Paid in", scopes the one button's file; the caption says
+// what the file will hold before the click.
+test.describe('#11635 the Book exports one month or the whole book', () => {
+  // "Today" is fixed so the months the Book shows are known: July (entries),
+  // August (none), September (entries). October is the current month, empty.
+  const DAY = new Date('2026-10-10T12:00:00Z');
+  const fakeBook = () =>
+    newFake({
+      payments: [
+        incomeRow({ id: 21, note: 'September work', paid_on: '2026-09-12T00:00:00Z' }),
+        incomeRow({ id: 22, note: 'July work', paid_on: '2026-07-14T00:00:00Z' }),
+      ],
+      expenses: [expenseRow(101)],
+    });
+  const select = (page: Page) => page.getByRole('combobox', { name: 'Paid in' });
+  const caption = (page: Page) => page.locator('[data-test="book-report-caption"]');
+  const reportRequests = (fake: Fake) => fake.requests.filter((r) => r.method === 'GET' && r.path === '/invoicing/export/book-report.csv');
+  async function openAt(page: Page, fake: Fake) {
+    await page.clock.setFixedTime(DAY);
+    await open(page, fake);
+  }
+  async function choose(page: Page, option: string) {
+    await select(page).click();
+    await page.getByRole('option', { name: option, exact: true }).click();
+  }
+  async function download(page: Page) {
+    const done = page.waitForEvent('download');
+    await page.locator('[data-test="book-report-csv"]').click();
+    await done;
+  }
+
+  test('the select lists "All months", then the months the Book shows, newest first, marking the empty ones', async ({ page }) => {
+    await openAt(page, fakeBook());
+    await expect(select(page)).toContainText('All months');
+    await select(page).click();
+    const options = (await page.getByRole('option').allTextContents()).map((t) => t.trim());
+    expect(options).toEqual(['All months', 'October 2026 · no entries', 'September 2026', 'August 2026 · no entries', 'July 2026']);
+    // The Book's own order and marks, read from the page: the same months,
+    // newest first, with the same two marked empty.
+    const shown = await page.locator('[data-test="book-month"], [data-test="book-month-empty"]').evaluateAll((els) =>
+      els.map((el) => ({ key: el.getAttribute('data-group'), empty: el.getAttribute('data-test') === 'book-month-empty' }))
+    );
+    expect(shown).toEqual([
+      { key: '2026-10', empty: true },
+      { key: '2026-09', empty: false },
+      { key: '2026-08', empty: true },
+      { key: '2026-07', empty: false },
+    ]);
+  });
+
+  test('"All months" sends no month and keeps today\'s caption', async ({ page }) => {
+    const fake = fakeBook();
+    await openAt(page, fake);
+    await expect(caption(page)).toHaveText('The entries counted with Work only, by month and category');
+    await download(page);
+    expect(reportRequests(fake)).toHaveLength(1);
+    expect(reportRequests(fake)[0].search).toBe('');
+  });
+
+  test('a month with entries sends its month, says so before the click, and stays chosen after the download', async ({ page }) => {
+    const fake = fakeBook();
+    await openAt(page, fake);
+    await choose(page, 'July 2026');
+    await expect(caption(page)).toHaveText('The entries counted with Work only that were paid in July 2026, by category');
+    await download(page);
+    expect(reportRequests(fake)[0].search).toBe('?month=2026-07');
+    await expect(select(page)).toContainText('July 2026');
+    // The same month again, without choosing again.
+    await download(page);
+    expect(reportRequests(fake).map((r) => r.search)).toEqual(['?month=2026-07', '?month=2026-07']);
+  });
+
+  test('a month with no entries is offered, sends its month, and says every amount is zero', async ({ page }) => {
+    const fake = fakeBook();
+    await openAt(page, fake);
+    await choose(page, 'August 2026 · no entries');
+    await expect(caption(page)).toHaveText('Nothing counted with Work only was paid in August 2026. Every amount in the file is zero.');
+    await expect(page.locator('[data-test="book-report-csv"]')).toBeEnabled();
+    await download(page);
+    expect(reportRequests(fake)[0].search).toBe('?month=2026-08');
+  });
+
+  test('a chosen month the Book stops showing stays listed, marked, and still sends its month', async ({ page }) => {
+    // July holds one expense and nothing else, so removing it takes July,
+    // the oldest month, off the Book. It happens on the Book itself: leaving
+    // the tab and coming back resets the select to "All months" by design.
+    const fake = newFake({
+      payments: [incomeRow({ id: 21, note: 'September work', paid_on: '2026-09-12T00:00:00Z' })],
+      expenses: [expenseRow(101)],
+    });
+    await openAt(page, fake);
+    await choose(page, 'July 2026');
+    // July is folded: only the newest month with entries opens by itself.
+    await page.locator('[data-test="book-month"]', { hasText: 'July 2026' }).locator('[data-test="month-head"]').click();
+    const dialog = await openRowEdit(page, 'out');
+    const remove = dialog.locator('[data-test="edit-remove"]');
+    await remove.click();
+    await remove.click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('[data-test="book-row"]:visible')).toHaveCount(1);
+
+    await expect(select(page)).toContainText('July 2026 · no entries');
+    await expect(caption(page)).toHaveText('Nothing counted with Work only was paid in July 2026. Every amount in the file is zero.');
+    await select(page).click();
+    const options = (await page.getByRole('option').allTextContents()).map((t) => t.trim());
+    // Still newest first, with the kept month in its place at the end.
+    expect(options).toEqual(['All months', 'October 2026 · no entries', 'September 2026', 'July 2026 · no entries']);
+    await page.keyboard.press('Escape');
+    await download(page);
+    expect(reportRequests(fake)[0].search).toBe('?month=2026-07');
+  });
+
+  test('on a wide screen the select keeps one width, wide enough for its longest option, whatever is chosen', async ({ page }, info) => {
+    test.skip(info.project.name !== 'chromium', 'a desktop width');
+    await openAt(page, fakeBook());
+    const width = async () => (await select(page).boundingBox())!.width;
+    const all = await width();
+    await choose(page, 'July 2026');
+    const short = await width();
+    await choose(page, 'October 2026 · no entries');
+    const long = await width();
+    expect([all, short, long].map((w) => Math.round(w)), 'one width for every choice').toEqual([Math.round(long), Math.round(long), Math.round(long)]);
+    // The longest label is on one line and not cut.
+    const fit = await select(page).evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }));
+    expect(fit.scroll).toBeLessThanOrEqual(fit.client);
+  });
+
+  test('at 360px the select and the button are full width, the select first, and nothing scrolls sideways', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile-safari', 'a phone width');
+    await page.setViewportSize({ width: 360, height: 780 });
+    await openAt(page, fakeBook());
+    const group = (await page.locator('[data-test="book-export"] .export').boundingBox())!;
+    const sel = (await select(page).boundingBox())!;
+    const button = (await page.locator('[data-test="book-report-csv"]').boundingBox())!;
+    expect(Math.abs(sel.width - group.width), `select ${sel.width}px of ${group.width}px`).toBeLessThanOrEqual(1);
+    expect(Math.abs(button.width - group.width), `button ${button.width}px of ${group.width}px`).toBeLessThanOrEqual(1);
+    expect(sel.y, 'the select is above the button').toBeLessThan(button.y);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
