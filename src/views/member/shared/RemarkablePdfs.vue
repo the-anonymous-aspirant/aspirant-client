@@ -76,10 +76,12 @@ export default {
       // (system_3 #11144). Pinning to the commit that did the rename means a
       // future upstream rename 404s a NEW pinned sha, never this one, so it
       // can't happen silently again; bump the sha by hand if the repo adds a
-      // generator worth shipping.
+      // generator worth shipping. Bumped to the merge of the generator's PR 2
+      // (system_3 #11489, #11607): the cover page shows the year as text, in
+      // place of an image whose shared-note address had started to answer 404.
       generators: {
-        current_year: 'https://raw.githubusercontent.com/the-anonymous-aspirant/remarkable-pdf-journal/4886037a9745d1061858201b7ae3acb923cdd224/current_calendar_year.html',
-        next_year: 'https://raw.githubusercontent.com/the-anonymous-aspirant/remarkable-pdf-journal/4886037a9745d1061858201b7ae3acb923cdd224/next_calendar_year.html',
+        current_year: 'https://raw.githubusercontent.com/the-anonymous-aspirant/remarkable-pdf-journal/0927caa3f97d8af9f6c4c26433ddaae66bdc2082/current_calendar_year.html',
+        next_year: 'https://raw.githubusercontent.com/the-anonymous-aspirant/remarkable-pdf-journal/0927caa3f97d8af9f6c4c26433ddaae66bdc2082/next_calendar_year.html',
       }
     };
   },
