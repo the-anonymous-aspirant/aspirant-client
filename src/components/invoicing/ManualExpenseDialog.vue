@@ -1,6 +1,8 @@
 <template>
   <AspModal :open="open" :title="title" size="md" @update:open="onOpenChange">
-    <form class="manual-form" data-test="expense-form" @submit.prevent="save">
+    <!-- While the footer asks before discarding (system_3 #11632), the form
+         stays in view and cannot be changed. -->
+    <form class="manual-form" data-test="expense-form" :inert="unsentAsking || undefined" @submit.prevent="save">
       <p v-if="!editing" class="manual-form__lead">Enter a work expense — money going out, for your own bookkeeping.</p>
       <!-- What the bank recorded, as text: nothing can make it editable
            (§3.143 Decision 5, §3.22). An import stores the bank's payee name
@@ -107,7 +109,8 @@
       <p v-if="error" class="manual-form__error" role="alert" data-test="expense-error">{{ error }}</p>
     </form>
     <template #footer>
-      <ModalActions>
+      <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
+      <ModalActions v-else>
         <!-- Remove arms first (§3.143 Decision 6). An expense is never on an
              invoice, so removing it changes nothing else. -->
         <template v-if="editing" #destructive>
@@ -115,7 +118,7 @@
             {{ confirmingRemove ? 'Remove this expense' : 'Remove' }}
           </AspButton>
         </template>
-        <AspButton variant="secondary" :disabled="closeBlocked" data-test="expense-cancel" @click="onOpenChange(false)">Cancel</AspButton>
+        <AspButton variant="secondary" :disabled="unsentBusy" data-test="expense-cancel" @click="onOpenChange(false)">Cancel</AspButton>
         <AspButton :loading="saving" data-test="expense-save" @click="save">{{ editing ? 'Save changes' : 'Save expense' }}</AspButton>
       </ModalActions>
     </template>
@@ -126,6 +129,8 @@
   import { AspButton, AspInput, AspModal, AspSelect } from '@aspirant/design-system';
   import LineDescriptionInput from './LineDescriptionInput.vue';
   import ModalActions from './ModalActions.vue';
+  import UnsentAsk from './UnsentAsk.vue';
+  import { unsentGuard } from './unsentGuard.js';
   import { historyLines } from './auditHistory.js';
   import {
     SOURCE_LABELS,
@@ -183,7 +188,8 @@
   // for change (aspirant-server invoicing_edit.go refuses the rest).
   export default {
     name: 'ManualExpenseDialog',
-    components: { AspButton, AspInput, AspModal, AspSelect, LineDescriptionInput, ModalActions },
+    components: { AspButton, AspInput, AspModal, AspSelect, LineDescriptionInput, ModalActions, UnsentAsk },
+    mixins: [unsentGuard],
     props: {
       open: { type: Boolean, default: false },
       categories: { type: Array, default: () => [] },
@@ -225,11 +231,12 @@
         const mb = this.receiptFile.size / (1024 * 1024);
         return mb < 0.05 ? 'under 0.1 MB' : `${mb.toFixed(1)} MB`;
       },
-      // While Save runs with a file picked, the dialog stays: a close between
-      // the create and the upload would leave an upload running that nobody
-      // sees fail.
-      closeBlocked() {
-        return this.saving && !this.editing && !!this.receiptFile;
+      // While a write runs, no exit closes and none asks (system_3 #11632,
+      // §3.166 item 4). Before, only a create with a picked file held the
+      // dialog: a close between the create and the upload would leave an
+      // upload running that nobody sees fail.
+      unsentBusy() {
+        return this.saving || this.savingCategory || this.removing;
       },
       sourceName() {
         if (!this.editing) return '';
@@ -267,6 +274,7 @@
           this.historyLoaded = false;
           this.historyError = '';
           if (this.expense) this.loadHistory(this.expense.id);
+          this.takeUnsentBaseline();
         }
       },
     },
@@ -330,10 +338,38 @@
         if (now.reference.trim() !== was.reference) patch.reference = now.reference.trim();
         return patch;
       },
-      // Esc, the scrim, the corner ✕ and Cancel all come through here.
+      // Esc, the scrim, the corner ✕ and Cancel all come through here, and
+      // Back through the guard; each asks first when something is unsent
+      // (system_3 #11632).
       onOpenChange(value) {
-        if (!value && this.closeBlocked) return;
-        this.$emit('update:open', value);
+        if (value) return;
+        this.requestClose();
+      },
+      closeNow() {
+        this.$emit('update:open', false);
+      },
+      // What Save would send that the server does not hold, normalised as
+      // Save does it, so a field typed and put back is equal again. A new
+      // expense compares with the blank form; an edit sends only its patch,
+      // so an empty patch is nothing unsent. A picked receipt counts.
+      unsentValue() {
+        const receipt = this.receiptFile ? { name: this.receiptFile.name, size: this.receiptFile.size } : null;
+        if (this.editing) return { patch: this.expense ? this.editPatch() : {}, receipt };
+        const f = this.form;
+        const cents = String(f.amount).trim() ? centsFromEuros(f.amount) : null;
+        return {
+          paid_on: f.paid_on,
+          amount: cents === null ? String(f.amount).trim() : cents,
+          category: f.category,
+          payee: f.payee.trim(),
+          reference: f.reference.trim(),
+          note: f.note.trim(),
+          receipt,
+        };
+      },
+      // "Keep editing" after an armed Remove disarms it (§3.166).
+      unsentKeptEditing() {
+        this.confirmingRemove = false;
       },
       async onReceiptPicked(event) {
         const file = event.target.files[0];

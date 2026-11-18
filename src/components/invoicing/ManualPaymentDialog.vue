@@ -1,6 +1,7 @@
 <template>
-  <AspModal :open="open" :title="title" size="md" @update:open="$emit('update:open', $event)">
-    <form class="manual-form" data-test="manual-form" @submit.prevent="save">
+  <!-- Every exit asks first when something is unsent (system_3 #11632). -->
+  <AspModal :open="open" :title="title" size="md" @update:open="onOpenChange">
+    <form class="manual-form" data-test="manual-form" :inert="unsentAsking || undefined" @submit.prevent="save">
       <template v-if="!editing">
         <p class="manual-form__lead">
           Enter a payment you received. It is saved as paid work. To invoice it, select it in the list and use Create invoice.
@@ -134,7 +135,8 @@
       <p v-if="error" class="manual-form__error" role="alert" data-test="manual-error">{{ error }}</p>
     </form>
     <template #footer>
-      <ModalActions>
+      <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
+      <ModalActions v-else>
         <!-- Remove arms first and says what else happens (§3.143 Decision 6).
              A payment on an issued invoice cannot be removed. -->
         <template v-if="editing && !issued" #destructive>
@@ -151,10 +153,10 @@
           </span>
         </template>
         <template v-if="issued">
-          <AspButton variant="secondary" data-test="edit-close" @click="$emit('update:open', false)">Close</AspButton>
+          <AspButton variant="secondary" data-test="edit-close" @click="onOpenChange(false)">Close</AspButton>
         </template>
         <template v-else>
-          <AspButton variant="secondary" @click="$emit('update:open', false)">Cancel</AspButton>
+          <AspButton variant="secondary" :disabled="unsentBusy" data-test="manual-cancel" @click="onOpenChange(false)">Cancel</AspButton>
           <AspButton :loading="saving" data-test="manual-save" @click="save">
             {{ editing ? 'Save changes' : 'Save payment' }}
           </AspButton>
@@ -170,6 +172,8 @@
   import PayerBookLine from './PayerBookLine.vue';
   import SuggestField from './SuggestField.vue';
   import ModalActions from './ModalActions.vue';
+  import UnsentAsk from './UnsentAsk.vue';
+  import { unsentGuard } from './unsentGuard.js';
   import { FIELD_HINTS } from './fieldHints.js';
   import { matchPayer, normalizeName, tidyName } from './payerMatch.js';
   import { historyLines } from './auditHistory.js';
@@ -211,7 +215,8 @@
   // one keeps what the bank recorded; one on an issued invoice only reads.
   export default {
     name: 'ManualPaymentDialog',
-    components: { AspButton, AspInput, AspModal, AspSelect, AspTextarea, LineDescriptionInput, PayerBookLine, SuggestField, ModalActions },
+    components: { AspButton, AspInput, AspModal, AspSelect, AspTextarea, LineDescriptionInput, PayerBookLine, SuggestField, ModalActions, UnsentAsk },
+    mixins: [unsentGuard],
     props: {
       open: { type: Boolean, default: false },
       clients: { type: Array, default: () => [] },
@@ -235,6 +240,10 @@
       };
     },
     computed: {
+      // While a write runs, no exit closes and none asks (system_3 #11632).
+      unsentBusy() {
+        return this.saving || this.removing;
+      },
       editing() {
         return !!this.payment;
       },
@@ -325,9 +334,41 @@
         this.historyLoaded = false;
         this.historyError = '';
         if (this.payment) this.loadHistory(this.payment.id);
+        this.takeUnsentBaseline();
       },
     },
     methods: {
+      // Esc, the scrim, the corner ✕, Cancel or Close, and Back (system_3
+      // #11632): each asks first when something is unsent.
+      onOpenChange(value) {
+        if (value) return;
+        this.requestClose();
+      },
+      closeNow() {
+        this.$emit('update:open', false);
+      },
+      // What Save would send that the server does not hold, normalised as
+      // Save does it. A new payment compares with the blank form, the new
+      // client's details included; an edit sends only its patch.
+      unsentValue() {
+        if (this.editing) return { patch: this.issued || !this.payment ? {} : this.editPatch() };
+        const f = this.form;
+        const cents = String(f.amount).trim() ? centsFromEuros(f.amount) : null;
+        return {
+          paid_on: f.paid_on,
+          amount: cents === null ? String(f.amount).trim() : cents,
+          method: f.method,
+          reference: f.reference.trim(),
+          sender_name: f.sender_name.trim(),
+          note: f.note.trim(),
+          resolvedAsNew: this.resolvedAsNew,
+          newClient: { address: (this.newClient.address || '').trim(), email: (this.newClient.email || '').trim() },
+        };
+      },
+      // "Keep editing" after an armed Remove disarms it (§3.166).
+      unsentKeptEditing() {
+        this.confirmingRemove = false;
+      },
       formatDay,
       formatMoney,
       async loadHistory(id) {
