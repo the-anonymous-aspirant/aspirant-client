@@ -367,6 +367,23 @@ test.describe('#11507 payers and clients worth a second look', () => {
       expect(b.x, `client ${id}: and starts inside it`).toBeGreaterThanOrEqual(container.x - 1);
     }
 
+    // One label for both kinds of flag, on one line, and a name that says
+    // which flag it hides (§3.160; system_3 #11570). A pair's names come in
+    // the review line's order, so both of its rows carry the same name.
+    const pairClear = page.getByRole('button', { name: 'Hide this flag on this device: Renée Fittizio and Renee Carla Fittizio' });
+    const cardClear = page.getByRole('button', { name: 'Hide this flag on this device: Musterplatz.io 7c4e1a9b' });
+    await expect(pairClear, 'both rows of the pair carry the one name').toHaveCount(2);
+    await expect(cardClear).toHaveCount(1);
+    for (const clear of [pairClear.first(), pairClear.last(), cardClear]) {
+      await expect(clear).toHaveText('Hide on this device');
+      const lines = await clear.evaluate((el) => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        return new Set(Array.from(range.getClientRects()).map((r) => Math.round(r.top))).size;
+      });
+      expect(lines, 'the label is on one line').toBe(1);
+    }
+
     await page.locator('[data-test="clients-review-show"]').click();
     await expect(clientRows(page)).toHaveCount(3);
     await expect(page.locator('[data-test="client-row"][data-client-id="2"]')).toHaveCount(0);
