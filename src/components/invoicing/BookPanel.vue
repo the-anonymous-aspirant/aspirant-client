@@ -197,9 +197,6 @@
               <span v-if="row.what" :class="{ muted: !!row.who }">{{ row.what }}</span>
               <template v-if="!row.who && !row.what">—</template>
             </span>
-            <!-- Where the table is too narrow for the Invoice column, the
-                 number is a line here instead (system_3 #11509). -->
-            <span v-if="!invoiceColumn && row.issuedInvoice && row.issuedInvoice.line" class="invoice-line muted" data-test="book-row-invoice">{{ row.issuedInvoice.line }}</span>
           </template>
           <template #cell-category="{ row }"><span class="muted">{{ row.categoryLabel }}</span></template>
           <template #cell-invoice="{ row }">
@@ -393,13 +390,10 @@
     return { inCents, outCents, resultCents: inCents - outCents };
   }
 
-  // The Invoice column (system_3 #11509; design ack on that task). It is as
-  // wide as "2026-014" needs, and it shows only while the table can hold it,
-  // its other fixed columns (7.5 + 11 + 7.5 + 7.5 + 10rem) and at least 12rem
-  // of "Who and what for". Below that the number is a line in that cell.
+  // The Invoice column (system_3 #11509; design ack on that task): as wide as
+  // "2026-014" needs (56px of text and the cell's 24px of padding come to
+  // exactly 5rem, so the nearest half rem with room to spare).
   const INVOICE_COLUMN_REM = 5.5;
-  const OTHER_FIXED_COLUMNS_REM = 43.5;
-  const DESCRIPTION_MIN_REM = 12;
 
   export default {
     name: 'BookPanel',
@@ -420,9 +414,6 @@
     data() {
       return {
         narrow: false,
-        // Whether the table is wide enough for the Invoice column, by the
-        // table's own width and not the viewport's: the sidebar moves it.
-        invoiceColumn: false,
         rowError: '',
         paymentEditOpen: false,
         editPayment: null,
@@ -459,17 +450,21 @@
         // Every column but the description has a width and the layout is
         // fixed, so the columns line up from one month's table to the next
         // (§3.145 Decision 6). "Out" is wider: it carries the Receipt button.
-        allColumns: [
+        columns: [
           { key: 'paid_on', label: 'Date paid', width: '7.5rem' },
           // The header Transactions uses for the same "{who} · {what}" cell
           // (§3.159 Decision 6, system_3 #11502). It read "What it was for"
           // while the cell led with who paid, which the operator took for the
           // wrong value in the column (c70806 on #10985).
-          { key: 'description', label: 'Who and what for', sortable: false },
+          // The row's identity (design ack on system_3 #11509): it leads the
+          // design system's card, and it is the column whose room decides
+          // when the table gives way to cards (design system, §3.165).
+          { key: 'description', label: 'Who and what for', sortable: false, role: 'identity' },
           { key: 'category', label: 'Category', sortable: false, width: '11rem' },
           // Which invoice the money is on (system_3 #11509, operator c70806 on
           // #10985). As wide as "2026-014" needs, and the same in every
-          // month's table. Left out where the table is narrow: see `columns`.
+          // month's table. It shows wherever the table does: where the box
+          // is too narrow the table itself gives way to its card list.
           { key: 'invoice', label: 'Invoice', sortable: false, width: `${INVOICE_COLUMN_REM}rem` },
           { key: 'in', label: 'In', align: 'right', sortable: false, width: '7.5rem' },
           { key: 'out', label: 'Out', align: 'right', sortable: false, width: '7.5rem' },
@@ -489,9 +484,6 @@
       };
     },
     computed: {
-      columns() {
-        return this.invoiceColumn ? this.allColumns : this.allColumns.filter((c) => c.key !== 'invoice');
-      },
       // The guard follows `open` (unsentGuard.js); here that is Save as
       // preset's, the panel's one guarded dialog (system_3 #11669).
       open() {
@@ -711,21 +703,9 @@
         this.narrow = e.matches;
       };
       this.narrowQuery.addEventListener('change', this.onNarrowChange);
-      // The tables fill the panel, so the panel's width is theirs.
-      this.measureTable = () => {
-        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-        const needed = (OTHER_FIXED_COLUMNS_REM + INVOICE_COLUMN_REM + DESCRIPTION_MIN_REM) * rem;
-        this.invoiceColumn = this.$el.clientWidth >= needed;
-      };
-      this.measureTable();
-      if (typeof ResizeObserver !== 'undefined') {
-        this.tableObserver = new ResizeObserver(this.measureTable);
-        this.tableObserver.observe(this.$el);
-      }
     },
     beforeUnmount() {
       if (this.narrowQuery) this.narrowQuery.removeEventListener('change', this.onNarrowChange);
-      if (this.tableObserver) this.tableObserver.disconnect();
     },
     methods: {
       formatDay,
@@ -1171,13 +1151,8 @@
   /* An invoice number is "<prefix>-<n>" with a prefix of up to 20 characters,
      so no fixed width holds the longest: it wraps and is never cut (§3.72,
      system_3 #11509). */
-  .invoice-number,
-  .invoice-line {
+  .invoice-number {
     overflow-wrap: anywhere;
-  }
-
-  .invoice-line {
-    display: block;
   }
 
   .nowrap {

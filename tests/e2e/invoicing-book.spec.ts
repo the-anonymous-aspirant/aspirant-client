@@ -1081,9 +1081,10 @@ test.describe('#11512 the Book exports its entries as a PDF', () => {
 // system_3 #11509 (operator c70806 on #10985: "Number should be the invoice id
 // on the book page"; design ack on #11509, §3.143 Decision 7 as amended). The
 // Book had no such column. A counted payment now names its issued invoice: in
-// an Invoice column while the table has room, else as a line under "Who and
-// what for", and as a line on the phone card. The value is the `invoice` field
-// the payments list already carries, so nothing new is fetched.
+// an Invoice column wherever the Book shows its table, and as a line on the
+// phone card. "Who and what for" is the table's identity column. The value is
+// the `invoice` field the payments list already carries, so nothing new is
+// fetched.
 test.describe('#11509 the Book names a payment\'s issued invoice', () => {
   const LONG = 'ABCDEFGHIJKLMNOPQRST-001'; // a 20-character prefix with no hyphen
   const fakeWithInvoices = (over: Json[] = []) =>
@@ -1103,7 +1104,6 @@ test.describe('#11509 the Book names a payment\'s issued invoice', () => {
   const headers = async (page: Page) => (await page.locator('[data-test="book-month"]').first().locator('thead th').allTextContents()).map((t) => t.trim());
   const noSidewaysScroll = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   const widthOf = (page: Page, selector: string) => page.locator(selector).first().evaluate((el) => el.getBoundingClientRect().width);
-  const REM = 16;
 
   test('the five cases: a number, a dash, and nothing for a draft, no invoice and an expense', async ({ page }) => {
     await open(page, fakeWithInvoices());
@@ -1136,7 +1136,7 @@ test.describe('#11509 the Book names a payment\'s issued invoice', () => {
   });
 
   for (const width of [1440, 1280]) {
-    test(`at ${width}px the Invoice column shows, between Category and In, and "Who and what for" keeps 12rem`, async ({ page }, info) => {
+    test(`at ${width}px the Invoice column shows, between Category and In, and "Who and what for" keeps 24ch`, async ({ page }, info) => {
       test.skip(info.project.name !== 'chromium', 'a desktop width');
       await page.setViewportSize({ width, height: 900 });
       await open(page, fakeWithInvoices());
@@ -1156,8 +1156,6 @@ test.describe('#11509 the Book names a payment\'s issued invoice', () => {
         expect((await rowWith(page, text).locator('td').nth(at).textContent())!.trim(), `the Invoice cell of "${text}"`).toBe('');
       }
       expect((await rowWith(page, 'Issued with no number').locator('td').nth(at).textContent())!.trim()).toBe('—');
-      // No line under the description while the column shows.
-      await expect(rowWith(page, 'On an issued invoice').locator('[data-test="book-row-description"] ~ [data-test="book-row-invoice"]')).toHaveCount(0);
 
       // The same width in every month's table.
       const months = page.locator('[data-test="book-month"]');
@@ -1170,7 +1168,18 @@ test.describe('#11509 the Book names a payment\'s issued invoice', () => {
 
       const who = await page.locator('[data-test="book-month"]').first().locator('thead th', { hasText: 'Who and what for' }).evaluate((el) => el.getBoundingClientRect().width);
       console.log(`#11509 at ${width}px: table ${(await widthOf(page, '[data-test="book-month"] table')).toFixed(0)}px, Invoice column ${widths[0].toFixed(1)}px, "Who and what for" ${who.toFixed(1)}px`);
-      expect(who, `"Who and what for" is ${who.toFixed(1)}px`).toBeGreaterThanOrEqual(12 * REM);
+      // 24ch in the cell's own font: the identity column's floor (§3.119).
+      const ch24 = await rowWith(page, 'On an issued invoice').locator('[data-test="book-row-description"]').evaluate((el) => {
+        const probe = document.createElement('span');
+        probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
+        probe.textContent = '0'.repeat(24);
+        el.appendChild(probe);
+        const w = probe.getBoundingClientRect().width;
+        probe.remove();
+        return w;
+      });
+      console.log(`#11509 at ${width}px: 24ch is ${ch24.toFixed(1)}px`);
+      expect(who, `"Who and what for" is ${who.toFixed(1)}px; 24ch is ${ch24.toFixed(1)}px`).toBeGreaterThanOrEqual(ch24);
       expect(await noSidewaysScroll(page)).toBe(true);
     });
   }
@@ -1190,33 +1199,4 @@ test.describe('#11509 the Book names a payment\'s issued invoice', () => {
     expect(fit.textOverflow).not.toBe('ellipsis');
     expect(await noSidewaysScroll(page)).toBe(true);
   });
-
-  // The rule is the table's own width, 61rem, not the viewport: the sidebar
-  // moves the table by 80px. 1024px is the sidebar open (a 760px table); 1104px
-  // gives the 840px table that 1024px has with the sidebar collapsed, which
-  // this mocked run cannot click (the toggle is the logo image).
-  for (const width of [1024, 1104]) {
-    test(`at ${width}px the table is too narrow: no Invoice column, the number is a line, and the row's door stays in view`, async ({ page }, info) => {
-      test.skip(info.project.name !== 'chromium', 'a desktop width');
-      await page.setViewportSize({ width, height: 900 });
-      await open(page, fakeWithInvoices());
-      const table = await widthOf(page, '[data-test="book-month"] table');
-      expect(table, `the table is ${table.toFixed(0)}px`).toBeLessThan(61 * REM);
-      expect(await headers(page)).not.toContain('Invoice');
-
-      const line = invoiceOf(page, 'On an issued invoice');
-      await expect(line).toHaveText('Invoice 2026-014');
-      const description = rowWith(page, 'On an issued invoice').locator('[data-test="book-row-description"]');
-      const d = (await description.boundingBox())!;
-      const l = (await line.boundingBox())!;
-      expect(l.y, 'the line is under "Who and what for"').toBeGreaterThanOrEqual(d.y + d.height - 1);
-      await expect(invoiceOf(page, 'On a draft')).toHaveCount(0);
-
-      const door = rowWith(page, 'On an issued invoice').locator('[data-test="book-row-edit"]');
-      const b = (await door.boundingBox())!;
-      console.log(`#11509 at ${width}px: table ${table.toFixed(0)}px, the row's door ends at ${(b.x + b.width).toFixed(0)}px of ${width}`);
-      expect(b.x + b.width, "the row's door is inside the screen").toBeLessThanOrEqual(width);
-      expect(await noSidewaysScroll(page)).toBe(true);
-    });
-  }
 });
