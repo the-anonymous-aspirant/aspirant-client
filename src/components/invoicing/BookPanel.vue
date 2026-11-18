@@ -571,6 +571,13 @@
           // Said beside the button: the tab's shared error line is at its
           // top, a screen or more above the Export group (system_3 #11500).
           this.reportError = errorOf(err).message;
+          // The line renders under the button. When the button already sits at
+          // the foot of a phone screen, that is below it, and a failed export
+          // looked like nothing happened (system_3 #11623).
+          this.$nextTick(() => {
+            const el = this.$el.querySelector('[data-test="book-report-error"]');
+            if (el) el.scrollIntoView({ block: 'nearest' });
+          });
         } finally {
           this.reportDownloading = false;
         }

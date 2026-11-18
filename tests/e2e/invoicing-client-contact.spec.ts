@@ -430,6 +430,8 @@ test.describe('#10013 Clients — the client list as a CSV', () => {
     page.on('download', () => { downloaded = true; });
     await page.locator('[data-test="export-clients-csv"]').click();
     await expect(page.locator('[data-test="export-clients-csv-error"]')).toHaveText('recording the export failed');
+    // In view, not under the foot of a phone screen (system_3 #11623).
+    await expect(page.locator('[data-test="export-clients-csv-error"]')).toBeInViewport();
     expect(downloaded).toBe(false);
   });
 });

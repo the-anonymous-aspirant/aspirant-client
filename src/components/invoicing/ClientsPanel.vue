@@ -500,6 +500,13 @@
           await downloadBlob(clientsCsvUrl(), 'Kunden.csv');
         } catch (err) {
           this.csvError = errorOf(err).message;
+          // Brought into view for the same reason as the Book's export error
+          // (system_3 #11623): it renders under a button that can sit at the
+          // foot of a phone screen.
+          this.$nextTick(() => {
+            const el = this.$el.querySelector('[data-test="export-clients-csv-error"]');
+            if (el) el.scrollIntoView({ block: 'nearest' });
+          });
         } finally {
           this.csvDownloading = false;
         }
