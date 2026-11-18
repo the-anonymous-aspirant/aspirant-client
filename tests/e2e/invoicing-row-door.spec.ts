@@ -403,3 +403,90 @@ test.describe('#11022 phone: every card says at rest that it opens', () => {
     }
   });
 });
+
+// system_3 #11664 (design ruling on #11663, a dated note on §3.121): below
+// 768px a bar of the page's own surface sits behind the fixed menu button, so
+// a scrolled list no longer shows through it. No line at rest; a 1px line at
+// its foot once something has scrolled under it.
+test.describe('#11664 the phone menu button has a bar behind it', () => {
+  const bar = (page: Page) => page.locator('[data-test="mobile-topbar"]');
+  const toggle = (page: Page) => page.locator('.mobile-menu-toggle');
+  // What is painted at a point: the top element's own data-test, or its tag.
+  const topAt = (page: Page, x: number, y: number) =>
+    page.evaluate(([px, py]) => {
+      const el = document.elementFromPoint(px, py);
+      return el ? el.getAttribute('data-test') || (el.closest('.mobile-menu-toggle') ? 'toggle' : el.className || el.tagName) : null;
+    }, [x, y]);
+
+  for (const [w, h] of [[390, 844], [360, 780]] as const) {
+    test(`at ${w}x${h}: scrolled so a card's top is at y 20, only the bar and the button show in its 58px`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: h });
+      await open(page);
+      const box = (await bar(page).boundingBox())!;
+      expect([box.y, box.height, box.width]).toEqual([0, 58, w]);
+      // Room below the list, as a longer list has, so a card can reach y 20.
+      await page.evaluate(() => document.querySelector('.app-main')!.appendChild(Object.assign(document.createElement('div'), { style: 'height: 1500px' })));
+      const card = page.locator('[data-test="payment-row"], [data-test="expense-row"]').nth(1);
+      await card.evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top - 20));
+      await expect.poll(() => card.evaluate((el) => Math.round(el.getBoundingClientRect().top))).toBe(20);
+      for (const x of [20, 100, w / 2, w - 20]) {
+        for (const y of [20, 40, 56]) {
+          expect(['mobile-topbar', 'toggle'], `${x},${y}`).toContain(await topAt(page, x, y));
+        }
+      }
+      // The button is whole, on top.
+      const t = (await toggle(page).boundingBox())!;
+      expect(t.y).toBeGreaterThanOrEqual(0);
+      expect(t.y + t.height).toBeLessThanOrEqual(58);
+      expect(await topAt(page, t.x + t.width / 2, t.y + t.height / 2)).toBe('toggle');
+      // The line shows once scrolled.
+      expect(await bar(page).evaluate((el) => getComputedStyle(el).borderBottomColor)).not.toBe('rgba(0, 0, 0, 0)');
+    });
+  }
+
+  test('at rest at the top of the page the first screen is pixel for pixel as without the bar', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open(page);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    expect(await bar(page).evaluate((el) => getComputedStyle(el).borderBottomColor)).toBe('rgba(0, 0, 0, 0)');
+    const withBar = await page.screenshot({ clip: { x: 0, y: 0, width: 390, height: 120 } });
+    await bar(page).evaluate((el) => ((el as HTMLElement).style.display = 'none'));
+    const withoutBar = await page.screenshot({ clip: { x: 0, y: 0, width: 390, height: 120 } });
+    expect(withBar.equals(withoutBar)).toBe(true);
+  });
+
+  test('the drawer and a modal cover the bar', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open(page);
+    await page.evaluate(() => document.querySelector('.app-main')!.appendChild(Object.assign(document.createElement('div'), { style: 'height: 1500px' })));
+    await page.locator('[data-test="payment-row"]').first().evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top - 20));
+    await toggle(page).click();
+    await expect(page.locator('.mobile-overlay')).toBeVisible();
+    // Right of the drawer the scrim is on top; over the drawer, the drawer.
+    expect(await topAt(page, 380, 30)).not.toBe('mobile-topbar');
+    expect(await topAt(page, 120, 30)).not.toBe('mobile-topbar');
+    await toggle(page).click();
+    await page.locator('[data-test="expense-row"]').first().locator('[data-test="row-who"]').click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    for (const x of [20, 195, 370]) expect(await topAt(page, x, 30), `${x}`).not.toBe('mobile-topbar');
+  });
+
+  for (const [w, h] of [[390, 844], [360, 780]] as const) {
+    test(`at ${w}x${h} with a card ticked, the top bar and the selection bar take at most a quarter of the screen`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: h });
+      await open(page);
+      await page.locator('[data-test="payment-row"]').first().locator('[data-test="payment-select"]').check();
+      const sel = (await page.locator('.selection-bar').boundingBox())!;
+      const top = (await bar(page).boundingBox())!;
+      const share = (top.height + sel.height) / h;
+      console.log(`#11664 ${w}x${h}: top bar ${top.height}px + selection bar ${Math.round(sel.height * 10) / 10}px = ${Math.round(share * 1000) / 10}% of ${h}px`);
+      expect(share).toBeLessThanOrEqual(0.25);
+    });
+  }
+
+  test('above 767px there is no bar', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 900 });
+    await open(page);
+    await expect(bar(page)).toHaveCount(0);
+  });
+});
