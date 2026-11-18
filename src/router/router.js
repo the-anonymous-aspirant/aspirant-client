@@ -51,6 +51,7 @@ import VerifyEmailView from '../views/VerifyEmailView.vue';
 import ResetPasswordView from '../views/ResetPasswordView.vue';
 import SignupView from '../views/SignupView.vue';
 import ForgotPasswordView from '../views/ForgotPasswordView.vue';
+import ResendVerificationView from '../views/ResendVerificationView.vue';
 import NotFound from '../views/NotFound.vue';
 import { TIER, tierOf } from '../lib/tiers.js';
 
@@ -79,6 +80,10 @@ const routes = [
   // itself invalid.
   { path: '/verify-email', component: VerifyEmailView, meta: { title: 'Verify email' } },
   { path: '/reset-password', component: ResetPasswordView, meta: { title: 'Reset password' } },
+  // The other half of #10979's dead-link sentence (system_3 #11143-A2):
+  // whoever's confirmation link is spent, expired or cut short had no way
+  // to ask for a new one. Public for the same reason the landings are.
+  { path: '/resend-verification', component: ResendVerificationView, meta: { title: 'New confirmation link' } },
   // The START of the same flow (#5338, under #5296). Public for the same
   // reason the two landings are: whoever needs it has no session. Note this
   // route carries NO minTier — a tier gate here would bounce exactly the

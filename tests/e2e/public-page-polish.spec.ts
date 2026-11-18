@@ -23,6 +23,7 @@ test.describe('AP6: one title per public page', () => {
     ['/reset-password', 'Reset password · The Aspirant'],
     ['/signup', 'Sign up · The Aspirant'],
     ['/forgot-password', 'Forgot password · The Aspirant'],
+    ['/resend-verification', 'New confirmation link · The Aspirant'],
     ['/support', 'Support · The Aspirant'],
     ['/this-path-does-not-exist', 'Page not found · The Aspirant'],
   ];

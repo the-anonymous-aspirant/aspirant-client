@@ -2,13 +2,18 @@
   <div class="token-view page">
     <h1>Confirm your address</h1>
     <AspCard class="token-view-card" padding="md">
-      <!-- No door to name (UX walk AP3, system_3 #10979): nothing on this site
-           sends a new confirmation link, so the page says so instead of
-           naming a step nobody can take. The resend is #11143. -->
-      <p v-if="!token" class="message message--error" data-test="verify-no-code">
-        This link is missing its confirmation code. Open the link from your email again: the
-        code is part of the link, so a link copied in part loses it.
-      </p>
+      <!-- A link cut short before its code lands here, not in the linkDead
+           branch below (design ack c71363, system_3 #11143): the code never
+           reached the server, so this is a client-side shape check, not a
+           server refusal. The resend now covers this case too, for whoever
+           no longer has the email to copy the link from again. -->
+      <template v-if="!token">
+        <p class="message message--error" data-test="verify-no-code">
+          This link is missing its confirmation code. Open the link from your email again: the
+          code is part of the link, so a link copied in part loses it.
+        </p>
+        <RouterLink class="next" to="/resend-verification">Get a new confirmation link</RouterLink>
+      </template>
 
       <template v-else-if="state === 'ready'">
         <p class="lede">
@@ -28,13 +33,22 @@
         <RouterLink class="next" to="/login">Go to sign in</RouterLink>
       </template>
 
-      <template v-else>
-        <p class="message message--error" data-test="verify-failed">{{ error }}</p>
-        <!-- An already-used link usually means the address is confirmed: the
-             one step that may work is signing in. -->
-        <p v-if="linkDead" class="message" data-test="verify-try-sign-in">
+      <!-- A spent, expired or never-existed link (system_3 #11143): the
+           dead-link sentence is a door, not plain text (UX walk AP3, #10979;
+           design ack c71363). A used link usually means the address is
+           confirmed already, so sign-in comes before the resend door. -->
+      <template v-else-if="linkDead">
+        <p class="message message--error" data-test="verify-link-dead">
+          That confirmation link is invalid, already used or expired.
+        </p>
+        <p class="message" data-test="verify-try-sign-in">
           If you confirmed your address already, <RouterLink to="/login">sign in</RouterLink>.
         </p>
+        <RouterLink class="next" to="/resend-verification">Get a new confirmation link</RouterLink>
+      </template>
+
+      <template v-else>
+        <p class="message message--error" data-test="verify-failed">{{ error }}</p>
       </template>
     </AspCard>
   </div>
@@ -96,12 +110,13 @@
             // recovery — because telling them apart tells someone submitting
             // guesses which ones were structurally right. Show what it said
             // and do not try to be more specific.
-            const body = await response.json().catch(() => null);
-            this.linkDead = response.status === 400;
-            this.error =
-              response.status === 400
-                ? 'That confirmation link is invalid, already used or expired. A new one cannot be requested from this site yet.'
-                : body?.error?.message || 'That did not work. Try again.';
+            if (response.status === 400) {
+              this.linkDead = true;
+              this.error = '';
+            } else {
+              const body = await response.json().catch(() => null);
+              this.error = body?.error?.message || 'That did not work. Try again.';
+            }
             this.state = 'failed';
             return;
           }
