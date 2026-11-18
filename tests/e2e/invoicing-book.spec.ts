@@ -2,6 +2,7 @@ import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
 import { openWaysIn } from './helpers/waysIn';
 import { fillEmptyMonths } from '../../src/components/invoicing/listGroups.js';
+import { bookPdfCaption, bookPdfDoc, bookPdfFileName, fileNameSlug } from '../../src/components/invoicing/bookPdf.js';
 
 /** The income-and-expenses book (system_3 #10414-C): payments and
  *  hand-entered expenses merged into one dated list, grouped by month, with
@@ -25,6 +26,9 @@ interface Fake {
   nextExpenseId: number;
   nextCategoryId: number;
   reportStatus?: number;
+  // The status of GET /invoicing/book/selection; anything but 200 leaves the
+  // Book unread.
+  selectionStatus?: number;
 }
 
 const incomeRow = (over: Json = {}) => ({
@@ -70,6 +74,7 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/audit-events') return json(route, 200, { events: [] });
     if (path === '/invoicing/expenses' && method === 'GET') return json(route, 200, { expenses: fake.expenses });
     // What the Book counts (system_3 #10635): the starting selection, Work only.
+    if (path === '/invoicing/book/selection' && method === 'GET' && fake.selectionStatus && fake.selectionStatus !== 200) return json(route, fake.selectionStatus, { error: { code: 'server_error', message: 'could not read the selection' } });
     if (path === '/invoicing/book/selection' && method === 'GET') return json(route, 200, { selection: { preset: 'work_only', changed: false, income: ['paid_work'], expense_all: true, expense: [] }, presets: [{ id: 'work_only', name: 'Work only', builtin: true, income: ['paid_work'], expense_all: true, expense: [] }] });
     if (path === '/invoicing/expense-categories' && method === 'GET') return json(route, 200, { categories: fake.categories });
     if (path === '/invoicing/expense-categories' && method === 'POST') {
@@ -808,3 +813,239 @@ test.describe('#11635 the Book exports one month or the whole book', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
+
+// system_3 #11512 (#11497 item 13; operator c70883 on #10985; design ack on
+// #11512): the Book's entries as a PDF, beside the CSV. The file is made in
+// the browser from what the tab holds. The tab announces the document it is
+// about to draw as a "book-pdf" event, so these tests read the document and
+// not the drawn pages.
+test.describe('#11512 the Book exports its entries as a PDF', () => {
+  // "Today" is 2026-10-10, 14:00 in Berlin. The Book then shows October (no
+  // entries), September, August (no entries) and July.
+  const DAY = new Date('2026-10-10T12:00:00Z');
+  const fakeBook = () =>
+    newFake({
+      payments: [
+        incomeRow({ id: 21, sender_name: 'Atelier Süd', note: 'September work', gross_cents: 12000, paid_on: '2026-09-12T00:00:00Z' }),
+        incomeRow({ id: 22, note: 'Wandbild Juli', paid_on: '2026-07-14T00:00:00Z' }),
+        incomeRow({ id: 23, sender_name: '', note: '', gross_cents: 500, paid_on: '2026-07-02T00:00:00Z' }),
+        incomeRow({ id: 24, note: 'unsorted', category: 'uncategorised', paid_on: '2026-07-03T00:00:00Z' }),
+        incomeRow({ id: 25, note: 'unsorted', category: 'uncategorised', paid_on: '2026-09-03T00:00:00Z' }),
+        incomeRow({ id: 26, note: 'unsorted', category: 'uncategorised', paid_on: '2026-09-04T00:00:00Z' }),
+      ],
+      expenses: [expenseRow(101)],
+    });
+  const button = (page: Page) => page.locator('[data-test="book-pdf"]');
+  const caption = (page: Page) => page.locator('[data-test="book-pdf-caption"]');
+  async function openAt(page: Page, fake: Fake) {
+    await page.clock.setFixedTime(DAY);
+    await open(page, fake);
+  }
+  async function choose(page: Page, option: string) {
+    await page.getByRole('combobox', { name: 'Paid in' }).click();
+    await page.getByRole('option', { name: option, exact: true }).click();
+  }
+  // Presses the button and returns the file and the document it was drawn
+  // from (functions, the footer, do not survive the copy).
+  async function press(page: Page) {
+    await page.evaluate(() => {
+      document.addEventListener('book-pdf', (e) => { (window as any).__bookPdf = JSON.stringify((e as CustomEvent).detail); }, { once: true });
+    });
+    const done = page.waitForEvent('download');
+    await button(page).click();
+    const file = await done;
+    const detail = JSON.parse(await page.evaluate(() => (window as any).__bookPdf));
+    return { file, doc: detail.doc as Json, fileName: detail.fileName as string };
+  }
+  const tables = (doc: Json) => (doc.content as Json[]).filter((n) => n.table);
+  const headOf = (table: Json) => ({ label: table.table.body[0][0].columns[0].text, totals: table.table.body[0][0].columns[1].text });
+  const cells = (row: Json[]) => row.map((c) => c.text);
+  const texts = (doc: Json) => JSON.stringify(doc.content);
+
+  test('the document for all months: the title line, what it counts, the columns, the rows and every total', async ({ page }) => {
+    const fake = fakeBook();
+    await openAt(page, fake);
+    const before = fake.requests.length;
+    const { doc } = await press(page);
+
+    expect(doc.content[0].text).toBe('Book entries · Work only · all months · made 2026-10-10');
+    // The tab's own counting sentence and its Uncategorised continuation,
+    // word for word, without the button.
+    const onTab = `${(await page.locator('[data-test="book-counting-line"]').textContent())!.trim()} ${(await page.locator('[data-test="book-uncategorised"]').textContent())!.trim()}`;
+    expect(doc.content[1].text).toBe(onTab);
+    expect(doc.content[1].text).toBe('Counting with Work only: payments marked Paid work, and every expense except Private. 3 payments are still Uncategorised and not counted.');
+
+    // Newest first, as on the tab: October (empty), September, August
+    // (empty), July, then the closing line.
+    const order = (doc.content as Json[]).slice(2).map((n) => (n.table ? headOf(n).label : n.stack[0].text || n.stack[1].columns[0].text));
+    expect(order).toEqual(['October 2026', 'September 2026', 'August 2026', 'July 2026', 'All months in this file']);
+    const [october, , august] = (doc.content as Json[]).slice(2);
+    expect(october.stack.map((n: Json) => n.text)).toEqual(['October 2026', 'No entries']);
+    expect(august.stack.map((n: Json) => n.text)).toEqual(['August 2026', 'No entries']);
+
+    const [september, july] = tables(doc);
+    // The tab's columns, in the tab's order, repeated with the month's head
+    // on every page the month runs over.
+    expect(cells(july.table.body[1])).toEqual(['Date paid', 'Who and what for', 'Category', 'In', 'Out']);
+    expect(july.table.headerRows).toBe(2);
+    expect(july.table.keepWithHeaderRows).toBe(1);
+    // "who · what"; "—" when both are empty; the minus on Out.
+    expect(july.table.body.slice(2).map(cells)).toEqual([
+      ['2026-07-20', 'Guitar strings', 'materials and supplies', '', '-€45.99'],
+      ['2026-07-14', 'Galerie Nord · Wandbild Juli', 'Paid work', '€350.00', ''],
+      ['2026-07-02', '—', 'Paid work', '€5.00', ''],
+    ]);
+    expect(headOf(july)).toEqual({ label: 'July 2026', totals: 'In €355.00    Out -€45.99    Result €309.01' });
+    expect(headOf(september)).toEqual({ label: 'September 2026', totals: 'In €120.00    Out €0.00    Result €120.00' });
+    expect(september.table.body.slice(2).map(cells)).toEqual([['2026-09-12', 'Atelier Süd · September work', 'Paid work', '€120.00', '']]);
+
+    // The month's In, Out and Result are the tab's month head's, with the
+    // minus added to Out.
+    const head = page.locator('[data-test="book-month"][data-group="2026-07"] .month__totals');
+    const onHead = (await head.locator('span').allTextContents()).map((t) => t.trim());
+    expect(onHead).toEqual(['In €355.00', 'Out €45.99', 'Result €309.01']);
+
+    const closing = (doc.content as Json[])[doc.content.length - 1];
+    expect(closing.stack[1].columns.map((c: Json) => c.text)).toEqual(['All months in this file', 'In €475.00    Out -€45.99    Result €429.01']);
+
+    expect(doc.pageSize).toBe('A4');
+    expect(doc.pageOrientation).toBe('portrait');
+    // Made from what the tab holds: the press sends nothing.
+    expect(fake.requests.length).toBe(before);
+  });
+
+  test('the document for one month: the title names it, the Uncategorised count is that month\'s, and no closing line', async ({ page }) => {
+    await openAt(page, fakeBook());
+    await choose(page, 'July 2026');
+    const july = await press(page);
+    expect(july.doc.content[0].text).toBe('Book entries · Work only · paid in July 2026 · made 2026-10-10');
+    expect(july.doc.content[1].text).toBe('Counting with Work only: payments marked Paid work, and every expense except Private. 1 payment is still Uncategorised and not counted.');
+    expect(tables(july.doc).map((t) => headOf(t).label)).toEqual(['July 2026']);
+    expect(texts(july.doc)).not.toContain('All months in this file');
+
+    // A month with no entries keeps its heading and says so. August has no
+    // Uncategorised payment, so the continuation is absent.
+    await choose(page, 'August 2026 · no entries');
+    await expect(caption(page)).toHaveText('Nothing counted with Work only was paid in August 2026. The file says so.');
+    const august = await press(page);
+    expect(august.doc.content[1].text).toBe('Counting with Work only: payments marked Paid work, and every expense except Private.');
+    expect(tables(august.doc)).toHaveLength(0);
+    expect((august.doc.content as Json[])[2].stack.map((n: Json) => n.text)).toEqual(['August 2026', 'No entries']);
+    expect(texts(august.doc)).not.toContain('All months in this file');
+  });
+
+  test('each caption says what the file will hold, with its count', async ({ page }) => {
+    await openAt(page, fakeBook());
+    await expect(button(page)).toHaveText('Book entries (PDF)');
+    await expect(button(page)).toHaveAttribute('aria-describedby', 'book-pdf-caption');
+    await expect(caption(page)).toHaveText("4 entries counted with Work only, month by month, with each month's totals");
+    await choose(page, 'July 2026');
+    await expect(caption(page)).toHaveText("3 entries counted with Work only that were paid in July 2026, with the month's totals");
+    await choose(page, 'September 2026');
+    await expect(caption(page)).toHaveText("1 entry counted with Work only that was paid in September 2026, with the month's totals");
+    // The CSV's caption is its own and unchanged.
+    await expect(page.locator('[data-test="book-report-caption"]')).toHaveText('The entries counted with Work only that were paid in September 2026, by category');
+    expect(bookPdfCaption({ loaded: true, entries: 1, selectionName: 'Work only' })).toBe("1 entry counted with Work only, month by month, with each month's totals");
+  });
+
+  test('the file is a real PDF, named as the CSV is, for all months and for one', async ({ page }) => {
+    const fs = await import('node:fs');
+    await openAt(page, fakeBook());
+    // Nothing leaves the browser while the file is made (security's
+    // condition on #11512): no request of any kind, to this origin or any
+    // other, between the press and the download. The fonts are the bundled
+    // ones and the document has no image.
+    const sent: string[] = [];
+    const record = (r: { url(): string }) => sent.push(r.url());
+    page.on('request', record);
+    const all = await press(page);
+    page.off('request', record);
+    expect(sent, 'requests between the press and the download').toEqual([]);
+    expect(all.file.suggestedFilename()).toBe('book-entries-work-only-2026-10-10-1400.pdf');
+    expect(all.fileName).toBe(all.file.suggestedFilename());
+    const bytes = fs.readFileSync((await all.file.path())!);
+    expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    expect(bytes.subarray(-32).toString('latin1')).toContain('%%EOF');
+    expect(bytes.length).toBeGreaterThan(5000);
+
+    await choose(page, 'July 2026');
+    const july = await press(page);
+    expect(july.file.suggestedFilename()).toBe('book-entries-work-only-month-2026-07-2026-10-10-1400.pdf');
+    // The choice stays after a download, and the button is ready again.
+    await expect(page.getByRole('combobox', { name: 'Paid in' })).toContainText('July 2026');
+    await expect(button(page)).toBeEnabled();
+  });
+
+  test('the file name writes the selection as the server\'s CSV name does', () => {
+    const now = new Date('2026-01-05T08:07:00Z'); // 09:07 in Berlin
+    const presets = [
+      { id: 'work_only', name: 'Work only' },
+      { id: 'p7', name: 'Büro Köln & Straße' },
+      { id: 'p9', name: '!!!' },
+    ];
+    const name = (selection: Json, monthKey = '') => bookPdfFileName({ selection, presets, monthKey, now });
+    expect(name({ preset: 'work_only', changed: false })).toBe('book-entries-work-only-2026-01-05-0907.pdf');
+    expect(name({ preset: 'p7', changed: false })).toBe('book-entries-buero-koeln-strasse-2026-01-05-0907.pdf');
+    expect(name({ preset: 'p7', changed: true }, '2025-12')).toBe('book-entries-buero-koeln-strasse-changed-month-2025-12-2026-01-05-0907.pdf');
+    expect(name({ preset: 'gone', changed: false })).toBe('book-entries-custom-2026-01-05-0907.pdf');
+    expect(name({ preset: 'p9', changed: false })).toBe('book-entries-preset-p9-2026-01-05-0907.pdf');
+    expect(fileNameSlug('  Ärger – 2026 ')).toBe('aerger-2026');
+  });
+
+  test('before the Book has loaded the button is disabled and its caption is the reason', async ({ page }) => {
+    await openAt(page, newFake({ payments: [incomeRow()], selectionStatus: 500 }));
+    await expect(button(page)).toBeDisabled();
+    await expect(caption(page)).toHaveText('Available once the Book has loaded.');
+    // The server builds the CSV, so its button stays as it is.
+    await expect(page.locator('[data-test="book-report-csv"]')).toBeEnabled();
+  });
+
+  test('a loaded Book with nothing counted still exports, and the file says "No entries"', async ({ page }) => {
+    await openAt(page, newFake());
+    await expect(caption(page)).toHaveText('Nothing is counted with Work only. The file says so.');
+    const { doc, file } = await press(page);
+    expect(tables(doc)).toHaveLength(0);
+    expect(texts(doc)).toContain('No entries');
+    expect(texts(doc)).not.toContain('All months in this file');
+    expect(file.suggestedFilename()).toBe('book-entries-work-only-2026-10-10-1400.pdf');
+  });
+
+  test('a PDF that cannot be made says so under the button, in view', async ({ page }) => {
+    await openAt(page, fakeBook());
+    // The browser refuses to hand the finished file over.
+    await page.evaluate(() => {
+      URL.createObjectURL = () => {
+        throw new Error('refused');
+      };
+    });
+    await button(page).click();
+    const error = page.locator('[data-test="book-pdf-error"]');
+    await expect(error).toHaveText('The PDF could not be made. Try again.');
+    await expect(error).toBeInViewport();
+    await expect(button(page)).toBeEnabled();
+  });
+
+  test('with the Invoice column the file carries it between Category and In, by #11509\'s cell rules', () => {
+    const fmt = { day: (d: string) => d.slice(0, 10), money: (c: number) => `€${(c / 100).toFixed(2)}`, signedMoney: (c: number) => `${c < 0 ? '-' : ''}€${(Math.abs(c) / 100).toFixed(2)}` };
+    const row = (over: Json) => ({ type: 'in', paid_on: '2026-07-14', who: 'Galerie Nord', what: '', categoryLabel: 'Paid work', amount_cents: 100, ...over });
+    const month = { key: '2026-07', label: 'July 2026', inCents: 300, outCents: 0, resultCents: 300, rows: [row({ issuedInvoice: { number: '2026-003' } }), row({ issuedInvoice: { number: '—' } }), row({ issuedInvoice: { number: '' } })] };
+    const doc = bookPdfDoc({ months: [month], selectionName: 'Work only', scope: 'paid in July 2026', madeOn: '2026-10-10', countingSentence: 'Counting.', withInvoice: true, fmt }) as Json;
+    const table = tables(doc)[0].table;
+    expect(cells(table.body[1])).toEqual(['Date paid', 'Who and what for', 'Category', 'Invoice', 'In', 'Out']);
+    expect(table.body.slice(2).map((r: Json[]) => r[3].text)).toEqual(['2026-003', '—', '']);
+    expect(table.body[0][0].colSpan).toBe(6);
+  });
+
+  test('at 360px both buttons are full width under the select, and nothing scrolls sideways', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile-safari', 'a phone width');
+    await page.setViewportSize({ width: 360, height: 780 });
+    await openAt(page, fakeBook());
+    const group = (await page.locator('[data-test="book-export"] .export').boundingBox())!;
+    const csv = (await page.locator('[data-test="book-report-csv"]').boundingBox())!;
+    const pdf = (await button(page).boundingBox())!;
+    expect(Math.abs(pdf.width - group.width), `PDF button ${pdf.width}px of ${group.width}px`).toBeLessThanOrEqual(1);
+    expect(pdf.y, 'the PDF button is under the CSV button and its caption').toBeGreaterThan(csv.y + csv.height);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
+
