@@ -497,12 +497,31 @@
           <AspSelect
             :model-value="row.payment.category"
             :options="categoryOptionsFor(row.payment)"
-            :aria-label="`Category for ${row.transaction_id}`"
+            :aria-label="categoryNameFor(row)"
             :disabled="saving.has(row.key)"
             data-test="payment-category"
             @update:model-value="patch(row.payment, { category: $event })"
           />
           <span v-if="isPayPalTransferIntoN26(row.payment)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
+        </div>
+        <!-- An expense's category is set on its row too, like a payment's
+             (system_3 #11567, #11497 item 16; operator c71346 on #10985;
+             design ack on #11567). Its options are zir expense categories in
+             the Edit expense dialog's order, loaded the first time any
+             expense's select opens: opening Transactions still asks for no
+             categories. No "Add" here; a new category is made in the dialog
+             (§3.161). -->
+        <div v-else-if="row.expense" class="cell-select">
+          <AspSelect
+            :model-value="row.expense.category"
+            :options="expenseOptionsFor(row.expense)"
+            searchable
+            :aria-label="categoryNameFor(row)"
+            :disabled="saving.has(row.key)"
+            data-test="table-expense-category"
+            @open="ensureExpenseCategories"
+            @update:model-value="patchExpenseCategory(row.expense, $event)"
+          />
         </div>
         <span v-else data-test="row-category">{{ row.categoryLabel }}</span>
         <!-- §3.143 Decision 3: the row the Book does not count says so. -->
@@ -953,10 +972,18 @@
       // Money out offers zir expense categories: the server's list once
       // loaded, plus any zir rows carry, so a select opened before the list
       // arrives still offers the categories in view.
+      // In the Edit expense dialog's order, the server's own, so one
+      // category is never in two places in two lists (system_3 #11567, D5);
+      // a category only the rows carry follows, in the order first seen.
       setCategoryOptions() {
         if (!this.selectedExpenses.length) return this.categoryOptions;
-        const names = new Set([...this.expenseCategories.map((c) => c.name), ...this.expenses.map((e) => e.category)]);
-        return [...names].filter(Boolean).sort((x, y) => x.localeCompare(y)).map((n) => ({ value: n, label: n }));
+        const names = [...this.expenseCategoryNames];
+        for (const e of this.expenses) if (e.category && !names.includes(e.category)) names.push(e.category);
+        return names.map((n) => ({ value: n, label: n }));
+      },
+      // Zir expense categories, in the order the server lists them.
+      expenseCategoryNames() {
+        return this.expenseCategories.map((c) => c.name);
       },
       // Not invoiceable: money out, or money in not marked Paid work.
       notPaidWork() {
@@ -1292,6 +1319,58 @@
       },
       isPayPalTransferIntoN26(row) {
         return row.source === 'n26' && (row.sender_name || '').toLowerCase().includes('paypal');
+      },
+      // An expense row's options: the dialog's list, with the row's own value
+      // added at the end when it is not among them, as the dialog adds it, so
+      // the select always shows what is stored (§3.69). Before the list has
+      // loaded, the row's value alone.
+      expenseOptionsFor(expense) {
+        const names = [...this.expenseCategoryNames];
+        if (expense.category && !names.includes(expense.category)) names.push(expense.category);
+        return names.map((n) => ({ value: n, label: n }));
+      },
+      // A row's select is named by its transaction id. A hand-entered row has
+      // an id the server makes up and never prints ("M-…"), so it is named by
+      // its date and "who · what" instead (design ack on #11567).
+      categoryNameFor(row) {
+        const record = row.payment || row.expense;
+        if (record && record.entry === 'manual') {
+          const what = [row.who, row.what].filter(Boolean).join(' · ') || '—';
+          return `Category for ${formatDay(row.paid_on)} · ${what}`;
+        }
+        return `Category for ${row.transaction_id}`;
+      },
+      // The list loads the first time an expense's select opens. A failed load
+      // leaves the select on the row's value and says so; the next open tries
+      // again.
+      async ensureExpenseCategories() {
+        if (this.expenseCategoriesRequested) return;
+        this.expenseCategoriesRequested = true;
+        try {
+          this.expenseCategories = await listExpenseCategories();
+        } catch {
+          this.expenseCategoriesRequested = false;
+          this.rowError = 'Your categories could not be loaded. Try again by opening the list.';
+        }
+      },
+      // As a payment's: saved on change, the row's select disabled while it
+      // saves, a refusal said on the tab's error line, and the reload puts the
+      // select back to what is stored.
+      async patchExpenseCategory(expense, category) {
+        if (!category || category === expense.category) return;
+        this.rowError = '';
+        const key = `e${expense.id}`;
+        this.saving = new Set([...this.saving, key]);
+        try {
+          await patchExpense(expense.id, { category });
+        } catch (err) {
+          this.rowError = errorOf(err).message;
+        } finally {
+          const next = new Set(this.saving);
+          next.delete(key);
+          this.saving = next;
+          this.changed();
+        }
       },
       categoryOptionsFor(row) {
         if (!this.isPayPalTransferIntoN26(row)) return this.categoryOptions;
