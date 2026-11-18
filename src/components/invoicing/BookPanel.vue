@@ -251,12 +251,19 @@
       <p v-if="reportError" class="error" role="alert" data-test="book-report-error">{{ reportError }}</p>
     </section>
 
-    <AspModal :open="presetDialogOpen" size="sm" title="Save as preset" @update:open="presetDialogOpen = $event">
-      <AspInput v-model="presetName" label="Name" maxlength="60" data-test="book-preset-name" @keydown.enter.prevent="savePreset" />
-      <p v-if="presetError" class="error" role="alert" data-test="book-preset-error">{{ presetError }}</p>
+    <!-- Every exit asks first when a name is typed (system_3 #11669,
+         §3.166; A1's guard, unsentGuard.js). -->
+    <AspModal :open="presetDialogOpen" size="sm" title="Save as preset" @update:open="onPresetOpenChange">
+      <div :inert="unsentAsking || undefined">
+        <AspInput v-model="presetName" label="Name" maxlength="60" data-test="book-preset-name" @keydown.enter.prevent="savePreset" />
+        <p v-if="presetError" class="error" role="alert" data-test="book-preset-error">{{ presetError }}</p>
+      </div>
       <template #footer>
-        <AspButton variant="secondary" type="button" @click="presetDialogOpen = false">Cancel</AspButton>
-        <AspButton variant="primary" type="button" :loading="saving" :disabled="!presetName.trim()" data-test="book-preset-confirm" @click="savePreset">Save</AspButton>
+        <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
+        <template v-else>
+          <AspButton variant="secondary" type="button" :disabled="presetSaving" data-test="book-preset-cancel" @click="onPresetOpenChange(false)">Cancel</AspButton>
+          <AspButton variant="primary" type="button" :loading="presetSaving" :disabled="!presetName.trim()" data-test="book-preset-confirm" @click="savePreset">Save</AspButton>
+        </template>
       </template>
     </AspModal>
 
@@ -285,6 +292,8 @@
   import ExpenseReceiptDialog from './ExpenseReceiptDialog.vue';
   import ManualExpenseDialog from './ManualExpenseDialog.vue';
   import ManualPaymentDialog from './ManualPaymentDialog.vue';
+  import UnsentAsk from './UnsentAsk.vue';
+  import { unsentGuard } from './unsentGuard.js';
   import {
     CATEGORY_LABELS,
     bookReportCsvUrl,
@@ -327,7 +336,8 @@
 
   export default {
     name: 'BookPanel',
-    components: { AspButton, AspCheckbox, AspDataTable, AspEmptyState, AspInput, AspModal, AspSelect, BookChart, ExpenseReceiptDialog, ManualExpenseDialog, ManualPaymentDialog },
+    components: { AspButton, AspCheckbox, AspDataTable, AspEmptyState, AspInput, AspModal, AspSelect, BookChart, ExpenseReceiptDialog, ManualExpenseDialog, ManualPaymentDialog, UnsentAsk },
+    mixins: [unsentGuard],
     props: {
       payments: { type: Array, required: true },
       expenses: { type: Array, required: true },
@@ -367,6 +377,10 @@
         selectionError: '',
         confirmingDelete: false,
         presetDialogOpen: false,
+        // Save as preset's own write. The panel's `saving` is shared with its
+        // selection writes, so the dialog's busy test needs its own flag
+        // (system_3 #11669).
+        presetSaving: false,
         presetName: '',
         presetError: '',
         // Every column but the description has a width and the layout is
@@ -398,6 +412,14 @@
       };
     },
     computed: {
+      // The guard follows `open` (unsentGuard.js); here that is Save as
+      // preset's, the panel's one guarded dialog (system_3 #11669).
+      open() {
+        return this.presetDialogOpen;
+      },
+      unsentBusy() {
+        return this.presetSaving;
+      },
       selection() {
         return this.book ? this.book.selection : null;
       },
@@ -699,6 +721,19 @@
         this.presetName = '';
         this.presetError = '';
         this.presetDialogOpen = true;
+        this.takeUnsentBaseline();
+      },
+      // Esc, the scrim, the corner ✕, Cancel and Back: each asks first when a
+      // name is typed (§3.166).
+      onPresetOpenChange(value) {
+        if (value) return;
+        this.requestClose();
+      },
+      closeNow() {
+        this.presetDialogOpen = false;
+      },
+      unsentValue() {
+        return { name: this.presetName.trim() };
       },
       // Save the ticks under zir name, then count by that preset.
       async savePreset() {
@@ -706,6 +741,7 @@
         if (!name || this.saving) return;
         const counting = { income: [...this.selection.income], expense_all: false, expense: this.expenseList(this.selection) };
         this.saving = true;
+        this.presetSaving = true;
         this.presetError = '';
         try {
           const created = await createBookPreset({ name, ...counting });
@@ -716,6 +752,7 @@
           this.presetError = errorOf(err).message;
         } finally {
           this.saving = false;
+          this.presetSaving = false;
         }
       },
       updatePreset() {

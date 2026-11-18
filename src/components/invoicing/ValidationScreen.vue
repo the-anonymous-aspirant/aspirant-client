@@ -51,6 +51,7 @@
 <script>
   import { AspButton, AspModal } from '@aspirant/design-system';
   import ModalActions from './ModalActions.vue';
+  import { unsentGuard } from './unsentGuard.js';
   import { downloadBlob, errorOf, getValidation } from './api.js';
 
   // Every export runs the §5 integrity check first (spec §5): violations
@@ -60,6 +61,9 @@
   export default {
     name: 'ValidationScreen',
     components: { AspButton, AspModal, ModalActions },
+    // Only for Back (system_3 #11669, §3.166): this screen holds no input, so
+    // nothing is ever unsent, and every exit, Back included, closes at once.
+    mixins: [unsentGuard],
     props: {
       open: { type: Boolean, default: false },
       url: { type: String, required: true },
@@ -81,6 +85,12 @@
       },
     },
     methods: {
+      closeNow() {
+        this.$emit('update:open', false);
+      },
+      unsentValue() {
+        return null;
+      },
       async check() {
         this.state = 'checking';
         this.report = null;
