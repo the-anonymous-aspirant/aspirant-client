@@ -151,7 +151,11 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
     await expense.getByRole('combobox', { name: 'Category' }).click();
     await expect(page.getByRole('option')).toHaveText(CATEGORIES);
     await page.getByRole('option', { name: 'travel' }).click();
+    // A category was chosen, so Cancel asks before it is thrown away
+    // (system_3 #11668); "Discard changes" closes.
     await expense.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(expense.locator('[data-test="unsent-ask-line"]')).toBeVisible();
+    await expense.locator('[data-test="unsent-discard"]').click();
     await expect(expense).toBeHidden();
 
     // The imports open the system file dialog, on their own inputs: PayPal
