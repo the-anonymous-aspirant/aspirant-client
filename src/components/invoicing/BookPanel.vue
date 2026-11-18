@@ -231,8 +231,7 @@
              operator c70883 on #10985; design ack on #11635). It scopes the
              file and filters nothing on the page, so it sits with the file.
              "Paid in": the Book's one calendar is the day the money moved
-             (§3.140 Decision 1). One button follows it: a second button
-             would be a second name for the same report. -->
+             (§3.140 Decision 1). It scopes both files below it. -->
         <div class="export__month" :style="{ '--export-month-ch': `${exportMonthChars}ch` }">
           <AspSelect v-model="exportMonth" :options="exportMonthOptions" label="Paid in" data-test="book-report-month" />
         </div>
@@ -247,8 +246,28 @@
           Bookkeeping report (CSV)
         </AspButton>
         <p v-if="book" id="book-report-caption" class="export__scope muted" data-test="book-report-caption">{{ reportCaption }}</p>
+        <!-- The Book's entries as a PDF (system_3 #11512, #11497 item 13;
+             operator c70883 on #10985; design ack on #11512). A second file
+             with its own name, because it holds something else: the CSV is
+             sums by category and month, this is the entries. It is made in
+             the browser from what the tab holds, so it needs the Book to
+             have loaded; until then the button is disabled and the caption
+             is the reason (§3.114). -->
+        <AspButton
+          variant="secondary"
+          class="export__button export__button--next"
+          :loading="pdfDownloading"
+          :disabled="!book"
+          aria-describedby="book-pdf-caption"
+          data-test="book-pdf"
+          @click="downloadBookPdf"
+        >
+          {{ pdfButton }}
+        </AspButton>
+        <p id="book-pdf-caption" class="export__scope muted" data-test="book-pdf-caption">{{ pdfCaption }}</p>
       </div>
       <p v-if="reportError" class="error" role="alert" data-test="book-report-error">{{ reportError }}</p>
+      <p v-if="pdfError" class="error" role="alert" data-test="book-pdf-error">{{ pdfError }}</p>
     </section>
 
     <AspModal :open="presetDialogOpen" size="sm" title="Save as preset" @update:open="presetDialogOpen = $event">
@@ -301,6 +320,13 @@
   } from './api.js';
   import { expenseParts, newestFirst, paymentParts } from './ledgerRows.js';
   import { fillEmptyMonths, groupByMonth, landedRows, monthKey, monthLabel, openGroupKeys } from './listGroups.js';
+  // Imported as KvittoMaker and the card generator import it. The app's
+  // router loads those two with the first page, so the library is already
+  // in the browser when the Book opens; importing it on the press would
+  // save nothing.
+  import pdfMake from 'pdfmake/build/pdfmake';
+  import pdfFonts from 'pdfmake/build/vfs_fonts';
+  import { BOOK_PDF_BUTTON, bookPdfCaption, bookPdfDoc, bookPdfFileName } from './bookPdf.js';
   import { INCOME_ORDER, WORK_ONLY, countableExpenseNames, countingSentence, countsInBook, selectionName } from './bookSelection.js';
 
   // The income-and-expenses book (system_3 #10414-C): payments and
@@ -315,6 +341,10 @@
   // signal (c63777).
   // In, Out and Result over a set of rows: one sum for a month head and for
   // the period line, so the two cannot add up differently.
+  pdfMake.addVirtualFileSystem(pdfFonts);
+
+  const uncategorisedText = (n) => (n === 1 ? '1 payment is still Uncategorised and not counted.' : `${n} payments are still Uncategorised and not counted.`);
+
   function totalsOf(rows) {
     let inCents = 0;
     let outCents = 0;
@@ -351,6 +381,9 @@
         expenseCategories: [],
         reportDownloading: false,
         reportError: '',
+        pdfDownloading: false,
+        pdfError: '',
+        pdfButton: BOOK_PDF_BUTTON,
         // The month the export is scoped to, "YYYY-MM", or '' for the whole
         // book. Not remembered between visits: an export scoped by a
         // forgotten choice would be a wrong file that looks right. It stays
@@ -425,8 +458,7 @@
         return this.payments.filter((p) => p.kind === 'incoming' && p.category === 'uncategorised').length;
       },
       uncategorisedSentence() {
-        const n = this.uncountedUncategorised;
-        return n === 1 ? '1 payment is still Uncategorised and not counted.' : `${n} payments are still Uncategorised and not counted.`;
+        return uncategorisedText(this.uncountedUncategorised);
       },
       // The active preset reads "(changed)" once a tick differs from it; a
       // selection whose preset was deleted reads "Custom".
@@ -527,6 +559,25 @@
         const label = monthLabel(this.exportMonth);
         if (month && !month.empty) return `The entries counted with ${this.name} that were paid in ${label}, by category`;
         return `Nothing counted with ${this.name} was paid in ${label}. Every amount in the file is zero.`;
+      },
+      // The months the PDF holds: every month the Book shows, or the chosen
+      // one. A chosen month the Book does not show is an empty month.
+      pdfMonths() {
+        if (!this.exportMonth) return this.months;
+        const shown = this.months.find((m) => m.key === this.exportMonth);
+        return [shown || { key: this.exportMonth, label: monthLabel(this.exportMonth), rows: [], empty: true, inCents: 0, outCents: 0, resultCents: 0 }];
+      },
+      pdfEntries() {
+        return this.pdfMonths.reduce((n, m) => n + m.rows.length, 0);
+      },
+      pdfCaption() {
+        return bookPdfCaption({
+          loaded: !!this.book,
+          entries: this.pdfEntries,
+          selectionName: this.name,
+          monthKey: this.exportMonth,
+          monthLabel: this.exportMonth ? monthLabel(this.exportMonth) : '',
+        });
       },
       // Open now: zir own choice, else the newest month WITH entries; a lone
       // month is open (§3.145 Decision 3, §3.17 R3). The Book has no filter.
@@ -630,6 +681,45 @@
           });
         } finally {
           this.reportDownloading = false;
+        }
+      },
+      // The PDF's document and name, from what the tab shows now. The file
+      // says what it counts and what it leaves out, as the tab does (§3.143
+      // Decision 7); for one month the Uncategorised count is that month's.
+      bookPdfParts() {
+        const month = this.exportMonth;
+        const uncounted = month
+          ? this.payments.filter((p) => p.kind === 'incoming' && p.category === 'uncategorised' && monthKey(p.paid_on) === month).length
+          : this.uncountedUncategorised;
+        const doc = bookPdfDoc({
+          months: this.pdfMonths,
+          selectionName: this.name,
+          scope: month ? `paid in ${monthLabel(month)}` : 'all months',
+          madeOn: this.today,
+          countingSentence: this.sentence,
+          uncategorisedSentence: this.uncountedUncategorised && uncounted ? uncategorisedText(uncounted) : '',
+          fmt: { day: formatDay, money: formatMoney, signedMoney: this.formatSignedMoney },
+        });
+        return { doc, fileName: bookPdfFileName({ selection: this.selection, presets: this.presets, monthKey: month, now: new Date() }) };
+      },
+      async downloadBookPdf() {
+        if (this.pdfDownloading || !this.book) return;
+        this.pdfDownloading = true;
+        this.pdfError = '';
+        try {
+          const { doc, fileName } = this.bookPdfParts();
+          // What is about to be drawn, for anything that wants to read the
+          // document and not the drawn pages (the Book spec does).
+          this.$el.dispatchEvent(new CustomEvent('book-pdf', { bubbles: true, detail: { fileName, doc } }));
+          await pdfMake.createPdf(doc).download(fileName);
+        } catch {
+          this.pdfError = 'The PDF could not be made. Try again.';
+          this.$nextTick(() => {
+            const el = this.$el.querySelector('[data-test="book-pdf-error"]');
+            if (el) el.scrollIntoView({ block: 'nearest' });
+          });
+        } finally {
+          this.pdfDownloading = false;
         }
       },
       onExpenseChanged() {
@@ -801,6 +891,11 @@
   .export__scope {
     margin: 0;
     font-size: var(--text-sm);
+  }
+
+  /* A second file's button sits clear of the first file's caption. */
+  .export__button--next {
+    margin-top: var(--space-sm);
   }
 
   /* The month select sits above the button with a little more room than
