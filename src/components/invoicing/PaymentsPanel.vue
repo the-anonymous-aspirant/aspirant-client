@@ -431,7 +431,20 @@
             data-test="row-category"
           >{{ row.categoryLabel }}</span>&nbsp;· <span data-test="row-client">{{ clientNameOf(row.payment) || 'no client' }}</span></span>
           <span v-if="isPayPalTransferIntoN26(row.payment)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
-          <span v-if="row.invoice" class="muted invoice-line" data-test="row-invoice">{{ row.invoice }}</span>
+          <!-- The invoice's name opens it (system_3 #11568, design ack
+               c71992): a link-variant button, so a tap opens the invoice and
+               not the card (onCardTap skips buttons), and a tap beside it on
+               this line opens nothing. -->
+          <span v-if="row.invoice" class="muted invoice-line" data-test="row-invoice-line">
+            <AspButton
+              variant="link"
+              class="invoice-link"
+              :disabled="generating || creating || removing"
+              :aria-label="invoiceLinkName(row)"
+              data-test="row-invoice"
+              @click="openRowInvoice(row)"
+            >{{ row.invoice }}</AspButton>
+          </span>
           <!-- The card's one button (Design ack c71060 answer 4). A press
                generates and does not open the card (`onCardTap`). -->
           <AspButton
@@ -552,7 +565,16 @@
         >
           Generate invoice
         </AspButton>
-        <span v-else-if="row.invoice" class="muted" data-test="row-invoice">{{ row.invoice }}</span>
+        <span v-else-if="row.invoice" class="muted">
+          <AspButton
+            variant="link"
+            class="invoice-link"
+            :disabled="generating || creating || removing"
+            :aria-label="invoiceLinkName(row)"
+            data-test="row-invoice"
+            @click="openRowInvoice(row)"
+          >{{ row.invoice }}</AspButton>
+        </span>
       </template>
       <!-- §3.140 Decision 2: money in in body ink, money out in red with a
            minus sign, so colour is never the only signal. -->
@@ -700,6 +722,9 @@
       // runs the review; the panel shows that it is under way, why it failed,
       // and afterwards what the review did.
       generating: { type: Boolean, default: false },
+      // The page's invoice view is open (system_3 #11568): when it closes
+      // after a row's invoice link opened it, focus comes back to the row.
+      invoiceOpen: { type: Boolean, default: false },
       generateError: { type: String, default: '' },
       reviewSummary: { type: String, default: '' },
     },
@@ -754,6 +779,8 @@
         // The payment whose row button started the generation under way, or
         // null when the toolbar's did (or none is).
         generatingRow: null,
+        // The row whose invoice link opened the invoice view (#11568).
+        invoiceReturnKey: null,
         confirmingRemove: false,
         removing: false,
         expenseCategoriesRequested: false,
@@ -1146,6 +1173,18 @@
       },
       // A generation that went through leaves nothing ticked, like Create
       // invoice; one that failed keeps the ticks, so ze can press again.
+      invoiceOpen(open, was) {
+        if (open || !was || !this.invoiceReturnKey) return;
+        this.$nextTick(() => {
+          this.returnFocusToRow();
+          // A change in the view reloads the rows; check once more after it.
+          clearTimeout(this.invoiceReturnTimer);
+          this.invoiceReturnTimer = setTimeout(() => {
+            this.returnFocusToRow();
+            this.invoiceReturnKey = null;
+          }, 1500);
+        });
+      },
       generating(now, was) {
         if (!was || now) return;
         if (this.generatingRow === null && !this.generateError) this.selected = [];
@@ -1341,12 +1380,49 @@
       // an id the server makes up and never prints ("M-…"), so it is named by
       // its date and "who · what" instead (design ack on #11567).
       categoryNameFor(row) {
+        return `Category for ${this.rowRef(row)}`;
+      },
+      // How a control names its row: the transaction id, or for a
+      // hand-entered row, whose id the server makes up and never prints, its
+      // date and "who · what" (design ack on #11567).
+      rowRef(row) {
         const record = row.payment || row.expense;
         if (record && record.entry === 'manual') {
           const what = [row.who, row.what].filter(Boolean).join(' · ') || '—';
-          return `Category for ${formatDay(row.paid_on)} · ${what}`;
+          return `${formatDay(row.paid_on)} · ${what}`;
         }
-        return `Category for ${row.transaction_id}`;
+        return row.transaction_id;
+      },
+      // "Open draft for <row>", "Open invoice 2026-003", and for an issued
+      // invoice with no number "Open invoice for <row>" (design ack c71992).
+      invoiceLinkName(row) {
+        const inv = row.payment && row.payment.invoice;
+        if (inv && inv.status === 'issued' && inv.invoice_number) return `Open invoice ${inv.invoice_number}`;
+        if (inv && inv.status === 'issued') return `Open invoice for ${this.rowRef(row)}`;
+        return `Open draft for ${this.rowRef(row)}`;
+      },
+      // Opens the row's invoice in the page's invoice view, as the Invoices
+      // tab does. The tab stays Transactions.
+      openRowInvoice(row) {
+        const inv = row.payment && row.payment.invoice;
+        if (!inv || !inv.id || this.generating || this.creating || this.removing) return;
+        this.invoiceReturnKey = row.key;
+        this.$emit('open-invoice', inv.id);
+      },
+      // After the invoice view closes: the modal has put focus back on the
+      // link if it is still in the page. If the link went (a draft deleted,
+      // or a re-render after a change), the row's link or, failing that, its
+      // Edit takes focus. Runs again once after the next load, which may
+      // replace the row.
+      returnFocusToRow() {
+        const key = this.invoiceReturnKey;
+        if (!key || typeof document === 'undefined') return;
+        const active = document.activeElement;
+        if (active && active !== document.body && document.contains(active)) return;
+        const shown = (sel) => [...this.$el.querySelectorAll(sel)].find((el) => el.offsetParent !== null);
+        const scope = `[data-row-key="${key}"]`;
+        const target = shown(`${scope} [data-test="row-invoice"]:not(:disabled)`) || shown(`${scope} [data-test="payment-edit"]`);
+        if (target) target.focus();
       },
       // The list loads the first time an expense's select opens. A failed load
       // leaves the select on the row's value and says so; the next open tries
@@ -1405,6 +1481,9 @@
       onCardTap(row, event) {
         if (!row.payment && !row.expense) return;
         if (event.target.closest('button, input, select, label, a, [role="combobox"], [role="listbox"], [role="option"], .select')) return;
+        // The invoice line holds only the invoice's link: a tap beside it
+        // opens nothing, rather than the card (system_3 #11568).
+        if (event.target.closest('.invoice-line')) return;
         if (row.payment) this.openEdit(row.payment);
         else this.openExpenseEdit(row.expense);
       },
@@ -2313,6 +2392,18 @@
 
   .invoice-line {
     margin-top: var(--space-2xs);
+  }
+
+  /* The invoice's name as a link (system_3 #11568): today's words, ink and
+     size, underlined. Its button is at least 24px tall (§3.122 P8): the link
+     variant has no box, and on a card a tap just beside the word would
+     otherwise land on the card. */
+  /* Doubled class: AspButton's own .btn--link sets min-block-size: 0 with
+     the same specificity and would otherwise win. */
+  .invoice-link.invoice-link {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 24px;
   }
 
   /* The phone card's "{category} · {client}" (#11019-A4). It wraps between

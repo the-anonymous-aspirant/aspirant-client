@@ -103,6 +103,7 @@
         :generating="generating && reviewOrigin === 'transactions'"
         :generate-error="reviewOrigin === 'transactions' ? generateError : ''"
         :review-summary="reviewOrigin === 'transactions' ? reviewSummary : ''"
+        :invoice-open="editorOpen"
         @changed="fetchAll"
         @open-invoice="openInvoice"
         @generate="generate({ paymentIds: $event })"
