@@ -16,6 +16,12 @@ interface Fake {
   expenses: Json[];
   events: Json[];
   requests: Array<{ method: string; path: string; body: string }>;
+  // system_3 #11567: the category list the server gives, its status, a
+  // refused save, and whether the Book's selection is served.
+  categories?: Json[];
+  categoriesStatus?: number;
+  patchRefusal?: string;
+  book?: boolean;
 }
 
 const exp = (over: Json): Json => ({
@@ -57,7 +63,11 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: [] });
     if (path === '/invoicing/expenses' && method === 'GET') return json(route, 200, { expenses: fake.expenses.filter((e) => !e.removed_at) });
     if (path === '/invoicing/invoices' && method === 'GET') return json(route, 200, { invoices: [] });
-    if (path === '/invoicing/expense-categories' && method === 'GET') return json(route, 200, { categories: CATEGORIES });
+    if (path === '/invoicing/expense-categories' && method === 'GET') {
+      if (fake.categoriesStatus && fake.categoriesStatus !== 200) return json(route, fake.categoriesStatus, { error: { code: 'server_error', message: 'could not list' } });
+      return json(route, 200, { categories: fake.categories || CATEGORIES });
+    }
+    if (fake.book && path === '/invoicing/book/selection' && method === 'GET') return json(route, 200, { selection: { preset: 'everything', changed: false, income: ['paid_work'], expense_all: true, expense: [] }, presets: [{ id: 'everything', name: 'Everything', builtin: true, income: ['paid_work'], expense_all: true, expense: [] }] });
     if (path === '/invoicing/audit-events') {
       const id = Number(url.searchParams.get('entity_id'));
       const events = fake.events.filter((e) => e.entity_type === url.searchParams.get('entity_type') && e.entity_id === id);
@@ -71,6 +81,7 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     }
     let m = path.match(/^\/invoicing\/expenses\/(\d+)$/);
     if (m && method === 'PATCH') {
+      if (fake.patchRefusal) return json(route, 400, { error: { code: 'bad_request', message: fake.patchRefusal } });
       const e = fake.expenses.find((x) => x.id === Number(m![1]))!;
       Object.assign(e, JSON.parse(req.postData() || '{}'));
       return json(route, 200, { expense: e });
@@ -247,3 +258,107 @@ test.describe('#10695 Edit an expense, and name who was paid', () => {
     await expect(page.locator('[data-test="expense-row"] [data-test="expense-edit"]')).toHaveCount(2);
   });
 });
+
+// system_3 #11567 (#11497 item 16; operator c71346 on #10985; design ack on
+// #11567): on a wide screen an expense's category is a select in its row,
+// like a payment's. Its options are the Edit expense dialog's, in the server's
+// order, loaded the first time any expense's select opens.
+test.describe('#11567 an expense row\'s category is a select on its row', () => {
+  test.skip(({ isMobile }) => isMobile, 'the desktop table; a phone card reads the category as text');
+  // AspSelect puts the data-test on its combobox itself.
+  const select = (page: Page, txn: string) => row(page, txn).locator('[data-test="table-expense-category"]');
+  const optionTexts = async (page: Page) => (await page.getByRole('option').allInnerTexts()).map((t) => t.trim());
+  const categoryReads = (fake: Fake) => fake.requests.filter((r) => r.method === 'GET' && r.path === '/invoicing/expense-categories').length;
+
+  test('each expense row shows its category; the list loads on the first open, in the dialog\'s order', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await expect(select(page, 'M-hand-e')).toContainText('other');
+    await expect(select(page, 'N26-imp-e')).toContainText('travel');
+    expect(categoryReads(fake), 'opening Transactions asks for no categories').toBe(0);
+    await select(page, 'M-hand-e').click();
+    await expect(page.locator('.select__search-input:visible')).toHaveCount(1);
+    expect(await optionTexts(page)).toEqual(['materials and supplies', 'other', 'travel']);
+    expect(categoryReads(fake)).toBe(1);
+    await page.keyboard.press('Escape');
+    await select(page, 'N26-imp-e').click();
+    expect(categoryReads(fake), 'loaded once').toBe(1);
+  });
+
+  test('a change saves at once, and the Book follows without a reload', async ({ page }) => {
+    const fake = newFake();
+    fake.book = true;
+    fake.categories = [...CATEGORIES, { id: 9, name: 'Private' }];
+    await open(page, fake);
+    await page.getByRole('tab', { name: 'Book', exact: true }).click();
+    const october = page.locator('[data-test="book-month"][data-group="2026-10"] .month__totals');
+    await expect(october).toContainText('Out €54.50');
+    await page.getByRole('tab', { name: 'Transactions', exact: true }).click();
+    await select(page, 'M-hand-e').click();
+    await page.getByRole('option', { name: 'Private', exact: true }).click();
+    await expect.poll(() => writes(fake, 'PATCH')).toEqual([{ path: '/invoicing/expenses/21', body: { category: 'Private' } }]);
+    await expect(select(page, 'M-hand-e')).toContainText('Private');
+    // Private is never counted, so October's Out drops by that €12.50.
+    await page.getByRole('tab', { name: 'Book', exact: true }).click();
+    await expect(october).toContainText('Out €42.00');
+  });
+
+  test('a category not in the list is shown, and listed at the end', async ({ page }) => {
+    const fake = newFake();
+    fake.expenses[0].category = 'old studio rent';
+    await open(page, fake);
+    await expect(select(page, 'M-hand-e')).toContainText('old studio rent');
+    await select(page, 'M-hand-e').click();
+    expect(await optionTexts(page)).toEqual(['materials and supplies', 'other', 'travel', 'old studio rent']);
+  });
+
+  test('a list that cannot be loaded leaves the row\'s value and says so; the next open tries again', async ({ page }) => {
+    const fake = newFake();
+    fake.categoriesStatus = 500;
+    await open(page, fake);
+    await select(page, 'M-hand-e').click();
+    await expect(page.locator('[data-test="payment-error"]')).toHaveText('Your categories could not be loaded. Try again by opening the list.');
+    expect(await optionTexts(page)).toEqual(['other']);
+    await page.keyboard.press('Escape');
+    await expect(select(page, 'M-hand-e')).toContainText('other');
+    fake.categoriesStatus = 200;
+    await select(page, 'M-hand-e').click();
+    await expect.poll(() => optionTexts(page)).toEqual(['materials and supplies', 'other', 'travel']);
+  });
+
+  test('a refused save says why, and the select returns to what is stored', async ({ page }) => {
+    const fake = newFake();
+    fake.patchRefusal = 'that category is not one of yours';
+    await open(page, fake);
+    await select(page, 'M-hand-e').click();
+    await page.getByRole('option', { name: 'travel', exact: true }).click();
+    await expect(page.locator('[data-test="payment-error"]')).toHaveText('that category is not one of yours');
+    await expect(select(page, 'M-hand-e')).toContainText('other');
+  });
+
+  test('a hand-entered row is named by its date and who and what; an imported one by its id', async ({ page }) => {
+    await open(page, newFake());
+    await expect(page.getByRole('combobox', { name: 'Category for 2026-10-20 · Copyshop Esempio · Prints', exact: true })).toHaveCount(1);
+    await expect(page.getByRole('combobox', { name: 'Category for N26-imp-e', exact: true })).toHaveCount(1);
+  });
+
+  test('Set category with expenses ticked lists the same categories in the same order', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await select(page, 'M-hand-e').click();
+    const rowList = await optionTexts(page);
+    await page.keyboard.press('Escape');
+    await page.getByRole('checkbox', { name: 'Select M-hand-e' }).check();
+    await page.getByRole('checkbox', { name: 'Select N26-imp-e' }).check();
+    await page.locator('[data-test="bulk-category"]').click();
+    expect(await optionTexts(page)).toEqual(rowList);
+  });
+});
+
+test('#11567 on a phone an expense card still reads its category as text', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'the phone card');
+  await open(page, newFake());
+  await expect(row(page, 'M-hand-e').locator('[data-test="table-expense-category"]')).toHaveCount(0);
+  await expect(row(page, 'M-hand-e').locator('[data-test="row-category"]')).toHaveText('other');
+});
+
