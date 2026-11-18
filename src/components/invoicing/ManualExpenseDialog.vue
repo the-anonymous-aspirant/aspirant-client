@@ -1,5 +1,5 @@
 <template>
-  <AspModal :open="open" :title="title" size="md" @update:open="$emit('update:open', $event)">
+  <AspModal :open="open" :title="title" size="md" @update:open="onOpenChange">
     <form class="manual-form" data-test="expense-form" @submit.prevent="save">
       <p v-if="!editing" class="manual-form__lead">Enter a work expense — money going out, for your own bookkeeping.</p>
       <!-- What the bank recorded, as text: nothing can make it editable
@@ -53,6 +53,46 @@
       <AspInput v-if="!imported" v-model="form.reference" label="Reference (optional)" data-test="expense-reference" />
       <LineDescriptionInput v-model="form.note" label="What it was for (optional)" data-test="expense-note" />
 
+      <!-- The receipt, from the start (system_3 #11510, operator c70883 on
+           #10985; design ack on #11510). An upload needs the expense's id,
+           so the picked file waits in the browser and goes up straight after
+           Save has created the expense: the Receipt dialog's own call and
+           limits, only sooner. A new entry only: an expense that exists keeps
+           its receipt on its row (D5). No preview here; the Receipt dialog is
+           where a receipt is looked at. -->
+      <div v-if="!editing" class="receipt-pick" data-test="expense-receipt">
+        <span id="expense-receipt-label" class="receipt-pick__label">Receipt (optional)</span>
+        <input
+          ref="receiptInput"
+          type="file"
+          accept="image/png,image/jpeg,application/pdf"
+          class="receipt-pick__input"
+          tabindex="-1"
+          aria-hidden="true"
+          data-test="expense-receipt-input"
+          @change="onReceiptPicked"
+        />
+        <div class="receipt-pick__actions">
+          <AspButton
+            variant="secondary"
+            size="sm"
+            type="button"
+            :disabled="saving"
+            aria-describedby="expense-receipt-label"
+            data-test="expense-receipt-attach"
+            @click="$refs.receiptInput.click()"
+          >
+            {{ receiptFile ? 'Choose a different file' : 'Attach receipt' }}
+          </AspButton>
+          <AspButton v-if="receiptFile" variant="ghost" size="sm" type="button" :disabled="saving" data-test="expense-receipt-remove" @click="clearReceipt">
+            Remove
+          </AspButton>
+        </div>
+        <p v-if="receiptFile" class="receipt-pick__file" data-test="expense-receipt-file">{{ receiptFile.name }} · {{ receiptSize }}</p>
+        <p v-else class="manual-form__hint" data-test="expense-receipt-hint">PDF, PNG or JPEG, up to 5 MB.</p>
+        <p v-if="receiptError" class="manual-form__error" role="alert" data-test="expense-receipt-error">{{ receiptError }}</p>
+      </div>
+
       <!-- §3.143 Decision 5: what changed before, one tap away. Events come
            newest first. -->
       <details v-if="editing" class="history" data-test="edit-history">
@@ -75,7 +115,7 @@
             {{ confirmingRemove ? 'Remove this expense' : 'Remove' }}
           </AspButton>
         </template>
-        <AspButton variant="secondary" @click="$emit('update:open', false)">Cancel</AspButton>
+        <AspButton variant="secondary" :disabled="closeBlocked" data-test="expense-cancel" @click="onOpenChange(false)">Cancel</AspButton>
         <AspButton :loading="saving" data-test="expense-save" @click="save">{{ editing ? 'Save changes' : 'Save expense' }}</AspButton>
       </ModalActions>
     </template>
@@ -99,7 +139,28 @@
     listAuditEvents,
     patchExpense,
     removeExpense,
+    uploadExpenseReceipt,
   } from './api.js';
+
+  // A receipt picked on a new entry is checked at the pick, from the file
+  // itself, so a refusal comes before the expense is created (system_3
+  // #11510). The limit and the three sentences are the server's
+  // (aspirant-server invoicing_expense_receipt.go), and like the server this
+  // goes by the first bytes, never by the name or the type the browser
+  // reports. The server still has the last word at upload.
+  const RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
+  const RECEIPT_SIGNATURES = [
+    [0x25, 0x50, 0x44, 0x46, 0x2d], // %PDF-
+    [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], // PNG
+    [0xff, 0xd8, 0xff], // JPEG
+  ];
+  async function receiptRefusal(file) {
+    if (file.size > RECEIPT_MAX_BYTES) return 'The receipt is larger than 5 MB.';
+    if (file.size === 0) return 'Receipt is empty.';
+    const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+    const known = RECEIPT_SIGNATURES.some((sig) => sig.every((byte, i) => head[i] === byte));
+    return known ? '' : 'Unsupported file type (allowed: PDF, JPEG, PNG).';
+  }
 
   const blankForm = () => ({ paid_on: '', amount: '', payee: '', category: 'other', reference: '', note: '' });
 
@@ -143,6 +204,9 @@
         historyError: '',
         confirmingRemove: false,
         removing: false,
+        // A receipt picked for a new entry, held in the browser until Save.
+        receiptFile: null,
+        receiptError: '',
       };
     },
     computed: {
@@ -154,6 +218,18 @@
       },
       title() {
         return this.editing ? 'Edit expense' : 'Enter expense by hand';
+      },
+      // In MB, the base the server's limit uses: bytes / 1,048,576.
+      receiptSize() {
+        if (!this.receiptFile) return '';
+        const mb = this.receiptFile.size / (1024 * 1024);
+        return mb < 0.05 ? 'under 0.1 MB' : `${mb.toFixed(1)} MB`;
+      },
+      // While Save runs with a file picked, the dialog stays: a close between
+      // the create and the upload would leave an upload running that nobody
+      // sees fail.
+      closeBlocked() {
+        return this.saving && !this.editing && !!this.receiptFile;
       },
       sourceName() {
         if (!this.editing) return '';
@@ -186,6 +262,7 @@
           this.newCategoryName = '';
           this.categoryError = '';
           this.confirmingRemove = false;
+          this.clearReceipt();
           this.history = [];
           this.historyLoaded = false;
           this.historyError = '';
@@ -253,24 +330,67 @@
         if (now.reference.trim() !== was.reference) patch.reference = now.reference.trim();
         return patch;
       },
+      // Esc, the scrim, the corner ✕ and Cancel all come through here.
+      onOpenChange(value) {
+        if (!value && this.closeBlocked) return;
+        this.$emit('update:open', value);
+      },
+      async onReceiptPicked(event) {
+        const file = event.target.files[0];
+        // Cleared so picking the same file again still fires `change`.
+        event.target.value = '';
+        if (!file) return;
+        const refusal = await receiptRefusal(file);
+        // A refused pick leaves the form as it was, an earlier pick included.
+        if (refusal) {
+          this.receiptError = refusal;
+          return;
+        }
+        this.receiptError = '';
+        this.receiptFile = file;
+      },
+      clearReceipt() {
+        this.receiptFile = null;
+        this.receiptError = '';
+      },
       async save() {
         this.error = this.check();
         if (this.error) return;
         if (this.editing) return this.saveEdit();
         this.saving = true;
         try {
-          await createManualExpense({
-            paid_on: this.form.paid_on,
-            amount_cents: centsFromEuros(this.form.amount),
-            category: this.form.category,
-            payee: this.form.payee.trim(),
-            reference: this.form.reference.trim(),
-            note: this.form.note.trim(),
-          });
+          let expense;
+          try {
+            expense = await createManualExpense({
+              paid_on: this.form.paid_on,
+              amount_cents: centsFromEuros(this.form.amount),
+              category: this.form.category,
+              payee: this.form.payee.trim(),
+              reference: this.form.reference.trim(),
+              note: this.form.note.trim(),
+            });
+          } catch (err) {
+            // Nothing was created; the picked file stays picked.
+            this.error = errorOf(err).message;
+            return;
+          }
+          // The expense exists now and is kept whatever its receipt does: the
+          // form never removes it again, and a second Save would make a twin.
+          // So the dialog closes either way and the tab says what happened;
+          // a receipt that failed is added from the expense's row.
+          const outcome = { receipt: 'none' };
+          if (this.receiptFile) {
+            try {
+              await uploadExpenseReceipt(expense.id, this.receiptFile);
+              outcome.receipt = 'attached';
+            } catch (err) {
+              outcome.receipt = 'failed';
+              outcome.reason = errorOf(err).message;
+            }
+          }
+          this.saving = false;
           this.$emit('update:open', false);
-          this.$emit('changed');
-        } catch (err) {
-          this.error = errorOf(err).message;
+          this.$emit('changed', outcome);
         } finally {
           this.saving = false;
         }
@@ -321,6 +441,39 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
+  }
+
+  .receipt-pick {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+  }
+
+  /* The same small label the date field has. */
+  .receipt-pick__label {
+    font-size: var(--text-sm);
+  }
+
+  /* Visually hidden, still in the DOM: the button opens it, as in the
+     Receipt dialog. */
+  .receipt-pick__input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+  }
+
+  .receipt-pick__actions {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: center;
+  }
+
+  /* The name wraps and is never cut. */
+  .receipt-pick__file {
+    margin: 0;
+    overflow-wrap: anywhere;
   }
 
   .manual-form__lead,

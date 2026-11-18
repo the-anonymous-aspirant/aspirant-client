@@ -143,8 +143,12 @@
     <AspCard v-if="manualSummary" class="summary" padding="sm" data-test="manual-summary">
       <!-- The expense is in this list now (§3.143 Decision 3, system_3
            #10630); the line keeps the imports' own words for it. -->
+      <!-- With a receipt picked at entry (system_3 #11510) the line also says
+           what became of it. The expense is kept either way. -->
       <p v-if="manualSummary.expense" class="summary__line" data-test="manual-summary-expense">
-        By hand: 1 expense added to your book.
+        <template v-if="manualSummary.receipt === 'attached'">By hand: 1 expense added to your book, with its receipt.</template>
+        <template v-else-if="manualSummary.receipt === 'failed'">By hand: 1 expense added to your book. Its receipt was not attached: {{ manualSummary.reason }}. Add it with Receipt on the expense's row.</template>
+        <template v-else>By hand: 1 expense added to your book.</template>
       </p>
       <p v-else class="summary__line">
         By hand: saved {{ formatMoney(manualSummary.gross_cents, manualSummary.currency) }}<template v-if="manualSummary.sender_name"> from {{ manualSummary.sender_name }}</template>.<template v-if="manualSummary.client_name">
@@ -1426,11 +1430,16 @@
           // unknown category, so nothing wrong can be stored.
         }
       },
-      onExpenseSaved() {
+      // `outcome` says what became of a receipt picked at entry (system_3
+      // #11510): attached, failed with the server's reason, or none picked.
+      onExpenseSaved(outcome) {
         this.summary = null;
         this.n26Summary = null;
         this.payersSummary = null;
-        this.manualSummary = { expense: true };
+        const receipt = (outcome && outcome.receipt) || 'none';
+        // The sentence supplies its own full stop after the reason.
+        const reason = String((outcome && outcome.reason) || 'the server gave no reason').replace(/\.+$/, '');
+        this.manualSummary = { expense: true, receipt, reason };
         this.changed();
       },
       onManualSaved({ payment, client }) {

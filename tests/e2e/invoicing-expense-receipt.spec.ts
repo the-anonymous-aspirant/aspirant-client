@@ -1,6 +1,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { deflateSync } from 'node:zlib';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import { openWaysIn } from './helpers/waysIn';
 
 /** One receipt per work expense (system_3 #10602/#10603), attached from the
  *  Book's expense row. The server endpoints are covered by aspirant-server's
@@ -25,6 +26,9 @@ interface Fake {
   // round-trip through aspirant-server's own Go tests, not this spec).
   nextUploads: ReceiptFake[];
   refuseNextUpload?: Json;
+  // system_3 #11510: refuse the next hand entry, or hold it until released.
+  refuseNextCreate?: Json;
+  holdCreate?: Promise<void>;
   requests: Array<{ method: string; path: string }>;
 }
 
@@ -99,6 +103,20 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     // What the Book counts (system_3 #10635): the starting selection, Work only.
     if (path === '/invoicing/book/selection' && method === 'GET') return json(route, 200, { selection: { preset: 'work_only', changed: false, income: ['paid_work'], expense_all: true, expense: [] }, presets: [{ id: 'work_only', name: 'Work only', builtin: true, income: ['paid_work'], expense_all: true, expense: [] }] });
     if (path === '/invoicing/expense-categories' && method === 'GET') return json(route, 200, { categories: [] });
+    // A hand entry (system_3 #11510): the new expense comes back with its id,
+    // which the receipt's upload then needs.
+    if (path === '/invoicing/expenses/manual' && method === 'POST') {
+      if (fake.refuseNextCreate) {
+        const err = fake.refuseNextCreate;
+        fake.refuseNextCreate = undefined;
+        return json(route, 400, { error: err });
+      }
+      if (fake.holdCreate) await fake.holdCreate;
+      const body = JSON.parse(req.postData() || '{}');
+      const expense = { id: 500 + fake.expenses.length, source: 'manual', entry: 'manual', transaction_id: 'M-new', currency: 'EUR', client_id: null, reference: '', ...body, paid_on: `${body.paid_on}T00:00:00Z` };
+      fake.expenses.push(expense);
+      return json(route, 201, { expense });
+    }
 
     const receiptMatch = path.match(/^\/invoicing\/expenses\/(\d+)\/receipt$/);
     if (receiptMatch) {
@@ -288,5 +306,207 @@ test.describe('#10603 Invoices: a receipt on a work expense', () => {
     await expect(page.locator('[data-test="receipt-none"]')).toHaveText('No receipt attached.');
     expect(fake.receipts.has(101)).toBe(true);
     expect(fake.receipts.has(102)).toBe(false);
+  });
+});
+
+// system_3 #11510 (operator c70883 on #10985; design ack on #11510): the
+// receipt can be picked while the expense is entered by hand, not only from
+// its row after saving. An upload needs the expense's id, so the file waits in
+// the browser and goes up straight after Save has created the expense. The
+// dialog then closes whatever the upload did, and the tab's summary line says
+// what became of the receipt.
+test.describe('#11510 a receipt while entering an expense by hand', () => {
+  const png = blackPng(10, 10);
+  const PNG = { name: 'kassenbon.png', mimeType: 'image/png', buffer: png };
+  const PDF = { name: 'rechnung.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%fake\n') };
+  const withPngHead = (size: number) => { const b = Buffer.alloc(size); png.copy(b, 0, 0, 8); return b; };
+  const receiptCalls = (fake: Fake) => fake.requests.filter((r) => r.path.endsWith('/receipt'));
+  const creates = (fake: Fake) => fake.requests.filter((r) => r.method === 'POST' && r.path === '/invoicing/expenses/manual');
+  const input = (page: Page) => page.locator('[data-test="expense-receipt-input"]');
+  const picked = (page: Page) => page.locator('[data-test="expense-receipt-file"]');
+  const refusal = (page: Page) => page.locator('[data-test="expense-receipt-error"]');
+  const summary = (page: Page) => page.locator('[data-test="manual-summary-expense"]');
+
+  async function openEntry(page: Page, fake: Fake) {
+    await open(page, fake);
+    await page.getByRole('tab', { name: 'Transactions' }).click();
+    await openWaysIn(page);
+    await page.locator('[data-test="expense-new"]').click();
+    const dialog = page.getByRole('dialog', { name: 'Enter expense by hand' });
+    await expect(dialog).toBeVisible();
+    return dialog;
+  }
+  async function fillRequired(page: Page) {
+    await page.locator('[data-test="expense-date"]').fill('2026-07-21');
+    await page.locator('[data-test="expense-amount"]').fill('12,50');
+  }
+
+  test('the control is there when the form opens: its label, the button and the Receipt dialog\'s hint', async ({ page }) => {
+    const fake = newFake();
+    const dialog = await openEntry(page, fake);
+    await expect(dialog.getByText('Receipt (optional)', { exact: true })).toBeVisible();
+    await expect(page.locator('[data-test="expense-receipt-attach"]')).toHaveText('Attach receipt');
+    await expect(page.locator('[data-test="expense-receipt-hint"]')).toHaveText('PDF, PNG or JPEG, up to 5 MB.');
+    await expect(input(page)).toHaveAttribute('accept', 'image/png,image/jpeg,application/pdf');
+    expect(receiptCalls(fake)).toHaveLength(0);
+  });
+
+  test('a pick, a changed pick and Remove; nothing is sent at any of them', async ({ page }) => {
+    const fake = newFake();
+    await openEntry(page, fake);
+    await input(page).setInputFiles(PNG);
+    await expect(picked(page)).toHaveText(/^kassenbon\.png · .+ MB$/);
+    await expect(page.locator('[data-test="expense-receipt-attach"]')).toHaveText('Choose a different file');
+    await expect(page.locator('[data-test="expense-receipt-hint"]')).toHaveCount(0);
+
+    await input(page).setInputFiles(PDF);
+    await expect(picked(page)).toContainText('rechnung.pdf');
+
+    await page.locator('[data-test="expense-receipt-remove"]').click();
+    await expect(picked(page)).toHaveCount(0);
+    await expect(page.locator('[data-test="expense-receipt-attach"]')).toHaveText('Attach receipt');
+    expect(creates(fake)).toHaveLength(0);
+    expect(receiptCalls(fake)).toHaveLength(0);
+  });
+
+  test('the three refusals at the pick, by the file\'s own bytes; exactly 5 MB is accepted and one byte more is not', async ({ page }) => {
+    const fake = newFake();
+    await openEntry(page, fake);
+    const MAX = 5 * 1024 * 1024;
+
+    await input(page).setInputFiles({ name: 'max.png', mimeType: 'image/png', buffer: withPngHead(MAX) });
+    await expect(picked(page)).toHaveText('max.png · 5.0 MB');
+    await expect(refusal(page)).toHaveCount(0);
+
+    // A refused pick leaves the form as it was: the earlier pick stays.
+    await input(page).setInputFiles({ name: 'over.png', mimeType: 'image/png', buffer: withPngHead(MAX + 1) });
+    await expect(refusal(page)).toHaveText('The receipt is larger than 5 MB.');
+    await expect(picked(page)).toContainText('max.png');
+
+    await input(page).setInputFiles({ name: 'leer.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(0) });
+    await expect(refusal(page)).toHaveText('Receipt is empty.');
+
+    // By the bytes, not the name or the reported type: text called a PNG.
+    await input(page).setInputFiles({ name: 'notiz.png', mimeType: 'image/png', buffer: Buffer.from('just text') });
+    await expect(refusal(page)).toHaveText('Unsupported file type (allowed: PDF, JPEG, PNG).');
+    await expect(refusal(page)).toHaveAttribute('role', 'alert');
+
+    // And a real PNG with a wrong name and no reported type is accepted.
+    await input(page).setInputFiles({ name: 'foto', mimeType: '', buffer: png });
+    await expect(picked(page)).toContainText('foto');
+    await expect(refusal(page)).toHaveCount(0);
+    expect(creates(fake)).toHaveLength(0);
+    expect(receiptCalls(fake)).toHaveLength(0);
+  });
+
+  test('Save with a file creates the expense, then uploads the receipt to it, and the tab says both were kept', async ({ page }) => {
+    const fake = newFake();
+    const dialog = await openEntry(page, fake);
+    await input(page).setInputFiles(PNG);
+    await fillRequired(page);
+    await page.locator('[data-test="expense-save"]').click();
+    await expect(dialog).toBeHidden();
+
+    expect(creates(fake)).toHaveLength(1);
+    const puts = receiptCalls(fake).filter((r) => r.method === 'PUT');
+    expect(puts).toHaveLength(1);
+    const newId = (fake.expenses[fake.expenses.length - 1] as { id: number }).id;
+    expect(puts[0].path).toBe(`/invoicing/expenses/${newId}/receipt`);
+    expect(fake.requests.indexOf(creates(fake)[0]), 'the create comes first').toBeLessThan(fake.requests.indexOf(puts[0]));
+    expect(fake.receipts.has(newId)).toBe(true);
+    await expect(summary(page)).toHaveText('By hand: 1 expense added to your book, with its receipt.');
+  });
+
+  test('Save without a file sends the one call, and the tab reads as today', async ({ page }) => {
+    const fake = newFake();
+    const dialog = await openEntry(page, fake);
+    await fillRequired(page);
+    await page.locator('[data-test="expense-save"]').click();
+    await expect(dialog).toBeHidden();
+    expect(creates(fake)).toHaveLength(1);
+    expect(receiptCalls(fake)).toHaveLength(0);
+    await expect(summary(page)).toHaveText('By hand: 1 expense added to your book.');
+  });
+
+  test('a refused create keeps the form, its error and the picked file, and uploads nothing', async ({ page }) => {
+    const fake = newFake();
+    fake.refuseNextCreate = { code: 'invalid_field', message: 'category is not one of your expense categories' };
+    const dialog = await openEntry(page, fake);
+    await input(page).setInputFiles(PNG);
+    await fillRequired(page);
+    await page.locator('[data-test="expense-save"]').click();
+    await expect(page.locator('[data-test="expense-error"]')).toHaveText('category is not one of your expense categories');
+    await expect(dialog).toBeVisible();
+    await expect(picked(page)).toContainText('kassenbon.png');
+    expect(receiptCalls(fake)).toHaveLength(0);
+  });
+
+  test('when the expense saves and the upload fails, the dialog closes and the tab says so, with where to add it', async ({ page }) => {
+    const fake = newFake();
+    fake.refuseNextUpload = { code: 'invalid_field', message: 'Unsupported file type (allowed: PDF, JPEG, PNG)' };
+    const dialog = await openEntry(page, fake);
+    await input(page).setInputFiles(PNG);
+    await fillRequired(page);
+    await page.locator('[data-test="expense-save"]').click();
+    await expect(dialog).toBeHidden();
+    await expect(summary(page)).toHaveText(
+      "By hand: 1 expense added to your book. Its receipt was not attached: Unsupported file type (allowed: PDF, JPEG, PNG). Add it with Receipt on the expense's row."
+    );
+    // One expense, kept; no second create and no retry from the form.
+    expect(creates(fake)).toHaveLength(1);
+    expect(receiptCalls(fake).filter((r) => r.method === 'PUT')).toHaveLength(1);
+    const newId = (fake.expenses[fake.expenses.length - 1] as { id: number }).id;
+    expect(fake.receipts.has(newId)).toBe(false);
+  });
+
+  test('while Save runs with a file, Esc, the scrim, the ✕ and Cancel do not close the dialog', async ({ page }) => {
+    const fake = newFake();
+    let release: () => void = () => {};
+    fake.holdCreate = new Promise<void>((resolve) => { release = resolve; });
+    const dialog = await openEntry(page, fake);
+    await input(page).setInputFiles(PNG);
+    await fillRequired(page);
+    await page.locator('[data-test="expense-save"]').click();
+    await expect(page.locator('[data-test="expense-cancel"]')).toBeDisabled();
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+    await page.mouse.click(2, 2); // the scrim
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: /close/i }).first().click({ force: true }); // the corner ✕
+    await expect(dialog).toBeVisible();
+    await page.locator('[data-test="expense-cancel"]').click({ force: true });
+    await expect(dialog).toBeVisible();
+
+    release();
+    await expect(dialog).toBeHidden();
+    await expect(summary(page)).toHaveText('By hand: 1 expense added to your book, with its receipt.');
+  });
+
+  test('editing an expense shows no receipt control', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    const row = page.locator('[data-test="book-row"][data-type="out"]:visible').first();
+    if (await page.evaluate(() => window.matchMedia('(max-width: 640px)').matches)) await row.locator('[data-test="book-row-description"]').click();
+    else await row.locator('[data-test="book-row-edit"]').click();
+    await expect(page.getByRole('dialog', { name: 'Edit expense' })).toBeVisible();
+    await expect(page.locator('[data-test="expense-receipt"]')).toHaveCount(0);
+  });
+
+  test('at 360px a 60-character file name wraps whole and nothing scrolls sideways', async ({ page }, info) => {
+    test.skip(info.project.name !== 'mobile-safari', 'a phone width');
+    await page.setViewportSize({ width: 360, height: 780 });
+    const fake = newFake();
+    await openEntry(page, fake);
+    const longName = `${'beleg-'.repeat(9)}2026.png`; // 62 characters
+    await input(page).setInputFiles({ name: longName, mimeType: 'image/png', buffer: png });
+    await expect(picked(page)).toContainText(longName);
+    const fit = await picked(page).evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth, lines: el.getClientRects().length, overflow: getComputedStyle(el).textOverflow }));
+    expect(fit.scroll, 'the name is not cut').toBeLessThanOrEqual(fit.client);
+    expect(fit.overflow).not.toBe('ellipsis');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    // Where the control sits on the full-screen sheet when the form opens.
+    const top = await page.locator('[data-test="expense-receipt-attach"]').evaluate((el) => Math.round(el.getBoundingClientRect().top));
+    console.log(`#11510 at 360x780: the Attach receipt button's top is at ${top}px of 780`);
   });
 });
