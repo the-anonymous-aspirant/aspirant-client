@@ -68,11 +68,11 @@
         </div>
         <span v-for="other in lookAlikesOf(row)" :key="`alike-${other.id}`" class="review-flag" data-test="client-look-alike">
           Looks like {{ other.name }}
-          <AspButton variant="ghost" size="sm" class="review-flag__clear" data-test="client-not-same" @click.stop="clearPair(row, other)">Not the same person (this device only)</AspButton>
+          <AspButton variant="ghost" size="sm" class="review-flag__clear" data-test="client-not-same" :aria-label="`Hide this flag on this device: ${pairNames(row, other)}`" @click.stop="clearPair(row, other)">Hide on this device</AspButton>
         </span>
         <span v-if="isCardLike(row)" class="review-flag" data-test="client-card-like">
           Looks like a card payment or an online service
-          <AspButton variant="ghost" size="sm" class="review-flag__clear" data-test="client-real" @click.stop="clearCard(row)">It's a real client (this device only)</AspButton>
+          <AspButton variant="ghost" size="sm" class="review-flag__clear" data-test="client-real" :aria-label="`Hide this flag on this device: ${row.name}`" @click.stop="clearCard(row)">Hide on this device</AspButton>
         </span>
         <span v-if="row.address" class="multiline">{{ row.address }}</span>
         <span v-else class="muted" data-test="client-no-address">No postal address</span>
@@ -118,11 +118,11 @@
         <span class="client-name">{{ row.name }}</span>
         <span v-for="other in lookAlikesOf(row)" :key="`alike-${other.id}`" class="review-flag" data-test="client-look-alike">
           Looks like {{ other.name }}
-          <AspButton variant="ghost" size="sm" class="review-flag__clear" data-test="client-not-same" @click.stop="clearPair(row, other)">Not the same person (this device only)</AspButton>
+          <AspButton variant="ghost" size="sm" class="review-flag__clear" data-test="client-not-same" :aria-label="`Hide this flag on this device: ${pairNames(row, other)}`" @click.stop="clearPair(row, other)">Hide on this device</AspButton>
         </span>
         <span v-if="isCardLike(row)" class="review-flag" data-test="client-card-like">
           Looks like a card payment or an online service
-          <AspButton variant="ghost" size="sm" class="review-flag__clear" data-test="client-real" @click.stop="clearCard(row)">It's a real client (this device only)</AspButton>
+          <AspButton variant="ghost" size="sm" class="review-flag__clear" data-test="client-real" :aria-label="`Hide this flag on this device: ${row.name}`" @click.stop="clearCard(row)">Hide on this device</AspButton>
         </span>
         <span v-if="row.notes" class="client-notes" :title="row.notes" data-test="client-notes">{{ row.notes }}</span>
       </template>
@@ -427,8 +427,17 @@
       isCardLike(row) {
         return this.review.cardLike.some((c) => c.id === row.id);
       },
-      // "Not the same person" and "It's a real client" clear one guess on
-      // this device. Nothing is sent: the client records are untouched.
+      // A pair's two names, in the order the review line gives them, so the
+      // button on either row of a pair has the one accessible name.
+      pairNames(row, other) {
+        const pair = this.review.pairs.find((p) => p.some((c) => c.id === row.id) && p.some((c) => c.id === other.id));
+        const [first, second] = pair || [row, other];
+        return `${first.name} and ${second.name}`;
+      },
+      // "Hide on this device" clears one guess on this device, for either
+      // kind of flag (§3.160; one act, one label). It hides a guess and saves
+      // no fact about the person. Nothing is sent: the client records are
+      // untouched.
       clearPair(a, b) {
         this.dismissed = { ...this.dismissed, pairs: [...this.dismissed.pairs, pairKey(a, b)] };
         saveDismissed(this.dismissed);
@@ -816,9 +825,9 @@
     font-size: var(--text-sm);
   }
 
-  /* The clear button's label is longer than the name column is wide at
-     1440px (264px), so it takes its own line and wraps inside the cell
-     instead of running over the address beside it. */
+  /* The clear button takes its own line under the flag's sentence. Its
+     label fits the name column at 1440px (264px) on one line; in a narrower
+     cell it may break between words, never run over the address beside it. */
   .review-flag .review-flag__clear {
     display: block;
     max-width: 100%;
