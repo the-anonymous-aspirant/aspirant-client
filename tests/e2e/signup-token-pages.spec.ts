@@ -92,30 +92,34 @@ test.describe('/verify-email', () => {
     expect(calls[0].body).toEqual({ token: VERIFY_TOKEN });
   });
 
-  test('a link with no token explains itself and sends nothing', async ({ page }) => {
+  test('a link with no token explains itself, sends nothing, and links to a new one', async ({ page }) => {
     const calls = await captureApi(page, '/verify-email', 200, {});
 
     await open(page, '/verify-email');
     await expect(page.getByText(/missing its confirmation code/i)).toBeVisible();
-    // #10979: no "request a new one" — nothing here can send one.
-    await expect(page.getByText(/request a new one/i)).toHaveCount(0);
     await expect(page.getByRole('button', { name: /confirm my address/i })).toHaveCount(0);
+    // #11143-A2 (design ack c71363): a cut-short link no longer dead-ends.
+    const link = page.getByRole('link', { name: 'Get a new confirmation link' });
+    await expect(link).toHaveAttribute('href', '/resend-verification');
+    await link.click();
+    await expect(page).toHaveURL(/\/resend-verification$/);
     expect(calls).toHaveLength(0);
   });
 
-  test('a spent or expired token says so, names no step nobody can take, and offers sign-in', async ({ page }) => {
+  test('a spent or expired token says so, names no step nobody can take, and links to a new one', async ({ page }) => {
     await captureApi(page, '/verify-email', 400, INVALID_TOKEN_BODY);
 
     await open(page, `/verify-email?token=${VERIFY_TOKEN}`);
     await page.getByRole('button', { name: /confirm my address/i }).click();
 
-    // #10979 (UX walk AP3): the API's "Request a new one" named a step
-    // nothing on this site offers; the page says so instead.
-    await expect(page.locator('[data-test="verify-failed"]')).toHaveText(
-      'That confirmation link is invalid, already used or expired. A new one cannot be requested from this site yet.'
+    // #10979 (UX walk AP3) / #11143-A2: the API's "Request a new one" named
+    // a step nothing on this site offered; now it is a door, not plain text.
+    await expect(page.locator('[data-test="verify-link-dead"]')).toHaveText(
+      'That confirmation link is invalid, already used or expired.'
     );
-    await expect(page.getByText(/request a new one/i)).toHaveCount(0);
     await expect(page.locator('[data-test="verify-try-sign-in"]').getByRole('link', { name: 'sign in' })).toHaveAttribute('href', '/login');
+    const link = page.getByRole('link', { name: 'Get a new confirmation link' });
+    await expect(link).toHaveAttribute('href', '/resend-verification');
     // The API deliberately does not distinguish expired from consumed from
     // never-existed; the page must not invent a distinction either.
     await expect(page.getByText(/expired|already used|not found/i)).toHaveCount(1);
