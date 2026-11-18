@@ -86,6 +86,21 @@
           <div class="row__client full-select">
             <AspSelect v-model="form.client_id" searchable :options="clientOptions" label="Client" :label-hint="hints.client" data-test="draft-client" />
           </div>
+          <!-- The address this invoice will print, read before Accept
+               (system_3 #11554, #11497 item 14; operator c71213 on #10985;
+               design ack on #11554). It is the client's record as the PDF's
+               recipient block prints it under the name: one line per line,
+               trimmed, empty lines dropped. The email is not shown, because
+               the invoice does not print it. It sits in its own grid row
+               under the select, not in the select's cell: the row aligns its
+               fields to their lower edge, and a taller Client cell would push
+               the dates down (§3.72). No address, no block: the lines further
+               down already say so. -->
+          <div v-if="chosenClientAddressLines.length" class="row__address" data-test="draft-client-address">
+            <span class="muted row__address-caption">Address on the invoice</span>
+            <span v-for="(line, i) in chosenClientAddressLines" :key="i" data-test="draft-client-address-line">{{ line }}</span>
+            <span class="muted row__address-change">To change it, edit the client under Clients.</span>
+          </div>
           <!-- The hint sits beside the label, never inside it: inside a
                <label>, a tap on it would focus the date (#10033). -->
           <div class="date-field">
@@ -342,6 +357,16 @@
       chosenClientHasNoAddress() {
         const c = this.clients.find((x) => x.id === this.form.client_id);
         return !!c && !(c.address || '').trim();
+      },
+      // As aspirant-server's nonEmptyLines (invoicing_pdf/document.go), which
+      // builds the printed recipient block from the same field.
+      chosenClientAddressLines() {
+        const c = this.clients.find((x) => x.id === this.form.client_id);
+        if (!c) return [];
+        return String(c.address || '')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean);
       },
       chosenClientName() {
         const c = this.clients.find((x) => x.id === this.form.client_id);
@@ -650,6 +675,29 @@
     align-items: end;
   }
 
+  /* Under the Client select, in the select's own column and so no wider
+     than it, one grid row down. The row's gap is a field's distance from the
+     next field; the address belongs to the select, so it sits closer. */
+  .row__address {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    margin-top: calc(var(--space-xs) - var(--space-md));
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .row__address-caption {
+    margin-bottom: var(--space-2xs);
+  }
+
+  .row__address-change {
+    margin-top: var(--space-2xs);
+  }
+
   .full-select :deep(.select) {
     display: flex;
     width: 100%;
@@ -787,7 +835,8 @@
     }
 
     .row__client,
-    .row__vat {
+    .row__vat,
+    .row__address {
       grid-column: 1 / -1;
     }
 
