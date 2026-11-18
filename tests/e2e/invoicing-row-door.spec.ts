@@ -313,3 +313,93 @@ test.describe('#11501 phone: a tap on the card opens it', () => {
     await expect(dialog(page)).toContainText('Edit expense');
   });
 });
+
+// system_3 #11022 (UX walk AM5; design ack c72063): on a phone every card
+// says at rest that it opens, with the tab's own door word in muted ink at
+// the end of a line the card already has. It is part of the card's one tap.
+test.describe('#11022 phone: every card says at rest that it opens', () => {
+  const sameLine = async (a: Locator, b: Locator) => {
+    const [ra, rb] = [(await a.boundingBox())!, (await b.boundingBox())!];
+    // One line: the two boxes overlap vertically by most of the shorter one.
+    const overlap = Math.min(ra.y + ra.height, rb.y + rb.height) - Math.max(ra.y, rb.y);
+    return overlap >= 0.6 * Math.min(ra.height, rb.height);
+  };
+  const doorOf = (card: Locator) => card.locator('[data-test="card-door"]');
+
+  for (const width of [390, 360]) {
+    test(`at ${width}px every card on each tab carries its word, on its own line, never the amount's`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await open(page);
+      const tx = page.locator('[data-test="payment-row"], [data-test="expense-row"]');
+      expect(await tx.count()).toBeGreaterThan(1);
+      for (const card of await tx.all()) {
+        await expect(doorOf(card)).toHaveText('Edit');
+        await expect(doorOf(card)).toHaveAttribute('aria-hidden', 'true');
+        expect(await sameLine(doorOf(card), card.locator('[data-test="row-date-line"]')), 'Transactions: the date line').toBe(true);
+        expect(await sameLine(doorOf(card), card.locator('[data-test="row-amount"]')), 'Transactions: not the amount line').toBe(false);
+      }
+
+      await page.getByRole('tab', { name: 'Book', exact: true }).click();
+      const book = page.locator('[data-test="book-row"]:visible');
+      expect(await book.count()).toBeGreaterThan(0);
+      for (const card of await book.all()) {
+        await expect(doorOf(card)).toHaveText('Edit');
+        expect(await sameLine(doorOf(card), card.locator('.amount')), 'Book: not the amount line').toBe(false);
+        expect(await sameLine(doorOf(card), card.locator('[data-test="book-row-description"]')), 'Book: not the description').toBe(false);
+      }
+
+      await page.getByRole('tab', { name: 'Clients', exact: true }).click();
+      const clients = page.locator('[data-test="client-row"]');
+      expect(await clients.count()).toBeGreaterThan(0);
+      for (const card of await clients.all()) {
+        await expect(doorOf(card)).toHaveText('Edit');
+        expect(await sameLine(doorOf(card), card.locator('strong').first()), 'Clients: the name line').toBe(true);
+      }
+
+      await page.getByRole('tab', { name: 'Invoices', exact: true }).click();
+      const invoices = page.locator('[data-test="invoice-row"]');
+      expect(await invoices.count()).toBeGreaterThan(0);
+      for (const card of await invoices.all()) {
+        await expect(doorOf(card)).toHaveText('Open');
+        expect(await sameLine(doorOf(card), card.locator('.invoice-identity')), 'Invoices: the top line').toBe(true);
+        expect(await sameLine(doorOf(card), card.locator('.amount')), 'Invoices: not the amount line').toBe(false);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  }
+
+  test('a tap on the word opens what the card opens', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open(page);
+    await doorOf(page.locator('[data-test="expense-row"][data-txn="N26-E1"]')).click();
+    await expect(dialog(page)).toContainText('Edit expense');
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toHaveCount(0);
+
+    await page.getByRole('tab', { name: 'Book', exact: true }).click();
+    await doorOf(page.locator('[data-test="book-row"][data-type="out"]').first()).click();
+    await expect(dialog(page)).toContainText('Edit expense');
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toHaveCount(0);
+
+    await page.getByRole('tab', { name: 'Clients', exact: true }).click();
+    await doorOf(page.locator('[data-test="client-row"][data-client-id="1"]')).click();
+    await expect(dialog(page)).toContainText('Edit client');
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toHaveCount(0);
+
+    await page.getByRole('tab', { name: 'Invoices', exact: true }).click();
+    await doorOf(page.locator('[data-test="invoice-row"]').first()).click();
+    await expect(page.locator('[data-test="invoice-editor"]')).toBeVisible();
+  });
+
+  test('above 640px no word is added', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await open(page);
+    await expect(page.locator('[data-test="card-door"]')).toHaveCount(0);
+    for (const tab of ['Book', 'Clients', 'Invoices'] as const) {
+      await page.getByRole('tab', { name: tab, exact: true }).click();
+      await expect(page.locator('[data-test="card-door"]')).toHaveCount(0);
+    }
+  });
+});

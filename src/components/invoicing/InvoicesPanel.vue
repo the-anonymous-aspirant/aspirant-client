@@ -142,9 +142,17 @@
           :data-invoice-id="row.id"
           @click="$emit('open', row.id)"
         >
+          <!-- The card says at rest that it opens (system_3 #11022, UX walk AM5;
+               design ack c72063): the tab's own door word, muted, at the end
+               of a line the card already has, so no card grows. It is part of
+               the card's one tap, not a second door (§3.159 Decision 3); a
+               screen reader and a keyboard are #11661's. -->
           <span class="invoice-card__row">
             <strong class="invoice-identity">{{ identityOf(row) }}</strong>
-            <AspBadge :status="statusTone(row.status)">{{ statusLabel(row.status) }}</AspBadge>
+            <span class="invoice-card__end">
+              <AspBadge :status="statusTone(row.status)">{{ statusLabel(row.status) }}</AspBadge>
+              <span class="muted card-door" aria-hidden="true" data-test="card-door">Open</span>
+            </span>
           </span>
           <!-- A draft has no number yet, so its identity above is already its
                client (identityOf): this line would only repeat it. -->
@@ -902,6 +910,17 @@
 
   .invoice-card:hover {
     border-color: var(--brand-primary);
+  }
+
+  .invoice-card__end {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .card-door {
+    white-space: nowrap;
   }
 
   .invoice-card__row {
