@@ -1,10 +1,12 @@
 <template>
   <!-- In a review the dialog cannot be dismissed while a write is in flight:
        closing then would end the review before its outcome is counted. -->
-  <AspModal :open="open" :title="title" size="lg" :dismissible="!(reviewing && busy)" @update:open="close">
+  <!-- Every exit asks first when something is unsent: the draft's fields,
+       or a typed cancel reason (system_3 #11670, §3.166; A1's guard). -->
+  <AspModal :open="open" :title="title" size="lg" :dismissible="!(reviewing && busy)" @update:open="onOpenChange">
     <ReadState v-if="!detail" :state="loadError ? 'failed' : 'loading'" heading="The invoice could not be loaded" message="We could not reach the server. Try again." loading-label="Loading" retry-label="Try again" @retry="load" />
 
-    <div v-else ref="editor" class="editor" data-test="invoice-editor" :data-status="invoice.status">
+    <div v-else ref="editor" class="editor" data-test="invoice-editor" :data-status="invoice.status" :inert="unsentAsking || undefined">
       <!-- Issued or cancelled: the record, read-only. -->
       <template v-if="!isDraft">
         <dl class="facts">
@@ -204,7 +206,8 @@
            of invoices quick. Reject is a ghost on the left, as the dialogs'
            Remove is (§3.143 Decision 6); Accept, the one primary, is last
            (design ack c70970). -->
-      <div v-if="detail && isDraft && reviewing" class="review-actions" data-test="review-actions">
+      <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
+      <div v-else-if="detail && isDraft && reviewing" class="review-actions" data-test="review-actions">
         <span class="review-actions__reject">
           <AspButton variant="ghost" :disabled="busy || switching" data-test="review-reject" @click="reject">Reject</AspButton>
         </span>
@@ -224,14 +227,14 @@
           <AspButton v-if="!cancelling" variant="destructive" data-test="invoice-cancel" @click="cancelling = true">Cancel invoice (Storno)…</AspButton>
           <AspButton v-else variant="destructive" :loading="busy" data-test="invoice-cancel-confirm" @click="cancel">Cancel this invoice</AspButton>
         </template>
-        <AspButton variant="secondary" @click="close(false)">Close</AspButton>
-        <AspButton v-if="reviewing" data-test="review-next" @click="$emit('reviewed', 'later')">Next</AspButton>
+        <AspButton variant="secondary" :disabled="busy" data-test="editor-close" @click="onOpenChange(false)">Close</AspButton>
+        <AspButton v-if="reviewing" :disabled="busy" data-test="review-next" @click="requestNext">Next</AspButton>
       </ModalActions>
       <!-- Not loaded, or cancelled. In a review a draft that is gone or no
            longer a draft is passed over, never a dead end. -->
       <ModalActions v-else>
-        <AspButton variant="secondary" @click="close(false)">Close</AspButton>
-        <AspButton v-if="reviewing" data-test="review-next" @click="$emit('reviewed', 'later')">Next</AspButton>
+        <AspButton variant="secondary" :disabled="busy" data-test="editor-close" @click="onOpenChange(false)">Close</AspButton>
+        <AspButton v-if="reviewing" :disabled="busy" data-test="review-next" @click="requestNext">Next</AspButton>
       </ModalActions>
     </template>
   </AspModal>
@@ -243,6 +246,8 @@
   import ReadState from '../ReadState.vue';
   import LineDescriptionInput from './LineDescriptionInput.vue';
   import ModalActions from './ModalActions.vue';
+  import UnsentAsk from './UnsentAsk.vue';
+  import { unsentGuard } from './unsentGuard.js';
   import { FIELD_HINTS } from './fieldHints.js';
   import {
     KLEINBETRAG_LIMIT_CENTS,
@@ -269,7 +274,8 @@
   // read-only record that can only be cancelled (Storno).
   export default {
     name: 'InvoiceEditor',
-    components: { AspBadge, AspButton, AspInput, AspLabelHint, AspModal, AspSelect, AspTextarea, LineDescriptionInput, ModalActions, ReadState },
+    components: { AspBadge, AspButton, AspInput, AspLabelHint, AspModal, AspSelect, AspTextarea, LineDescriptionInput, ModalActions, ReadState, UnsentAsk },
+    mixins: [unsentGuard],
     props: {
       open: { type: Boolean, default: false },
       invoiceId: { type: Number, default: null },
@@ -303,6 +309,9 @@
         history: [],
         historyError: '',
         previewUrl: '',
+        // Where an exit that asked goes once it is discarded: 'close', or
+        // 'next' for a review's Next (system_3 #11670).
+        unsentExit: 'close',
         narrow: typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches,
       };
     },
@@ -326,6 +335,11 @@
       },
       reviewing() {
         return !!this.review;
+      },
+      // While a step's write runs, no exit closes and none asks, the ✕
+      // included (system_3 #11670).
+      unsentBusy() {
+        return this.busy;
       },
       title() {
         // The operator's own wording for the counter (c70806 on #10985).
@@ -492,6 +506,50 @@
             price: decimalFromMinor(it.unit_price_cents, 2),
           })),
         };
+        // What is on screen now is what the server holds: after a load, a
+        // save, an issue, a cancel, and for each draft of a review.
+        this.takeUnsentBaseline();
+      },
+      // What Save or Cancel would send that the server does not hold,
+      // normalised: a field typed and put back is equal again. A draft's
+      // fields; on an issued invoice, the cancel reason once its step is open.
+      unsentValue() {
+        if (!this.detail) return null;
+        const reason = this.cancelling ? this.cancelReason.trim() : '';
+        if (!this.isDraft) return { reason };
+        const f = this.form;
+        return {
+          reason,
+          client_id: f.client_id || 0,
+          from: String(f.service_date_from || '').trim(),
+          to: String(f.service_date_to || '').trim(),
+          vat: this.kleinunternehmer ? '' : String(f.vat_percent || '').trim(),
+          lines: f.lines.map((l) => [String(l.description || '').trim(), String(l.quantity || '').trim(), String(l.price || '').trim()]),
+        };
+      },
+      // Esc, the scrim, the corner ✕, Close and Back: each asks first when
+      // something is unsent (§3.166).
+      onOpenChange(value) {
+        if (value) return;
+        this.unsentExit = 'close';
+        this.requestClose();
+      },
+      // A review's Next passes over this invoice without saving, so it asks
+      // too, and a discard moves on rather than closing.
+      requestNext() {
+        this.unsentExit = 'next';
+        this.requestClose();
+      },
+      closeNow() {
+        const exit = this.unsentExit;
+        this.unsentExit = 'close';
+        if (exit === 'next') this.$emit('reviewed', 'later');
+        else this.$emit('update:open', false);
+      },
+      // "Keep editing" after an armed issue or cancel step leaves the step as
+      // it is: the reason typed is the thing being kept.
+      unsentKeptEditing() {
+        this.unsentExit = 'close';
       },
       // The stored PDF is served as an attachment (a download), so the
       // preview fetches it and shows a blob: URL, which browsers render
@@ -616,18 +674,23 @@
           const id = this.invoice.id;
           await updateDraft(id, this.buildPatch());
           await issueInvoice(id);
+          // Decided: the draft stays on screen while the next one loads, and
+          // must not ask (system_3 #11670).
+          this.takeUnsentBaseline();
           this.$emit('reviewed', 'accepted');
         });
       },
       reject() {
         return this.run(async () => {
           await deleteDraft(this.invoice.id);
+          this.takeUnsentBaseline();
           this.$emit('reviewed', 'rejected');
         });
       },
       later() {
         return this.run(async () => {
           await updateDraft(this.invoice.id, this.buildPatch());
+          this.takeUnsentBaseline();
           this.$emit('reviewed', 'later');
         });
       },
@@ -639,6 +702,8 @@
         return this.run(async () => {
           this.setDetail(await cancelInvoice(this.invoice.id, this.cancelReason.trim()));
           this.cancelling = false;
+          // The reason is sent; the step is closed.
+          this.takeUnsentBaseline();
         });
       },
       close(value) {
