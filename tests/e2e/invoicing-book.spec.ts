@@ -1078,3 +1078,145 @@ test.describe('#11512 the Book exports its entries as a PDF', () => {
   });
 });
 
+// system_3 #11509 (operator c70806 on #10985: "Number should be the invoice id
+// on the book page"; design ack on #11509, §3.143 Decision 7 as amended). The
+// Book had no such column. A counted payment now names its issued invoice: in
+// an Invoice column while the table has room, else as a line under "Who and
+// what for", and as a line on the phone card. The value is the `invoice` field
+// the payments list already carries, so nothing new is fetched.
+test.describe('#11509 the Book names a payment\'s issued invoice', () => {
+  const LONG = 'ABCDEFGHIJKLMNOPQRST-001'; // a 20-character prefix with no hyphen
+  const fakeWithInvoices = (over: Json[] = []) =>
+    newFake({
+      payments: [
+        incomeRow({ id: 11, note: 'On an issued invoice', paid_on: '2026-07-16T00:00:00Z', on_invoice: true, invoice: { id: 5, status: 'issued', invoice_number: '2026-014' } }),
+        incomeRow({ id: 12, note: 'Issued with no number', paid_on: '2026-07-15T12:00:00Z', on_invoice: true, invoice: { id: 7, status: 'issued', invoice_number: '' } }),
+        incomeRow({ id: 13, note: 'On a draft', paid_on: '2026-07-15T00:00:00Z', on_invoice: true, invoice: { id: 6, status: 'draft', invoice_number: '' } }),
+        incomeRow({ id: 14, note: 'No invoice yet', paid_on: '2026-07-14T00:00:00Z' }),
+        incomeRow({ id: 15, note: 'An earlier month', paid_on: '2026-06-10T00:00:00Z', on_invoice: true, invoice: { id: 8, status: 'issued', invoice_number: '2026-009' } }),
+        ...over,
+      ],
+      expenses: [expenseRow(101)],
+    });
+  const rowWith = (page: Page, text: string) => page.locator('[data-test="book-row"]:visible', { hasText: text });
+  const invoiceOf = (page: Page, text: string) => rowWith(page, text).locator('[data-test="book-row-invoice"]');
+  const headers = async (page: Page) => (await page.locator('[data-test="book-month"]').first().locator('thead th').allTextContents()).map((t) => t.trim());
+  const noSidewaysScroll = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  const widthOf = (page: Page, selector: string) => page.locator(selector).first().evaluate((el) => el.getBoundingClientRect().width);
+  const REM = 16;
+
+  test('the five cases: a number, a dash, and nothing for a draft, no invoice and an expense', async ({ page }) => {
+    await open(page, fakeWithInvoices());
+    const narrow = await narrowOf(page);
+    // The table names the number alone under its header; a card has no
+    // header, so it writes the line Transactions writes.
+    await expect(invoiceOf(page, 'On an issued invoice')).toHaveText(narrow ? 'Invoice 2026-014' : '2026-014');
+    await expect(invoiceOf(page, 'Issued with no number')).toHaveText(narrow ? 'Invoice' : '—');
+    for (const text of ['On a draft', 'No invoice yet', 'Guitar strings']) {
+      await expect(rowWith(page, text)).toHaveCount(1);
+      await expect(invoiceOf(page, text)).toHaveCount(0);
+    }
+    expect(await noSidewaysScroll(page)).toBe(true);
+  });
+
+  test('a phone card carries the line at 390 and at 360, with no sideways scroll', async ({ page }) => {
+    await open(page, fakeWithInvoices());
+    test.skip(!(await narrowOf(page)), 'the card is the phone layout');
+    for (const width of [390, 360]) {
+      await page.setViewportSize({ width, height: 800 });
+      const line = invoiceOf(page, 'On an issued invoice');
+      await expect(line).toHaveText('Invoice 2026-014');
+      // A line of its own, after the category line.
+      const category = rowWith(page, 'On an issued invoice').getByText('Paid work', { exact: true });
+      const c = (await category.boundingBox())!;
+      const l = (await line.boundingBox())!;
+      expect(l.y, `the line is under the category at ${width}`).toBeGreaterThanOrEqual(c.y + c.height - 1);
+      expect(await noSidewaysScroll(page), `no sideways scroll at ${width}`).toBe(true);
+    }
+  });
+
+  for (const width of [1440, 1280]) {
+    test(`at ${width}px the Invoice column shows, between Category and In, and "Who and what for" keeps 12rem`, async ({ page }, info) => {
+      test.skip(info.project.name !== 'chromium', 'a desktop width');
+      await page.setViewportSize({ width, height: 900 });
+      await open(page, fakeWithInvoices());
+      const head = await headers(page);
+      const at = head.indexOf('Invoice');
+      expect(at, `headers: ${head.join(' | ')}`).toBeGreaterThan(-1);
+      expect(head[at - 1]).toBe('Category');
+      expect(head[at + 1]).toBe('In');
+
+      const number = invoiceOf(page, 'On an issued invoice');
+      await expect(number).toHaveText('2026-014');
+      expect(await number.evaluate((el) => el.getClientRects().length), '"2026-014" is on one line').toBe(1);
+      // A draft, no invoice and an expense leave the cell itself empty. An
+      // absent number element is not enough: the table prints the row's own
+      // value wherever a cell's slot renders nothing.
+      for (const text of ['On a draft', 'No invoice yet', 'Guitar strings']) {
+        expect((await rowWith(page, text).locator('td').nth(at).textContent())!.trim(), `the Invoice cell of "${text}"`).toBe('');
+      }
+      expect((await rowWith(page, 'Issued with no number').locator('td').nth(at).textContent())!.trim()).toBe('—');
+      // No line under the description while the column shows.
+      await expect(rowWith(page, 'On an issued invoice').locator('[data-test="book-row-description"] ~ [data-test="book-row-invoice"]')).toHaveCount(0);
+
+      // The same width in every month's table.
+      const months = page.locator('[data-test="book-month"]');
+      await expect(months).toHaveCount(2);
+      const widths: number[] = [];
+      for (let i = 0; i < 2; i += 1) {
+        widths.push(await months.nth(i).locator('thead th', { hasText: 'Invoice' }).evaluate((el) => el.getBoundingClientRect().width));
+      }
+      expect(Math.abs(widths[0] - widths[1]), `Invoice column widths ${widths.join(' and ')}`).toBeLessThanOrEqual(0.5);
+
+      const who = await page.locator('[data-test="book-month"]').first().locator('thead th', { hasText: 'Who and what for' }).evaluate((el) => el.getBoundingClientRect().width);
+      console.log(`#11509 at ${width}px: table ${(await widthOf(page, '[data-test="book-month"] table')).toFixed(0)}px, Invoice column ${widths[0].toFixed(1)}px, "Who and what for" ${who.toFixed(1)}px`);
+      expect(who, `"Who and what for" is ${who.toFixed(1)}px`).toBeGreaterThanOrEqual(12 * REM);
+      expect(await noSidewaysScroll(page)).toBe(true);
+    });
+  }
+
+  test('a number with a 20-character prefix wraps inside its cell and is whole', async ({ page }, info) => {
+    test.skip(info.project.name !== 'chromium', 'a desktop width');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open(page, fakeWithInvoices([
+      incomeRow({ id: 16, note: 'A long number', paid_on: '2026-07-17T00:00:00Z', on_invoice: true, invoice: { id: 9, status: 'issued', invoice_number: LONG } }),
+    ]));
+    const number = invoiceOf(page, 'A long number');
+    await expect(number).toHaveText(LONG);
+    const cell = number.locator('xpath=ancestor::td[1]');
+    const fit = await cell.evaluate((td) => ({ scroll: td.scrollWidth, client: td.clientWidth, overflow: getComputedStyle(td).overflow, textOverflow: getComputedStyle(td).textOverflow }));
+    expect(fit.scroll, 'the number does not spill out of its cell').toBeLessThanOrEqual(fit.client);
+    expect(await number.evaluate((el) => el.getClientRects().length), 'it wraps').toBeGreaterThan(1);
+    expect(fit.textOverflow).not.toBe('ellipsis');
+    expect(await noSidewaysScroll(page)).toBe(true);
+  });
+
+  // The rule is the table's own width, 61rem, not the viewport: the sidebar
+  // moves the table by 80px. 1024px is the sidebar open (a 760px table); 1104px
+  // gives the 840px table that 1024px has with the sidebar collapsed, which
+  // this mocked run cannot click (the toggle is the logo image).
+  for (const width of [1024, 1104]) {
+    test(`at ${width}px the table is too narrow: no Invoice column, the number is a line, and the row's door stays in view`, async ({ page }, info) => {
+      test.skip(info.project.name !== 'chromium', 'a desktop width');
+      await page.setViewportSize({ width, height: 900 });
+      await open(page, fakeWithInvoices());
+      const table = await widthOf(page, '[data-test="book-month"] table');
+      expect(table, `the table is ${table.toFixed(0)}px`).toBeLessThan(61 * REM);
+      expect(await headers(page)).not.toContain('Invoice');
+
+      const line = invoiceOf(page, 'On an issued invoice');
+      await expect(line).toHaveText('Invoice 2026-014');
+      const description = rowWith(page, 'On an issued invoice').locator('[data-test="book-row-description"]');
+      const d = (await description.boundingBox())!;
+      const l = (await line.boundingBox())!;
+      expect(l.y, 'the line is under "Who and what for"').toBeGreaterThanOrEqual(d.y + d.height - 1);
+      await expect(invoiceOf(page, 'On a draft')).toHaveCount(0);
+
+      const door = rowWith(page, 'On an issued invoice').locator('[data-test="book-row-edit"]');
+      const b = (await door.boundingBox())!;
+      console.log(`#11509 at ${width}px: table ${table.toFixed(0)}px, the row's door ends at ${(b.x + b.width).toFixed(0)}px of ${width}`);
+      expect(b.x + b.width, "the row's door is inside the screen").toBeLessThanOrEqual(width);
+      expect(await noSidewaysScroll(page)).toBe(true);
+    });
+  }
+});

@@ -161,6 +161,7 @@
                 <span v-if="row.what" :class="{ muted: !!row.who }">{{ row.what }}</span>
                 <template v-if="!row.who && !row.what">—</template>
               </span>
+              <span v-if="row.issuedInvoice && row.issuedInvoice.line" class="muted" data-test="book-row-invoice">{{ row.issuedInvoice.line }}</span>
               <!-- The card says at rest that it opens (system_3 #11022, UX walk AM5;
                  design ack c72063): the tab's own door word, muted, at the end
                  of a line the card already has, so no card grows. It is part of
@@ -196,8 +197,14 @@
               <span v-if="row.what" :class="{ muted: !!row.who }">{{ row.what }}</span>
               <template v-if="!row.who && !row.what">—</template>
             </span>
+            <!-- Where the table is too narrow for the Invoice column, the
+                 number is a line here instead (system_3 #11509). -->
+            <span v-if="!invoiceColumn && row.issuedInvoice && row.issuedInvoice.line" class="invoice-line muted" data-test="book-row-invoice">{{ row.issuedInvoice.line }}</span>
           </template>
           <template #cell-category="{ row }"><span class="muted">{{ row.categoryLabel }}</span></template>
+          <template #cell-invoice="{ row }">
+            <span v-if="row.issuedInvoice && row.issuedInvoice.number" class="invoice-number" data-test="book-row-invoice">{{ row.issuedInvoice.number }}</span>
+          </template>
           <template #cell-in="{ row }">
             <span v-if="row.type === 'in'" class="nowrap in-amount">{{ formatMoney(row.amount_cents) }}</span>
           </template>
@@ -333,7 +340,7 @@
     putBookSelection,
     updateBookPreset,
   } from './api.js';
-  import { expenseParts, newestFirst, paymentParts } from './ledgerRows.js';
+  import { bookInvoice, expenseParts, newestFirst, paymentParts } from './ledgerRows.js';
   import { fillEmptyMonths, groupByMonth, landedRows, monthKey, monthLabel, openGroupKeys } from './listGroups.js';
   import { BOOK_PDF_BUTTON, bookPdfCaption, bookPdfDoc, bookPdfFileName } from './bookPdf.js';
   import { INCOME_ORDER, WORK_ONLY, countableExpenseNames, countingSentence, countsInBook, selectionName } from './bookSelection.js';
@@ -386,6 +393,14 @@
     return { inCents, outCents, resultCents: inCents - outCents };
   }
 
+  // The Invoice column (system_3 #11509; design ack on that task). It is as
+  // wide as "2026-014" needs, and it shows only while the table can hold it,
+  // its other fixed columns (7.5 + 11 + 7.5 + 7.5 + 10rem) and at least 12rem
+  // of "Who and what for". Below that the number is a line in that cell.
+  const INVOICE_COLUMN_REM = 5.5;
+  const OTHER_FIXED_COLUMNS_REM = 43.5;
+  const DESCRIPTION_MIN_REM = 12;
+
   export default {
     name: 'BookPanel',
     components: { AspButton, AspCheckbox, AspDataTable, AspEmptyState, AspInput, AspModal, AspSelect, BookChart, ExpenseReceiptDialog, ManualExpenseDialog, ManualPaymentDialog, UnsentAsk },
@@ -405,6 +420,9 @@
     data() {
       return {
         narrow: false,
+        // Whether the table is wide enough for the Invoice column, by the
+        // table's own width and not the viewport's: the sidebar moves it.
+        invoiceColumn: false,
         rowError: '',
         paymentEditOpen: false,
         editPayment: null,
@@ -441,7 +459,7 @@
         // Every column but the description has a width and the layout is
         // fixed, so the columns line up from one month's table to the next
         // (§3.145 Decision 6). "Out" is wider: it carries the Receipt button.
-        columns: [
+        allColumns: [
           { key: 'paid_on', label: 'Date paid', width: '7.5rem' },
           // The header Transactions uses for the same "{who} · {what}" cell
           // (§3.159 Decision 6, system_3 #11502). It read "What it was for"
@@ -449,6 +467,10 @@
           // wrong value in the column (c70806 on #10985).
           { key: 'description', label: 'Who and what for', sortable: false },
           { key: 'category', label: 'Category', sortable: false, width: '11rem' },
+          // Which invoice the money is on (system_3 #11509, operator c70806 on
+          // #10985). As wide as "2026-014" needs, and the same in every
+          // month's table. Left out where the table is narrow: see `columns`.
+          { key: 'invoice', label: 'Invoice', sortable: false, width: `${INVOICE_COLUMN_REM}rem` },
           { key: 'in', label: 'In', align: 'right', sortable: false, width: '7.5rem' },
           { key: 'out', label: 'Out', align: 'right', sortable: false, width: '7.5rem' },
           // The row's door and, for an expense, Receipt left of it (§3.159
@@ -467,6 +489,9 @@
       };
     },
     computed: {
+      columns() {
+        return this.invoiceColumn ? this.allColumns : this.allColumns.filter((c) => c.key !== 'invoice');
+      },
       // The guard follows `open` (unsentGuard.js); here that is Save as
       // preset's, the panel's one guarded dialog (system_3 #11669).
       open() {
@@ -545,6 +570,11 @@
             created_at: p.created_at,
             ...paymentParts(p),
             categoryLabel: CATEGORY_LABELS[p.category] || p.category,
+            // Its issued invoice, as the column and as a line (system_3
+            // #11509). An expense row has neither. Not named `invoice`: the
+            // table prints `row[column.key]` itself wherever the cell's slot
+            // renders nothing, which put this object in every empty cell.
+            issuedInvoice: bookInvoice(p),
             amount_cents: p.gross_cents,
             payment: p,
           }));
@@ -681,9 +711,21 @@
         this.narrow = e.matches;
       };
       this.narrowQuery.addEventListener('change', this.onNarrowChange);
+      // The tables fill the panel, so the panel's width is theirs.
+      this.measureTable = () => {
+        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        const needed = (OTHER_FIXED_COLUMNS_REM + INVOICE_COLUMN_REM + DESCRIPTION_MIN_REM) * rem;
+        this.invoiceColumn = this.$el.clientWidth >= needed;
+      };
+      this.measureTable();
+      if (typeof ResizeObserver !== 'undefined') {
+        this.tableObserver = new ResizeObserver(this.measureTable);
+        this.tableObserver.observe(this.$el);
+      }
     },
     beforeUnmount() {
       if (this.narrowQuery) this.narrowQuery.removeEventListener('change', this.onNarrowChange);
+      if (this.tableObserver) this.tableObserver.disconnect();
     },
     methods: {
       formatDay,
@@ -1124,6 +1166,18 @@
 
   .muted {
     color: var(--text-muted);
+  }
+
+  /* An invoice number is "<prefix>-<n>" with a prefix of up to 20 characters,
+     so no fixed width holds the longest: it wraps and is never cut (§3.72,
+     system_3 #11509). */
+  .invoice-number,
+  .invoice-line {
+    overflow-wrap: anywhere;
+  }
+
+  .invoice-line {
+    display: block;
   }
 
   .nowrap {
