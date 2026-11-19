@@ -16,6 +16,8 @@ export default {
 
 <template>
   <GameTimeline
+    page-title="Conflict Quiz"
+    page-subtitle="Put historical conflicts in order, or guess the year each one began."
     title="Historical Conflicts"
     :items="items"
     :getRandomSet="getRandomSet"

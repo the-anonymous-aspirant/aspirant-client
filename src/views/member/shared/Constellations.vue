@@ -1,6 +1,6 @@
 <template>
   <div class="constellations-view page">
-    <h1>Constellations</h1>
+    <ApplicationHeader title="Constellations" back-to="/applications" back-label="Applications" />
     <p class="page-subtitle">
       The shared Connections sheet for the card game. Pick a game name, then
       create a room or join one with its code.
@@ -129,6 +129,7 @@
 import axios from 'axios';
 import { AspInput, AspButton, AspSelect, AspSegmented } from '@aspirant/design-system';
 import UserAvatar from '../../../components/UserAvatar.vue';
+import ApplicationHeader from '../../../components/applications/ApplicationHeader.vue';
 import { useProfile } from '../../../composables/useProfile.js';
 
 // Constellations landing / lobby (#4598 / #4587-B3). The app's shared
@@ -148,7 +149,7 @@ const unwrap = (res) => (res && res.data && typeof res.data === 'object' && 'dat
 
 export default {
   name: 'Constellations',
-  components: { AspInput, AspButton, AspSelect, AspSegmented, UserAvatar },
+  components: { ApplicationHeader, AspInput, AspButton, AspSelect, AspSegmented, UserAvatar },
   data() {
     return {
       gameUsername: '',

@@ -20,7 +20,7 @@ async function openGame(page: Page, size: { width: number; height: number }) {
   await page.setViewportSize(size);
   await page.goto('/quizzes/rbguesser');
   await dismissMobileSidebarIfPresent(page);
-  await expect(page.locator('.RBGuesser h1')).toHaveText('RGB Guessing Game');
+  await expect(page.locator('.RBGuesser h1')).toHaveText('RGB Guesser');
 }
 
 const bottomOf = async (page: Page, selector: string) => {

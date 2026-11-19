@@ -185,7 +185,13 @@
 
     <div class="nav-links">
       <SidebarLink :pending="!imagesLoaded" :image="homeIconUrl" to="/">Home</SidebarLink>
-      <SidebarLink :pending="!imagesLoaded" :image="applicationsIconUrl" to="/applications"
+      <!-- Marked on every page below it too: the quizzes and games live at
+           /quizzes and /games (system_3 #11000). -->
+      <SidebarLink
+        :pending="!imagesLoaded"
+        :image="applicationsIconUrl"
+        to="/applications"
+        :match="['/applications', '/quizzes', '/games']"
         >Applications</SidebarLink
       >
       <!-- Member area (#4184): renamed from "Trusted"; the same role gate. A

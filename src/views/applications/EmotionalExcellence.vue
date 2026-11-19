@@ -1,7 +1,8 @@
 <template>
   <div class="emotional-excellence page">
-    <h1>Emotional Excellence (Alpha)</h1>
-    <p><i>A proof-of-concept tracker of emotion. </i></p>
+    <ApplicationHeader title="Emotional Excellence" back-to="/applications" back-label="Applications">
+      <h2 class="page-subtitle" data-test="application-subtitle">Alpha: a proof-of-concept tracker of emotion.</h2>
+    </ApplicationHeader>
     <p>
       <i>Your results are stored as json in your browsers storage and is never sent anywhere</i>
     </p>
@@ -183,6 +184,7 @@
 
 <script>
   import emotions from '../../resources/games/emotions.js';
+  import ApplicationHeader from '../../components/applications/ApplicationHeader.vue';
   import { AspButton, AspSegmented, deriveInk, parseColor, toRgbString } from '@aspirant/design-system';
 
   // A fill-derived ink, cached per colour string: the emotion tree repeats a
@@ -193,6 +195,7 @@
   export default {
     name: 'EmotionalExcellence',
     components: {
+      ApplicationHeader,
       AspButton,
       AspSegmented,
     },
@@ -403,10 +406,6 @@
     display: flex;
     flex-direction: column;
     color: var(--text-on-light);
-  }
-
-  .emotional-excellence h1 {
-    margin-bottom: var(--space-xs);
   }
 
   .emotional-excellence h2 {

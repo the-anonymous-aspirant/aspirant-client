@@ -16,6 +16,8 @@ export default {
 
 <template>
   <GameTimeline
+    page-title="People Quiz"
+    page-subtitle="Put historical figures in order, or guess the year each one belongs to."
     title="Historical Figures"
     :items="items"
     :getRandomSet="getRandomSet"

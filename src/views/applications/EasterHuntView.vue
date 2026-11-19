@@ -1,6 +1,6 @@
 <template>
   <div class="easter-hunt">
-    <h1>Easter Egg Hunt</h1>
+    <ApplicationHeader title="Easter Egg Hunt" back-to="/applications/games" back-label="Game Center" />
     <h2 class="page-subtitle" v-if="gameState && !isLocked">
       {{ timeLeftText }}
     </h2>
@@ -174,6 +174,7 @@
 <script>
 import axios from 'axios';
 import { AspButton, AspSegmented } from '@aspirant/design-system';
+import ApplicationHeader from '../../components/applications/ApplicationHeader.vue';
 import HuntEndForm from '../../components/easterHunt/HuntEndForm.vue';
 
 const BOARD_SIZE = 128;
@@ -307,7 +308,7 @@ function generateOverlay(seed) {
 
 export default {
   name: 'EasterHuntView',
-  components: { AspButton, AspSegmented, HuntEndForm },
+  components: { ApplicationHeader, AspButton, AspSegmented, HuntEndForm },
   data() {
     return {
       gameState: null,
@@ -726,11 +727,6 @@ export default {
   flex-direction: column;
   align-items: center;
   padding: 0 var(--space-sm);
-}
-
-.easter-hunt h1 {
-  font-family: var(--font-family-base);
-  margin-bottom: var(--space-xs);
 }
 
 .page-subtitle {

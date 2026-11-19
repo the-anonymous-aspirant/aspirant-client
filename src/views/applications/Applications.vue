@@ -84,7 +84,7 @@
           },
           {
             title: 'Constellations',
-            description: 'A shared relationship-graph board for the card game',
+            description: 'A shared board for the relationship card game.',
             route: 'constellations',
             icon: 'constellations_icon',
           },

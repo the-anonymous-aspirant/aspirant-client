@@ -1,6 +1,6 @@
 <template>
   <div class="quiz-hub page">
-    <h1>Quiz Center</h1>
+    <ApplicationHeader title="Quiz Center" back-to="/applications" back-label="Applications" />
     <h2 class="page-subtitle">Test your knowledge and discover your personality!</h2>
     <div class="quiz-list">
       <application-card
@@ -19,6 +19,7 @@
 <script>
   import AssetManager from '../../asset_manager';
   import ApplicationCard from '../../components/ApplicationCard.vue';
+  import ApplicationHeader from '../../components/applications/ApplicationHeader.vue';
 
   // The Quiz Center roster (#4842) — the ONE definition of this hub's tiles,
   // lifted from the former inline <application-card> list so the grid renders
@@ -71,6 +72,7 @@
   export default {
     name: 'QuizHub',
     components: {
+      ApplicationHeader,
       ApplicationCard,
     },
     data() {

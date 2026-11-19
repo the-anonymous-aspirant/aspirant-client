@@ -2,7 +2,7 @@
   <div class="sql-quiz page">
     <!-- The page title sits on the page, above the quiz panel, so it takes the
          shared gutter and title y (#9599, §3.121); the panel keeps its look. -->
-    <h1 class="sql-quiz-title">SQL Personality Revealer</h1>
+    <ApplicationHeader title="Personality Test: SQL" back-to="/applications/quizzes" back-label="Quiz Center" />
     <div class="quiz-container">
       <div v-if="!result">
         <div class="progress-bar">
@@ -77,10 +77,12 @@
   import { seriesColor, tokenColor } from '../../composables/chartSeries.js';
   import { debugMode } from '../../global_state_manager.js';
   import { AspButton } from '@aspirant/design-system';
+  import ApplicationHeader from '../../components/applications/ApplicationHeader.vue';
 
   export default {
     name: 'SqlPersonalityQuiz',
     components: {
+      ApplicationHeader,
       AspButton,
     },
     data() {
@@ -249,14 +251,12 @@
     box-shadow: var(--shadow-sm);
   }
 
-  h1 {
+  /* The result's heading, inside the panel, centred on the panel's own
+     ground. The page title is ApplicationHeader's (system_3 #11000). */
+  .quiz-container h1 {
     font-family: var(--font-family-base);
     color: var(--text-on-light);
     margin-bottom: var(--space-lg);
-  }
-  /* Inside the panel, the result's heading still centres on the panel's own
-     ground; the page title above it does not. */
-  .quiz-container h1 {
     text-align: center;
   }
 
@@ -423,7 +423,7 @@
       margin: 0;
     }
 
-    h1 {
+    .quiz-container h1 {
       font-size: var(--text-2xl);
       margin-bottom: var(--space-md);
     }
