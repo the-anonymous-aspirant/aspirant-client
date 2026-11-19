@@ -357,7 +357,10 @@
           { key: 'address', label: 'Address', sortable: false, width: '24%' },
           { key: 'email', label: 'Contact', width: '24%' },
           { key: 'paypal_email', label: 'PayPal email', width: '20%' },
-          { key: 'actions', label: '', sortable: false, align: 'right', width: '8%' },
+          // A fixed width, the one Invoices gives its one-button column
+          // (system_3 #11627): as a share of the table, "Edit" ran out of
+          // the list's box at 1024 and 700px.
+          { key: 'actions', label: '', sortable: false, align: 'right', width: '5.5rem' },
         ],
       };
     },

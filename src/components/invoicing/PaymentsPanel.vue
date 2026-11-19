@@ -852,7 +852,11 @@
           // "Date paid", the Book's header for the same day (§3.159 Decision 6,
           // system_3 #11502): the day the money moved (§3.145).
           { key: 'paid_on', label: 'Date paid', width: '7.5rem' },
-          { key: 'who', label: 'Who and what for', sortable: false },
+          // The row's identity, and Amount its figure (design ack on
+          // system_3 #11627, §3.165): "Who and what for" leads the design
+          // system's card, Amount sits top-right, and this column's room
+          // decides when the table gives way to cards.
+          { key: 'who', label: 'Who and what for', sortable: false, role: 'identity' },
           // Width measured at 1280 with the sidebar open, where the table has
           // 968px (#8407): the cell pads 12px a side and a table-cell trigger
           // ~32px, so 10.25rem shows "Uncategorised" (106px of text) whole.
@@ -865,7 +869,7 @@
           // Design ack c71060). The client reads as text under who.
           { key: 'invoice', label: 'Invoice', sortable: false, width: '10.25rem' },
           // The last of the row's values, as the row reads (§3.143 Decision 3).
-          { key: 'amount', label: 'Amount', align: 'right', sortable: false, width: '8rem' },
+          { key: 'amount', label: 'Amount', align: 'right', sortable: false, width: '8rem', role: 'figure' },
           // The row's door and, for an expense, Receipt left of it (§3.159
           // Decision 3). Wide enough for both `sm` buttons on one line.
           { key: 'actions', label: '', sortable: false, align: 'right', width: '10rem' },
