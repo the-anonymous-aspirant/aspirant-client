@@ -395,12 +395,19 @@
     background: transparent;
     border: 1.5px solid var(--border-control, var(--border-subtle));
   }
-  :global([data-theme='dark']) .legend .swatch.cell-success { background: var(--chart-series-3-on-dark); }
-  :global([data-theme='dark']) .legend .swatch.cell-running { background: var(--chart-series-1-on-dark); }
-  :global([data-theme='dark']) .legend .swatch.cell-blocked { background: var(--chart-series-5-on-dark); }
-  :global([data-theme='dark']) .legend .swatch.cell-failed { background: var(--chart-series-4-on-dark); }
-  :global([data-theme='dark']) .legend .swatch.cell-cancelled { background: var(--chart-series-2-on-dark); }
-  :global([data-theme='dark']) .legend .swatch.cell-unknown { background: var(--chart-series-9-on-dark); }
+  /* No `:global()` around the theme attribute (system_3 #11455). In a scoped
+     style Vue replaces a whole selector containing `:global(…)` with its
+     inside, so `:global([data-theme='dark']) .legend .swatch.cell-x` became a
+     bare `[data-theme=dark]` rule on <html> and these six fills never
+     applied. Written plainly, the scope attribute goes on the last part only
+     (`[data-theme='dark'] .legend .swatch.cell-x[data-v-…]`), which is what
+     is wanted: the attribute lives on <html>, outside this component. */
+  [data-theme='dark'] .legend .swatch.cell-success { background: var(--chart-series-3-on-dark); }
+  [data-theme='dark'] .legend .swatch.cell-running { background: var(--chart-series-1-on-dark); }
+  [data-theme='dark'] .legend .swatch.cell-blocked { background: var(--chart-series-5-on-dark); }
+  [data-theme='dark'] .legend .swatch.cell-failed { background: var(--chart-series-4-on-dark); }
+  [data-theme='dark'] .legend .swatch.cell-cancelled { background: var(--chart-series-2-on-dark); }
+  [data-theme='dark'] .legend .swatch.cell-unknown { background: var(--chart-series-9-on-dark); }
 
   .browser-flows-frame {
     height: 100vh;
