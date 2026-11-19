@@ -52,6 +52,25 @@ function track(vm, on) {
   if (had && !guarded.size) window.removeEventListener('beforeunload', onBeforeUnload);
 }
 
+// Where "Keep editing" puts focus: back where it was, if that element is
+// still in the page (a field, for an Esc pressed in it). The footer's Cancel or
+// "Not now" that asked is not: the footer gave way to the ask, and the one
+// that returns is a new element. Then its replacement, found by data-test or
+// name in the same dialog; failing that, the dialog itself, so it still hears
+// Esc and Tab (system_3 #11685, found on #11668's dogfood walk).
+export function unsentFocusTarget(back, key) {
+  if (typeof document === 'undefined') return null;
+  if (back && typeof back.focus === 'function' && document.contains(back)) return back;
+  const panel = key && key.panel && document.contains(key.panel) ? key.panel : null;
+  if (!panel) return null;
+  const buttons = [...panel.querySelectorAll('button')];
+  const same =
+    (key.dataTest && buttons.find((b) => b.getAttribute('data-test') === key.dataTest)) ||
+    (key.text && buttons.find((b) => (b.textContent || '').trim() === key.text));
+  if (same && !same.disabled) return same;
+  return panel;
+}
+
 export const unsentGuard = {
   data() {
     return {
@@ -86,7 +105,20 @@ export const unsentGuard = {
       if (this.unsentBusy) return false;
       if (this.unsentAsking) return false;
       if (this.hasUnsent()) {
-        this.unsentReturnFocus = typeof document !== 'undefined' ? document.activeElement : null;
+        const back = typeof document !== 'undefined' ? document.activeElement : null;
+        this.unsentReturnFocus = back;
+        // The footer's Cancel or "Not now" is removed while the ask shows, so
+        // remember how to find its replacement, and the dialog it sat in
+        // (system_3 #11685).
+        // If focus is not inside a dialog when the ask begins, the dialog
+        // to fall back to is the open one on top.
+        const own = back && back !== document.body && back.closest('[role="dialog"]');
+        const panel = own || [...document.querySelectorAll('[role="dialog"]')].pop() || null;
+        this.unsentReturnKey = {
+          dataTest: own ? back.getAttribute('data-test') : null,
+          text: own ? (back.textContent || '').trim() : '',
+          panel,
+        };
         this.unsentAsking = true;
         return false;
       }
@@ -96,15 +128,19 @@ export const unsentGuard = {
     keepEditing() {
       this.unsentAsking = false;
       const back = this.unsentReturnFocus;
+      const key = this.unsentReturnKey;
       this.unsentReturnFocus = null;
+      this.unsentReturnKey = null;
       this.$nextTick(() => {
-        if (back && typeof back.focus === 'function' && document.contains(back)) back.focus();
+        const target = unsentFocusTarget(back, key);
+        if (target) target.focus();
       });
       this.unsentKeptEditing();
     },
     discardUnsent() {
       this.unsentAsking = false;
       this.unsentReturnFocus = null;
+      this.unsentReturnKey = null;
       this.closeNow();
     },
     // A dialog may override this to disarm a step the ask interrupted.
