@@ -1,5 +1,8 @@
 <template>
-  <AspModal :open="open" title="Import N26 payments" size="md" @update:open="close">
+  <!-- Every exit asks first when a tick or a category was changed (system_3
+       #11671, §3.166; A1's guard). The summary is emitted on every close, a
+       discard included. -->
+  <AspModal :open="open" title="Import N26 payments" size="md" @update:open="onOpenChange">
     <div class="n26" data-test="n26-review">
       <p class="n26__lead">
         Only ticked payments are imported. They arrive without a category.
@@ -113,17 +116,18 @@
     <template #footer>
       <div class="n26-footer">
         <p v-if="!importable" class="n26-footer__note" data-test="n26-nothing">{{ nothingLine }}</p>
-        <ModalActions>
+        <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
+        <ModalActions v-else>
           <template v-if="importable">
-            <AspButton variant="secondary" :disabled="confirming" data-test="n26-cancel" @click="close(false)">Cancel</AspButton>
+            <AspButton variant="secondary" :disabled="confirming" data-test="n26-cancel" @click="onOpenChange(false)">Cancel</AspButton>
             <AspButton :loading="confirming" :disabled="nothingTicked" data-test="n26-confirm" @click="confirm">
               {{ confirmLabel }}
             </AspButton>
           </template>
-          <AspButton v-else variant="secondary" data-test="n26-close" @click="close(false)">Close</AspButton>
+          <AspButton v-else variant="secondary" data-test="n26-close" @click="onOpenChange(false)">Close</AspButton>
         </ModalActions>
         <!-- States what enables the primary (§3.114, c60358 item 4). -->
-        <p v-if="importable && nothingTicked" class="n26-footer__note n26-footer__note--end" data-test="n26-tick-hint">
+        <p v-if="importable && nothingTicked && !unsentAsking" class="n26-footer__note n26-footer__note--end" data-test="n26-tick-hint">
           Tick at least one row to import.
         </p>
       </div>
@@ -135,6 +139,8 @@
   import { AspButton, AspCheckbox, AspModal } from '@aspirant/design-system';
   import ExpenseCandidatesSection from './ExpenseCandidatesSection.vue';
   import ModalActions from './ModalActions.vue';
+  import UnsentAsk from './UnsentAsk.vue';
+  import { unsentGuard } from './unsentGuard.js';
   import {
     N26_KIND_LABELS,
     confirmN26Expenses,
@@ -161,7 +167,8 @@
   // statement) starts unticked. The server re-validates and dedupes anyway.
   export default {
     name: 'N26ImportDialog',
-    components: { AspButton, AspCheckbox, AspModal, ExpenseCandidatesSection, ModalActions },
+    components: { AspButton, AspCheckbox, AspModal, ExpenseCandidatesSection, ModalActions, UnsentAsk },
+    mixins: [unsentGuard],
     props: {
       open: { type: Boolean, default: false },
       // The parse response: [{ filename, document_kind, candidates,
@@ -266,7 +273,14 @@
           this.paymentsResult = null;
           this.error = '';
           if (this.expenseRows.length) this.loadCategories();
+          // The rows as they arrive (incoming ticked, outgoing not) are the
+          // baseline (system_3 #11671).
+          this.takeUnsentBaseline();
         },
+      },
+      // Opened again on the same files: what is on screen is where it starts.
+      open(isOpen) {
+        if (isOpen) this.takeUnsentBaseline();
       },
     },
     methods: {
@@ -357,6 +371,20 @@
       close(value) {
         if (this.confirming || value) return;
         this.finish(this.paymentsResult || { confirmed: 0, duplicates: 0 }, this.paymentsResult ? this.checkedRows : [], null);
+      },
+      // Esc, the scrim, the corner ✕, Cancel or Close, and Back: each asks
+      // first when a tick or a category was changed (§3.166).
+      onOpenChange(value) {
+        if (value) return;
+        this.requestClose();
+      },
+      // The close it always had: the summary, then closed.
+      closeNow() {
+        this.close(false);
+      },
+      unsentValue() {
+        const exp = Object.fromEntries(Object.entries(this.expenseState).map(([k, v]) => [k, [!!v.checked, v.category]]));
+        return { checked: this.checked, expenses: exp };
       },
       finish(result, posted, expenses) {
         const alreadyImported = this.rows.filter(({ row }) => row.already_imported).length;

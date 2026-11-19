@@ -433,3 +433,72 @@ test.describe('#11507 payers and clients worth a second look', () => {
     await expect(review(page)).toHaveCount(0);
   });
 });
+
+// system_3 #11671 (A4 of #11632; §3.166, cited as #11629): the payers review
+// asks before an exit throws away a tick or a name; a refetch that lands while
+// it is open keeps what was ticked and typed.
+test.describe('#11671 the payers review asks before an exit throws away a tick or a name', () => {
+  const ask = (page: Page) => page.locator('[data-test="unsent-ask"]');
+  const dialog = (page: Page) => page.locator('[data-test="payers-dialog"]');
+
+  test('untouched closes at once; a tick asks on Cancel and Esc; Discard closes with nothing added', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await openFromImport(page);
+    await page.locator('[data-test="payers-cancel"]').click();
+    await expect(dialog(page)).toHaveCount(0);
+
+    await page.locator('[data-test="payers-open"]').click();
+    await expect(dialog(page)).toBeVisible();
+    await check(page, 0).check();
+    await page.locator('[data-test="payers-cancel"]').click();
+    await expect(ask(page)).toBeVisible();
+    await page.locator('[data-test="unsent-keep"]').click();
+    await expect(check(page, 0)).toBeChecked();
+    await check(page, 0).focus();
+    await page.keyboard.press('Escape');
+    await expect(ask(page)).toBeVisible();
+    await page.locator('[data-test="unsent-discard"]').click();
+    await expect(dialog(page)).toHaveCount(0);
+    expect(addRequests(fake)).toEqual([]);
+  });
+
+  test('a refetch that lands while it is open keeps a ticked row and its name', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    // Saving a client starts the page's refetch; its client list is held
+    // until the payers review is open and filled in, then lands.
+    await page.route(/\/api\/invoicing\/clients\/\d+$/, (route) =>
+      route.request().method() === 'PUT' ? json(route, 200, { client: fake.clients[0] }) : route.fallback());
+    let releaseClients: (() => void) | null = null;
+    let holdClients = false;
+    await page.route(/\/api\/invoicing\/clients$/, async (route) => {
+      if (route.request().method() !== 'GET' || !holdClients) return route.fallback();
+      holdClients = false;
+      await new Promise<void>((r) => (releaseClients = r));
+      return json(route, 200, { clients: [...fake.clients, { id: 9, name: 'Atelier Süd', paypal_email: '' }] });
+    });
+    await page.getByRole('tab', { name: 'Clients', exact: true }).click();
+    const edit = page.locator('[data-test="client-edit-1"]:visible');
+    if (await edit.count()) await edit.click();
+    else await page.locator('[data-test="client-row"]').first().click();
+    holdClients = true;
+    await page.locator('[data-test="client-save"]').click();
+    await expect.poll(() => releaseClients !== null).toBe(true);
+    await expect(page.getByRole('dialog', { name: /client/i })).toHaveCount(0);
+
+    await page.locator('[data-test="clients-add-from-payments"]').click();
+    await expect(dialog(page)).toBeVisible();
+    await check(page, 0).check();
+    const name = rows(page).nth(0).getByRole('combobox').first();
+    await name.fill('Luca B.');
+    const before = fake.requests.filter((r) => r.path === '/invoicing/payers/candidates').length;
+    releaseClients!();
+    await expect.poll(() => fake.requests.filter((r) => r.path === '/invoicing/payers/candidates').length).toBeGreaterThan(before);
+    await page.waitForTimeout(300);
+    await expect(check(page, 0)).toBeChecked();
+    await expect(name).toHaveValue('Luca B.');
+    await page.locator('[data-test="payers-cancel"]').click();
+    await expect(ask(page)).toBeVisible();
+  });
+});
