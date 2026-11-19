@@ -20,6 +20,19 @@
         its own. Leave this page open or come back later. To find out when, ask the person who sent
         you the link.
       </p>
+      <!-- An admin starts the next hunt here, with its end time (system_3
+           #11313). Between hunts the Game panel, and its Admin controls, is
+           not on the page. -->
+      <HuntEndForm
+        v-if="isAdmin"
+        heading="Start a hunt"
+        button-label="Start the hunt"
+        variant="primary"
+        :busy="starting"
+        :failure="startFailure"
+        test-id="hunt-start-form"
+        @submit="startHunt"
+      />
     </div>
 
     <!-- Tabs. Both members switch a named panel below, so the strip declares
@@ -91,8 +104,25 @@
         <!-- Admin controls -->
         <div class="panel admin-panel" v-if="isAdmin">
           <h3>Admin</h3>
-          <div class="admin-buttons">
-            <AspButton variant="destructive" @click="resetGame">Reset Game</AspButton>
+          <!-- A reset starts a new hunt, so it asks for the end time too, and
+               is armed on the page rather than in a browser dialog (system_3
+               #11313; §3.143 Decision 6). -->
+          <HuntEndForm
+            v-if="resetOpen"
+            heading="Start a new hunt"
+            warning="This deletes all clicks and scores."
+            button-label="Delete scores and start"
+            variant="destructive"
+            cancellable
+            on-card
+            :busy="starting"
+            :failure="startFailure"
+            test-id="hunt-reset-form"
+            @submit="startHunt"
+            @cancel="closeReset"
+          />
+          <div v-else class="admin-buttons">
+            <AspButton variant="destructive" data-test="hunt-reset-open" @click="openReset">Reset Game</AspButton>
             <AspButton variant="secondary" @click="toggleReveal">
               {{ showReveal ? 'Hide Eggs' : 'Reveal All Eggs' }}
             </AspButton>
@@ -144,6 +174,7 @@
 <script>
 import axios from 'axios';
 import { AspButton, AspSegmented } from '@aspirant/design-system';
+import HuntEndForm from '../../components/easterHunt/HuntEndForm.vue';
 
 const BOARD_SIZE = 128;
 const CELL_SIZE = 10;
@@ -276,10 +307,14 @@ function generateOverlay(seed) {
 
 export default {
   name: 'EasterHuntView',
-  components: { AspButton, AspSegmented },
+  components: { AspButton, AspSegmented, HuntEndForm },
   data() {
     return {
       gameState: null,
+      // Starting or resetting a hunt (system_3 #11313).
+      starting: false,
+      startFailure: '',
+      resetOpen: false,
       // A read that failed for any reason but "no game" (a 404 or a null
       // body): shown as itself, with a retry, never as an idle hunt.
       loadError: null,
@@ -589,17 +624,37 @@ export default {
       this.toastTimer = setTimeout(() => { this.toast = null; }, 3000);
     },
 
-    async resetGame() {
-      if (!confirm('Reset the game? This deletes all clicks and scores.')) return;
+    openReset() {
+      this.startFailure = '';
+      this.resetOpen = true;
+    },
+    closeReset() {
+      this.startFailure = '';
+      this.resetOpen = false;
+    },
+    // Starts a hunt, or a new one over a running or ended hunt, ending at
+    // `lockAt` (RFC 3339 with the browser's offset). The server's default
+    // end is in the past, so a time is always sent (system_3 #11313).
+    async startHunt(lockAt) {
+      if (this.starting || !lockAt) return;
+      this.starting = true;
+      this.startFailure = '';
       try {
-        await axios.post('/api/games/easter-hunt/admin/reset');
+        await axios.post('/api/games/easter-hunt/admin/reset', { lock_at: lockAt });
         this.overlay = null;
         this.showReveal = false;
         this.adminEggs = null;
+        this.resetOpen = false;
         await this.fetchState();
-        this.showToast('Game reset!', 'success');
+        this.activeTab = 'game';
+        this.showToast('The hunt has started', 'success');
       } catch (e) {
-        this.showToast('Reset failed', 'error');
+        const reason = e.response?.data?.error?.message || e.response?.data?.message;
+        this.startFailure = reason
+          ? `The hunt was not started: ${reason}`
+          : `The hunt was not started (${e.response?.status ? `server error ${e.response.status}` : 'no response'}).`;
+      } finally {
+        this.starting = false;
       }
     },
 
@@ -785,8 +840,11 @@ canvas {
   border: 3px solid var(--border-card);
   box-shadow: var(--shadow-lg);
   image-rendering: pixelated;
-  width: min(1280px, calc(100vh - 160px));
-  height: min(1280px, calc(100vh - 160px));
+  /* Also no wider than its column: sized from the viewport height alone,
+     the board spilled over the side panels at 1440 and hid the end of their
+     lines (system_3 #11313, where the Admin panel's reset form showed it). */
+  width: min(1280px, calc(100vh - 160px), 100%);
+  aspect-ratio: 1;
   background: var(--surface-card);
 }
 
