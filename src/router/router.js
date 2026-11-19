@@ -6,7 +6,6 @@ import ApplicationsView from '../views/applications/Applications.vue';
 import QuizHubView from '../views/applications/QuizHub.vue';
 import GameHubView from '../views/applications/GameHub.vue';
 import GameRBGuesserView from '../views/applications/GameRBGuesser.vue';
-import GameSql from '../views/applications/GameSql.vue';
 import AdminView from '../views/admin/AdminView.vue';
 import MemberView from '../views/MemberView.vue';
 import LuddeAnalytics from '../views/member/personal/LuddeAnalytics.vue';
@@ -31,10 +30,7 @@ import ProfileView from '../views/ProfileView.vue';
 import ThirtyYearGiftView from '../views/member/personal/ThirtyYearGift.vue';
 import Translator from '../views/member/shared/Translator.vue';
 import Goals from '../views/member/shared/Goals.vue';
-import GoalTreeCanvas from '../views/member/shared/GoalTreeCanvas.vue';
 import ValuationStatement from '../views/member/personal/ValuationStatement.vue';
-import PappasPushups from '../views/member/personal/PappasPushups.vue';
-import PappasSitups from '../views/member/personal/PappasSitups.vue';
 import JobsView from '../views/member/personal/JobsView.vue';
 import InvoicingView from '../views/member/personal/InvoicingView.vue';
 import Scratchpad from '../views/member/shared/Scratchpad.vue';
@@ -42,10 +38,7 @@ import Constellations from '../views/member/shared/Constellations.vue';
 import ConstellationsRoom from '../views/member/shared/ConstellationsRoom.vue';
 import Advisor from '../views/admin/Advisor.vue';
 import BrowserFlows from '../views/admin/BrowserFlows.vue';
-import FlowDetail from '../views/admin/browser-flows/FlowDetail.vue';
 import RunForensic from '../views/admin/browser-flows/RunForensic.vue';
-import KvittoMaker from '../views/admin/tools/KvittoMaker.vue';
-import CardgenApp from '../views/admin/cardgen/CardgenApp.vue';
 import LoginView from '../views/LoginView.vue';
 import VerifyEmailView from '../views/VerifyEmailView.vue';
 import ResetPasswordView from '../views/ResetPasswordView.vue';
@@ -54,6 +47,20 @@ import ForgotPasswordView from '../views/ForgotPasswordView.vue';
 import ResendVerificationView from '../views/ResendVerificationView.vue';
 import NotFound from '../views/NotFound.vue';
 import { TIER, tierOf } from '../lib/tiers.js';
+
+// Views that pull a large library load when their route opens, not with the
+// first page (system_3 #11650): pdfmake (KvittoMaker, the card generator),
+// chart.js (the two Pappas trackers, a browser flow's detail, the SQL game)
+// and vue-flow with dagre, marked and dompurify (a goal's tree). A static
+// import here put each library in the first page's preloads, for every
+// visitor, signed in or not.
+const GameSql = () => import('../views/applications/GameSql.vue');
+const GoalTreeCanvas = () => import('../views/member/shared/GoalTreeCanvas.vue');
+const PappasPushups = () => import('../views/member/personal/PappasPushups.vue');
+const PappasSitups = () => import('../views/member/personal/PappasSitups.vue');
+const FlowDetail = () => import('../views/admin/browser-flows/FlowDetail.vue');
+const KvittoMaker = () => import('../views/admin/tools/KvittoMaker.vue');
+const CardgenApp = () => import('../views/admin/cardgen/CardgenApp.vue');
 
 // Access-tier gates (epic #5113-A2/A3). The guard below reads user_role and
 // admits when its tier clears the route's minTier. tierOf accepts both the tier
