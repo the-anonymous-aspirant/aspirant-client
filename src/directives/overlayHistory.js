@@ -53,11 +53,33 @@ let installed = false;
 // overlay.
 let selfUnwinds = 0;
 
+// The page's own scroll-restoration mode, held while overlays are open
+// (system_3 #11670). The mode belongs to each history entry, and returning to
+// the page's entry restores its scroll under that entry's mode. With 'auto'
+// that jumped the page back to where it was when the first overlay opened,
+// undoing a scroll made since (a list moving the row just saved into view).
+// So the page's entry is 'manual' from the first push until the last overlay
+// has closed and the page's entry is current again, then its mode returns.
+let pageScrollMode = null;
+
+function restorePageScrollMode() {
+  if (pageScrollMode === null || stack.length > 0 || selfUnwinds > 0) return;
+  const mode = pageScrollMode;
+  // The browser applies scroll restoration after the popstate is dispatched;
+  // set the page's mode back once that has happened.
+  setTimeout(() => {
+    if (pageScrollMode !== mode || stack.length > 0 || selfUnwinds > 0) return;
+    window.history.scrollRestoration = mode;
+    pageScrollMode = null;
+  }, 0);
+}
+
 function onPopState() {
   if (selfUnwinds > 0) {
     // Echo of our own history.back() from popOverlay(): the overlay is already
     // closing. Consume it and stop.
     selfUnwinds -= 1;
+    restorePageScrollMode();
     return;
   }
   // A genuine Back gesture. Close the top-most overlay, if any. The underlying
@@ -68,6 +90,7 @@ function onPopState() {
   if (top) {
     top.close();
   }
+  restorePageScrollMode();
 }
 
 function install() {
@@ -86,6 +109,12 @@ function install() {
  */
 export function pushOverlay(close) {
   install();
+  // The first overlay: hold the page's entry at 'manual' before our entry is
+  // pushed (see pageScrollMode).
+  if (stack.length === 0 && pageScrollMode === null && 'scrollRestoration' in window.history) {
+    pageScrollMode = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+  }
   const token = {};
   stack.push({ token, close });
   // Preserve vue-router's own history.state bookkeeping (position/back/forward)
@@ -124,12 +153,19 @@ export function popOverlay(token) {
  */
 export function clearForNavigation() {
   stack.length = 0;
+  // Still on the page's entry here (router.beforeEach): give it its mode
+  // back, so the next page's entry is not created as 'manual'.
+  if (pageScrollMode !== null) {
+    window.history.scrollRestoration = pageScrollMode;
+    pageScrollMode = null;
+  }
 }
 
 /** Test-only: reset module state between specs. Not used by app code. */
 export function __resetOverlayHistory() {
   stack.length = 0;
   selfUnwinds = 0;
+  pageScrollMode = null;
 }
 
 /** Test-only: current tracked overlay depth. */

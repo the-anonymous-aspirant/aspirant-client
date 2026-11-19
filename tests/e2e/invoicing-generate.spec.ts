@@ -52,6 +52,10 @@ interface Fake {
   // Invoice ids whose issue the server refuses, with its sentence.
   refuseIssue: Record<number, string>;
   requests: Array<{ method: string; path: string; body: string }>;
+  // A write held open until released, so a test can act while it runs
+  // (system_3 #11670).
+  hold?: boolean;
+  release?: () => void;
 }
 
 const issuedSeptember = () => ({
@@ -140,10 +144,15 @@ async function mock(page: Page, fake: Fake): Promise<void> {
       const out = generate(fake, body);
       return json(route, out.invoices.length ? 201 : 200, out);
     }
-    const m = path.match(/^\/invoicing\/invoices\/(\d+)(\/issue)?$/);
+    const m = path.match(/^\/invoicing\/invoices\/(\d+)(\/issue|\/cancel)?$/);
     if (m) {
       const inv = fake.invoices.find((i) => i.id === Number(m[1]));
       if (!inv) return json(route, 404, { error: { code: 'not_found', message: 'Invoice not found' } });
+      if (method !== 'GET' && fake.hold) await new Promise<void>((r) => (fake.release = r));
+      if (m[2] === '/cancel' && method === 'POST') {
+        Object.assign(inv, { status: 'cancelled', cancel_reason: JSON.parse(req.postData() || '{}').reason, cancelled_at: '2026-11-16T10:00:00Z' });
+        return json(route, 200, detailOf(fake, inv));
+      }
       if (m[2] && method === 'POST') {
         if (fake.refuseIssue[inv.id]) return json(route, 422, { error: { code: 'client_address_missing', message: fake.refuseIssue[inv.id] } });
         const number = fake.next++;
@@ -929,5 +938,126 @@ test.describe('#11371 the phone\'s selection bar', () => {
     await expect(generateSelected(page)).toHaveText('Generate 2 invoices');
     await expect(page.locator('[data-test="bulk-category"]')).toContainText('Set category of 2 selected');
     await expect(lead(page)).toHaveCount(0);
+  });
+});
+
+// system_3 #11670 (A3 of #11632; §3.166, cited as #11629): the invoice editor
+// asks before an exit throws away what was typed: a draft's fields, or a
+// typed Storno reason. Each draft of a review, and each just-decided one,
+// opens and moves on without asking; while a step's write runs no exit
+// closes, the ✕ included.
+test.describe('#11670 the invoice editor asks before an exit throws away what was typed', () => {
+  const ask = (page: Page) => page.locator('[data-test="unsent-ask"]');
+  const closeX = (page: Page) => dialog(page).getByRole('button', { name: 'Close dialog' });
+  // Esc is pressed from a plain field: in the description, a combobox, the
+  // first Esc closes its suggestions, as it should.
+  const quantity = (page: Page) => page.getByRole('textbox', { name: 'Quantity, line 1' });
+  const openIssued = async (page: Page) => {
+    if (!(await monthPicker(page).innerText()).includes('All months')) await chooseMonth(page, 'All months');
+    await page.locator('[data-test="invoice-row"]:visible').filter({ hasText: '2026-001' }).first().click();
+    await expect(editor(page)).toHaveAttribute('data-status', 'issued');
+  };
+
+  test('a review: each draft opens without asking; an edit asks on Esc, ✕ and Back; Keep editing keeps it; put back closes', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await generateButton(page).click();
+    await expect(dialog(page)).toContainText('Invoice 1 / 3');
+    // Untouched, Later moves on without asking.
+    fake.requests.length = 0;
+    await page.locator('[data-test="review-later"]').click();
+    await expect(dialog(page)).toContainText('Invoice 2 / 3');
+    await expect(ask(page)).toHaveCount(0);
+
+    await quantity(page).fill('2');
+    await page.keyboard.press('Escape');
+    await expect(ask(page)).toBeVisible();
+    await page.locator('[data-test="unsent-keep"]').click();
+    await closeX(page).click();
+    await expect(ask(page)).toBeVisible();
+    await page.locator('[data-test="unsent-keep"]').click();
+    await page.goBack();
+    await expect(ask(page)).toBeVisible();
+    await expect(page).toHaveURL(/\/member\/personal\/invoicing/);
+    await page.locator('[data-test="unsent-keep"]').click();
+    await expect(quantity(page)).toHaveValue('2');
+    // Accept saves what is on screen, then moves on without asking.
+    await page.locator('[data-test="review-accept"]').click();
+    await expect(dialog(page)).toContainText('Invoice 3 / 3');
+    await expect(ask(page)).toHaveCount(0);
+    // Typed and put back: Esc closes at once.
+    const was = await quantity(page).inputValue();
+    await quantity(page).fill('7');
+    await quantity(page).fill(` ${was} `);
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toHaveCount(0);
+  });
+
+  test('Discard changes closes a review with no write', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await generateButton(page).click();
+    await expect(dialog(page)).toContainText('Invoice 1 / 3');
+    fake.requests.length = 0;
+    await quantity(page).fill('3');
+    await page.keyboard.press('Escape');
+    await page.locator('[data-test="unsent-discard"]').click();
+    await expect(dialog(page)).toHaveCount(0);
+    expect(writes(fake)).toEqual([]);
+  });
+
+  test('while a step\'s write runs, Esc and the ✕ neither close nor ask', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await generateButton(page).click();
+    await expect(dialog(page)).toContainText('Invoice 1 / 3');
+    fake.hold = true;
+    await page.locator('[data-test="review-later"]').click();
+    await expect.poll(() => fake.release !== undefined).toBe(true);
+    await page.keyboard.press('Escape');
+    await closeX(page).click({ force: true });
+    await expect(dialog(page)).toBeVisible();
+    await expect(ask(page)).toHaveCount(0);
+    fake.hold = false;
+    fake.release!();
+    await expect(dialog(page)).toContainText('Invoice 2 / 3');
+  });
+
+  test('an issued invoice: closing does not ask; a typed Storno reason asks on Esc and Close; after the cancel it does not', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await openIssued(page);
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toHaveCount(0);
+
+    await openIssued(page);
+    await page.locator('[data-test="invoice-cancel"]').click();
+    const reason = dialog(page).getByLabel('Reason for the cancellation (Storno)');
+    // The step open with no reason is nothing typed: Esc closes at once.
+    await expect(reason).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toHaveCount(0);
+
+    await openIssued(page);
+    await page.locator('[data-test="invoice-cancel"]').click();
+    await reason.fill('Wrong client');
+    await page.keyboard.press('Escape');
+    await expect(ask(page)).toBeVisible();
+    await page.locator('[data-test="unsent-keep"]').click();
+    await closeX(page).click();
+    await expect(ask(page)).toBeVisible();
+    await page.locator('[data-test="unsent-keep"]').click();
+    await dialog(page).locator('[data-test="editor-close"]').click();
+    await expect(ask(page)).toBeVisible();
+    await page.locator('[data-test="unsent-keep"]').click();
+    await page.goBack();
+    await expect(ask(page)).toBeVisible();
+    await page.locator('[data-test="unsent-keep"]').click();
+    await expect(reason).toHaveValue('Wrong client');
+    await page.locator('[data-test="invoice-cancel-confirm"]').click();
+    await expect(editor(page)).toHaveAttribute('data-status', 'cancelled');
+    await closeX(page).click();
+    await expect(dialog(page)).toHaveCount(0);
+    expect(writes(fake)).toEqual(['POST /invoices/1/cancel']);
   });
 });
