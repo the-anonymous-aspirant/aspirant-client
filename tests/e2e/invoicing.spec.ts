@@ -987,3 +987,35 @@ test.describe('#10634 PayPal import — removed and deleted rows are named and c
     );
   });
 });
+
+// system_3 #11671 (A4 of #11632; §3.166, cited as #11629): the PayPal expense
+// review asks before an exit throws away a tick; `done` with nothing added is
+// emitted on every close, a discard included.
+test.describe('#11671 the PayPal expense review asks before an exit throws away a tick', () => {
+  const ask = (page: Page) => page.locator('[data-test="unsent-ask"]');
+
+  test('untouched, Not now closes at once', async ({ page }) => {
+    const fake = importWithOutgoing([paypalOutgoing(1), paypalOutgoing(2)]);
+    await importPayPal(page, fake);
+    await expect(ppxReview(page)).toBeVisible();
+    await page.locator('[data-test="paypal-expenses-cancel"]').click();
+    await expect(ppxReview(page)).toHaveCount(0);
+    expect(ppxConfirms(fake)).toEqual([]);
+  });
+
+  test('a tick asks on Not now and Back; Keep editing keeps it; Discard closes with nothing added', async ({ page }) => {
+    const fake = importWithOutgoing([paypalOutgoing(1), paypalOutgoing(2)]);
+    await importPayPal(page, fake);
+    await expect(ppxReview(page)).toBeVisible();
+    await ppxRows(page).nth(0).locator('input[type="checkbox"]').check();
+    await page.locator('[data-test="paypal-expenses-cancel"]').click();
+    await expect(ask(page)).toBeVisible();
+    await page.locator('[data-test="unsent-keep"]').click();
+    await expect(ppxRows(page).nth(0).locator('input[type="checkbox"]')).toBeChecked();
+    await page.goBack();
+    await expect(ask(page)).toBeVisible();
+    await page.locator('[data-test="unsent-discard"]').click();
+    await expect(ppxReview(page)).toHaveCount(0);
+    expect(ppxConfirms(fake)).toEqual([]);
+  });
+});

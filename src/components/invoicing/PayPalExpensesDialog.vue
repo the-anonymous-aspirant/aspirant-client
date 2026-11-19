@@ -2,7 +2,9 @@
   <!-- After a PayPal import (system_3 #10438): the payments are already in;
        the file's outgoing payments were not stored, and are offered here as
        work expenses. Only the ticked ones are added, each with its category. -->
-  <AspModal :open="open" title="Add PayPal expenses" size="md" @update:open="close">
+  <!-- Every exit asks first when a tick or a category was changed (system_3
+       #11671, §3.166; A1's guard). `done` is emitted on every close. -->
+  <AspModal :open="open" title="Add PayPal expenses" size="md" @update:open="onOpenChange">
     <div class="ppx" data-test="paypal-expenses-review">
       <p class="ppx__lead">
         Your PayPal payments are imported. The file also lists payments you made: add the ones that were for your work. To add them later, import this file again.
@@ -18,13 +20,14 @@
     </div>
     <template #footer>
       <div class="ppx-footer">
-        <ModalActions>
-          <AspButton variant="secondary" :disabled="confirming" data-test="paypal-expenses-cancel" @click="close(false)">Not now</AspButton>
+        <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
+        <ModalActions v-else>
+          <AspButton variant="secondary" :disabled="confirming" data-test="paypal-expenses-cancel" @click="onOpenChange(false)">Not now</AspButton>
           <AspButton :loading="confirming" :disabled="ticked.length === 0" data-test="paypal-expenses-confirm" @click="confirm">
             {{ confirmLabel }}
           </AspButton>
         </ModalActions>
-        <p v-if="ticked.length === 0" class="ppx-footer__note" data-test="paypal-expenses-tick-hint">
+        <p v-if="ticked.length === 0 && !unsentAsking" class="ppx-footer__note" data-test="paypal-expenses-tick-hint">
           Tick at least one payment to add it as an expense.
         </p>
       </div>
@@ -36,6 +39,8 @@
   import { AspButton, AspModal } from '@aspirant/design-system';
   import ExpenseCandidatesSection from './ExpenseCandidatesSection.vue';
   import ModalActions from './ModalActions.vue';
+  import UnsentAsk from './UnsentAsk.vue';
+  import { unsentGuard } from './unsentGuard.js';
   import { confirmPayPalExpenses, errorOf, listExpenseCategories } from './api.js';
 
   // Every book has this category (the server seeds it): the default, and the
@@ -44,7 +49,8 @@
 
   export default {
     name: 'PayPalExpensesDialog',
-    components: { AspButton, AspModal, ExpenseCandidatesSection, ModalActions },
+    components: { AspButton, AspModal, ExpenseCandidatesSection, ModalActions, UnsentAsk },
+    mixins: [unsentGuard],
     props: {
       open: { type: Boolean, default: false },
       // The import response's expense_candidates (server PR 178).
@@ -89,12 +95,18 @@
           });
           this.state = state;
           this.error = '';
+          // Every payment unticked is the baseline (system_3 #11671).
+          this.takeUnsentBaseline();
         },
       },
       // The category list is read when the review opens, not for an import
       // that offers nothing new.
       open(isOpen) {
-        if (isOpen) this.loadCategories();
+        if (isOpen) {
+          this.loadCategories();
+          // Opened again on the same payments: where it starts.
+          this.takeUnsentBaseline();
+        }
       },
     },
     methods: {
@@ -122,6 +134,19 @@
         if (this.confirming || value) return;
         this.$emit('done', { confirmed: 0, duplicates: 0 });
         this.$emit('update:open', false);
+      },
+      // Esc, the scrim, the corner ✕, Not now, and Back: each asks first when
+      // a tick or a category was changed (§3.166).
+      onOpenChange(value) {
+        if (value) return;
+        this.requestClose();
+      },
+      // The close it always had: `done` with nothing added, then closed.
+      closeNow() {
+        this.close(false);
+      },
+      unsentValue() {
+        return Object.fromEntries(Object.entries(this.state).map(([k, v]) => [k, [!!v.checked, v.category]]));
       },
       async confirm() {
         const rows = this.ticked;

@@ -1045,3 +1045,55 @@ test.describe('#10634 N26 import — removed and deleted rows are named and coun
     await expectSummaryAddsUp(page);
   });
 });
+
+// system_3 #11671 (A4 of #11632; §3.166, cited as #11629): the N26 review
+// asks before an exit throws away a changed tick; its summary is emitted on
+// every close, a discard included.
+test.describe('#11671 the N26 review asks before an exit throws away a changed tick', () => {
+  const review = (page: Page) => page.locator('[data-test="n26-review"]');
+  const ask = (page: Page) => page.locator('[data-test="unsent-ask"]');
+
+  test('untouched, Cancel closes at once with its summary', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await upload(page, ['conferma.pdf', 'statement.pdf']);
+    await page.locator('[data-test="n26-cancel"]').click();
+    await expect(review(page)).toHaveCount(0);
+    await expect(summary(page)).toBeVisible();
+    expect(confirmRequests(fake)).toEqual([]);
+  });
+
+  test('a changed tick asks on Cancel, Esc and Back; Keep editing keeps it; Discard closes and still says what was read', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await upload(page, ['conferma.pdf', 'statement.pdf']);
+    const first = checkbox(page, 0);
+    const was = await first.isChecked();
+    await first.click();
+    await page.locator('[data-test="n26-cancel"]').click();
+    await expect(ask(page)).toBeVisible();
+    await page.locator('[data-test="unsent-keep"]').click();
+    expect(await first.isChecked()).toBe(!was);
+    await first.focus();
+    await page.keyboard.press('Escape');
+    await expect(ask(page)).toBeVisible();
+    await page.locator('[data-test="unsent-keep"]').click();
+    await page.goBack();
+    await expect(ask(page)).toBeVisible();
+    await expect(page).toHaveURL(/\/member\/personal\/invoicing/);
+    await page.locator('[data-test="unsent-discard"]').click();
+    await expect(review(page)).toHaveCount(0);
+    await expect(summary(page)).toBeVisible();
+    expect(confirmRequests(fake)).toEqual([]);
+  });
+
+  test('a tick put back closes at once', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await upload(page, ['conferma.pdf', 'statement.pdf']);
+    await checkbox(page, 0).click();
+    await checkbox(page, 0).click();
+    await page.locator('[data-test="n26-cancel"]').click();
+    await expect(review(page)).toHaveCount(0);
+  });
+});

@@ -1,5 +1,7 @@
 <template>
-  <AspModal :open="open" title="Add payers to your client book" size="md" @update:open="close">
+  <!-- Every exit asks first when a payer was ticked or a name changed
+       (system_3 #11671, §3.166; A1's guard). -->
+  <AspModal :open="open" title="Add payers to your client book" size="md" @update:open="onOpenChange">
     <div class="payers" data-test="payers-dialog">
       <p class="payers__lead">Tick the people who are your clients. Each one's payments are linked to their client.</p>
       <ul class="payer-rows">
@@ -56,8 +58,9 @@
     </div>
     <template #footer>
       <div class="payers-footer">
-        <ModalActions>
-          <AspButton variant="secondary" :disabled="saving" data-test="payers-cancel" @click="close(false)">Cancel</AspButton>
+        <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
+        <ModalActions v-else>
+          <AspButton variant="secondary" :disabled="saving" data-test="payers-cancel" @click="onOpenChange(false)">Cancel</AspButton>
           <AspButton :loading="saving" :disabled="!!blockedCaption" data-test="payers-save" @click="save">
             Add to client book ({{ tickedRows.length }})
           </AspButton>
@@ -72,6 +75,8 @@
 <script>
   import { AspButton, AspCheckbox, AspModal } from '@aspirant/design-system';
   import ModalActions from './ModalActions.vue';
+  import UnsentAsk from './UnsentAsk.vue';
+  import { unsentGuard } from './unsentGuard.js';
   import PayerBookLine from './PayerBookLine.vue';
   import SuggestField from './SuggestField.vue';
   import { looksLikeCardPaymentOrService, matchPayer, normalizeName } from './payerMatch.js';
@@ -86,7 +91,8 @@
   // nothing.
   export default {
     name: 'PayersDialog',
-    components: { AspButton, AspCheckbox, AspModal, ModalActions, PayerBookLine, SuggestField },
+    components: { AspButton, AspCheckbox, AspModal, ModalActions, PayerBookLine, SuggestField, UnsentAsk },
+    mixins: [unsentGuard],
     props: {
       open: { type: Boolean, default: false },
       // listPayerCandidates().payers, in the server's order (most payments first).
@@ -101,6 +107,10 @@
       return { rowState: {}, saving: false, error: '' };
     },
     computed: {
+      // While Save runs, no exit closes and none asks.
+      unsentBusy() {
+        return this.saving;
+      },
       tickedRows() {
         return this.candidates.filter((row) => this.stateOf(row).checked);
       },
@@ -128,25 +138,54 @@
       open(isOpen) {
         if (isOpen) this.reset();
       },
+      // A refetch can land while the dialog is open: a client saved just
+      // before it opened refreshes the page's clients, and with them this
+      // list. Rows still listed keep what was ticked and typed (system_3
+      // #11671); new rows start from their defaults.
       candidates() {
-        this.reset();
+        this.reset(this.open);
       },
     },
     created() {
       this.reset();
     },
     methods: {
-      reset() {
+      reset(keepTyped = false) {
         const rowState = {};
+        const defaults = {};
         for (const row of this.candidates) {
           // A sender already in the book (by PayPal email or name) is
           // prefilled with that client's name, so the line reads "In your
           // client book."; any other with the server's tidied name (Decision 6).
           const name = row.same_client ? row.same_client.name : row.tidied_name || row.payer;
-          rowState[row.key] = { checked: false, name, resolvedAsNew: false };
+          defaults[row.key] = { checked: false, name, resolvedAsNew: false };
+          rowState[row.key] = keepTyped && this.rowState[row.key] ? this.rowState[row.key] : defaults[row.key];
         }
         this.rowState = rowState;
-        this.error = '';
+        if (!keepTyped) this.error = '';
+        // The baseline is every row at its defaults, prefilled names
+        // included, so a row kept as typed still counts as unsent.
+        this.unsentBaseline = JSON.stringify(this.payersValue(defaults));
+      },
+      payersValue(state) {
+        return Object.fromEntries(
+          this.candidates.map((row) => {
+            const s = state[row.key] || {};
+            return [row.key, [!!s.checked, String(s.name || '').trim(), !!s.resolvedAsNew]];
+          }),
+        );
+      },
+      // Esc, the scrim, the corner ✕, Cancel, and Back: each asks first when
+      // a payer was ticked or a name changed (§3.166).
+      onOpenChange(value) {
+        if (value) return;
+        this.requestClose();
+      },
+      closeNow() {
+        this.$emit('update:open', false);
+      },
+      unsentValue() {
+        return this.payersValue(this.rowState);
       },
       stateOf(row) {
         return this.rowState[row.key] || { checked: false, name: '', resolvedAsNew: false };
