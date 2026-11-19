@@ -161,7 +161,6 @@
                 <span v-if="row.what" :class="{ muted: !!row.who }">{{ row.what }}</span>
                 <template v-if="!row.who && !row.what">—</template>
               </span>
-              <span v-if="row.issuedInvoice && row.issuedInvoice.line" class="muted" data-test="book-row-invoice">{{ row.issuedInvoice.line }}</span>
               <!-- The card says at rest that it opens (system_3 #11022, UX walk AM5;
                  design ack c72063): the tab's own door word, muted, at the end
                  of a line the card already has, so no card grows. It is part of
@@ -171,6 +170,7 @@
                 <span class="muted">{{ row.categoryLabel }}</span>
                 <span class="muted card-door" aria-hidden="true" data-test="card-door">Edit</span>
               </span>
+              <span v-if="row.issuedInvoice && row.issuedInvoice.line" class="muted" data-test="book-row-invoice">{{ row.issuedInvoice.line }}</span>
               </button>
               <div v-if="row.type === 'out'" class="book-card__expense-actions">
                 <AspButton variant="ghost" size="sm" data-test="book-expense-receipt" @click="openReceipt(row)">
