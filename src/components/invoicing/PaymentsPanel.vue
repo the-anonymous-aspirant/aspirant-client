@@ -388,19 +388,36 @@
         :data-direction="row.direction"
         @click="onCardTap(row, $event)"
       >
+        <!-- The card's checkbox, first in reading order and outside its button
+             (system_3 #11661; §3.132 Decision 6), laid over its own spot in
+             the card's top line. A row it cannot act on has none. -->
+        <span v-if="selectable(row)" class="card-check">
+          <AspCheckbox
+            :model-value="selected.includes(row.key)"
+            :aria-label="`Select ${row.transaction_id}`"
+            data-test="payment-select"
+            @update:model-value="toggle(row.key, $event)"
+          />
+        </span>
+        <!-- The card's body is its button: the card's text, named for what it
+             opens, so a keyboard reaches it and a screen reader announces it
+             (system_3 #11661, design ruling c72063 on #11022, §3.165
+             Decision 3). Every other control sits after it. -->
+        <component
+          :is="row.payment || row.expense ? 'button' : 'div'"
+          :type="row.payment || row.expense ? 'button' : undefined"
+          class="card-body"
+          :aria-label="row.payment || row.expense ? cardBodyName(row) : undefined"
+          data-test="card-body"
+          @click="openCard(row)"
+        >
         <div class="payment-card__top">
           <span class="payment-card__who">
-            <AspCheckbox
-              v-if="selectable(row)"
-              :model-value="selected.includes(row.key)"
-              :aria-label="`Select ${row.transaction_id}`"
-              data-test="payment-select"
-              @update:model-value="toggle(row.key, $event)"
-            />
-            <!-- A row no checkbox can act on keeps an invisible copy, so every
-                 name starts on one edge: an issued invoice's payment
-                 (§3.129 Decision 6, design_agent c62100). -->
-            <AspCheckbox v-else :model-value="false" class="select-gutter" aria-hidden="true" tabindex="-1" data-test="payment-select-gutter" />
+            <!-- Room for the checkbox, which sits over this spot outside the
+                 card's button: an input cannot be inside a button (#11661).
+                 A row no checkbox can act on keeps only this room, so every
+                 name starts on one edge (§3.129 Decision 6, c62100). -->
+            <span class="card-check-space" aria-hidden="true" :data-test="selectable(row) ? undefined : 'payment-select-gutter'"></span>
             <span class="sender" data-test="row-who">{{ row.who || row.what || '—' }}</span>
           </span>
           <strong class="nowrap amount" :class="row.direction === 'in' ? 'in-amount' : 'out-amount'" data-test="row-amount">{{ signedAmount(row) }}</strong>
@@ -409,7 +426,8 @@
              design ack c72063): the tab's own door word, muted, at the end
              of a line the card already has, so no card grows. It is part of
              the card's one tap, not a second door (§3.159 Decision 3); a
-             screen reader and a keyboard are #11661's. -->
+             screen reader and a keyboard reach it as the body button's
+             name (#11661). -->
         <span class="card-line">
           <span class="muted" data-test="row-date-line"><span class="nowrap">{{ formatDay(row.paid_on) }}</span> · <span data-test="row-source">{{ row.source }}</span></span>
           <span v-if="row.payment || row.expense" class="muted card-door" aria-hidden="true" data-test="card-door">Edit</span>
@@ -431,6 +449,13 @@
             data-test="row-category"
           >{{ row.categoryLabel }}</span>&nbsp;· <span data-test="row-client">{{ clientNameOf(row.payment) || 'no client' }}</span></span>
           <span v-if="isPayPalTransferIntoN26(row.payment)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
+        </template>
+        <!-- An expense's category reads as text here; it is set from the
+             selection and the edit dialog (system_3 #10631, #10632). -->
+        <span v-else class="muted" data-test="row-category">{{ row.categoryLabel }}</span>
+        <span v-if="!inBook(row)" class="muted not-in-book" data-test="row-not-in-book">Not in the Book</span>
+        </component>
+        <template v-if="row.payment">
           <!-- The invoice's name opens it (system_3 #11568, design ack
                c71992): a link-variant button, so a tap opens the invoice and
                not the card (onCardTap skips buttons), and a tap beside it on
@@ -461,10 +486,6 @@
             Generate invoice
           </AspButton>
         </template>
-        <!-- An expense's category reads as text here; it is set from the
-             selection and the edit dialog (system_3 #10631, #10632). -->
-        <span v-else class="muted" data-test="row-category">{{ row.categoryLabel }}</span>
-        <span v-if="!inBook(row)" class="muted not-in-book" data-test="row-not-in-book">Not in the Book</span>
         <!-- The one button inside an expense card, as on the Book's card
              (§3.159 Decision 3, system_3 #11501). A press opens the receipt
              and not the card (`onCardTap`). -->
@@ -1478,6 +1499,16 @@
       },
       // A phone card's body opens its row's dialog (§3.143 Decision 5); its
       // own controls (checkbox, selects, buttons) keep their own job.
+      // The card's body button (system_3 #11661): its name says what it
+      // opens, and its press opens it. The card's own tap handler below
+      // skips buttons, so a press opens the dialog once.
+      cardBodyName(row) {
+        return `${row.payment ? 'Edit payment' : 'Edit expense'} for ${this.rowRef(row)}`;
+      },
+      openCard(row) {
+        if (row.payment) this.openEdit(row.payment);
+        else if (row.expense) this.openExpenseEdit(row.expense);
+      },
       onCardTap(row, event) {
         if (!row.payment && !row.expense) return;
         if (event.target.closest('button, input, select, label, a, [role="combobox"], [role="listbox"], [role="option"], .select')) return;
@@ -2360,6 +2391,58 @@
   /* A payment card's body opens its edit dialog (§3.143 Decision 5). */
   .payment-card--tap {
     cursor: pointer;
+  }
+
+  /* The card's body button (system_3 #11661) has no box of its own: the card
+     keeps its look, and every line sits where it did. Its column repeats
+     the card's, so the text keeps its spacing. */
+  .payment-card {
+    position: relative;
+  }
+
+  .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: inherit;
+  }
+
+  /* The focus ring is drawn on the card's box, not around the text. */
+  .card-body:focus-visible {
+    outline: none;
+  }
+
+  .payment-card:has(> .card-body:focus-visible) {
+    box-shadow: var(--shadow-focus);
+    border-color: var(--text-body);
+  }
+
+  /* The checkbox, outside the button, over its spot in the top line: the
+     card's padding, a box as tall as that line, centred in it. */
+  .card-check {
+    position: absolute;
+    top: var(--space-sm);
+    left: var(--space-md);
+    height: 24px;
+    display: flex;
+    align-items: center;
+    z-index: 1;
+  }
+
+  .card-check-space {
+    visibility: hidden;
+    display: inline-block;
+    flex: none;
+    width: 16px;
+    height: 16px;
   }
 
   .payment-card__top {

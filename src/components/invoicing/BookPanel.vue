@@ -144,6 +144,11 @@
               :data-row-key="row.key"
               @click="onCardTap(row, $event)"
             >
+              <!-- The card's body is its button: its text, named for what it
+                   opens, reachable by keyboard and announced by a screen
+                   reader (system_3 #11661, design ruling c72063 on #11022).
+                   Receipt follows it. -->
+              <button type="button" class="card-body" :aria-label="cardBodyName(row)" data-test="card-body" @click="openEdit(row)">
               <div class="book-card__top">
                 <span class="nowrap">{{ formatDay(row.paid_on) }}</span>
                 <strong class="nowrap amount" :class="row.type === 'in' ? 'in-amount' : 'out-amount'">
@@ -165,6 +170,7 @@
                 <span class="muted">{{ row.categoryLabel }}</span>
                 <span class="muted card-door" aria-hidden="true" data-test="card-door">Edit</span>
               </span>
+              </button>
               <div v-if="row.type === 'out'" class="book-card__expense-actions">
                 <AspButton variant="ghost" size="sm" data-test="book-expense-receipt" @click="openReceipt(row)">
                   Receipt
@@ -865,6 +871,16 @@
         this.receiptExpenseLabel = `${this.formatDay(row.paid_on)} · ${this.formatMoney(row.amount_cents)}${row.who ? ` · ${row.who}` : ''}`;
         this.receiptOpen = true;
       },
+      // The card's body button's name (system_3 #11661): what it opens, and
+      // the row, named as Transactions names it (#11567): the transaction id,
+      // or a hand-entered row's date and "who · what".
+      cardBodyName(row) {
+        const record = row.payment || row.expense;
+        const what = record && record.entry === 'manual'
+          ? `${this.formatDay(row.paid_on)} · ${[row.who, row.what].filter(Boolean).join(' · ') || '—'}`
+          : (record && record.transaction_id) || this.formatDay(row.paid_on);
+        return `${row.type === 'in' ? 'Edit payment' : 'Edit expense'} for ${what}`;
+      },
       // §3.143 Decision 7: the row opens the dialog it opens on Transactions.
       async openEdit(row) {
         if (row.type === 'in') {
@@ -1153,6 +1169,32 @@
   /* The card's body opens its row's edit dialog (system_3 #10729). */
   .book-card--tap {
     cursor: pointer;
+  }
+
+  /* The card's body button (system_3 #11661): no box of its own, the card's
+     column inside it, so every line sits where it did. */
+  .book-card .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: inherit;
+  }
+
+  .book-card .card-body:focus-visible {
+    outline: none;
+  }
+
+  .book-card:has(> .card-body:focus-visible) {
+    box-shadow: var(--shadow-focus);
+    border-color: var(--text-body);
   }
 
   .book-card__top {
