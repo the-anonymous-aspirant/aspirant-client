@@ -1224,3 +1224,72 @@ test.describe('#11509 the Book names a payment\'s issued invoice', () => {
     expect(await noSidewaysScroll(page)).toBe(true);
   });
 });
+
+// system_3 #11748 (§3.132 Decision 6; design ack on #11627 and #11747): in the
+// design system's card, Transactions' checkbox leads the first line, before
+// "Who and what for", as the tab's own phone card puts it. A row on an issued
+// invoice keeps its invisible gutter, so every name starts on one edge.
+test.describe('#11748 Transactions\' checkbox leads the design system\'s card', () => {
+  test.skip(({ isMobile }) => isMobile, 'viewport widths over 640px; a phone has the tab\'s own cards');
+
+  const fake = () =>
+    newFake({
+      payments: [
+        incomeRow({ id: 11, transaction_id: 'M-11', note: 'On an issued invoice', paid_on: '2026-07-16T00:00:00Z', on_invoice: true, on_issued_invoice: true, invoice: { id: 5, status: 'issued', invoice_number: '2026-014' } }),
+        incomeRow({ id: 12, transaction_id: 'M-12', note: 'Tattoo (small) and a follow-up', paid_on: '2026-07-15T00:00:00Z' }),
+        incomeRow({ id: 13, transaction_id: 'M-13', note: 'Bought in the shop', category: 'uncategorised', paid_on: '2026-07-14T00:00:00Z' }),
+      ],
+      expenses: [expenseRow(101)],
+    });
+  const cards = (page: Page) => page.locator('[data-test="payments-panel"] tr.data-table__row');
+  const rect = (loc: ReturnType<Page['locator']>) => loc.evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, right: r.right }; });
+
+  for (const [width, label] of [[700, 'sidebar hidden'], [768, 'sidebar open'], [1024, 'sidebar open']] as const) {
+    test(`at ${width} (${label}) each card's checkbox comes first, on the name's line`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openTransactions(page, fake());
+      await expect(page.locator('[data-test="payments-panel"] table.data-table--cards-select')).toHaveCount(1);
+      const n = await cards(page).count();
+      expect(n).toBe(4);
+      const lefts: number[] = [];
+      for (let i = 0; i < n; i++) {
+        const card = cards(page).nth(i);
+        const select = card.locator('td.data-table__card-cell--select');
+        const who = card.locator('td.data-table__card-cell--identity');
+        const amount = card.locator('td.data-table__card-cell--figure');
+        const [s, w, a] = [await rect(select), await rect(who), await rect(amount)];
+        expect(s.right, `card ${i + 1}: the checkbox is left of the name`).toBeLessThanOrEqual(w.x + 0.5);
+        expect(Math.abs(s.y - w.y), `card ${i + 1}: on the name's line`).toBeLessThanOrEqual(1);
+        expect(Math.abs(a.y - w.y), `card ${i + 1}: Amount stays top-right`).toBeLessThanOrEqual(1);
+        lefts.push(Math.round(w.x));
+      }
+      // The row on the issued invoice has no checkbox, only its gutter, and
+      // its name starts on the same edge as the others.
+      const issued = page.locator('[data-test="payment-row"][data-txn="M-11"]');
+      await expect(issued.locator('[data-test="payment-select"]')).toHaveCount(0);
+      await expect(issued.locator('[data-test="payment-select-gutter"]')).toHaveCount(1);
+      expect(new Set(lefts).size, `name left edges: ${lefts.join(', ')}`).toBe(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  }
+
+  test('at 1024 a tick selects the row: Select all turns mixed and the toolbar counts it', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await openTransactions(page, fake());
+    const row = page.locator('[data-test="payment-row"][data-txn="M-12"]');
+    await row.locator('[data-test="payment-select"]').click();
+    await expect(row.getByRole('checkbox')).toBeChecked();
+    await expect(page.locator('[data-test="select-all-shown"] input[type="checkbox"]')).toHaveJSProperty('indeterminate', true);
+    await expect(page.locator('[data-test="bulk-category"]')).toContainText('Set category of 1 selected');
+    // The tick opened nothing.
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
+  test('at 1280 the table is unchanged: the checkbox is its first column', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openTransactions(page, fake());
+    await expect(page.locator('[data-test="payments-panel"] table.data-table--cards')).toHaveCount(0);
+    const first = page.locator('[data-test="payment-row"][data-txn="M-12"] td').first();
+    await expect(first.locator('[data-test="payment-select"]')).toBeVisible();
+  });
+});
