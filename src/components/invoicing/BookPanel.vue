@@ -766,6 +766,8 @@
           madeOn: this.today,
           countingSentence: this.sentence,
           uncategorisedSentence: this.uncountedUncategorised && uncounted ? uncategorisedText(uncounted) : '',
+          // The file has the tab's columns, Invoice among them (system_3 #11509).
+          withInvoice: true,
           fmt: { day: formatDay, money: formatMoney, signedMoney: this.formatSignedMoney },
         });
         return { doc, fileName: bookPdfFileName({ selection: this.selection, presets: this.presets, monthKey: month, now: new Date() }) };

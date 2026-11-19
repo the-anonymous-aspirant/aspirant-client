@@ -885,19 +885,20 @@ test.describe('#11512 the Book exports its entries as a PDF', () => {
 
     const [september, july] = tables(doc);
     // The tab's columns, in the tab's order, repeated with the month's head
-    // on every page the month runs over.
-    expect(cells(july.table.body[1])).toEqual(['Date paid', 'Who and what for', 'Category', 'In', 'Out']);
+    // on every page the month runs over. Invoice is the tab's since #11509;
+    // no payment here is on an issued invoice, so its cells are empty.
+    expect(cells(july.table.body[1])).toEqual(['Date paid', 'Who and what for', 'Category', 'Invoice', 'In', 'Out']);
     expect(july.table.headerRows).toBe(2);
     expect(july.table.keepWithHeaderRows).toBe(1);
     // "who · what"; "—" when both are empty; the minus on Out.
     expect(july.table.body.slice(2).map(cells)).toEqual([
-      ['2026-07-20', 'Guitar strings', 'materials and supplies', '', '-€45.99'],
-      ['2026-07-14', 'Galerie Nord · Wandbild Juli', 'Paid work', '€350.00', ''],
-      ['2026-07-02', '—', 'Paid work', '€5.00', ''],
+      ['2026-07-20', 'Guitar strings', 'materials and supplies', '', '', '-€45.99'],
+      ['2026-07-14', 'Galerie Nord · Wandbild Juli', 'Paid work', '', '€350.00', ''],
+      ['2026-07-02', '—', 'Paid work', '', '€5.00', ''],
     ]);
     expect(headOf(july)).toEqual({ label: 'July 2026', totals: 'In €355.00    Out -€45.99    Result €309.01' });
     expect(headOf(september)).toEqual({ label: 'September 2026', totals: 'In €120.00    Out €0.00    Result €120.00' });
-    expect(september.table.body.slice(2).map(cells)).toEqual([['2026-09-12', 'Atelier Süd · September work', 'Paid work', '€120.00', '']]);
+    expect(september.table.body.slice(2).map(cells)).toEqual([['2026-09-12', 'Atelier Süd · September work', 'Paid work', '', '€120.00', '']]);
 
     // The month's In, Out and Result are the tab's month head's, with the
     // minus added to Out.
@@ -1117,6 +1118,29 @@ test.describe('#11509 the Book names a payment\'s issued invoice', () => {
       await expect(invoiceOf(page, text)).toHaveCount(0);
     }
     expect(await noSidewaysScroll(page)).toBe(true);
+  });
+
+  test('the Book PDF carries the number in its Invoice column, by the same rules', async ({ page }) => {
+    await open(page, fakeWithInvoices());
+    await page.evaluate(() => {
+      document.addEventListener('book-pdf', (e) => { (window as any).__bookPdf = JSON.stringify((e as CustomEvent).detail); }, { once: true });
+    });
+    const done = page.waitForEvent('download');
+    await page.locator('[data-test="book-pdf"]').click();
+    await done;
+    const doc = JSON.parse(await page.evaluate(() => (window as any).__bookPdf)).doc as Json;
+    const july = (doc.content as Json[]).filter((n) => n.table).find((n) => n.table.body[0][0].columns[0].text === 'July 2026')!;
+    const head = july.table.body[1].map((c: Json) => c.text);
+    const at = head.indexOf('Invoice');
+    expect(head.slice(at - 1, at + 2), head.join(' | ')).toEqual(['Category', 'Invoice', 'In']);
+    const byRow = Object.fromEntries(july.table.body.slice(2).map((r: Json[]) => [r[1].text, r[at].text]));
+    expect(byRow).toEqual({
+      'Guitar strings': '',
+      'Galerie Nord · On an issued invoice': '2026-014',
+      'Galerie Nord · Issued with no number': '—',
+      'Galerie Nord · On a draft': '',
+      'Galerie Nord · No invoice yet': '',
+    });
   });
 
   test('a phone card carries the line at 390 and at 360, with no sideways scroll', async ({ page }) => {
