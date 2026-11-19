@@ -20,17 +20,6 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* The dark theme asks the browser for its dark native chrome: scrollbars, a
-   date picker's icon, a native select's list. Until system_3 #11455 this
-   arrived by accident. A scoped rule in the meal log,
-   `:global([data-theme='dark']) .datetime-input { color-scheme: dark; }`,
-   compiled to a bare `[data-theme=dark]` rule on <html>, for every page. That
-   rule is gone, so the page-wide scheme is declared here, where it can be
-   seen. The light theme sets nothing, as before. */
-:root[data-theme='dark'] {
-  color-scheme: dark;
-}
-
 /* A link takes its surface's ink (§3.121, §3.18, §3.72; #9191). On the page:
    the calm accent-into-text mix AspContent uses, underlined so it never reads
    as plain text. On a dark setter (an AspCard, or prose inside the sidebar):

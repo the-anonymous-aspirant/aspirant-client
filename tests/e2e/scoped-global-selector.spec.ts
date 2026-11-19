@@ -93,9 +93,10 @@ test.describe('#11455 a scoped :global() selector names nothing but its global p
   });
 });
 
-// The dark colour scheme is asked for on purpose, on <html>, in src/style.css.
-// It used to arrive by the accident above. The value on <html> is the same as
-// before in both themes; what changed is that a rule now says so.
+// The dark colour scheme is asked for on purpose. It used to arrive by the
+// accident above; #11455 declared it in src/style.css, and since #11585 the
+// design system's tokens give it to `[data-theme]`, so the client declares
+// none of its own (#11586). In light the tokens ask for the light scheme.
 test.describe('#11455 the dark theme asks for the dark colour scheme, the light one does not', () => {
   const NOW = new Date('2026-11-14T10:00:00');
 

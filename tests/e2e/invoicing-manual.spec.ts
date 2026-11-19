@@ -412,3 +412,21 @@ test.describe('#11507 a new client\'s address and email, typed with the payment'
     expect(body).not.toHaveProperty('new_client_email');
   });
 });
+
+// system_3 #11586: the dialog's date field takes the page theme's colour
+// scheme from the design system, not the OS's (it used to say
+// `color-scheme: light dark`, which follows the OS).
+test.describe('#11586 the hand-entry date field follows the page theme, not the OS', () => {
+  for (const [theme, os] of [['dark', 'light'], ['light', 'dark']] as const) {
+    test(`${theme} theme on a ${os} OS: the date field computes ${theme}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: os });
+      await page.addInitScript((t) => localStorage.setItem('theme', t as string), theme);
+      await open(page, newFake({ clients: [] }));
+      await openWaysIn(page);
+      await page.locator('[data-test="manual-new"]').click();
+      const date = page.locator('[data-test="manual-date"]');
+      await expect(date).toBeVisible();
+      expect(await date.evaluate((el) => getComputedStyle(el).colorScheme)).toBe(theme);
+    });
+  }
+});
