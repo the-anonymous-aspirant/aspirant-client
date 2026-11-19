@@ -116,7 +116,10 @@ test.describe('#9987 Clients — notes', () => {
     await openClientEdit(page, 2);
     await expect(notesField(page)).toHaveValue('Short.');
     await notesField(page).fill('Changed, then cancelled.');
+    // An edit is unsent, so Cancel asks first (system_3 #11669); Discard
+    // changes closes without a write.
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.locator('[data-test="unsent-discard"]').click();
     await expect(form(page)).toBeHidden();
     expect(fake.requests.some((r) => r.method === 'PUT')).toBe(false);
     await openClientEdit(page, 2);

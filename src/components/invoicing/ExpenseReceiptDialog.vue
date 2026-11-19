@@ -77,6 +77,7 @@
 <script>
   import { AspButton, AspModal } from '@aspirant/design-system';
   import ModalActions from './ModalActions.vue';
+  import { unsentGuard } from './unsentGuard.js';
   import { deleteExpenseReceipt, downloadBlob, errorOf, expenseReceiptUrl, getExpenseReceiptBlob, uploadExpenseReceipt } from './api.js';
 
   // Only these exact types are ever previewed, and the blob is rebuilt with
@@ -94,6 +95,10 @@
   export default {
     name: 'ExpenseReceiptDialog',
     components: { AspButton, AspModal, ModalActions },
+    // Only for Back (system_3 #11669, §3.166): this dialog holds no input, so
+    // its value never changes, nothing is ever unsent, and every exit,
+    // Back included, closes at once.
+    mixins: [unsentGuard],
     props: {
       open: { type: Boolean, default: false },
       expenseId: { type: Number, default: null },
@@ -148,6 +153,12 @@
       },
       onOpenChange(isOpen) {
         this.$emit('update:open', isOpen);
+      },
+      closeNow() {
+        this.$emit('update:open', false);
+      },
+      unsentValue() {
+        return null;
       },
       async onFileSelected(event) {
         const file = event.target.files && event.target.files[0];
