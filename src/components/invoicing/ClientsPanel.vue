@@ -197,8 +197,10 @@
       <p v-if="csvError" class="error" role="alert" data-test="export-clients-csv-error">{{ csvError }}</p>
     </section>
 
-    <AspModal v-model:open="editorOpen" :title="editing ? 'Edit client' : 'Add client'" size="md">
-      <form class="client-form" data-test="client-form" @submit.prevent="save">
+    <!-- Every exit asks first when something is unsent (system_3 #11669,
+         §3.166; A1's guard, unsentGuard.js). -->
+    <AspModal :open="editorOpen" :title="editing ? 'Edit client' : 'Add client'" size="md" @update:open="onEditorOpenChange">
+      <form class="client-form" data-test="client-form" :inert="unsentAsking || undefined" @submit.prevent="save">
         <!-- When ze added the client and when it was updated, as days in zir
              calendar (operator c61587, design_agent c62046). -->
         <p v-if="editing && editingStamp" class="client-form__stamp muted" data-test="client-stamp">{{ editingStamp }}</p>
@@ -268,8 +270,9 @@
         <p v-if="error" class="client-form__error" role="alert" data-test="client-error">{{ error }}</p>
       </form>
       <template #footer>
-        <ModalActions>
-          <AspButton variant="secondary" @click="editorOpen = false">Cancel</AspButton>
+        <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
+        <ModalActions v-else>
+          <AspButton variant="secondary" :disabled="saving" data-test="client-cancel" @click="onEditorOpenChange(false)">Cancel</AspButton>
           <AspButton :loading="saving" data-test="client-save" @click="save">Save</AspButton>
         </ModalActions>
       </template>
@@ -287,6 +290,8 @@
 <script>
   import { AspButton, AspDataTable, AspEmptyState, AspInput, AspModal, AspTextarea } from '@aspirant/design-system';
   import ModalActions from './ModalActions.vue';
+  import UnsentAsk from './UnsentAsk.vue';
+  import { unsentGuard } from './unsentGuard.js';
   import PayersDialog from './PayersDialog.vue';
   import { groupByLetter, letterKey } from './listGroups.js';
   import { loadDismissed, pairKey, reviewOf, reviewSentences, saveDismissed } from './clientReview.js';
@@ -304,7 +309,8 @@
   // that without it (system_3 #9835). The server is still the gate.
   export default {
     name: 'ClientsPanel',
-    components: { AspButton, AspDataTable, AspEmptyState, AspInput, AspModal, AspTextarea, ModalActions, PayersDialog },
+    components: { AspButton, AspDataTable, AspEmptyState, AspInput, AspModal, AspTextarea, ModalActions, PayersDialog, UnsentAsk },
+    mixins: [unsentGuard],
     props: {
       clients: { type: Array, required: true },
     },
@@ -350,6 +356,15 @@
       };
     },
     computed: {
+      // The guard follows `open` (unsentGuard.js); here that is the client
+      // editor's, the panel's one guarded dialog (system_3 #11669).
+      open() {
+        return this.editorOpen;
+      },
+      // While a save runs, no exit closes and none asks.
+      unsentBusy() {
+        return this.saving;
+      },
       // "Show them" narrows the list to the clients the review line is
       // about; otherwise it is the whole book.
       rows() {
@@ -533,6 +548,7 @@
         this.error = '';
         this.fieldErrors = noErrors();
         this.editorOpen = true;
+        this.takeUnsentBaseline();
       },
       // A client's figures (#10006): issued invoices only (a Storno's
       // replacement is counted, the cancelled one is not, as in #9972's
@@ -578,7 +594,24 @@
         this.error = '';
         this.fieldErrors = noErrors();
         this.editorOpen = true;
+        // An edit's baseline is the row as copied (system_3 #11669).
+        this.takeUnsentBaseline();
         this.loadStats(row.id);
+      },
+      // Esc, the scrim, the corner ✕, Cancel and Back: each asks first when
+      // something is unsent (§3.166).
+      onEditorOpenChange(value) {
+        if (value) return;
+        this.requestClose();
+      },
+      closeNow() {
+        this.editorOpen = false;
+      },
+      // What Save would send, normalised: fields typed and put back compare
+      // equal again.
+      unsentValue() {
+        const f = this.form;
+        return Object.fromEntries(Object.keys(f).map((k) => [k, String(f[k] ?? '').trim()]));
       },
       async save() {
         if (!this.form.name.trim()) {

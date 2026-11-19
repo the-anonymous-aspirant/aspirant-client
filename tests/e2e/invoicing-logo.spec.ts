@@ -189,7 +189,10 @@ test.describe('#9858 Invoices: the issuer logo in the profile editor', () => {
 
     await chooseLogo(page, blackPng(400, 200));
     await expectPreview(page, 400);
+    // A staged logo is unsent, so Cancel asks first (system_3 #11669);
+    // Discard changes closes without a write.
     await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.locator('[data-test="unsent-discard"]').click();
     await expect(form(page)).toBeHidden();
     expect(requestOrder(fake)).toEqual([]);
 

@@ -1,6 +1,8 @@
 <template>
-  <AspModal :open="open" title="Issuer profile" size="md" @update:open="$emit('update:open', $event)">
-    <form class="profile-form" data-test="profile-form" @submit.prevent="save">
+  <!-- Every exit asks first when something is unsent, the staged logo
+       included (system_3 #11669, §3.166). -->
+  <AspModal :open="open" title="Issuer profile" size="md" @update:open="onOpenChange">
+    <form class="profile-form" data-test="profile-form" :inert="unsentAsking || undefined" @submit.prevent="save">
       <AspInput v-model="form.full_name" label="Full name" required />
       <AspTextarea v-model="form.address" label="Address" hint="One line per address line." :rows="3" required />
       <AspInput v-model="form.steuernummer" label="Steuernummer (Tax number)" :label-hint="hints.steuernummer" hint="Invoices cannot be issued while this is empty." />
@@ -104,8 +106,9 @@
       <p v-if="error" class="profile-form__error" role="alert" data-test="profile-error">{{ error }}</p>
     </form>
     <template #footer>
-      <ModalActions>
-        <AspButton variant="secondary" @click="$emit('update:open', false)">Cancel</AspButton>
+      <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
+      <ModalActions v-else>
+        <AspButton variant="secondary" :disabled="saving" data-test="profile-cancel" @click="onOpenChange(false)">Cancel</AspButton>
         <AspButton :loading="saving" data-test="profile-save" @click="save">Save</AspButton>
       </ModalActions>
     </template>
@@ -115,6 +118,8 @@
 <script>
   import { AspButton, AspCheckbox, AspInput, AspModal, AspTextarea } from '@aspirant/design-system';
   import ModalActions from './ModalActions.vue';
+  import UnsentAsk from './UnsentAsk.vue';
+  import { unsentGuard } from './unsentGuard.js';
   import { FIELD_HINTS } from './fieldHints.js';
   import { FIELD_REFUSALS, deleteLogo, errorOf, getLogoBlob, saveProfile, uploadLogo } from './api.js';
 
@@ -127,7 +132,8 @@
 
   export default {
     name: 'ProfileEditor',
-    components: { AspButton, AspCheckbox, AspInput, AspModal, AspTextarea, ModalActions },
+    components: { AspButton, AspCheckbox, AspInput, AspModal, AspTextarea, ModalActions, UnsentAsk },
+    mixins: [unsentGuard],
     props: {
       open: { type: Boolean, default: false },
       profile: { type: Object, required: true },
@@ -151,6 +157,10 @@
       };
     },
     computed: {
+      // While a save runs, no exit closes and none asks.
+      unsentBusy() {
+        return this.saving;
+      },
       logoShown() {
         if (this.logoStaged) return this.logoStaged.action === 'upload';
         return this.logoSet;
@@ -175,6 +185,7 @@
           this.logoSet = this.hasLogo;
           this.logoStaged = null;
           this.logoError = '';
+          this.takeUnsentBaseline();
           this.loadLogo();
         } else {
           this.logoStaged = null;
@@ -247,6 +258,24 @@
           this.logoError = errorOf(err).message;
           return false;
         }
+      },
+      // Esc, the scrim, the corner ✕, Cancel and Back: each asks first when
+      // something is unsent (§3.166).
+      onOpenChange(value) {
+        if (value) return;
+        this.requestClose();
+      },
+      closeNow() {
+        this.$emit('update:open', false);
+      },
+      // What Save would send, normalised as Save does it, and the staged logo:
+      // a picked or removed logo is unsent until Save (system_3 #11669).
+      unsentValue() {
+        const f = this.form;
+        const fields = Object.fromEntries(Object.keys(f).map((k) => [k, typeof f[k] === 'string' ? f[k].trim() : f[k]]));
+        fields.next_invoice_number = Number(f.next_invoice_number);
+        const staged = this.logoStaged;
+        return { fields, logo: staged ? (staged.action === 'upload' ? `upload:${staged.file.name}:${staged.file.size}` : 'delete') : null };
       },
       copy(p) {
         return {
