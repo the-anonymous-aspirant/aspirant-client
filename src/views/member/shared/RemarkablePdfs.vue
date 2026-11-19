@@ -79,9 +79,11 @@ export default {
       // generator worth shipping. Bumped to the merge of the generator's PR 2
       // (system_3 #11489, #11607): the cover page shows the year as text, in
       // place of an image whose shared-note address had started to answer 404.
+      // Then to the merge of its PR 3 (system_3 #11662, #11675): Crimson Pro is
+      // built into each page, so opening the planner sends nothing to Google.
       generators: {
-        current_year: 'https://raw.githubusercontent.com/the-anonymous-aspirant/remarkable-pdf-journal/0927caa3f97d8af9f6c4c26433ddaae66bdc2082/current_calendar_year.html',
-        next_year: 'https://raw.githubusercontent.com/the-anonymous-aspirant/remarkable-pdf-journal/0927caa3f97d8af9f6c4c26433ddaae66bdc2082/next_calendar_year.html',
+        current_year: 'https://raw.githubusercontent.com/the-anonymous-aspirant/remarkable-pdf-journal/7482ede5e655dfbe0d3c26deb9fdc6fd6cb124bc/current_calendar_year.html',
+        next_year: 'https://raw.githubusercontent.com/the-anonymous-aspirant/remarkable-pdf-journal/7482ede5e655dfbe0d3c26deb9fdc6fd6cb124bc/next_calendar_year.html',
       }
     };
   },
