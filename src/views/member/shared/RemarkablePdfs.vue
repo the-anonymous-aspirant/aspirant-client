@@ -35,7 +35,13 @@
       <div class="preview-container">
         <h3>Preview</h3>
         <div class="preview-box">
-          <iframe :srcdoc="htmlContent" class="preview-iframe"></iframe>
+          <!-- The HTML comes from another repository. With no sandbox a srcdoc
+               frame has the app's own origin, so its script would run as the
+               app, in the member's session. `allow-scripts` alone lets the
+               calendar build itself in an origin of its own; never add
+               `allow-same-origin` beside it, which undoes the sandbox
+               (system_3 #11488). -->
+          <iframe :srcdoc="htmlContent" class="preview-iframe" sandbox="allow-scripts"></iframe>
         </div>
       </div>
 
@@ -135,7 +141,10 @@ export default {
 
       const blob = new Blob([this.htmlContent], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      // noopener: the new tab gets no handle on this window. It does not
+      // change the tab's origin (a blob: URL made here has the app's origin);
+      // the pinned commit above is what bounds that (system_3 #11488).
+      window.open(url, '_blank', 'noopener');
 
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     },
@@ -145,6 +154,8 @@ export default {
 
       const blob = new Blob([this.htmlContent], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
+      // Not noopener: print() below needs the window, and noopener returns
+      // none (system_3 #11488).
       const printWindow = window.open(url, '_blank');
 
       if (printWindow) {
