@@ -1,6 +1,24 @@
 <template>
   <div id="myVapp">
     <div class="app-container">
+        <!-- The bar behind the phone menu button (system_3 #11664; design
+             ruling on #11663, a dated note on §3.121). Below 768px a list
+             scrolled under the fixed button showed through it. The bar is
+             the page's own surface, the button's box and the 14px above it,
+             with a 1px line at its foot only once something has scrolled
+             under it, so the first screen is as before. It is the one fixed
+             top bar §3.122 P6 allows. It sits on the sticky layer before the
+             drawer's scrim, so the scrim, the drawer and every modal cover it
+             and the button stays on top. Decorative, so hidden from assistive
+             technology. -->
+        <div
+          v-if="isMobile"
+          class="mobile-topbar"
+          :class="{ 'mobile-topbar--scrolled': scrolled }"
+          aria-hidden="true"
+          data-test="mobile-topbar"
+        ></div>
+
         <!-- Mobile menu button. A real button with a name and a 44px target,
              whose ink follows the surface under it (UX walk AP2, system_3
              #10978): amber on the light page measured 1.41:1. Closed, it sits
@@ -47,7 +65,7 @@
   import Sidebar from './components/sidebar/Sidebar.vue';
   import { sidebarWidth, collapsed, isMobile, sidebarHidden, toggleSidebar, checkMobile, authVersion } from './global_state_manager.js';
   import HomeView from './views/HomeView.vue';
-  import { onMounted, onBeforeUnmount } from 'vue';
+  import { onMounted, onBeforeUnmount, ref } from 'vue';
 
   export default {
     components: {
@@ -59,16 +77,27 @@
         checkMobile();
       };
 
+      // Whether the page has scrolled at all: the phone top bar's line shows
+      // only then (system_3 #11664).
+      const scrolled = ref(false);
+      const handleScroll = () => {
+        scrolled.value = window.scrollY > 0;
+      };
+
       onMounted(() => {
         checkMobile();
+        handleScroll();
         window.addEventListener('resize', handleResize);
+        window.addEventListener('scroll', handleScroll, { passive: true });
       });
 
       onBeforeUnmount(() => {
         window.removeEventListener('resize', handleResize);
+        window.removeEventListener('scroll', handleScroll);
       });
 
       return {
+        scrolled,
         sidebarWidth,
         collapsed,
         isMobile,
@@ -154,6 +183,28 @@
     border-radius: 2px;
   }
 
+  /* The phone top bar (system_3 #11664): fixed, full width, 58px (the
+     toggle's 44px box and the 14px above it), on the page's own surface.
+     Shown below 768px only (the rule further down). On the sticky layer, and
+     before the scrim in the DOM, so the scrim (same layer, later) and the
+     drawer and toggle (above) cover it. */
+  .mobile-topbar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: var(--z-index-sticky);
+    height: calc(var(--space-lg) - 10px + 44px);
+    background-color: var(--surface-page);
+    border-bottom: 1px solid transparent;
+    box-sizing: border-box;
+    display: none;
+  }
+
+  .mobile-topbar--scrolled {
+    border-bottom-color: var(--border-subtle);
+  }
+
   .mobile-overlay {
     position: fixed;
     top: 0;
@@ -186,6 +237,10 @@
   @media (max-width: 767.98px) {
     .mobile-menu-toggle {
       display: flex;
+    }
+
+    .mobile-topbar {
+      display: block;
     }
 
     /* The top inset clears the fixed drawer toggle: its --space-lg offset,
