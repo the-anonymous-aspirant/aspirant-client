@@ -209,6 +209,17 @@
             data-test="category-filter"
           />
         </div>
+        <!-- "Which payments have I not invoiced yet?" (system_3 #11020, UX
+             walk AM3): each invoice state is a filter with its count. Money
+             out has no invoice, so the filter is not offered under Out. -->
+        <div v-if="direction !== 'out'" class="filter filter--invoice full-select">
+          <AspSelect
+            v-model="invoiceFilter"
+            :options="invoiceFilterOptions"
+            aria-label="Show payments by invoice state"
+            data-test="invoice-filter"
+          />
+        </div>
       </div>
       <!-- One selection feeds every action, each enabled by its own
            condition (§3.143 Decision 4, §3.129): Set category for rows of
@@ -361,13 +372,17 @@
          The one "select all" sits above the months on both layouts and counts
          rows in open months only (Decision 5). -->
     <template v-else>
-    <div v-if="selectableShown.length" class="select-all" data-test="select-all-shown">
+    <div v-if="visibleRows.length" class="select-all" data-test="select-all-shown">
       <AspCheckbox
+        v-if="selectableShown.length"
         :model-value="allShownSelected"
         :indeterminate="someShownSelected"
-        :label="`Select all ${selectableShown.length} shown`"
+        :label="selectAllLabel"
         @update:model-value="selectAllShown"
       />
+      <!-- Why the count is smaller than the rows shown (system_3 #11020, D2:
+           a count says what it is out of). -->
+      <p v-if="unselectableShown" class="muted select-all__note" data-test="select-all-note">{{ unselectableNote }}</p>
     </div>
     <details
       v-for="group in groups"
@@ -476,6 +491,16 @@
               @click="openRowInvoice(row)"
             >{{ row.invoice }}</AspButton>
           </span>
+          <!-- A payment with no invoice says so in words (system_3 #11020, D2;
+               design ack c73490): "Not invoiced" in body ink where an invoice
+               can follow, "No invoice needed" muted elsewhere. The PayPal
+               transfer's reason line above is already its state. -->
+          <span
+            v-else-if="!isPayPalTransferIntoN26(row.payment)"
+            class="invoice-line"
+            :class="invoiceStateOf(row.payment) === 'none' ? 'invoice-state--open' : 'muted'"
+            data-test="row-invoice-state"
+          >{{ invoiceStateText(row.payment) }}</span>
           <!-- The card's one button (Design ack c71060 answer 4). A press
                generates and does not open the card (`onCardTap`). -->
           <AspButton
@@ -580,6 +605,14 @@
            and nothing on any other row, because no action there would enable
            the button (§3.159 Decision 1: absent, not disabled). -->
       <template #cell-invoice="{ row }">
+        <!-- Every payment states its invoice in words (system_3 #11020, D2),
+             the Generate invoice row included. -->
+        <span
+          v-if="row.payment && !row.invoice && !isPayPalTransferIntoN26(row.payment)"
+          class="invoice-state"
+          :class="invoiceStateOf(row.payment) === 'none' ? 'invoice-state--open' : 'muted'"
+          data-test="row-invoice-state"
+        >{{ invoiceStateText(row.payment) }}</span>
         <AspButton
           v-if="canGenerateRow(row)"
           variant="secondary"
@@ -709,7 +742,7 @@
     removePayments,
     createDraft,
   } from './api.js';
-  import { transactionRows } from './ledgerRows.js';
+  import { invoiceState, transactionRows } from './ledgerRows.js';
   import { groupByMonth, landedRows, monthKey, monthSpanLabel, openGroupKeys } from './listGroups.js';
   import { countsInBook } from './bookSelection.js';
 
@@ -770,6 +803,7 @@
           { value: 'out', label: 'Out' },
         ],
         categoryFilter: 'all',
+        invoiceFilter: 'all',
         // Months ze opened or closed this visit, by key; a month not in here
         // takes the default. Kept through a refetch, never stored (§3.145
         // Decision 3).
@@ -934,12 +968,49 @@
       foldOpen() {
         return this.foldTouched ? this.foldUserOpen : this.rows.length === 0;
       },
-      shown() {
+      // The rows the direction and category filters let through, before the
+      // invoice filter: what the invoice filter's counts are out of.
+      shownByCategory() {
         return this.rows.filter(
           (r) =>
             (this.direction === 'all' || r.direction === this.direction) &&
             (this.categoryFilter === 'all' || r.category === this.categoryFilter),
         );
+      },
+      shown() {
+        if (this.invoiceFilter === 'all') return this.shownByCategory;
+        return this.shownByCategory.filter((r) => r.payment && this.invoiceStateOf(r.payment) === this.invoiceFilter);
+      },
+      // "All invoice states", then each state with the number of loaded
+      // payments it shows under the other filters, every month counted,
+      // folded or not; a zero is said, not dropped (system_3 #11020, design
+      // ack c73490 item 2, D2).
+      invoiceFilterOptions() {
+        const counts = { none: 0, draft: 0, issued: 0, not_needed: 0 };
+        for (const r of this.shownByCategory) if (r.payment) counts[this.invoiceStateOf(r.payment)] += 1;
+        return [
+          { value: 'all', label: 'All invoice states' },
+          { value: 'none', label: `Not invoiced (${counts.none})` },
+          { value: 'draft', label: `Draft (${counts.draft})` },
+          { value: 'issued', label: `Invoiced (${counts.issued})` },
+          { value: 'not_needed', label: `No invoice needed (${counts.not_needed})` },
+        ];
+      },
+      // Select all says what it selects and out of how many: a row on an
+      // issued invoice has no checkbox (system_3 #11020, D2).
+      unselectableShown() {
+        return this.visibleRows.length - this.selectableShown.length;
+      },
+      selectAllLabel() {
+        const n = this.selectableShown.length;
+        return this.unselectableShown ? `Select all ${n} of ${this.visibleRows.length} shown` : `Select all ${n} shown`;
+      },
+      // design ack c73490 item 3: with nothing selectable the checkbox stays
+      // absent and this line says why.
+      unselectableNote() {
+        const k = this.unselectableShown;
+        if (!this.selectableShown.length) return `All ${k} shown are on issued invoices, so none can be selected.`;
+        return k === 1 ? "1 is on an issued invoice and can't be selected." : `${k} are on issued invoices and can't be selected.`;
       },
       categoryOptions() {
         return Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }));
@@ -1147,7 +1218,7 @@
       // The shown rows a checkbox can act on: not on an issued invoice
       // (§3.129 Decisions 4 and 6, design_agent c62100 on #10010).
       filtered() {
-        return this.direction !== 'all' || this.categoryFilter !== 'all';
+        return this.direction !== 'all' || this.categoryFilter !== 'all' || this.invoiceFilter !== 'all';
       },
       // The shown rows by the month the money moved, newest month first
       // (§3.145 Decision 1); `rows` is already newest day first.
@@ -1231,10 +1302,15 @@
       },
       // Any change of filter starts every month open again (§3.17 R2), and
       // clearing the last one brings back zir folds from before.
-      direction() {
+      direction(d) {
         this.filterOpen = {};
+        // Money out has no invoice: the filter is not offered under Out.
+        if (d === 'out') this.invoiceFilter = 'all';
       },
       categoryFilter() {
+        this.filterOpen = {};
+      },
+      invoiceFilter() {
         this.filterOpen = {};
       },
       // After a save, an import or a restore: every month that holds a new
@@ -1385,6 +1461,20 @@
       // on the selection would be refused for an issued invoice's payment.
       selectable(row) {
         return row.direction === 'out' || !row.payment.on_issued_invoice;
+      },
+      // A payment's invoice state (system_3 #11020, design ack c73490 item
+      // 1): a live invoice wins, whatever the category; with none, Paid work
+      // and Uncategorised are 'none' ("Not invoiced": an invoice can follow),
+      // and every other category, and the PayPal transfer into N26, is
+      // 'not_needed'.
+      invoiceStateText(payment) {
+        return this.invoiceStateOf(payment) === 'none' ? 'Not invoiced' : 'No invoice needed';
+      },
+      invoiceStateOf(payment) {
+        const s = invoiceState(payment);
+        if (s !== 'none') return s;
+        if (this.isPayPalTransferIntoN26(payment)) return 'not_needed';
+        return payment.category === 'paid_work' || payment.category === 'uncategorised' ? 'none' : 'not_needed';
       },
       // Mirrors the server's isPayPalTransferIntoN26 (invoicing_n26.go):
       // an N26 row whose payer is PayPal. The PayPal payments it sums are
@@ -2322,6 +2412,16 @@
     margin-bottom: var(--space-sm);
   }
 
+  .select-all__note {
+    margin: var(--space-2xs) 0 0;
+  }
+
+  /* In the table's Invoice cell the state sits on its own line, above the
+     Generate invoice button where there is one (system_3 #11020). */
+  .invoice-state {
+    display: block;
+  }
+
   /* §3.145: one fold per month. The layout is fixed and every column has a
      width, so the columns line up from one month's table to the next. */
   .ledger-group__summary {
@@ -2541,6 +2641,12 @@
     color: var(--text-body);
   }
 
+  /* "Not invoiced" is the open item, in body ink like an open category
+     (system_3 #11020, design ack c73490 item 1). */
+  .invoice-state--open {
+    color: var(--text-body);
+  }
+
   @media (max-width: 640px) {
     .panel-head,
     .toolbar,
@@ -2566,13 +2672,20 @@
        so the first card stays on a 390×844 first screen (design_agent c66182
        on system_3 #10627). */
     .filters {
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
     }
 
     .filters .filter {
-      flex: 1 1 auto;
+      flex: 1 1 0;
       width: auto;
       min-width: 0;
+    }
+
+    /* The Invoice filter takes a line of its own under them (system_3
+       #11020); a basis of 0 above keeps the category select beside the
+       strip, whatever its value's length. */
+    .filters .filter--invoice {
+      flex-basis: 100%;
     }
 
     .create {
