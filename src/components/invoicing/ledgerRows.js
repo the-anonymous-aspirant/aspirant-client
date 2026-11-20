@@ -51,6 +51,19 @@ export function invoiceLabel(payment) {
   return '';
 }
 
+// A payment's issued invoice as the Book names it (system_3 #11509, design
+// ack on that task; §3.143 Decision 7 as amended): `number` for the Invoice
+// column, the number alone, and `line` where the column has no room,
+// "Invoice 2026-014" as on Transactions. An issued invoice with no number
+// reads "—" in the column. A draft has no number yet, and the server never
+// names a cancelled invoice, so both, like no invoice, are two empty strings:
+// the Book states no other invoice state.
+export function bookInvoice(payment) {
+  const inv = payment && payment.invoice;
+  if (!inv || inv.status !== 'issued') return { number: '', line: '' };
+  return { number: inv.invoice_number || '—', line: invoiceLabel(payment) };
+}
+
 // Newest first: the day the money moved, then the row entered last
 // (§3.143 Decision 3, §3.145). A tie falls to the higher id, the later row
 // of its table, then to money in before money out, so the order is the same

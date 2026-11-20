@@ -170,6 +170,7 @@
                 <span class="muted">{{ row.categoryLabel }}</span>
                 <span class="muted card-door" aria-hidden="true" data-test="card-door">Edit</span>
               </span>
+              <span v-if="row.issuedInvoice && row.issuedInvoice.line" class="muted" data-test="book-row-invoice">{{ row.issuedInvoice.line }}</span>
               </button>
               <div v-if="row.type === 'out'" class="book-card__expense-actions">
                 <AspButton variant="ghost" size="sm" data-test="book-expense-receipt" @click="openReceipt(row)">
@@ -198,6 +199,9 @@
             </span>
           </template>
           <template #cell-category="{ row }"><span class="muted">{{ row.categoryLabel }}</span></template>
+          <template #cell-invoice="{ row }">
+            <span v-if="row.issuedInvoice && row.issuedInvoice.number" class="invoice-number" data-test="book-row-invoice">{{ row.issuedInvoice.number }}</span>
+          </template>
           <template #cell-in="{ row }">
             <span v-if="row.type === 'in'" class="nowrap in-amount">{{ formatMoney(row.amount_cents) }}</span>
           </template>
@@ -333,7 +337,7 @@
     putBookSelection,
     updateBookPreset,
   } from './api.js';
-  import { expenseParts, newestFirst, paymentParts } from './ledgerRows.js';
+  import { bookInvoice, expenseParts, newestFirst, paymentParts } from './ledgerRows.js';
   import { fillEmptyMonths, groupByMonth, landedRows, monthKey, monthLabel, openGroupKeys } from './listGroups.js';
   import { BOOK_PDF_BUTTON, bookPdfCaption, bookPdfDoc, bookPdfFileName } from './bookPdf.js';
   import { INCOME_ORDER, WORK_ONLY, countableExpenseNames, countingSentence, countsInBook, selectionName } from './bookSelection.js';
@@ -385,6 +389,11 @@
     }
     return { inCents, outCents, resultCents: inCents - outCents };
   }
+
+  // The Invoice column (system_3 #11509; design ack on that task): as wide as
+  // "2026-014" needs (56px of text and the cell's 24px of padding come to
+  // exactly 5rem, so the nearest half rem with room to spare).
+  const INVOICE_COLUMN_REM = 5.5;
 
   export default {
     name: 'BookPanel',
@@ -447,8 +456,16 @@
           // (§3.159 Decision 6, system_3 #11502). It read "What it was for"
           // while the cell led with who paid, which the operator took for the
           // wrong value in the column (c70806 on #10985).
-          { key: 'description', label: 'Who and what for', sortable: false },
+          // The row's identity (design ack on system_3 #11509): it leads the
+          // design system's card, and it is the column whose room decides
+          // when the table gives way to cards (design system, §3.165).
+          { key: 'description', label: 'Who and what for', sortable: false, role: 'identity' },
           { key: 'category', label: 'Category', sortable: false, width: '11rem' },
+          // Which invoice the money is on (system_3 #11509, operator c70806 on
+          // #10985). As wide as "2026-014" needs, and the same in every
+          // month's table. It shows wherever the table does: where the box
+          // is too narrow the table itself gives way to its card list.
+          { key: 'invoice', label: 'Invoice', sortable: false, width: `${INVOICE_COLUMN_REM}rem` },
           { key: 'in', label: 'In', align: 'right', sortable: false, width: '7.5rem' },
           { key: 'out', label: 'Out', align: 'right', sortable: false, width: '7.5rem' },
           // The row's door and, for an expense, Receipt left of it (§3.159
@@ -545,6 +562,11 @@
             created_at: p.created_at,
             ...paymentParts(p),
             categoryLabel: CATEGORY_LABELS[p.category] || p.category,
+            // Its issued invoice, as the column and as a line (system_3
+            // #11509). An expense row has neither. Not named `invoice`: the
+            // table prints `row[column.key]` itself wherever the cell's slot
+            // renders nothing, which put this object in every empty cell.
+            issuedInvoice: bookInvoice(p),
             amount_cents: p.gross_cents,
             payment: p,
           }));
@@ -744,6 +766,8 @@
           madeOn: this.today,
           countingSentence: this.sentence,
           uncategorisedSentence: this.uncountedUncategorised && uncounted ? uncategorisedText(uncounted) : '',
+          // The file has the tab's columns, Invoice among them (system_3 #11509).
+          withInvoice: true,
           fmt: { day: formatDay, money: formatMoney, signedMoney: this.formatSignedMoney },
         });
         return { doc, fileName: bookPdfFileName({ selection: this.selection, presets: this.presets, monthKey: month, now: new Date() }) };
@@ -1124,6 +1148,13 @@
 
   .muted {
     color: var(--text-muted);
+  }
+
+  /* An invoice number is "<prefix>-<n>" with a prefix of up to 20 characters,
+     so no fixed width holds the longest: it wraps and is never cut (§3.72,
+     system_3 #11509). */
+  .invoice-number {
+    overflow-wrap: anywhere;
   }
 
   .nowrap {

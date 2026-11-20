@@ -885,19 +885,20 @@ test.describe('#11512 the Book exports its entries as a PDF', () => {
 
     const [september, july] = tables(doc);
     // The tab's columns, in the tab's order, repeated with the month's head
-    // on every page the month runs over.
-    expect(cells(july.table.body[1])).toEqual(['Date paid', 'Who and what for', 'Category', 'In', 'Out']);
+    // on every page the month runs over. Invoice is the tab's since #11509;
+    // no payment here is on an issued invoice, so its cells are empty.
+    expect(cells(july.table.body[1])).toEqual(['Date paid', 'Who and what for', 'Category', 'Invoice', 'In', 'Out']);
     expect(july.table.headerRows).toBe(2);
     expect(july.table.keepWithHeaderRows).toBe(1);
     // "who · what"; "—" when both are empty; the minus on Out.
     expect(july.table.body.slice(2).map(cells)).toEqual([
-      ['2026-07-20', 'Guitar strings', 'materials and supplies', '', '-€45.99'],
-      ['2026-07-14', 'Galerie Nord · Wandbild Juli', 'Paid work', '€350.00', ''],
-      ['2026-07-02', '—', 'Paid work', '€5.00', ''],
+      ['2026-07-20', 'Guitar strings', 'materials and supplies', '', '', '-€45.99'],
+      ['2026-07-14', 'Galerie Nord · Wandbild Juli', 'Paid work', '', '€350.00', ''],
+      ['2026-07-02', '—', 'Paid work', '', '€5.00', ''],
     ]);
     expect(headOf(july)).toEqual({ label: 'July 2026', totals: 'In €355.00    Out -€45.99    Result €309.01' });
     expect(headOf(september)).toEqual({ label: 'September 2026', totals: 'In €120.00    Out €0.00    Result €120.00' });
-    expect(september.table.body.slice(2).map(cells)).toEqual([['2026-09-12', 'Atelier Süd · September work', 'Paid work', '€120.00', '']]);
+    expect(september.table.body.slice(2).map(cells)).toEqual([['2026-09-12', 'Atelier Süd · September work', 'Paid work', '', '€120.00', '']]);
 
     // The month's In, Out and Result are the tab's month head's, with the
     // minus added to Out.
@@ -1078,3 +1079,148 @@ test.describe('#11512 the Book exports its entries as a PDF', () => {
   });
 });
 
+// system_3 #11509 (operator c70806 on #10985: "Number should be the invoice id
+// on the book page"; design ack on #11509, §3.143 Decision 7 as amended). The
+// Book had no such column. A counted payment now names its issued invoice: in
+// an Invoice column wherever the Book shows its table, and as a line on the
+// phone card. "Who and what for" is the table's identity column. The value is
+// the `invoice` field the payments list already carries, so nothing new is
+// fetched.
+test.describe('#11509 the Book names a payment\'s issued invoice', () => {
+  const LONG = 'ABCDEFGHIJKLMNOPQRST-001'; // a 20-character prefix with no hyphen
+  const fakeWithInvoices = (over: Json[] = []) =>
+    newFake({
+      payments: [
+        incomeRow({ id: 11, note: 'On an issued invoice', paid_on: '2026-07-16T00:00:00Z', on_invoice: true, invoice: { id: 5, status: 'issued', invoice_number: '2026-014' } }),
+        incomeRow({ id: 12, note: 'Issued with no number', paid_on: '2026-07-15T12:00:00Z', on_invoice: true, invoice: { id: 7, status: 'issued', invoice_number: '' } }),
+        incomeRow({ id: 13, note: 'On a draft', paid_on: '2026-07-15T00:00:00Z', on_invoice: true, invoice: { id: 6, status: 'draft', invoice_number: '' } }),
+        incomeRow({ id: 14, note: 'No invoice yet', paid_on: '2026-07-14T00:00:00Z' }),
+        incomeRow({ id: 15, note: 'An earlier month', paid_on: '2026-06-10T00:00:00Z', on_invoice: true, invoice: { id: 8, status: 'issued', invoice_number: '2026-009' } }),
+        ...over,
+      ],
+      expenses: [expenseRow(101)],
+    });
+  const rowWith = (page: Page, text: string) => page.locator('[data-test="book-row"]:visible', { hasText: text });
+  const invoiceOf = (page: Page, text: string) => rowWith(page, text).locator('[data-test="book-row-invoice"]');
+  const headers = async (page: Page) => (await page.locator('[data-test="book-month"]').first().locator('thead th').allTextContents()).map((t) => t.trim());
+  const noSidewaysScroll = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  const widthOf = (page: Page, selector: string) => page.locator(selector).first().evaluate((el) => el.getBoundingClientRect().width);
+
+  test('the five cases: a number, a dash, and nothing for a draft, no invoice and an expense', async ({ page }) => {
+    await open(page, fakeWithInvoices());
+    const narrow = await narrowOf(page);
+    // The table names the number alone under its header; a card has no
+    // header, so it writes the line Transactions writes.
+    await expect(invoiceOf(page, 'On an issued invoice')).toHaveText(narrow ? 'Invoice 2026-014' : '2026-014');
+    await expect(invoiceOf(page, 'Issued with no number')).toHaveText(narrow ? 'Invoice' : '—');
+    for (const text of ['On a draft', 'No invoice yet', 'Guitar strings']) {
+      await expect(rowWith(page, text)).toHaveCount(1);
+      await expect(invoiceOf(page, text)).toHaveCount(0);
+    }
+    expect(await noSidewaysScroll(page)).toBe(true);
+  });
+
+  test('the Book PDF carries the number in its Invoice column, by the same rules', async ({ page }) => {
+    await open(page, fakeWithInvoices());
+    await page.evaluate(() => {
+      document.addEventListener('book-pdf', (e) => { (window as any).__bookPdf = JSON.stringify((e as CustomEvent).detail); }, { once: true });
+    });
+    const done = page.waitForEvent('download');
+    await page.locator('[data-test="book-pdf"]').click();
+    await done;
+    const doc = JSON.parse(await page.evaluate(() => (window as any).__bookPdf)).doc as Json;
+    const july = (doc.content as Json[]).filter((n) => n.table).find((n) => n.table.body[0][0].columns[0].text === 'July 2026')!;
+    const head = july.table.body[1].map((c: Json) => c.text);
+    const at = head.indexOf('Invoice');
+    expect(head.slice(at - 1, at + 2), head.join(' | ')).toEqual(['Category', 'Invoice', 'In']);
+    const byRow = Object.fromEntries(july.table.body.slice(2).map((r: Json[]) => [r[1].text, r[at].text]));
+    expect(byRow).toEqual({
+      'Guitar strings': '',
+      'Galerie Nord · On an issued invoice': '2026-014',
+      'Galerie Nord · Issued with no number': '—',
+      'Galerie Nord · On a draft': '',
+      'Galerie Nord · No invoice yet': '',
+    });
+  });
+
+  test('a phone card carries the line at 390 and at 360, with no sideways scroll', async ({ page }) => {
+    await open(page, fakeWithInvoices());
+    test.skip(!(await narrowOf(page)), 'the card is the phone layout');
+    for (const width of [390, 360]) {
+      await page.setViewportSize({ width, height: 800 });
+      const line = invoiceOf(page, 'On an issued invoice');
+      await expect(line).toHaveText('Invoice 2026-014');
+      // A line of its own, after the category line.
+      const category = rowWith(page, 'On an issued invoice').getByText('Paid work', { exact: true });
+      const c = (await category.boundingBox())!;
+      const l = (await line.boundingBox())!;
+      expect(l.y, `the line is under the category at ${width}`).toBeGreaterThanOrEqual(c.y + c.height - 1);
+      expect(await noSidewaysScroll(page), `no sideways scroll at ${width}`).toBe(true);
+    }
+  });
+
+  for (const width of [1440, 1280]) {
+    test(`at ${width}px the Invoice column shows, between Category and In, and "Who and what for" keeps 24ch`, async ({ page }, info) => {
+      test.skip(info.project.name !== 'chromium', 'a desktop width');
+      await page.setViewportSize({ width, height: 900 });
+      await open(page, fakeWithInvoices());
+      const head = await headers(page);
+      const at = head.indexOf('Invoice');
+      expect(at, `headers: ${head.join(' | ')}`).toBeGreaterThan(-1);
+      expect(head[at - 1]).toBe('Category');
+      expect(head[at + 1]).toBe('In');
+
+      const number = invoiceOf(page, 'On an issued invoice');
+      await expect(number).toHaveText('2026-014');
+      expect(await number.evaluate((el) => el.getClientRects().length), '"2026-014" is on one line').toBe(1);
+      // A draft, no invoice and an expense leave the cell itself empty. An
+      // absent number element is not enough: the table prints the row's own
+      // value wherever a cell's slot renders nothing.
+      for (const text of ['On a draft', 'No invoice yet', 'Guitar strings']) {
+        expect((await rowWith(page, text).locator('td').nth(at).textContent())!.trim(), `the Invoice cell of "${text}"`).toBe('');
+      }
+      expect((await rowWith(page, 'Issued with no number').locator('td').nth(at).textContent())!.trim()).toBe('—');
+
+      // The same width in every month's table.
+      const months = page.locator('[data-test="book-month"]');
+      await expect(months).toHaveCount(2);
+      const widths: number[] = [];
+      for (let i = 0; i < 2; i += 1) {
+        widths.push(await months.nth(i).locator('thead th', { hasText: 'Invoice' }).evaluate((el) => el.getBoundingClientRect().width));
+      }
+      expect(Math.abs(widths[0] - widths[1]), `Invoice column widths ${widths.join(' and ')}`).toBeLessThanOrEqual(0.5);
+
+      const who = await page.locator('[data-test="book-month"]').first().locator('thead th', { hasText: 'Who and what for' }).evaluate((el) => el.getBoundingClientRect().width);
+      console.log(`#11509 at ${width}px: table ${(await widthOf(page, '[data-test="book-month"] table')).toFixed(0)}px, Invoice column ${widths[0].toFixed(1)}px, "Who and what for" ${who.toFixed(1)}px`);
+      // 24ch in the cell's own font: the identity column's floor (§3.119).
+      const ch24 = await rowWith(page, 'On an issued invoice').locator('[data-test="book-row-description"]').evaluate((el) => {
+        const probe = document.createElement('span');
+        probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
+        probe.textContent = '0'.repeat(24);
+        el.appendChild(probe);
+        const w = probe.getBoundingClientRect().width;
+        probe.remove();
+        return w;
+      });
+      console.log(`#11509 at ${width}px: 24ch is ${ch24.toFixed(1)}px`);
+      expect(who, `"Who and what for" is ${who.toFixed(1)}px; 24ch is ${ch24.toFixed(1)}px`).toBeGreaterThanOrEqual(ch24);
+      expect(await noSidewaysScroll(page)).toBe(true);
+    });
+  }
+
+  test('a number with a 20-character prefix wraps inside its cell and is whole', async ({ page }, info) => {
+    test.skip(info.project.name !== 'chromium', 'a desktop width');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open(page, fakeWithInvoices([
+      incomeRow({ id: 16, note: 'A long number', paid_on: '2026-07-17T00:00:00Z', on_invoice: true, invoice: { id: 9, status: 'issued', invoice_number: LONG } }),
+    ]));
+    const number = invoiceOf(page, 'A long number');
+    await expect(number).toHaveText(LONG);
+    const cell = number.locator('xpath=ancestor::td[1]');
+    const fit = await cell.evaluate((td) => ({ scroll: td.scrollWidth, client: td.clientWidth, overflow: getComputedStyle(td).overflow, textOverflow: getComputedStyle(td).textOverflow }));
+    expect(fit.scroll, 'the number does not spill out of its cell').toBeLessThanOrEqual(fit.client);
+    expect(await number.evaluate((el) => el.getClientRects().length), 'it wraps').toBeGreaterThan(1);
+    expect(fit.textOverflow).not.toBe('ellipsis');
+    expect(await noSidewaysScroll(page)).toBe(true);
+  });
+});
