@@ -511,8 +511,9 @@
     box-shadow: var(--shadow-focus);
   }
 
-  /* The native picker's own icon follows the theme through the page-wide
-     `color-scheme` in src/style.css. This file used to set it with
+  /* The native picker's own icon follows the theme through the
+     `color-scheme` the design system's tokens give `[data-theme]` (system_3
+     #11585, #11586). This file used to set it with
      `:global([data-theme='dark']) .datetime-input`, which a scoped style
      compiles to a bare `[data-theme=dark]` rule on <html> (system_3 #11455). */
 
