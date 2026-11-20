@@ -272,6 +272,30 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
     });
   }
 
+  // Under the tabs, on a phone (design_agent c73534 on system_3 #11020): a
+  // tab whose first block draws its own edge (Transactions' "Add or import",
+  // Clients' "Add client") starts 4px under the strip, as c73520 set. A tab
+  // whose first block is plain text (Invoices' "Work done in", the Book's
+  // "Counting with" sentence) starts 8px under it, so the text does not hang
+  // off the strip. Pinned so a later trim cannot take the 8px back.
+  for (const theme of ['light', 'dark'] as const) {
+    test(`on a 390×844 phone each tab's first block sits 4px under the tabs, 8px where it is plain text, ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await open(page, theme);
+      const want: Record<string, number> = { Transactions: 4, Invoices: 8, Book: 8, Clients: 4 };
+      for (const [name, gap] of Object.entries(want)) {
+        await page.getByRole('tab', { name, exact: true }).click();
+        await expect(page.getByRole('tab', { name, exact: true })).toHaveAttribute('aria-selected', 'true');
+        const measured = await page.locator('.tabs').evaluate((tabs) => {
+          const panel = tabs.nextElementSibling as HTMLElement;
+          const first = [...panel.children].find((el) => el.getBoundingClientRect().height > 2 && getComputedStyle(el).position !== 'absolute');
+          return first!.getBoundingClientRect().top - tabs.getBoundingClientRect().bottom;
+        });
+        expect(Math.abs(measured - gap), `${name}: ${measured.toFixed(1)}px under the tabs`).toBeLessThanOrEqual(0.5);
+      }
+    });
+  }
+
   test('at desktop width the spacing above the list is unchanged', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'chromium', 'the desktop layout; a phone has the tighter spacing above');
     await page.setViewportSize({ width: 1440, height: 900 });
