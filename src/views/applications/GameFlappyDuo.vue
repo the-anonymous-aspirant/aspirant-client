@@ -1,6 +1,6 @@
 <template>
   <div class="flappy-duo-container">
-    <h1>Flappy Duo</h1>
+    <ApplicationHeader title="Flappy Duo" back-to="/applications/games" back-label="Game Center" />
     <div class="game-instructions" v-if="!isPlaying && !gameOver">
       <!-- Each line names its bird by colour, with a swatch of it, so "which
            bird is mine?" is answered before the game starts (system_3
@@ -99,6 +99,7 @@
 
 <script>
   import AssetManager from '../../asset_manager.js';
+  import ApplicationHeader from '../../components/applications/ApplicationHeader.vue';
   import { AspButton } from '@aspirant/design-system';
 
   // Where each bird flies, as a share of the board's width (#10993). They were
@@ -115,6 +116,7 @@
   export default {
     name: 'GameFlappyDuo',
     components: {
+      ApplicationHeader,
       AspButton,
     },
     data() {
@@ -740,13 +742,6 @@
     box-sizing: border-box;
   }
 
-  h1 {
-    font-family: var(--font-family-base);
-    font-size: var(--text-2xl);
-    margin-bottom: var(--space-lg);
-    color: var(--text-on-light);
-  }
-
   .game-area {
     position: relative;
     width: 1200px;
@@ -1056,11 +1051,6 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-    }
-
-    h1 {
-      font-size: var(--text-xl);
-      margin-bottom: var(--space-sm);
     }
 
     .game-area {

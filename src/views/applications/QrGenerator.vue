@@ -1,6 +1,6 @@
 <template>
   <div class="qr-generator page">
-    <h1>QR Code Generator</h1>
+    <ApplicationHeader title="QR Generator" back-to="/applications" back-label="Applications" />
     <h2 class="page-subtitle">Generate a QR code from any text or URL</h2>
 
     <div class="generator-card">
@@ -77,6 +77,7 @@
 import { ref, onBeforeUnmount } from 'vue';
 import { AspButton, AspSelect, AspTextarea } from '@aspirant/design-system';
 import { createQrImage } from '../../utils/qr';
+import ApplicationHeader from '../../components/applications/ApplicationHeader.vue';
 
 const inputText = ref('');
 const encodedText = ref('');

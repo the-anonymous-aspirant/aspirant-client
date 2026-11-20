@@ -3,7 +3,9 @@
     <audio ref="successSound" :src="successSoundUrl"></audio>
     <audio ref="failSound" :src="failSoundUrl"></audio>
 
-    <h1>Timeline Quiz: {{ title }}</h1>
+    <ApplicationHeader :title="pageTitle || `Timeline Quiz: ${title}`" back-to="/applications/quizzes" back-label="Quiz Center">
+      <h2 v-if="pageSubtitle" class="page-subtitle" data-test="application-subtitle">{{ pageSubtitle }}</h2>
+    </ApplicationHeader>
 
     <!-- Mode Selector -->
     <div class="mode-selector" v-if="!gameStarted">
@@ -407,17 +409,24 @@
 import AssetManager from '@/asset_manager.js';
 import axios from 'axios';
 import { AspButton, AspDataTable, AspModal } from '@aspirant/design-system';
+import ApplicationHeader from '@/components/applications/ApplicationHeader.vue';
 import { overlayHistoryWatch } from '@/directives/overlayHistory.js';
 
 export default {
   name: 'GameTimeline',
   components: {
+    ApplicationHeader,
     AspButton,
     AspDataTable,
     AspModal,
   },
   props: {
     title: { type: String, required: true },
+    // The page's one name, as Quiz Center lists it (system_3 #11000).
+    pageTitle: { type: String, default: '' },
+    // What kind of quiz it is: the part of the old long name the card's name
+    // does not carry (design ack on #11000).
+    pageSubtitle: { type: String, default: '' },
     items: { type: Array, required: true },
     getRandomSet: { type: Function, required: true },
     shuffleItems: { type: Function, required: true },
@@ -828,12 +837,6 @@ export default {
   margin: 0 auto;
   padding: var(--space-lg);
   text-align: center;
-}
-
-h1 {
-  font-family: var(--font-family-base);
-  color: var(--text-on-light);
-  margin-bottom: var(--space-md);
 }
 
 /* Mode Selector */

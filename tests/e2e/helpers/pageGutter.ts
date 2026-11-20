@@ -117,12 +117,18 @@ export function measure(page: Page): Promise<Geometry> {
         centred.push(`flex-centre:${el.tagName.toLowerCase()}.${el.className}`);
     }
     const h1 = root.querySelector('h1') as HTMLElement;
+    // An Applications page opens with a link back to its index above the
+    // title (system_3 #11000, design ack on that task). The page's content
+    // then starts at that header, so its top, not the title's, is the one
+    // that must sit on the public title line; the title keeps the edge.
+    const header = root.querySelector('[data-test="application-header"]') as HTMLElement | null;
+    const topOf = header || h1;
     const rootBottom = Math.round(root.getBoundingClientRect().bottom + window.scrollY);
     const toggle = document.querySelector('.mobile-menu-toggle') as HTMLElement | null;
     return {
       edge: Math.round(edge * 10) / 10,
       rootBottom,
-      titleTop: Math.round(h1.getBoundingClientRect().top * 10) / 10,
+      titleTop: Math.round(topOf.getBoundingClientRect().top * 10) / 10,
       titleLeft: Math.round(h1.getBoundingClientRect().left * 10) / 10,
       titleAlign: getComputedStyle(h1).textAlign,
       scrollHeight: document.documentElement.scrollHeight,

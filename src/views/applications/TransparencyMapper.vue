@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <h1>Transperator</h1>
+    <ApplicationHeader title="Transperator" back-to="/applications" back-label="Applications" />
     <h2 class="page-subtitle">Since the free ones online all suck</h2>
     <p>
       <em
@@ -84,9 +84,10 @@
 <script>
   import { AspButton, AspInput } from '@aspirant/design-system';
   import axios from 'axios';
+  import ApplicationHeader from '../../components/applications/ApplicationHeader.vue';
 
   export default {
-    components: { AspButton, AspInput },
+    components: { ApplicationHeader, AspButton, AspInput },
     data() {
       return {
         images: [], // Array to store multiple images
@@ -313,10 +314,6 @@
   };
 </script>
 <style scoped>
-  h1 {
-    margin-bottom: var(--space-xs);
-  }
-
   h2 {
     margin-bottom: var(--space-lg);
   }

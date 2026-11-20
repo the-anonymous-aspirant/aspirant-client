@@ -1,6 +1,6 @@
 <template>
   <div id="wordweaver" class="page">
-    <h1>WordWeaver</h1>
+    <ApplicationHeader title="WordWeaver" back-to="/applications/games" back-label="Game Center" />
     <div class="intro-text">
       <p><em>25 letters will fall in a pre-determined sequence</em></p>
       <p>
@@ -223,6 +223,7 @@
 
 <script>
   import { AspButton, AspInput, AspSegmented, AspTooltip } from '@aspirant/design-system';
+  import ApplicationHeader from '../../components/applications/ApplicationHeader.vue';
   import axios from 'axios';
 
   const BOARD_CONFIG = {
@@ -343,7 +344,7 @@
 
   export default {
     name: 'WordWeaver',
-    components: { AspButton, AspInput, AspSegmented, AspTooltip },
+    components: { ApplicationHeader, AspButton, AspInput, AspSegmented, AspTooltip },
     data() {
       return {
         board: Array.from({ length: BOARD_CONFIG.ROWS }, () =>
@@ -967,11 +968,6 @@
     color: var(--text-on-light);
   }
 
-  #wordweaver h1 {
-    color: var(--text-heading-card);
-    margin-bottom: var(--space-xs);
-  }
-
   .intro-text {
     color: var(--text-muted);
     margin-bottom: var(--space-sm);
@@ -1122,11 +1118,6 @@
   }
 
   @media (max-width: 768px) {
-    #wordweaver h1 {
-      margin-bottom: var(--space-2xs);
-      font-size: var(--text-xl);
-    }
-
     .intro-text {
       display: none;
     }

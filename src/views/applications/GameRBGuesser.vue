@@ -3,7 +3,7 @@
        game and quiz pages do since #9599 (§3.121, §3.114); the cards keep their
        centred interiors (UX walk AG5, system_3 #10997). -->
   <div class="RBGuesser page">
-    <h1>RGB Guessing Game</h1>
+    <ApplicationHeader title="RGB Guesser" back-to="/applications/quizzes" back-label="Quiz Center" />
     <p class="how-to" data-test="rgb-how-to">
       Match the target colour with the R, G and B sliders. After each guess, every channel says
       higher or lower. You have 10 guesses.
@@ -119,13 +119,14 @@
 
 <script>
   import { AspButton, AspInput } from '@aspirant/design-system';
+  import ApplicationHeader from '../../components/applications/ApplicationHeader.vue';
   import { defineComponent } from 'vue';
 
   import { debugMode, toggleDebugMode } from '../../global_state_manager.js';
 
   export default defineComponent({
     name: 'GameRBGuesser',
-    components: { AspButton, AspInput },
+    components: { ApplicationHeader, AspButton, AspInput },
     data() {
       return {
         debugMode,
@@ -281,12 +282,6 @@
      margin. */
   .RBGuesser {
     max-width: 600px;
-  }
-
-  h1 {
-    font-family: var(--font-family-base);
-    color: var(--text-on-light);
-    margin-bottom: var(--space-xs);
   }
 
   p {
@@ -509,10 +504,6 @@
 
   /* Responsive */
   @media (max-width: 768px) {
-    h1 {
-      font-size: var(--text-2xl);
-    }
-
     .how-to {
       margin-bottom: var(--space-md);
       font-size: var(--text-sm);
