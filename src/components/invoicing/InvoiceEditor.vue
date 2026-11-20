@@ -810,7 +810,6 @@
     border: 1px solid var(--border-control, var(--border-subtle));
     background: var(--surface-input, transparent);
     color: inherit;
-    color-scheme: light dark;
     min-width: 0;
   }
 

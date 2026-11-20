@@ -166,10 +166,6 @@
     box-shadow: var(--shadow-focus);
   }
 
-  :global([data-theme='dark']) .hunt-end-form__input {
-    color-scheme: dark;
-  }
-
   .hunt-end-form__actions {
     display: flex;
     flex-wrap: wrap;
