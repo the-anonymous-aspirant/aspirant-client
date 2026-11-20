@@ -877,8 +877,11 @@
           // The last of the row's values, as the row reads (§3.143 Decision 3).
           { key: 'amount', label: 'Amount', align: 'right', sortable: false, width: '8rem', role: 'figure' },
           // The row's door and, for an expense, Receipt left of it (§3.159
-          // Decision 3). Wide enough for both `sm` buttons on one line.
-          { key: 'actions', label: '', sortable: false, align: 'right', width: '10rem' },
+          // Decision 3). Wide enough for both `sm` buttons on one line: 12rem
+          // since "Add receipt" (system_3 #11791), 103px + 8px + Edit's 54px
+          // + 24px of cell padding = 189px. At 10rem the pair ran 29px left,
+          // over the amount.
+          { key: 'actions', label: '', sortable: false, align: 'right', width: '12rem' },
         ],
       };
     },

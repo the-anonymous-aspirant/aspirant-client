@@ -469,8 +469,9 @@
           { key: 'in', label: 'In', align: 'right', sortable: false, width: '7.5rem' },
           { key: 'out', label: 'Out', align: 'right', sortable: false, width: '7.5rem' },
           // The row's door and, for an expense, Receipt left of it (§3.159
-          // Decision 3): the width Transactions gives the same column.
-          { key: 'actions', label: '', sortable: false, align: 'right', width: '10rem' },
+          // Decision 3): the width Transactions gives the same column, 12rem
+          // since "Add receipt" (system_3 #11791).
+          { key: 'actions', label: '', sortable: false, align: 'right', width: '12rem' },
         ],
         // Months ze opened or closed this visit, by key; a month not in here
         // takes the default. Kept through a refetch, never stored (§3.145

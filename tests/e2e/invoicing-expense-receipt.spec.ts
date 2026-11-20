@@ -642,12 +642,24 @@ test.describe('#11791 an expense says whether its receipt is attached', () => {
         const edit = (await page.locator(`${rowSel} [data-test="expense-edit"]`).boundingBox())!;
         const cell = await page.locator(`${rowSel} [data-test="expense-edit"]`).evaluate((el) => {
           const td = el.closest('td')!;
-          return { width: td.getBoundingClientRect().width, right: td.getBoundingClientRect().right, scroll: td.scrollWidth, client: td.clientWidth };
+          return { width: td.getBoundingClientRect().width, right: td.getBoundingClientRect().right, left: td.getBoundingClientRect().left, padL: parseFloat(getComputedStyle(td).paddingLeft), scroll: td.scrollWidth, client: td.clientWidth };
         });
         console.log(`#11791 at 1280: last cell ${cell.width.toFixed(1)}px; Add receipt ${add.width.toFixed(1)}px, Edit ${edit.width.toFixed(1)}px`);
         expect(Math.abs(add.y - edit.y), 'one line').toBeLessThanOrEqual(1);
         expect(edit.x + edit.width).toBeLessThanOrEqual(cell.right + 0.5);
         expect(cell.scroll).toBeLessThanOrEqual(cell.client);
+        // The cell is right-aligned, so too narrow a cell overflows to the
+        // LEFT, over the amount, where scrollWidth cannot see it: the button
+        // must start inside the cell's own padding box.
+        expect(add.x, 'Add receipt starts inside its cell, clear of the amount').toBeGreaterThanOrEqual(cell.left + cell.padL - 0.5);
+        // The Book's table: the same column, the same pair.
+        await page.getByRole('tab', { name: 'Book' }).click();
+        const bookAdd = page.locator('[data-test="book-row"] [data-test="book-expense-receipt"]:visible').filter({ hasText: 'Add receipt' }).first();
+        await expect(bookAdd).toBeVisible();
+        const bb = (await bookAdd.boundingBox())!;
+        const bookCell = await bookAdd.evaluate((el) => { const td = el.closest('td')!; return { left: td.getBoundingClientRect().left, padL: parseFloat(getComputedStyle(td).paddingLeft), width: td.getBoundingClientRect().width }; });
+        console.log(`#11791 at 1280, Book: last cell ${bookCell.width.toFixed(1)}px`);
+        expect(bb.x, 'Book: Add receipt starts inside its cell').toBeGreaterThanOrEqual(bookCell.left + bookCell.padL - 0.5);
       } else {
         const card = (await page.locator(rowSel).boundingBox())!;
         console.log(`#11791 at 360: Add receipt ${add.width.toFixed(1)}px in a ${card.width.toFixed(1)}px card`);
