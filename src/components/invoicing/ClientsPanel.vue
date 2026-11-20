@@ -68,10 +68,16 @@
              of a line the card already has, so no card grows. It is part of
              the card's one tap, not a second door (§3.159 Decision 3); a
              screen reader and a keyboard are #11661's. -->
-        <div class="client-card__top">
+        <!-- The card's button is its name line (system_3 #11661; design ack
+             on that task, answer 1): named "Edit client <name>", reachable by
+             keyboard and announced by a screen reader. The review flags stay
+             directly under the name (§3.160) with their own buttons, which
+             cannot sit inside this one; a tap elsewhere on the card still
+             opens Edit client through the card's tap handler. -->
+        <button type="button" class="card-body client-card__top" :aria-label="`Edit client ${row.name}`" data-test="card-body" @click="startEdit(row)">
           <strong>{{ row.name }}</strong>
           <span class="muted card-door" aria-hidden="true" data-test="card-door">Edit</span>
-        </div>
+        </button>
         <span v-for="other in lookAlikesOf(row)" :key="`alike-${other.id}`" class="review-flag" data-test="client-look-alike">
           Looks like {{ other.name }}
           <AspButton variant="ghost" size="sm" class="review-flag__clear" data-test="client-not-same" :aria-label="`Hide this flag on this device: ${pairNames(row, other)}`" @click.stop="clearPair(row, other)">Hide on this device</AspButton>
@@ -730,6 +736,29 @@
     align-items: baseline;
     justify-content: space-between;
     gap: var(--space-sm);
+  }
+
+  /* The name line as the card's button (system_3 #11661): no box of its own,
+     so the line sits where it did; the focus ring is on the card's box. */
+  .client-card .card-body {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: inherit;
+  }
+
+  .client-card .card-body:focus-visible {
+    outline: none;
+  }
+
+  .client-card:has(> .card-body:focus-visible) {
+    box-shadow: var(--shadow-focus);
+    border-color: var(--text-body);
   }
 
   .muted {
