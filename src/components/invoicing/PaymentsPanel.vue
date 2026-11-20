@@ -303,31 +303,37 @@
             {{ barPair ? `As ${selected.length} invoices` : generateLabel }}
           </AspButton>
         </div>
-        <!-- Why Set category cannot act on this selection, in terms the
-             owner can fix here (§3.114). -->
-        <p v-if="mixedSelection" id="set-category-hint" class="create__hint" data-test="set-category-hint">
-          Choose only money in or only money out to set a category
-        </p>
-        <!-- What else an armed Remove does, said before it acts. -->
-        <p v-if="confirmingRemove && removeConsequence" id="bulk-remove-hint" class="create__hint" data-test="bulk-remove-consequence">
-          {{ removeConsequence }}
-        </p>
-        <!-- States why Create invoice and Generate invoices cannot act, in
-             terms the owner can fix here; the server is still the rule (only
-             paid work is invoiced). One line for the pair. -->
-        <p v-if="createCaption" id="create-invoice-hint" class="create__hint" data-test="create-invoice-hint">
-          {{ createCaption }}
-        </p>
-        <!-- Generate's own reason, when the pair's line has nothing to say
-             (§3.114; Design ack c71060). -->
-        <p v-if="generateCaption" id="generate-hint" class="create__hint" data-test="generate-hint">
-          {{ generateCaption }}
-        </p>
-        <!-- With two or more ticked the two buttons do different things with
-             the same rows, so the line says which does what before a press. -->
-        <p v-else-if="pairHint" id="generate-pair-hint" class="create__hint" data-test="generate-pair-hint">
-          {{ pairHint }}
-        </p>
+        <!-- The hints share one reserved line under the buttons, so the
+             at-rest hint, the empty line at one tick and the pair hint from
+             two ticked leave the list where it was (design ruling c73141 on
+             system_3 #11753). -->
+        <div class="create__hints">
+          <!-- Why Set category cannot act on this selection, in terms the
+               owner can fix here (§3.114). -->
+          <p v-if="mixedSelection" id="set-category-hint" class="create__hint" data-test="set-category-hint">
+            Choose only money in or only money out to set a category
+          </p>
+          <!-- What else an armed Remove does, said before it acts. -->
+          <p v-if="confirmingRemove && removeConsequence" id="bulk-remove-hint" class="create__hint" data-test="bulk-remove-consequence">
+            {{ removeConsequence }}
+          </p>
+          <!-- States why Create invoice and Generate invoices cannot act, in
+               terms the owner can fix here; the server is still the rule (only
+               paid work is invoiced). One line for the pair. -->
+          <p v-if="createCaption" id="create-invoice-hint" class="create__hint" data-test="create-invoice-hint">
+            {{ createCaption }}
+          </p>
+          <!-- Generate's own reason, when the pair's line has nothing to say
+               (§3.114; Design ack c71060). -->
+          <p v-if="generateCaption" id="generate-hint" class="create__hint" data-test="generate-hint">
+            {{ generateCaption }}
+          </p>
+          <!-- With two or more ticked the two buttons do different things with
+               the same rows, so the line says which does what before a press. -->
+          <p v-else-if="pairHint" id="generate-pair-hint" class="create__hint" data-test="generate-pair-hint">
+            {{ pairHint }}
+          </p>
+        </div>
       </component>
       </Teleport>
     </div>
@@ -2171,16 +2177,37 @@
 
   /* Keyed on the toolbar's width, never the viewport, like the ways in: the
      sidebar at 768 leaves the panel 504px (system_3 #10631). One row while
-     the widest state fits: Set category 320 + the armed "Remove 12 rows" ~130
-     + "Create invoice from 12 payments" ~230 + 2 × 12 = 704px = 44rem.
-     Below that, Set category takes its own full-width row and Remove and
-     Create invoice sit under it on the right, so the row never scrolls
-     sideways and the primary stays rightmost. */
+     the controls fit; below that, Set category takes its own full-width row
+     and Remove, Create invoice and Generate sit under it on the right, so the
+     row never scrolls sideways and the primary stays rightmost.
+
+     The threshold is the widest ticked state, measured in Chromium at the
+     desktop text size (system_3 #11753): Set category 320 + the armed
+     "Remove 12 rows" 146 + "Create invoice from 12 payments" 282 +
+     "Generate 12 invoices" 194 + 3 × 12 gaps = 978px, and about one
+     character more for each of the three counts at 100 rows or more:
+     1008px = 63rem. At rest the row is shorter (754px), but it switches at
+     the same width: ticking must not move the list, so the row just ticked
+     stays under the pointer (§3.157 Decision 2's reason, on the desktop
+     toolbar; design ruling c73081). The 44rem before this was derived from
+     three controls, before Generate joined the row (#513): a ticked row ran
+     138px past a 760px toolbar, and an unticked one past a 704 to 753px
+     toolbar. */
   .toolbar {
     container: selection-bar / inline-size;
   }
 
-  @container selection-bar (width < 44rem) {
+  /* One hint line's height is kept under the buttons whether or not a hint
+     shows: the at-rest "Select rows to…", nothing at one ticked, the pair
+     hint from two ticked. Without it "Select all" and the list moved 24px on
+     the first tick. A hint that wraps, or a second hint, still grows it
+     (design ruling c73141 on system_3 #11753). */
+  .create__hints {
+    min-height: calc(var(--space-2xs) + 1lh);
+    font-size: var(--text-sm);
+  }
+
+  @container selection-bar (width < 63rem) {
     .create {
       width: 100%;
     }
@@ -2266,6 +2293,13 @@
   /* One row ticked: the primary alone, at full width on its own row. */
   .selection-bar .bar-remove + .bar-pair {
     flex: 1 1 100%;
+  }
+
+  /* In the phone's bar each hint stays its own row of the bar's column, with
+     the bar's gap, and nothing is reserved: the bar shows only while a row
+     is ticked. */
+  .selection-bar .create__hints {
+    display: contents;
   }
 
   .selection-bar .create__hint,
