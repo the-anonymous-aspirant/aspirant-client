@@ -497,8 +497,8 @@
                transfer's reason line above is already its state. -->
           <span
             v-else-if="!isPayPalTransferIntoN26(row.payment) && !canGenerateRow(row)"
-            class="invoice-line"
-            :class="invoiceStateOf(row.payment) === 'none' ? 'invoice-state--open' : 'muted'"
+            class="muted invoice-line"
+            :class="{ 'invoice-state--open': invoiceStateOf(row.payment) === 'none' }"
             data-test="row-invoice-state"
           >{{ invoiceStateText(row.payment) }}</span>
           <!-- The card's one button (Design ack c71060 answer 4). A press
@@ -507,7 +507,7 @@
                line and two cards stay whole on a 390×844 first screen
                (system_3 #11020, design ruling c73497 item 1; §3.157). -->
           <div v-if="canGenerateRow(row)" class="card-generate-row">
-            <span class="invoice-state--open" data-test="row-invoice-state">Not invoiced</span>
+            <span class="muted invoice-state--open" data-test="row-invoice-state">Not invoiced</span>
             <AspButton
               variant="secondary"
               size="sm"
@@ -614,8 +614,8 @@
              the Generate invoice row included. -->
         <span
           v-if="row.payment && !row.invoice && !isPayPalTransferIntoN26(row.payment)"
-          class="invoice-state"
-          :class="invoiceStateOf(row.payment) === 'none' ? 'invoice-state--open' : 'muted'"
+          class="muted invoice-state"
+          :class="{ 'invoice-state--open': invoiceStateOf(row.payment) === 'none' }"
           data-test="row-invoice-state"
         >{{ invoiceStateText(row.payment) }}</span>
         <AspButton
@@ -2661,7 +2661,7 @@
     color: var(--text-body);
   }
 
-  /* "Not invoiced" is the open item, in body ink like an open category
+  /* "Not invoiced" is the open item: the muted line's size, in body ink, like an open category
      (system_3 #11020, design ack c73490 item 1). */
   .invoice-state--open {
     color: var(--text-body);
