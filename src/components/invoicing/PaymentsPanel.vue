@@ -229,7 +229,7 @@
         :is="narrow ? 'AspCard' : 'div'"
         v-if="!narrow || selected.length"
         ref="selectionBar"
-        v-bind="narrow ? { padding: 'sm', class: 'selection-bar', 'data-test': 'selection-bar', role: 'region', 'aria-label': 'Actions for the ticked rows' } : { class: 'create' }"
+        v-bind="narrow ? { padding: 'sm', class: 'selection-bar', 'data-test': 'selection-bar', role: 'region', 'aria-label': 'Actions for the ticked rows' } : { class: ['create', { 'create--ticked': selected.length > 0 }] }"
       >
         <!-- §3.129 Decision 5's failure line leads the bar: the rows that
              failed stay ticked, so the bar and the line stay together. -->
@@ -2171,16 +2171,26 @@
 
   /* Keyed on the toolbar's width, never the viewport, like the ways in: the
      sidebar at 768 leaves the panel 504px (system_3 #10631). One row while
-     the widest state fits: Set category 320 + the armed "Remove 12 rows" ~130
-     + "Create invoice from 12 payments" ~230 + 2 × 12 = 704px = 44rem.
-     Below that, Set category takes its own full-width row and Remove and
-     Create invoice sit under it on the right, so the row never scrolls
-     sideways and the primary stays rightmost. */
+     the controls fit; below that, Set category takes its own full-width row
+     and Remove, Create invoice and Generate sit under it on the right, so the
+     row never scrolls sideways and the primary stays rightmost.
+
+     Two thresholds, since a tick lengthens three labels. Measured in Chromium
+     at the desktop text size (system_3 #11753):
+     - at rest, Set category 320 + "Remove" 82 + "Create invoice" 146 +
+       "Generate invoices" 170 + 3 × 12 gaps = 754px: 47.5rem (760px);
+     - ticked, the widest state, Set category 320 + the armed "Remove 12
+       rows" 146 + "Create invoice from 12 payments" 282 + "Generate 12
+       invoices" 194 + 3 × 12 = 978px, and about one character more for each
+       of the three counts at 100 rows or more: 1008px = 63rem.
+     The single 44rem before them was derived from three controls, before
+     Generate joined the row (#513): a ticked row ran 138px past a 760px
+     toolbar, and an unticked one past a 704 to 753px toolbar. */
   .toolbar {
     container: selection-bar / inline-size;
   }
 
-  @container selection-bar (width < 44rem) {
+  @container selection-bar (width < 47.5rem) {
     .create {
       width: 100%;
     }
@@ -2192,6 +2202,22 @@
     }
 
     .set-category {
+      width: 100%;
+    }
+  }
+
+  @container selection-bar (width < 63rem) {
+    .create--ticked {
+      width: 100%;
+    }
+
+    .create--ticked .create__actions {
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      width: 100%;
+    }
+
+    .create--ticked .set-category {
       width: 100%;
     }
   }

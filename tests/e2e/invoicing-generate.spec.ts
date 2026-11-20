@@ -1061,3 +1061,68 @@ test.describe('#11670 the invoice editor asks before an exit throws away what wa
     expect(writes(fake)).toEqual(['POST /invoices/1/cancel']);
   });
 });
+
+// system_3 #11753 (design spec; c60951, §3.159 Decision 4, operator c61550 on
+// #9656, §3.119): the selection's four controls never run past the toolbar's
+// box. When they cannot share one row, Set category takes its own full-width
+// row and Remove, Create invoice and Generate invoice(s) sit under it on the
+// right, the primary rightmost, no label on two lines. Twelve invented
+// payments in one month, ticked with "Select all", then Remove armed.
+test.describe('#11753 the ticked toolbar stays inside its box', () => {
+  test.skip(({ isMobile }) => isMobile, 'viewport widths over 640px; a phone has its own bar');
+
+  const twelve = (): Fake => ({ ...newFake(), payments: Array.from({ length: 12 }, (_, i) => payment(i + 1, `2026-10-${String(i + 1).padStart(2, '0')}`)) });
+  const readings = (page: Page) => page.evaluate(() => {
+    const bar = document.querySelector('[data-test="payments-panel"] .toolbar') as HTMLElement;
+    const box = bar.getBoundingClientRect();
+    const ctl = (sel: string) => {
+      const el = document.querySelector(sel) as HTMLElement | null;
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.x), y: Math.round(r.y), right: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height), text: el.textContent!.trim() };
+    };
+    return {
+      page: { scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth },
+      toolbar: { scrollWidth: bar.scrollWidth, clientWidth: bar.clientWidth, left: Math.round(box.left), right: Math.round(box.right) },
+      setCategory: ctl('.create__actions .set-category'),
+      remove: ctl('[data-test="bulk-remove"]'),
+      create: ctl('[data-test="create-invoice"]'),
+      generate: ctl('[data-test="generate-selected"]'),
+    };
+  });
+  const check = (r: Awaited<ReturnType<typeof readings>>, what: string) => {
+    expect(r.page.scrollWidth, `${what}: the page does not scroll sideways`).toBe(r.page.clientWidth);
+    expect(r.toolbar.scrollWidth, `${what}: the toolbar holds its controls`).toBe(r.toolbar.clientWidth);
+    const buttons = [r.remove!, r.create!, r.generate!];
+    expect(r.generate!.right, `${what}: Generate is inside the toolbar's box`).toBeLessThanOrEqual(r.toolbar.right);
+    for (const b of buttons) expect(b.x, `${what}: Generate is rightmost`).toBeLessThanOrEqual(r.generate!.x);
+    // A wrapped label would double a button's height.
+    expect(Math.max(...buttons.map((b) => b.h)) - Math.min(...buttons.map((b) => b.h)), `${what}: no label on two lines`).toBeLessThanOrEqual(1);
+  };
+
+  // 984 leaves the toolbar 720px, between the old 44rem and the at-rest row.
+  for (const [width, sidebar] of [[700, 'hidden'], [768, 'open'], [984, 'open'], [1024, 'open'], [1152, 'open'], [1280, 'open'], [1440, 'open']] as const) {
+    test(`at ${width} (sidebar ${sidebar}): unticked as before; one ticked, twelve ticked, twelve with Remove armed`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openTransactions(page, twelve());
+      const rest = await readings(page);
+      await tick(page, 1);
+      const one = await readings(page);
+      await page.locator('[data-test="select-all-shown"]').getByRole('checkbox').check();
+      await expect(generateSelected(page)).toHaveText('Generate 12 invoices');
+      const all = await readings(page);
+      await page.locator('[data-test="bulk-remove"]').click();
+      await expect(page.locator('[data-test="bulk-remove"]')).toHaveText('Remove 12 rows');
+      const armed = await readings(page);
+      const form = (r: typeof one) => (Math.abs(r.setCategory!.y - r.generate!.y) <= 2 ? 'one row' : 'Set category above, buttons below');
+      console.log(`#11753 at ${width}: ${JSON.stringify({ rest: { ...rest, form: form(rest) }, one: { ...one, form: form(one) }, all: { ...all, form: form(all) }, armed: { ...armed, form: form(armed) } })}`);
+      // Unticked: one row wherever the toolbar is 47.5rem (760px) or wider,
+      // the two-row form below that, so it never runs past its box either.
+      check(rest, `${width}, unticked`);
+      expect(form(rest), `${width}, unticked: the form`).toBe(rest.toolbar.clientWidth >= 760 ? 'one row' : 'Set category above, buttons below');
+      check(one, `${width}, one ticked`);
+      check(all, `${width}, twelve ticked`);
+      check(armed, `${width}, twelve ticked, Remove armed`);
+    });
+  }
+});
