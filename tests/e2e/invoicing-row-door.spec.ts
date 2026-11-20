@@ -489,6 +489,7 @@ test.describe('#11664 the phone menu button has a bar behind it', () => {
     await open(page);
     await expect(bar(page)).toHaveCount(0);
   });
+});
 
 // system_3 #11627 (design spec from #11622, §3.165): Transactions declares
 // "Who and what for" its identity column and Amount its figure, so where that
