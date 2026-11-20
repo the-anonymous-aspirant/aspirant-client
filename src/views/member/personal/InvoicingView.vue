@@ -522,10 +522,12 @@
        (Invoices' "Work done in" label, the Book's "Counting with" sentence),
        it sits 8px under the tabs, not 4px, so it does not hang off the strip
        (design_agent c73534 on system_3 #11020). Transactions and Clients open
-       on a bordered control and keep 4px; §3.157's budget is Transactions'. */
+       on a bordered control and keep 4px; §3.157's budget is Transactions'.
+       A margin, not padding, so the text still starts the panel's box (the
+       Book's #11500 check). In this flex column it adds to the 4px gap. */
     .invoicing-view .invoices-panel,
     .invoicing-view .book-panel {
-      padding-block-start: var(--space-2xs);
+      margin-block-start: var(--space-2xs);
     }
 
     /* Two classes on this side: AspCard's own padding rule is scoped too, so
