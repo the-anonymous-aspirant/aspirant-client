@@ -496,26 +496,31 @@
                can follow, "No invoice needed" muted elsewhere. The PayPal
                transfer's reason line above is already its state. -->
           <span
-            v-else-if="!isPayPalTransferIntoN26(row.payment)"
+            v-else-if="!isPayPalTransferIntoN26(row.payment) && !canGenerateRow(row)"
             class="invoice-line"
             :class="invoiceStateOf(row.payment) === 'none' ? 'invoice-state--open' : 'muted'"
             data-test="row-invoice-state"
           >{{ invoiceStateText(row.payment) }}</span>
           <!-- The card's one button (Design ack c71060 answer 4). A press
-               generates and does not open the card (`onCardTap`). -->
-          <AspButton
-            v-if="canGenerateRow(row)"
-            variant="secondary"
-            size="sm"
-            class="card-generate"
-            :disabled="generating || creating || removing"
-            :loading="generating && generatingRow === row.payment.id"
-            :aria-label="`Generate invoice for ${row.transaction_id}`"
-            data-test="row-generate"
-            @click="generateRow(row.payment)"
-          >
-            Generate invoice
-          </AspButton>
+               generates and does not open the card (`onCardTap`). Its state,
+               "Not invoiced", shares the button's line, so the card gains no
+               line and two cards stay whole on a 390×844 first screen
+               (system_3 #11020, design ruling c73497 item 1; §3.157). -->
+          <div v-if="canGenerateRow(row)" class="card-generate-row">
+            <span class="invoice-state--open" data-test="row-invoice-state">Not invoiced</span>
+            <AspButton
+              variant="secondary"
+              size="sm"
+              class="card-generate"
+              :disabled="generating || creating || removing"
+              :loading="generating && generatingRow === row.payment.id"
+              :aria-label="`Generate invoice for ${row.transaction_id}`"
+              data-test="row-generate"
+              @click="generateRow(row.payment)"
+            >
+              Generate invoice
+            </AspButton>
+          </div>
         </template>
         <!-- The one button inside an expense card, as on the Book's card
              (§3.159 Decision 3, system_3 #11501). A press opens the receipt
@@ -2485,6 +2490,21 @@
     margin-top: var(--space-xs);
   }
 
+  /* "Not invoiced" left, centred on the button's height, and the button
+     right, on one line with the button's own space above it (system_3
+     #11020, design ruling c73497 item 1). */
+  .card-generate-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    margin-top: var(--space-xs);
+  }
+
+  .card-generate-row .card-generate {
+    margin-top: 0;
+  }
+
   /* An expense card's Receipt, at the card's start as on the Book's card. */
   .card-receipt {
     align-self: flex-start;
@@ -2686,6 +2706,13 @@
        strip, whatever its value's length. */
     .filters .filter--invoice {
       flex-basis: 100%;
+    }
+
+    /* The Invoice filter's line sits 4px under the strip and category, the
+       phone toolbar's own gap (c68157 on #10636), not the 12px above 640
+       (system_3 #11020, design ruling c73497 item 2). */
+    .filters {
+      row-gap: var(--space-2xs);
     }
 
     .create {
