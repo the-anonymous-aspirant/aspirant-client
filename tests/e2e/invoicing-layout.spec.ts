@@ -249,8 +249,10 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
       expect(buttonBottom, `the second card's Generate invoice ends at ${buttonBottom.toFixed(1)}px`).toBeLessThanOrEqual(844);
       expect(cardBottom, `the second card ends at ${cardBottom.toFixed(1)}px`).toBeLessThanOrEqual(844);
 
-      // Where the room came from: 12px, not 16px, at each of the four gaps
+      // Where the room came from: 4px, not 16px, at each of the four gaps
       // above the list, and 8px, not 16px, above and below the Issuer line.
+      // c71509 on #11019 set the gaps at 12px; c73520 on #11020 took them to
+      // 4px so the Invoice filter's line fits the same budget.
       const head = await boxOf(page, '.page-head');
       const card = await boxOf(page, '[data-test="profile-card"]');
       const line = await boxOf(page, '[data-test="profile-edit"]');
@@ -258,7 +260,7 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
       const fold = await boxOf(page, '[data-test="ways-in-summary"]');
       const filters = await boxOf(page, '[data-test="category-filter"]');
       const gaps = { 'title to Issuer': card.top - head.bottom, 'Issuer to tabs': tabs.top - card.bottom, 'tabs to Add or import': fold.top - tabs.bottom, 'Add or import to the filters': filters.top - fold.bottom };
-      for (const [name, gap] of Object.entries(gaps)) expect(Math.abs(gap - 12), `${name}: ${gap.toFixed(1)}px`).toBeLessThanOrEqual(0.5);
+      for (const [name, gap] of Object.entries(gaps)) expect(Math.abs(gap - 4), `${name}: ${gap.toFixed(1)}px`).toBeLessThanOrEqual(0.5);
       // 2px border + 8px + the 44px line + 8px + 2px.
       expect(Math.abs(card.height - 64), `Issuer card ${card.height.toFixed(1)}px`).toBeLessThanOrEqual(0.5);
       // What the trim must not take (c71509): the two 44px targets and the

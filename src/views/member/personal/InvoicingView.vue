@@ -506,13 +506,16 @@
      the fold at 390×844, the second card's "Generate invoice" included
      (§3.157's budget; design_agent c71509 on system_3 #11019, built as
      #11576). The gate #11373 measured the second card 25px under the fold.
-     These take spacing and no content: 12px between the page's blocks, which
-     is what the list's own cards sit apart, and 8px above and below the
-     Issuer line, which stays a 44px target. The card's side padding stays on
-     the shared gutter (§3.114). From 641px up nothing changes. */
+     These take spacing and no content: 4px between the page's blocks, and
+     8px above and below the Issuer line, which stays a 44px target. 4px is
+     the gap c68157 gives below the filters, so the groups stacked above the
+     list are 4px apart on every tab; each draws its own edge (design_agent
+     c73520 on system_3 #11020, which took 12px to 4px so the Invoice
+     filter's line fits). The card's side padding stays on the shared gutter
+     (§3.114). From 641px up nothing changes. */
   @media (max-width: 640px) {
     .invoicing-view {
-      gap: var(--space-sm);
+      gap: var(--space-2xs);
     }
 
     /* Two classes on this side: AspCard's own padding rule is scoped too, so
