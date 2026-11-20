@@ -1079,10 +1079,11 @@ test.describe('#11753 the ticked toolbar stays inside its box', () => {
       const el = document.querySelector(sel) as HTMLElement | null;
       if (!el) return null;
       const r = el.getBoundingClientRect();
-      return { x: Math.round(r.x), y: Math.round(r.y), right: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height), text: el.textContent!.trim() };
+      return { x: Math.round(r.x), y: Math.round(r.y + window.scrollY), right: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height), text: el.textContent!.trim() };
     };
     return {
       page: { scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth },
+      selectAllY: Math.round((document.querySelector('[data-test="select-all-shown"]') as HTMLElement).getBoundingClientRect().y + window.scrollY),
       toolbar: { scrollWidth: bar.scrollWidth, clientWidth: bar.clientWidth, left: Math.round(box.left), right: Math.round(box.right) },
       setCategory: ctl('.create__actions .set-category'),
       remove: ctl('[data-test="bulk-remove"]'),
@@ -1116,10 +1117,25 @@ test.describe('#11753 the ticked toolbar stays inside its box', () => {
       const armed = await readings(page);
       const form = (r: typeof one) => (Math.abs(r.setCategory!.y - r.generate!.y) <= 2 ? 'one row' : 'Set category above, buttons below');
       console.log(`#11753 at ${width}: ${JSON.stringify({ rest: { ...rest, form: form(rest) }, one: { ...one, form: form(one) }, all: { ...all, form: form(all) }, armed: { ...armed, form: form(armed) } })}`);
-      // Unticked: one row wherever the toolbar is 47.5rem (760px) or wider,
-      // the two-row form below that, so it never runs past its box either.
+      // Unticked, the toolbar takes the form the ticked one does (design
+      // ruling c73081): one row from 63rem (1008px), two rows below, so it
+      // never runs past its box either, and the first tick moves nothing.
       check(rest, `${width}, unticked`);
-      expect(form(rest), `${width}, unticked: the form`).toBe(rest.toolbar.clientWidth >= 760 ? 'one row' : 'Set category above, buttons below');
+      const expected = rest.toolbar.clientWidth >= 1008 ? 'one row' : 'Set category above, buttons below';
+      for (const [r, what] of [[rest, 'unticked'], [one, 'one ticked'], [all, 'twelve ticked'], [armed, 'Remove armed']] as const) {
+        expect(form(r), `${width}, ${what}: the form`).toBe(expected);
+      }
+      // The first tick does not move the toolbar's controls: the form is the
+      // same, so Set category and Generate stay where they were. ("Select
+      // all" below moves by the at-rest hint line, which the first tick
+      // removes; that line is outside this toolbar row, #11753 c73081.)
+      expect(one.setCategory!.y, `${width}: Set category stays put on the first tick`).toBe(rest.setCategory!.y);
+      // Generate too, wherever the three ticked buttons fit one line under
+      // Set category. At a 504px toolbar (768) they do not: "Generate
+      // invoice" wraps to a row of its own, as on main.
+      if (one.remove!.w + one.create!.w + one.generate!.w + 24 <= one.toolbar.clientWidth) {
+        expect(one.generate!.y, `${width}: Generate stays put on the first tick`).toBe(rest.generate!.y);
+      }
       check(one, `${width}, one ticked`);
       check(all, `${width}, twelve ticked`);
       check(armed, `${width}, twelve ticked, Remove armed`);
