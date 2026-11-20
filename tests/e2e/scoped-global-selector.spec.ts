@@ -123,8 +123,8 @@ test.describe('#11455 the dark theme asks for the dark colour scheme, the light 
     expect(await schemes(page)).toEqual({ theme: 'dark', html: 'dark', input: 'dark' });
   });
 
-  test('light: neither does', async ({ page }) => {
+  test('light: neither is dark; both take the light scheme', async ({ page }) => {
     await openMealLog(page, 'light');
-    expect(await schemes(page)).toEqual({ theme: 'light', html: 'normal', input: 'normal' });
+    expect(await schemes(page)).toEqual({ theme: 'light', html: 'light', input: 'light' });
   });
 });

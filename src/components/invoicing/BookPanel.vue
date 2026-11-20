@@ -329,12 +329,6 @@
   } from './api.js';
   import { expenseParts, newestFirst, paymentParts } from './ledgerRows.js';
   import { fillEmptyMonths, groupByMonth, landedRows, monthKey, monthLabel, openGroupKeys } from './listGroups.js';
-  // Imported as KvittoMaker and the card generator import it. The app's
-  // router loads those two with the first page, so the library is already
-  // in the browser when the Book opens; importing it on the press would
-  // save nothing.
-  import pdfMake from 'pdfmake/build/pdfmake';
-  import pdfFonts from 'pdfmake/build/vfs_fonts';
   import { BOOK_PDF_BUTTON, bookPdfCaption, bookPdfDoc, bookPdfFileName } from './bookPdf.js';
   import { INCOME_ORDER, WORK_ONLY, countableExpenseNames, countingSentence, countsInBook, selectionName } from './bookSelection.js';
 
@@ -350,7 +344,29 @@
   // signal (c63777).
   // In, Out and Result over a set of rows: one sum for a month head and for
   // the period line, so the two cannot add up differently.
-  pdfMake.addVirtualFileSystem(pdfFonts);
+  // pdfmake (1.87 MB) and its fonts load when the Book tab opens, not with
+  // the app's first page (system_3 #11650): the router loads this panel's
+  // code with every first page, signed in or not, so a module-level import
+  // put the library on all of them. It loads at the tab, not on the press,
+  // so nothing is requested between the press and the download (security's
+  // condition on #11512). One load is kept for the session; a failed load is
+  // forgotten, and the press then says the PDF could not be made.
+  let pdfMakeLoad = null;
+  function loadPdfMake() {
+    if (!pdfMakeLoad) {
+      pdfMakeLoad = Promise.all([import('pdfmake/build/pdfmake'), import('pdfmake/build/vfs_fonts')])
+        .then(([lib, fonts]) => {
+          const pdfMake = lib.default || lib;
+          pdfMake.addVirtualFileSystem(fonts.default || fonts);
+          return pdfMake;
+        })
+        .catch((err) => {
+          pdfMakeLoad = null;
+          throw err;
+        });
+    }
+    return pdfMakeLoad;
+  }
 
   const uncategorisedText = (n) => (n === 1 ? '1 payment is still Uncategorised and not counted.' : `${n} payments are still Uncategorised and not counted.`);
 
@@ -651,6 +667,8 @@
       },
     },
     mounted() {
+      // Ready before the first press; a failure is reported by the press.
+      loadPdfMake().catch(() => {});
       this.narrowQuery = window.matchMedia('(max-width: 640px)');
       this.narrow = this.narrowQuery.matches;
       this.onNarrowChange = (e) => {
@@ -733,6 +751,7 @@
           // What is about to be drawn, for anything that wants to read the
           // document and not the drawn pages (the Book spec does).
           this.$el.dispatchEvent(new CustomEvent('book-pdf', { bubbles: true, detail: { fileName, doc } }));
+          const pdfMake = await loadPdfMake();
           await pdfMake.createPdf(doc).download(fileName);
         } catch {
           this.pdfError = 'The PDF could not be made. Try again.';

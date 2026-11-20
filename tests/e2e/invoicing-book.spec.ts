@@ -1010,6 +1010,35 @@ test.describe('#11512 the Book exports its entries as a PDF', () => {
     expect(file.suggestedFilename()).toBe('book-entries-work-only-2026-10-10-1400.pdf');
   });
 
+  // system_3 #11650: pdfmake (1.87 MB) loads when the Book tab opens, not
+  // with the app's first page, which every visitor shares; and not on the
+  // press, so the press still sends nothing (the test above).
+  test('the PDF library loads when the Book tab opens, not before', async ({ page }) => {
+    const lib: string[] = [];
+    page.on('request', (r) => { if (/pdfmake|vfs_fonts/.test(r.url())) lib.push(new URL(r.url()).pathname); });
+    await page.clock.setFixedTime(DAY);
+    await mock(page, fakeBook());
+    await seedTrustedSessionAs(page, 'vinoly');
+    await page.goto('/member/personal/invoicing');
+    await dismissMobileSidebarIfPresent(page);
+    await expect(page.locator('[data-test="payments-panel"]')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    expect(lib, 'nothing of pdfmake on Transactions').toEqual([]);
+    await page.getByRole('tab', { name: 'Book', exact: true }).click();
+    await expect(button(page)).toBeEnabled();
+    await expect.poll(() => lib.length, { message: 'pdfmake is fetched with the Book tab' }).toBeGreaterThan(0);
+    const { file } = await press(page);
+    expect(file.suggestedFilename()).toMatch(/\.pdf$/);
+  });
+
+  test('a PDF library that fails to load: the press says the PDF could not be made', async ({ page }) => {
+    await page.route(/pdfmake|vfs_fonts/, (route) => route.abort());
+    await openAt(page, fakeBook());
+    await button(page).click();
+    await expect(page.locator('[data-test="book-pdf-error"]')).toHaveText('The PDF could not be made. Try again.');
+    await expect(button(page)).toBeEnabled();
+  });
+
   test('a PDF that cannot be made says so under the button, in view', async ({ page }) => {
     await openAt(page, fakeBook());
     // The browser refuses to hand the finished file over.
