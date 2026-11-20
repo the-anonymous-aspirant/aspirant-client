@@ -16,6 +16,8 @@ export default {
 
 <template>
   <GameTimeline
+    page-title="Innovation Quiz"
+    page-subtitle="Put inventions in order, or guess the year each was made."
     title="Innovations"
     :items="items"
     :getRandomSet="getRandomSet"

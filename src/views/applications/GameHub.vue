@@ -1,7 +1,7 @@
 <template>
   <div class="game-hub page">
-    <h1>Game Center</h1>
-    <h2>Challenge yourself with our collection of fun and engaging games!</h2>
+    <ApplicationHeader title="Game Center" back-to="/applications" back-label="Applications" />
+    <h2 class="page-subtitle">Challenge yourself with our collection of fun and engaging games!</h2>
     <div class="game-list">
       <application-card
         v-for="game in games"
@@ -19,6 +19,7 @@
 <script>
   import AssetManager from '../../asset_manager';
   import ApplicationCard from '../../components/ApplicationCard.vue';
+  import ApplicationHeader from '../../components/applications/ApplicationHeader.vue';
   import { meetsTier, TIER } from '../../lib/tiers.js';
 
   // The Game Center roster (#4842) — the ONE definition of this hub's tiles,
@@ -80,6 +81,7 @@
   export default {
     name: 'GameHub',
     components: {
+      ApplicationHeader,
       ApplicationCard,
     },
     data() {

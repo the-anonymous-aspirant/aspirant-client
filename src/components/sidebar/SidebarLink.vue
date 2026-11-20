@@ -19,6 +19,14 @@
         type: Boolean,
         default: false,
       },
+      // Other path prefixes this item stands for (system_3 #11000): a page
+      // below one of them marks this item too, so a visitor inside a quiz or
+      // a game still sees which section they are in. Exact path match when
+      // empty, as before.
+      match: {
+        type: Array,
+        default: () => [],
+      },
       // True while the sidebar's asset batch is still loading (#9581). An empty
       // `image` then means "not here yet", shown as the sized loading box; only
       // once the batch has resolved does an empty `image` mean "failed", and
@@ -30,7 +38,11 @@
     },
     setup(props, { emit }) {
       const route = useRoute();
-      const isActive = computed(() => route.path === props.to);
+      const isActive = computed(() => {
+        const path = route.path;
+        if (path === props.to) return true;
+        return props.match.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+      });
       const loadedImage = ref('');
       const isLoading = ref(false);
 

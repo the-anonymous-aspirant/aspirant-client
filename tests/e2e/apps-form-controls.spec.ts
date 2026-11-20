@@ -23,7 +23,7 @@ async function openQr(page: Page): Promise<void> {
   await page.addInitScript(() => localStorage.setItem('user_role', 'Viewer'));
   await page.goto('/applications/qr-generator');
   await dismissMobileSidebarIfPresent(page);
-  await expect(page.getByRole('heading', { name: 'QR Code Generator' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'QR Generator' })).toBeVisible();
 }
 
 test.describe('#4481 QrGenerator form controls are DS components', () => {
