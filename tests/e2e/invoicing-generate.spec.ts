@@ -1103,12 +1103,15 @@ test.describe('#11753 the ticked toolbar stays inside its box', () => {
 
   // 984 leaves the toolbar 720px, between the old 44rem and the at-rest row.
   for (const [width, sidebar] of [[700, 'hidden'], [768, 'open'], [984, 'open'], [1024, 'open'], [1152, 'open'], [1280, 'open'], [1440, 'open']] as const) {
-    test(`at ${width} (sidebar ${sidebar}): unticked as before; one ticked, twelve ticked, twelve with Remove armed`, async ({ page }) => {
+    test(`at ${width} (sidebar ${sidebar}): unticked as before; one ticked, two ticked, twelve ticked, twelve with Remove armed`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await openTransactions(page, twelve());
       const rest = await readings(page);
       await tick(page, 1);
       const one = await readings(page);
+      await tick(page, 2);
+      await expect(page.locator('[data-test="generate-pair-hint"]')).toBeVisible();
+      const two = await readings(page);
       await page.locator('[data-test="select-all-shown"]').getByRole('checkbox').check();
       await expect(generateSelected(page)).toHaveText('Generate 12 invoices');
       const all = await readings(page);
@@ -1116,27 +1119,33 @@ test.describe('#11753 the ticked toolbar stays inside its box', () => {
       await expect(page.locator('[data-test="bulk-remove"]')).toHaveText('Remove 12 rows');
       const armed = await readings(page);
       const form = (r: typeof one) => (Math.abs(r.setCategory!.y - r.generate!.y) <= 2 ? 'one row' : 'Set category above, buttons below');
-      console.log(`#11753 at ${width}: ${JSON.stringify({ rest: { ...rest, form: form(rest) }, one: { ...one, form: form(one) }, all: { ...all, form: form(all) }, armed: { ...armed, form: form(armed) } })}`);
+      console.log(`#11753 at ${width}: ${JSON.stringify({ rest: { ...rest, form: form(rest) }, one: { ...one, form: form(one) }, two: { ...two, form: form(two) }, all: { ...all, form: form(all) }, armed: { ...armed, form: form(armed) } })}`);
       // Unticked, the toolbar takes the form the ticked one does (design
       // ruling c73081): one row from 63rem (1008px), two rows below, so it
       // never runs past its box either, and the first tick moves nothing.
       check(rest, `${width}, unticked`);
       const expected = rest.toolbar.clientWidth >= 1008 ? 'one row' : 'Set category above, buttons below';
-      for (const [r, what] of [[rest, 'unticked'], [one, 'one ticked'], [all, 'twelve ticked'], [armed, 'Remove armed']] as const) {
+      for (const [r, what] of [[rest, 'unticked'], [one, 'one ticked'], [two, 'two ticked'], [all, 'twelve ticked'], [armed, 'Remove armed']] as const) {
         expect(form(r), `${width}, ${what}: the form`).toBe(expected);
       }
       // The first tick does not move the toolbar's controls: the form is the
-      // same, so Set category and Generate stay where they were. ("Select
-      // all" below moves by the at-rest hint line, which the first tick
-      // removes; that line is outside this toolbar row, #11753 c73081.)
+      // same, so Set category and Generate stay where they were.
       expect(one.setCategory!.y, `${width}: Set category stays put on the first tick`).toBe(rest.setCategory!.y);
-      // Generate too, wherever the three ticked buttons fit one line under
-      // Set category. At a 504px toolbar (768) they do not: "Generate
-      // invoice" wraps to a row of its own, as on main.
-      if (one.remove!.w + one.create!.w + one.generate!.w + 24 <= one.toolbar.clientWidth) {
+      // Generate too, and the list under the toolbar, wherever the three
+      // ticked buttons fit one line under Set category: one hint line is
+      // kept for the at-rest hint, the empty line at one ticked and the pair
+      // hint at two (design ruling c73141). At a 504px toolbar (768) they do
+      // not fit: "Generate invoice" wraps to a row of its own, as on main,
+      // and the list may move (accepted there).
+      const fits = (r: typeof one) => r.remove!.w + r.create!.w + r.generate!.w + 24 <= r.toolbar.clientWidth;
+      if (width >= 1024) expect(fits(one) && fits(two), `${width}: the ticked buttons fit one line`).toBe(true);
+      if (fits(one) && fits(two)) {
         expect(one.generate!.y, `${width}: Generate stays put on the first tick`).toBe(rest.generate!.y);
+        expect(one.selectAllY, `${width}: "Select all" stays put on the first tick`).toBe(rest.selectAllY);
+        expect(two.selectAllY, `${width}: "Select all" stays put on the second tick`).toBe(rest.selectAllY);
       }
       check(one, `${width}, one ticked`);
+      check(two, `${width}, two ticked`);
       check(all, `${width}, twelve ticked`);
       check(armed, `${width}, twelve ticked, Remove armed`);
     });
