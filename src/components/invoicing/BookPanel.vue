@@ -174,7 +174,7 @@
               </button>
               <div v-if="row.type === 'out'" class="book-card__expense-actions">
                 <AspButton variant="ghost" size="sm" data-test="book-expense-receipt" @click="openReceipt(row)">
-                  Receipt
+                  {{ receiptLabel(row) }}
                 </AspButton>
               </div>
             </li>
@@ -216,7 +216,7 @@
                of it, so the Out column holds the amount alone. -->
           <template #cell-actions="{ row }">
             <span class="row-actions">
-              <AspButton v-if="row.type === 'out'" variant="secondary" size="sm" data-test="book-expense-receipt" @click="openReceipt(row)">Receipt</AspButton>
+              <AspButton v-if="row.type === 'out'" variant="secondary" size="sm" data-test="book-expense-receipt" @click="openReceipt(row)">{{ receiptLabel(row) }}</AspButton>
               <AspButton variant="secondary" size="sm" data-test="book-row-edit" @click="openEdit(row)">Edit</AspButton>
             </span>
           </template>
@@ -337,7 +337,7 @@
     putBookSelection,
     updateBookPreset,
   } from './api.js';
-  import { bookInvoice, expenseParts, newestFirst, paymentParts } from './ledgerRows.js';
+  import { bookInvoice, expenseParts, newestFirst, paymentParts, receiptButtonLabel } from './ledgerRows.js';
   import { fillEmptyMonths, groupByMonth, landedRows, monthKey, monthLabel, openGroupKeys } from './listGroups.js';
   import { BOOK_PDF_BUTTON, bookPdfCaption, bookPdfDoc, bookPdfFileName } from './bookPdf.js';
   import { INCOME_ORDER, WORK_ONLY, countableExpenseNames, countingSentence, countsInBook, selectionName } from './bookSelection.js';
@@ -908,6 +908,12 @@
         this.confirmingDelete = false;
         const p = this.ownPreset;
         return this.write(() => deleteBookPreset(p.id));
+      },
+      // "Receipt" or "Add receipt", from the list's has_receipt (system_3
+      // #11791, design spec on #11630). The dialog's `changed` refetches the
+      // list, so the label follows an attach or a remove.
+      receiptLabel(row) {
+        return receiptButtonLabel(row.expense);
       },
       openReceipt(row) {
         this.receiptExpenseId = row.id;

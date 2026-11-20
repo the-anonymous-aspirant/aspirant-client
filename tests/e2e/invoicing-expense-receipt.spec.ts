@@ -26,9 +26,14 @@ interface Fake {
   // round-trip through aspirant-server's own Go tests, not this spec).
   nextUploads: ReceiptFake[];
   refuseNextUpload?: Json;
+  // system_3 #11791: refuse the next receipt removal.
+  refuseNextDelete?: Json;
   // system_3 #11510: refuse the next hand entry, or hold it until released.
   refuseNextCreate?: Json;
   holdCreate?: Promise<void>;
+  // system_3 #11791: answer the list with has_receipt, as aspirant-server
+  // does since #11790. Off by default: an older server's list carries none.
+  sendsHasReceipt?: boolean;
   requests: Array<{ method: string; path: string }>;
 }
 
@@ -99,7 +104,10 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: [] });
     if (path === '/invoicing/invoices' && method === 'GET') return json(route, 200, { invoices: [] });
     if (path === '/invoicing/audit-events') return json(route, 200, { events: [] });
-    if (path === '/invoicing/expenses' && method === 'GET') return json(route, 200, { expenses: fake.expenses });
+    if (path === '/invoicing/expenses' && method === 'GET') {
+      const expenses = fake.sendsHasReceipt ? fake.expenses.map((e) => ({ ...e, has_receipt: fake.receipts.has(e.id) })) : fake.expenses;
+      return json(route, 200, { expenses });
+    }
     // What the Book counts (system_3 #10635): the starting selection, Work only.
     if (path === '/invoicing/book/selection' && method === 'GET') return json(route, 200, { selection: { preset: 'work_only', changed: false, income: ['paid_work'], expense_all: true, expense: [] }, presets: [{ id: 'work_only', name: 'Work only', builtin: true, income: ['paid_work'], expense_all: true, expense: [] }] });
     if (path === '/invoicing/expense-categories' && method === 'GET') return json(route, 200, { categories: [] });
@@ -149,6 +157,11 @@ async function mock(page: Page, fake: Fake): Promise<void> {
         return json(route, 200, { receipt: { content_type: uploaded.contentType, filename: 'receipt', sha256: 'deadbeef', size_bytes: uploaded.content.length }, saved: true });
       }
       if (method === 'DELETE') {
+        if (fake.refuseNextDelete) {
+          const err = fake.refuseNextDelete;
+          fake.refuseNextDelete = undefined;
+          return json(route, 500, { error: err });
+        }
         if (!fake.receipts.has(id)) return json(route, 404, { error: { code: 'not_found', message: 'No receipt is attached' } });
         fake.receipts.delete(id);
         return json(route, 200, { deleted: true });
@@ -508,5 +521,139 @@ test.describe('#11510 a receipt while entering an expense by hand', () => {
     // Where the control sits on the full-screen sheet when the form opens.
     const top = await page.locator('[data-test="expense-receipt-attach"]').evaluate((el) => Math.round(el.getBoundingClientRect().top));
     console.log(`#11510 at 360x780: the Attach receipt button's top is at ${top}px of 780`);
+  });
+});
+
+// system_3 #11791 (design spec on #11630): the button says whether a receipt
+// is attached, "Receipt" or "Add receipt", on the Book and on Transactions,
+// table and card; an unknown reads "Receipt" (D2); it follows the dialog.
+test.describe('#11791 an expense says whether its receipt is attached', () => {
+  const twoExpenses = () => {
+    const fake = newFake({
+      sendsHasReceipt: true,
+      expenses: [expenseRow(101), expenseRow(102, { note: 'Train to Leipzig', paid_on: '2026-07-21T00:00:00Z' })],
+    });
+    fake.receipts.set(102, { content: blackPng(10, 10), contentType: 'image/png' });
+    return fake;
+  };
+  const bookButton = (page: Page, id: number) =>
+    page.locator('[data-test="book-row"]').filter({ has: page.locator(`[data-test="book-expense-receipt"]`) }).filter({ hasText: id === 102 ? 'Train to Leipzig' : 'Guitar strings' }).locator('[data-test="book-expense-receipt"]');
+
+  for (const [w, h] of [[390, 844], [1440, 900]] as const) {
+    test(`at ${w}px the Book and Transactions say Receipt or Add receipt`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: h });
+      await open(page, twoExpenses());
+      await expect(bookButton(page, 101)).toHaveText('Add receipt');
+      await expect(bookButton(page, 102)).toHaveText('Receipt');
+      // The visible text is the accessible name (design_agent c73526): no
+      // aria-label may leave the name saying Receipt over an Add receipt.
+      await expect(bookButton(page, 101)).toHaveAccessibleName('Add receipt');
+      await expect(bookButton(page, 102)).toHaveAccessibleName('Receipt');
+      await expect(page.getByRole('button', { name: 'Add receipt', exact: true })).toHaveCount(1);
+      await page.getByRole('tab', { name: 'Transactions' }).click();
+      const tx = (txn: string) => page.locator(`[data-test="expense-row"][data-txn="${txn}"] [data-test="expense-receipt"]`);
+      await expect(tx('M-e101')).toHaveText('Add receipt');
+      await expect(tx('M-e102')).toHaveText('Receipt');
+      await expect(tx('M-e101')).toHaveAccessibleName('Add receipt');
+      await expect(tx('M-e102')).toHaveAccessibleName('Receipt');
+      await expect(page.getByRole('button', { name: 'Add receipt', exact: true })).toHaveCount(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  }
+
+  test('a list that does not say reads Receipt, as before (D2)', async ({ page }) => {
+    await open(page, newFake({ expenses: [expenseRow(101)] }));
+    await expect(page.locator('[data-test="book-expense-receipt"]').first()).toHaveText('Receipt');
+  });
+
+  test('attaching and then removing in the dialog changes the row each time, without a reload', async ({ page }) => {
+    const img = blackPng(40, 20);
+    const fake = newFake({ sendsHasReceipt: true, nextUploads: [{ content: img, contentType: 'image/png' }] });
+    await open(page, fake);
+    const button = page.locator('[data-test="book-expense-receipt"]').first();
+    await expect(button).toHaveText('Add receipt');
+    // A reload would wipe this marker; the SPA's own history updates do not.
+    await page.evaluate(() => { (window as any).__no_reload_11791 = true; });
+    await openReceiptFor(page);
+    await page.locator('[data-test="receipt-file-input"]').setInputFiles({ name: 'kvitto.png', mimeType: 'image/png', buffer: img });
+    await expectImagePreview(page, 40);
+    await page.keyboard.press('Escape');
+    await expect(button).toHaveText('Receipt');
+    await openReceiptFor(page);
+    const removeBtn = page.locator('[data-test="receipt-remove"]');
+    await removeBtn.click();
+    await removeBtn.click();
+    await expect(page.locator('[data-test="receipt-none"]')).toHaveText('No receipt attached.');
+    await page.keyboard.press('Escape');
+    await expect(button).toHaveText('Add receipt');
+    expect(await page.evaluate(() => (window as any).__no_reload_11791 === true), 'no reload').toBe(true);
+  });
+
+  // The label follows the dialog's result, not the press (design_agent
+  // c73526): a refused attach or removal leaves it as it was, and the
+  // dialog's own error line reports it.
+  test('a refused attach or removal leaves the label as it was', async ({ page }) => {
+    const fake = newFake({ sendsHasReceipt: true });
+    await open(page, fake);
+    const button = page.locator('[data-test="book-expense-receipt"]').first();
+    await expect(button).toHaveText('Add receipt');
+    fake.refuseNextUpload = { code: 'invalid_receipt', message: 'That file is not a receipt we can keep' };
+    await openReceiptFor(page);
+    await page.locator('[data-test="receipt-file-input"]').setInputFiles({ name: 'kvitto.png', mimeType: 'image/png', buffer: blackPng(10, 10) });
+    await expect(page.locator('[data-test="receipt-error"]')).toHaveText('That file is not a receipt we can keep');
+    await page.keyboard.press('Escape');
+    await expect(button).toHaveText('Add receipt');
+
+    // Now attach one for real, then refuse its removal.
+    await openReceiptFor(page);
+    await page.locator('[data-test="receipt-file-input"]').setInputFiles({ name: 'kvitto.png', mimeType: 'image/png', buffer: blackPng(10, 10) });
+    await expect(page.locator('[data-test="receipt-remove"]')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(button).toHaveText('Receipt');
+    fake.refuseNextDelete = { code: 'internal', message: 'The receipt could not be removed' };
+    await openReceiptFor(page);
+    const removeBtn = page.locator('[data-test="receipt-remove"]');
+    await removeBtn.click();
+    await removeBtn.click();
+    await expect(page.locator('[data-test="receipt-error"]')).toHaveText('The receipt could not be removed');
+    await page.keyboard.press('Escape');
+    await expect(button).toHaveText('Receipt');
+  });
+
+  test('at 1280 the last column holds Add receipt and Edit on one line; at 360 the card fits it', async ({ page }) => {
+    for (const [w, h] of [[1280, 900], [360, 780]] as const) {
+      await page.setViewportSize({ width: w, height: h });
+      await open(page, newFake({ sendsHasReceipt: true }));
+      if (w === 360) {
+        // The Book's card first: the longer label fits it too.
+        const bookCard = page.locator('[data-test="book-row"]').filter({ has: page.locator('[data-test="book-expense-receipt"]') }).first();
+        const bookAdd = bookCard.locator('[data-test="book-expense-receipt"]');
+        await expect(bookAdd).toHaveText('Add receipt');
+        const ba = (await bookAdd.boundingBox())!;
+        const bc = (await bookCard.boundingBox())!;
+        console.log(`#11791 at 360, Book: Add receipt ${ba.width.toFixed(1)}px in a ${bc.width.toFixed(1)}px card`);
+        expect(ba.x + ba.width).toBeLessThanOrEqual(bc.x + bc.width);
+      }
+      await page.getByRole('tab', { name: 'Transactions' }).click();
+      const rowSel = '[data-test="expense-row"][data-txn="M-e101"]';
+      const add = (await page.locator(`${rowSel} [data-test="expense-receipt"]`).boundingBox())!;
+      await expect(page.locator(`${rowSel} [data-test="expense-receipt"]`)).toHaveText('Add receipt');
+      if (w === 1280) {
+        const edit = (await page.locator(`${rowSel} [data-test="expense-edit"]`).boundingBox())!;
+        const cell = await page.locator(`${rowSel} [data-test="expense-edit"]`).evaluate((el) => {
+          const td = el.closest('td')!;
+          return { width: td.getBoundingClientRect().width, right: td.getBoundingClientRect().right, scroll: td.scrollWidth, client: td.clientWidth };
+        });
+        console.log(`#11791 at 1280: last cell ${cell.width.toFixed(1)}px; Add receipt ${add.width.toFixed(1)}px, Edit ${edit.width.toFixed(1)}px`);
+        expect(Math.abs(add.y - edit.y), 'one line').toBeLessThanOrEqual(1);
+        expect(edit.x + edit.width).toBeLessThanOrEqual(cell.right + 0.5);
+        expect(cell.scroll).toBeLessThanOrEqual(cell.client);
+      } else {
+        const card = (await page.locator(rowSel).boundingBox())!;
+        console.log(`#11791 at 360: Add receipt ${add.width.toFixed(1)}px in a ${card.width.toFixed(1)}px card`);
+        expect(add.x + add.width).toBeLessThanOrEqual(card.x + card.width);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
   });
 });
