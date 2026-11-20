@@ -380,9 +380,9 @@
         :label="selectAllLabel"
         @update:model-value="selectAllShown"
       />
-      <!-- Why the count is smaller than the rows shown (system_3 #11020, D2:
-           a count says what it is out of). -->
-      <p v-if="unselectableShown" class="muted select-all__note" data-test="select-all-note">{{ unselectableNote }}</p>
+      <!-- When no shown row can be selected, why (system_3 #11020, design
+           ruling c73504 item 2; D2). Otherwise the label says it. -->
+      <p v-if="unselectableShown && !selectableShown.length" class="muted select-all__note" data-test="select-all-note">{{ unselectableNote }}</p>
     </div>
     <details
       v-for="group in groups"
@@ -468,7 +468,16 @@
           <span class="category-line muted" data-test="row-category-client"><span
             :class="{ 'category-line__open': row.payment.category === 'uncategorised' }"
             data-test="row-category"
-          >{{ row.categoryLabel }}</span>&nbsp;· <span data-test="row-client">{{ clientNameOf(row.payment) || 'no client' }}</span></span>
+          >{{ row.categoryLabel }}</span>&nbsp;· <span data-test="row-client">{{ clientNameOf(row.payment) || 'no client' }}</span><template
+            v-if="cardStateOnCategoryLine(row)"
+          >&nbsp;· <span
+            :class="{ 'invoice-state--open': invoiceStateOf(row.payment) === 'none' }"
+            data-test="row-invoice-state"
+          >{{ invoiceStateText(row.payment) }}</span></template></span>
+          <!-- With no live invoice and no Generate button, the state ends the
+               category line, which already carries the open mark, so the card
+               gains no line (system_3 #11020, design ruling c73504 item 1).
+               "Not invoiced" in body ink, "No invoice needed" muted. -->
           <span v-if="isPayPalTransferIntoN26(row.payment)" class="muted paid-work-reason" data-test="payment-no-paid-work-reason">Not paid work -- the PayPal payments it sums are, in the PayPal import</span>
         </template>
         <!-- An expense's category reads as text here; it is set from the
@@ -491,16 +500,6 @@
               @click="openRowInvoice(row)"
             >{{ row.invoice }}</AspButton>
           </span>
-          <!-- A payment with no invoice says so in words (system_3 #11020, D2;
-               design ack c73490): "Not invoiced" in body ink where an invoice
-               can follow, "No invoice needed" muted elsewhere. The PayPal
-               transfer's reason line above is already its state. -->
-          <span
-            v-else-if="!isPayPalTransferIntoN26(row.payment) && !canGenerateRow(row)"
-            class="muted invoice-line"
-            :class="{ 'invoice-state--open': invoiceStateOf(row.payment) === 'none' }"
-            data-test="row-invoice-state"
-          >{{ invoiceStateText(row.payment) }}</span>
           <!-- The card's one button (Design ack c71060 answer 4). A press
                generates and does not open the card (`onCardTap`). Its state,
                "Not invoiced", shares the button's line, so the card gains no
@@ -1008,14 +1007,14 @@
       },
       selectAllLabel() {
         const n = this.selectableShown.length;
-        return this.unselectableShown ? `Select all ${n} of ${this.visibleRows.length} shown` : `Select all ${n} shown`;
+        // One line at every width; the no-break space keeps "shown ·" together
+        // where it wraps (design ruling c73504 item 2).
+        return this.unselectableShown ? `Select all ${n} of ${this.visibleRows.length} shown\u00a0· ${this.unselectableShown} invoiced` : `Select all ${n} shown`;
       },
-      // design ack c73490 item 3: with nothing selectable the checkbox stays
-      // absent and this line says why.
+      // With nothing selectable the checkbox stays absent and this line says
+      // why (design ruling c73504 item 2).
       unselectableNote() {
-        const k = this.unselectableShown;
-        if (!this.selectableShown.length) return `All ${k} shown are on issued invoices, so none can be selected.`;
-        return k === 1 ? "1 is on an issued invoice and can't be selected." : `${k} are on issued invoices and can't be selected.`;
+        return `All ${this.unselectableShown} shown are invoiced, so none can be selected.`;
       },
       categoryOptions() {
         return Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }));
@@ -1472,6 +1471,12 @@
       // and Uncategorised are 'none' ("Not invoiced": an invoice can follow),
       // and every other category, and the PayPal transfer into N26, is
       // 'not_needed'.
+      // The phone card's state ends its category line when the card has no
+      // live invoice and no Generate button (design ruling c73504 item 1).
+      cardStateOnCategoryLine(row) {
+        const p = row.payment;
+        return Boolean(p) && !row.invoice && !this.isPayPalTransferIntoN26(p) && !this.canGenerateRow(row);
+      },
       invoiceStateText(payment) {
         return this.invoiceStateOf(payment) === 'none' ? 'Not invoiced' : 'No invoice needed';
       },

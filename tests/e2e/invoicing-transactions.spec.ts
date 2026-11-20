@@ -971,23 +971,36 @@ test.describe('#11020 Transactions says which payments are not invoiced', () => 
     await expect(invoiceFilter(page)).toContainText('All invoice states');
   });
 
-  test('Select all says what it selects and out of how many, in all three cases', async ({ page }) => {
+  test('Select all says what it selects and out of how many, on one line, in every case', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await open(page, invoiceFake());
     const all = page.locator('[data-test="select-all-shown"]');
     const note = page.locator('[data-test="select-all-note"]');
-    // Only October is open: five rows, one on an issued invoice.
-    await expect(all).toContainText('Select all 4 of 5 shown');
-    await expect(note).toHaveText("1 is on an issued invoice and can't be selected.");
-    await openAllMonths(page);
-    await expect(all).toContainText('Select all 8 of 10 shown');
-    await expect(note).toHaveText("2 are on issued invoices and can't be selected.");
-    await pickInvoiceFilter(page, 'Not invoiced (2)');
-    await expect(all).toContainText('Select all 2 shown');
+    // Only October is open: five rows, one invoiced (the singular).
+    await expect(all).toContainText(/^Select all 4 of 5 shown\s· 1 invoiced$/);
     await expect(note).toHaveCount(0);
+    // Every month open: two invoiced (the plural reads the same).
+    await openAllMonths(page);
+    await expect(all).toContainText(/^Select all 8 of 10 shown\s· 2 invoiced$/);
+    // Every shown row selectable.
+    await pickInvoiceFilter(page, 'Not invoiced (2)');
+    await expect(all).toContainText(/^Select all 2 shown$/);
+    await expect(note).toHaveCount(0);
+    // None selectable: no checkbox, and the line says why.
     await pickInvoiceFilter(page, 'Invoiced (2)');
     await expect(all.getByRole('checkbox')).toHaveCount(0);
-    await expect(note).toHaveText('All 2 shown are on issued invoices, so none can be selected.');
+    await expect(note).toHaveText('All 2 shown are invoiced, so none can be selected.');
+  });
+
+  test('at 390 a card with no Generate button ends its category line with its state', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open(page, invoiceFake());
+    await openAllMonths(page);
+    await expect(row(page, 'M-p6').locator('[data-test="row-category-client"]')).toHaveText(/^Uncategorised\s· no client\s· Not invoiced$/);
+    await expect(row(page, 'M-p3').locator('[data-test="row-category-client"]')).toHaveText(/^Gift\s· no client\s· No invoice needed$/);
+    // The Paid-work card's state shares its Generate line instead.
+    await expect(row(page, 'PP-P5').locator('.card-generate-row [data-test="row-invoice-state"]')).toHaveText('Not invoiced');
+    await expect(row(page, 'PP-P5').locator('[data-test="row-category-client"] [data-test="row-invoice-state"]')).toHaveCount(0);
   });
 
   test('at 390x844 the Invoice filter is on the first screen, under the strip and the category', async ({ page }) => {
