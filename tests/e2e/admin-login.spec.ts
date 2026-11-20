@@ -140,8 +140,13 @@ test.describe('Admin sign-in at /admin/login', () => {
       // slow run, already elapsed on a fast one. Freezing time and advancing
       // it explicitly makes the "still inside the window" and "past it"
       // halves of this test deterministic on any engine or load.
-      await page.clock.install();
-      await page.clock.pauseAt(new Date()); // freeze: install() alone still ticks in realtime
+      // Install at a known instant and freeze a minute after it. install()
+      // alone ticks in real time, so `pauseAt(new Date())` read after it could
+      // land behind the browser's clock and throw "Cannot fast-forward to the
+      // past" (system_3 #11664: 1 of 5 runs on mobile-safari at load).
+      const start = Date.now();
+      await page.clock.install({ time: start });
+      await page.clock.pauseAt(start + 60_000);
       await seedAdminSession(page);
       await page.goto('/admin/login?redirect=/admin');
       await dismissMobileSidebarIfPresent(page);
@@ -223,8 +228,11 @@ test.describe('Admin sign-in at /admin/login', () => {
       // "Checking" for the plain form before the assertion ever polled
       // ("element(s) not found", not a wrong-text mismatch). Freezing time
       // decouples the assertion from how long startup itself takes.
-      await page.clock.install();
-      await page.clock.pauseAt(new Date());
+      // Installed at a known instant and frozen a minute after it, so
+      // pauseAt is never behind the browser's ticking clock (#11664).
+      const start = Date.now();
+      await page.clock.install({ time: start });
+      await page.clock.pauseAt(start + 60_000);
       await seedAdminSession(page);
       // A gate the test controls, not a wall-clock delay: holding the route
       // open until the test itself releases it makes the "Checking"-to-
