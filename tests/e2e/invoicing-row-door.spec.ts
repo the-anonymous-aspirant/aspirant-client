@@ -490,3 +490,66 @@ test.describe('#11664 the phone menu button has a bar behind it', () => {
     await expect(bar(page)).toHaveCount(0);
   });
 });
+
+// system_3 #11627 (design spec from #11622, §3.165): Transactions declares
+// "Who and what for" its identity column and Amount its figure, so where that
+// column cannot keep 24ch the table shows the design system's card list; and
+// Clients' last column has a fixed 5.5rem, so its Edit stays in the list.
+// Widths are viewports with the sidebar open (200px).
+test.describe('#11627 Transactions and Clients between the phone and the wide screen', () => {
+  test.skip(({ isMobile }) => isMobile, 'viewport widths over 640px; a phone has the tab\'s own cards');
+
+  const txTable = (page: Page) => page.locator('[data-test="payments-panel"] table').first();
+  const isCards = (table: Locator) => table.evaluate((el) => el.classList.contains('data-table--cards'));
+  const noSidewaysScroll = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+
+  test('at 1024 Transactions shows cards, each with its controls and its door', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await open(page);
+    await expect.poll(() => isCards(txTable(page))).toBe(true);
+    const payment = page.locator('[data-test="payment-row"][data-txn="PP-P1"]');
+    // "Who and what for" leads the card, Amount top-right.
+    await expect(payment.locator('.data-table__card-cell--identity')).toContainText('Galerie Nord Esempio');
+    await expect(payment.locator('.data-table__card-cell--figure')).toContainText('1,200.00');
+    await expect(payment.locator('[data-test="payment-select"]')).toBeVisible();
+    await expect(payment.locator('[data-test="payment-category"]')).toBeVisible();
+    await expect(payment.locator('[data-test="row-generate"]')).toBeVisible();
+    await expect(payment.locator('[data-test="payment-edit"]')).toBeVisible();
+    const expense = page.locator('[data-test="expense-row"][data-txn="N26-E1"]');
+    await expect(expense.locator('[data-test="expense-receipt"]')).toBeVisible();
+    await expect(expense.locator('[data-test="expense-edit"]')).toBeVisible();
+    expect(await noSidewaysScroll(page)).toBe(true);
+  });
+
+  for (const width of [1280, 1440]) {
+    test(`at ${width} Transactions shows the table, "Who and what for" at least 24ch`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await open(page);
+      await expect.poll(() => isCards(txTable(page))).toBe(false);
+      const who = page.locator('[data-test="payment-row"][data-txn="PP-P1"] td.data-table__td--identity');
+      const fit = await who.evaluate((el) => ({ width: el.getBoundingClientRect().width, floor: parseFloat(getComputedStyle(el).minWidth) }));
+      console.log(`#11627 at ${width}px: "Who and what for" ${fit.width.toFixed(1)}px, 24ch ${fit.floor.toFixed(1)}px`);
+      expect(fit.floor).toBeGreaterThan(100);
+      expect(fit.width).toBeGreaterThanOrEqual(fit.floor - 0.5);
+      expect(await noSidewaysScroll(page)).toBe(true);
+    });
+  }
+
+  for (const width of [700, 1024]) {
+    test(`at ${width} every client's Edit is inside the list's box`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await open(page, 'Clients');
+      const edit = page.locator('[data-test="client-edit-1"]');
+      await expect(edit).toBeVisible();
+      const r = await edit.evaluate((el) => {
+        const box = el.closest('.data-table__scroll') || el.closest('table')!.parentElement!;
+        const b = el.getBoundingClientRect();
+        const x = box.getBoundingClientRect();
+        return { right: b.right, boxRight: x.right, left: b.left, boxLeft: x.left };
+      });
+      expect(r.right, `Edit ends at ${r.right.toFixed(1)}, the box at ${r.boxRight.toFixed(1)}`).toBeLessThanOrEqual(r.boxRight + 0.5);
+      expect(r.left).toBeGreaterThanOrEqual(r.boxLeft - 0.5);
+      expect(await noSidewaysScroll(page)).toBe(true);
+    });
+  }
+});
