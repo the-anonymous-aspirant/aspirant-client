@@ -889,7 +889,10 @@
         // earlier: { removed, deleted } (server PR 196).
         paypalExpensePrior: { removed: 0, deleted: 0 },
         columns: [
-          { key: 'select', label: '', sortable: false, width: '2.5rem' },
+          // The row's checkbox (§3.132 Decision 6, system_3 #11748): in the
+          // design system's card it leads the first line, before "Who and
+          // what for", as the tab's own phone card puts it.
+          { key: 'select', label: '', sortable: false, width: '2.5rem', role: 'select' },
           // Every column has a width and the layout is fixed, so the columns
           // line up from one month's table to the next (§3.145 Decision 6).
           // "Who and what for" takes what the others leave.
