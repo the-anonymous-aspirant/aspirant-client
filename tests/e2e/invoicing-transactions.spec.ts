@@ -513,9 +513,10 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     await openAllMonths(page);
     await expect(row(page, 'N26-E1').locator('[data-test="payment-select"]')).toHaveCount(1);
     await expect(row(page, 'N26-E1').locator('[data-test="payment-select-gutter"]')).toHaveCount(0);
-    // Six rows: N26-P1 is on an issued invoice.
+    // Six rows: N26-P1 is on an issued invoice. Since system_3 #11020
+    // (design ack c73490) the label names what it leaves out.
     const viewport = page.viewportSize();
-    if (viewport && viewport.width < 640) await expect(page.locator('[data-test="select-all-shown"]')).toContainText('Select all 6 shown');
+    if (viewport && viewport.width < 640) await expect(page.locator('[data-test="select-all-shown"]')).toContainText('Select all 6 of 7 shown · 1 invoiced');
     await page.locator('[data-test="select-all-shown"]').getByRole('checkbox').check();
     await expect(page.locator('[data-test="bulk-category"]')).toContainText(setCategoryText(6));
   });
@@ -582,8 +583,10 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
       expenses: [],
     }));
     const line = (txn: string) => page.locator(`.payment-card[data-txn="${txn}"] [data-test="row-category-client"]`);
-    await expect(line('U-1')).toHaveText('Uncategorised\u00a0· no client');
-    await expect(line('O-2')).toHaveText('Other\u00a0· no client');
+    // With no invoice and no Generate button, the invoice state ends the
+    // line (system_3 #11020, design ruling c73504 item 1).
+    await expect(line('U-1')).toHaveText('Uncategorised\u00a0· no client\u00a0· Not invoiced');
+    await expect(line('O-2')).toHaveText('Other\u00a0· no client\u00a0· No invoice needed');
     // The probe sits on the card, not inside the muted line: the muted token
     // is relative to the ink it inherits, so inside the line it would read
     // muted twice over.
