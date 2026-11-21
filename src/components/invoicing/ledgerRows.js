@@ -43,6 +43,16 @@ export function sourceLabel(row) {
 // nothing. The server names only the live invoice, never a cancelled one
 // (aspirant-server `invoice`, system_3 #10666); a list without the field
 // reads as no invoice.
+// A payment's invoice state, for the Invoice filter and the row's state line
+// (system_3 #11020, UX walk AM3): 'issued', 'draft' or 'none'. Every payment
+// has one, so a row with no invoice says so instead of saying nothing (D2).
+export function invoiceState(payment) {
+  const inv = payment && payment.invoice;
+  if (inv && inv.status === 'issued') return 'issued';
+  if (inv && inv.status === 'draft') return 'draft';
+  return 'none';
+}
+
 export function invoiceLabel(payment) {
   const inv = payment && payment.invoice;
   if (!inv) return '';
