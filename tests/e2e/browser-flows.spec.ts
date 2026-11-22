@@ -203,4 +203,52 @@ test.describe('/admin/browser-flows — native matrix', () => {
     await expect(page.locator('[data-test="browser-flows-legend"]')).toHaveCount(0);
     await expect(page.locator('[data-test="browser-flows-matrix"]')).toHaveCount(0);
   });
+
+  // system_3 #11846: runs read oldest-left, newest-right; the card used to
+  // open scrolled to its left edge, so on a narrow card the newest run sat
+  // past the right edge, unreachable without scrolling. The card now opens
+  // scrolled to its right end.
+  for (const [width, height] of [[390, 844], [768, 1024]] as const) {
+    test(`at ${width}x${height}: the newest run is visible on the first screen, no scroll`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      seedBrowserFlows([FLOWS[0]]);
+      seedBrowserFlowRuns([RUNS[0], RUNS[1]]); // run-a1 (oldest), run-a2 (newest)
+      await page.goto('/admin/browser-flows');
+      await dismissMobileSidebarIfPresent(page);
+
+      const card = page.locator('[data-test="browser-flows-matrix"]');
+      const newest = page.locator('[data-test="cell-flow-a-run-a2"]');
+      await expect(newest).toBeVisible();
+
+      const overflowed = await card.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+      expect(overflowed, 'fixture must actually overflow the card, or this test proves nothing').toBe(true);
+
+      const [cellRect, cardRect] = await Promise.all([
+        newest.evaluate((el) => el.getBoundingClientRect().right),
+        card.evaluate((el) => el.getBoundingClientRect().right),
+      ]);
+      expect(cellRect, 'newest run cell must end at or before the card\'s right edge').toBeLessThanOrEqual(cardRect + 0.5);
+
+      // The page itself still does not scroll sideways.
+      const pageOverflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+      expect(pageOverflows).toBe(false);
+    });
+  }
+
+  test('at 1440 the page is unchanged: the card does not overflow, scrollLeft stays 0', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    seedBrowserFlows([FLOWS[0]]);
+    seedBrowserFlowRuns([RUNS[0], RUNS[1]]);
+    await page.goto('/admin/browser-flows');
+    await dismissMobileSidebarIfPresent(page);
+
+    const card = page.locator('[data-test="browser-flows-matrix"]');
+    await expect(page.locator('[data-test="cell-flow-a-run-a2"]')).toBeVisible();
+    const { scrollLeft, overflowed } = await card.evaluate((el) => ({
+      scrollLeft: el.scrollLeft,
+      overflowed: el.scrollWidth > el.clientWidth + 1,
+    }));
+    expect(overflowed).toBe(false);
+    expect(scrollLeft).toBe(0);
+  });
 });
