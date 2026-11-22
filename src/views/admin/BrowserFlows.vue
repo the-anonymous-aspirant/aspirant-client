@@ -36,7 +36,7 @@
       No flows registered yet. POST one to <code>/api/browser-flows</code> to get started.
     </div>
 
-    <div v-else class="matrix-card" data-test="browser-flows-matrix">
+    <div v-else class="matrix-card" data-test="browser-flows-matrix" ref="matrixCard">
       <table>
         <thead>
           <tr>
@@ -211,6 +211,16 @@
         );
         this.runsByFlow = runsByFlow;
         this.loading = false;
+        this.scrollGridToLatest();
+      },
+      // Runs read oldest-left, newest-right (`rows` computed above); open the
+      // card scrolled to its right end so the newest run is on first screen
+      // instead of past the fold (system_3 #11846).
+      scrollGridToLatest() {
+        this.$nextTick(() => {
+          const el = this.$refs.matrixCard;
+          if (el) el.scrollLeft = el.scrollWidth;
+        });
       },
       async onTrigger(flowId) {
         if (this.acting.has(flowId)) return;
