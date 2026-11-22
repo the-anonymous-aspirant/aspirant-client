@@ -513,9 +513,10 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     await openAllMonths(page);
     await expect(row(page, 'N26-E1').locator('[data-test="payment-select"]')).toHaveCount(1);
     await expect(row(page, 'N26-E1').locator('[data-test="payment-select-gutter"]')).toHaveCount(0);
-    // Six rows: N26-P1 is on an issued invoice.
+    // Six rows: N26-P1 is on an issued invoice. Since system_3 #11020
+    // (design ack c73490) the label names what it leaves out.
     const viewport = page.viewportSize();
-    if (viewport && viewport.width < 640) await expect(page.locator('[data-test="select-all-shown"]')).toContainText('Select all 6 shown');
+    if (viewport && viewport.width < 640) await expect(page.locator('[data-test="select-all-shown"]')).toContainText('Select all 6 of 7 shown · 1 invoiced');
     await page.locator('[data-test="select-all-shown"]').getByRole('checkbox').check();
     await expect(page.locator('[data-test="bulk-category"]')).toContainText(setCategoryText(6));
   });
@@ -582,8 +583,10 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
       expenses: [],
     }));
     const line = (txn: string) => page.locator(`.payment-card[data-txn="${txn}"] [data-test="row-category-client"]`);
-    await expect(line('U-1')).toHaveText('Uncategorised\u00a0· no client');
-    await expect(line('O-2')).toHaveText('Other\u00a0· no client');
+    // With no invoice and no Generate button, the invoice state ends the
+    // line (system_3 #11020, design ruling c73504 item 1).
+    await expect(line('U-1')).toHaveText('Uncategorised\u00a0· no client\u00a0· Not invoiced');
+    await expect(line('O-2')).toHaveText('Other\u00a0· no client\u00a0· No invoice needed');
     // The probe sits on the card, not inside the muted line: the muted token
     // is relative to the ink it inherits, so inside the line it would read
     // muted twice over.
@@ -881,4 +884,139 @@ test('#11019-A2 at 640px and up the ways in are not folded', async ({ page }) =>
   await expect(page.locator('[data-test="ways-in-fold"]')).toHaveJSProperty('tagName', 'DIV');
   await expect(page.locator('[data-test="ways-in-summary"]')).toHaveCount(0);
   for (const [id] of WAYS_IN) await expect(page.locator(`[data-test="${id}"]`)).toBeVisible();
+});
+
+// system_3 #11020 (UX walk AM3; D2; design ack c73490): "which payments have
+// I not invoiced yet?" Every payment states its invoice in words; each state
+// is a filter with its count; Select all says what it selects and out of how
+// many. invoiceFake adds to mixedFake a Paid-work payment with no invoice
+// (PP-P5), an Uncategorised one (M-p6) and a second issued one (N26-P7):
+// Not invoiced PP-P5, M-p6; Draft PP-P2 (Paid work); Invoiced N26-P1, N26-P7;
+// No invoice needed M-p3 (Gift), PP-P4 (Other).
+const invoiceFake = () => {
+  const f = mixedFake();
+  f.payments.push(
+    pay({
+      id: 5, transaction_id: 'PP-P5', source: 'paypal', entry: 'import', paid_on: '2026-10-20T00:00:00Z',
+      created_at: '2026-10-21T09:00:00Z', sender_name: 'Atelier Esempio', note: 'Poster series', category: 'paid_work', client_id: 1, gross_cents: 30000,
+    }),
+    pay({
+      id: 6, transaction_id: 'M-p6', source: 'manual', entry: 'manual', method: 'cash', paid_on: '2026-10-21T00:00:00Z',
+      created_at: '2026-10-21T18:00:00Z', sender_name: 'Nachbar Esempio', note: 'Cash', category: 'uncategorised', gross_cents: 4000,
+    }),
+    pay({
+      id: 7, transaction_id: 'N26-P7', source: 'n26', entry: 'import', paid_on: '2026-08-20T00:00:00Z',
+      created_at: '2026-08-21T09:00:00Z', sender_name: 'Galerie Nord', note: 'Mural, August', category: 'paid_work', client_id: 1,
+      gross_cents: 90000, on_invoice: true, on_issued_invoice: true, invoice: { id: 3, status: 'issued', invoice_number: '2026-005' },
+    }),
+  );
+  return f;
+};
+const invoiceFilter = (page: Page) => page.locator('[data-test="invoice-filter"]');
+async function invoiceFilterOptions(page: Page): Promise<string[]> {
+  await invoiceFilter(page).click();
+  const labels = await page.getByRole('option').allTextContents();
+  await page.keyboard.press('Escape');
+  return labels.map((l) => l.trim());
+}
+async function pickInvoiceFilter(page: Page, label: string): Promise<void> {
+  await invoiceFilter(page).click();
+  await page.getByRole('option', { name: label, exact: true }).click();
+}
+
+test.describe('#11020 Transactions says which payments are not invoiced', () => {
+  for (const [w, h] of [[390, 844], [1440, 900]] as const) {
+    test(`at ${w}px every payment states its invoice in words, and an expense none`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: h });
+      await open(page, invoiceFake());
+      await openAllMonths(page);
+      const state = (txn: string) => row(page, txn).locator('[data-test="row-invoice"], [data-test="row-invoice-state"]');
+      await expect(state('N26-P1')).toHaveText('Invoice 2026-014');
+      await expect(state('PP-P2')).toHaveText('Draft');
+      await expect(state('PP-P5')).toHaveText('Not invoiced');
+      await expect(state('M-p6')).toHaveText('Not invoiced');
+      await expect(state('M-p3')).toHaveText('No invoice needed');
+      await expect(state('PP-P4')).toHaveText('No invoice needed');
+      // "Not invoiced" is the open item, in body ink; "No invoice needed" is muted.
+      const ink = (txn: string) => row(page, txn).locator('[data-test="row-invoice-state"]').evaluate((el) => getComputedStyle(el).color);
+      const body = await page.evaluate(() => getComputedStyle(document.body).color);
+      expect(await ink('PP-P5')).toBe(body);
+      expect(await ink('M-p3')).not.toBe(body);
+      for (const txn of ['M-e2', 'N26-E1', 'N26-E3']) await expect(row(page, txn).locator('[data-test="row-invoice-state"]')).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  }
+
+  test('each invoice state is a filter with its count, every month counted, and shows exactly those payments', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open(page, invoiceFake());
+    // Counted across every month, folded or not: only October is open here.
+    expect(await invoiceFilterOptions(page)).toEqual(['All invoice states', 'Not invoiced (2)', 'Draft (1)', 'Invoiced (2)', 'No invoice needed (2)']);
+    await pickInvoiceFilter(page, 'Not invoiced (2)');
+    await expect.poll(() => txns(page)).toEqual(['M-p6', 'PP-P5']);
+    await pickInvoiceFilter(page, 'No invoice needed (2)');
+    await expect.poll(() => txns(page)).toEqual(['M-p3', 'PP-P4']);
+    // The counts follow the category filter, and a zero is said.
+    await pickInvoiceFilter(page, 'All invoice states');
+    await pickCategory(page, 'Gift', 'In');
+    expect(await invoiceFilterOptions(page)).toEqual(['All invoice states', 'Not invoiced (0)', 'Draft (0)', 'Invoiced (0)', 'No invoice needed (1)']);
+  });
+
+  test('money out has no invoice, so the filter is not offered under Out and resets', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open(page, invoiceFake());
+    await pickInvoiceFilter(page, 'Draft (1)');
+    await expect.poll(() => txns(page)).toEqual(['PP-P2']);
+    await page.locator('[data-test="direction-filter"]').getByText('Out', { exact: true }).click();
+    await expect(invoiceFilter(page)).toHaveCount(0);
+    await expect.poll(() => txns(page)).toEqual(['N26-E1', 'M-e2', 'N26-E3']);
+    await page.locator('[data-test="direction-filter"]').getByText('All', { exact: true }).click();
+    await expect(invoiceFilter(page)).toContainText('All invoice states');
+  });
+
+  test('Select all says what it selects and out of how many, on one line, in every case', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await open(page, invoiceFake());
+    const all = page.locator('[data-test="select-all-shown"]');
+    const note = page.locator('[data-test="select-all-note"]');
+    // Only October is open: five rows, one invoiced (the singular).
+    await expect(all).toContainText(/^Select all 4 of 5 shown\s· 1 invoiced$/);
+    await expect(note).toHaveCount(0);
+    // Every month open: two invoiced (the plural reads the same).
+    await openAllMonths(page);
+    await expect(all).toContainText(/^Select all 8 of 10 shown\s· 2 invoiced$/);
+    // Every shown row selectable.
+    await pickInvoiceFilter(page, 'Not invoiced (2)');
+    await expect(all).toContainText(/^Select all 2 shown$/);
+    await expect(note).toHaveCount(0);
+    // None selectable: no checkbox, and the line says why.
+    await pickInvoiceFilter(page, 'Invoiced (2)');
+    await expect(all.getByRole('checkbox')).toHaveCount(0);
+    await expect(note).toHaveText('All 2 shown are invoiced, so none can be selected.');
+  });
+
+  test('at 390 a card with no Generate button ends its category line with its state', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open(page, invoiceFake());
+    await openAllMonths(page);
+    await expect(row(page, 'M-p6').locator('[data-test="row-category-client"]')).toHaveText(/^Uncategorised\s· no client\s· Not invoiced$/);
+    await expect(row(page, 'M-p3').locator('[data-test="row-category-client"]')).toHaveText(/^Gift\s· no client\s· No invoice needed$/);
+    // The Paid-work card's state shares its Generate line instead.
+    await expect(row(page, 'PP-P5').locator('.card-generate-row [data-test="row-invoice-state"]')).toHaveText('Not invoiced');
+    await expect(row(page, 'PP-P5').locator('[data-test="row-category-client"] [data-test="row-invoice-state"]')).toHaveCount(0);
+  });
+
+  test('at 390x844 the Invoice filter is on the first screen, under the strip and the category', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open(page, invoiceFake());
+    const inv = (await invoiceFilter(page).boundingBox())!;
+    const cat = (await page.locator('[data-test="category-filter"]').boundingBox())!;
+    const dir = (await page.locator('[data-test="direction-filter"]').boundingBox())!;
+    const card = (await page.locator('[data-test="payment-row"], [data-test="expense-row"]').first().boundingBox())!;
+    console.log(`#11020 390: direction y ${dir.y}, category y ${cat.y}, invoice filter y ${inv.y} h ${inv.height}, first card y ${card.y}`);
+    expect(Math.abs(cat.y - dir.y), 'category stays beside the strip').toBeLessThan(dir.height);
+    expect(inv.y).toBeGreaterThanOrEqual(cat.y + cat.height - 1);
+    expect(inv.y + inv.height).toBeLessThanOrEqual(844);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
 });

@@ -249,8 +249,10 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
       expect(buttonBottom, `the second card's Generate invoice ends at ${buttonBottom.toFixed(1)}px`).toBeLessThanOrEqual(844);
       expect(cardBottom, `the second card ends at ${cardBottom.toFixed(1)}px`).toBeLessThanOrEqual(844);
 
-      // Where the room came from: 12px, not 16px, at each of the four gaps
+      // Where the room came from: 4px, not 16px, at each of the four gaps
       // above the list, and 8px, not 16px, above and below the Issuer line.
+      // c71509 on #11019 set the gaps at 12px; c73520 on #11020 took them to
+      // 4px so the Invoice filter's line fits the same budget.
       const head = await boxOf(page, '.page-head');
       const card = await boxOf(page, '[data-test="profile-card"]');
       const line = await boxOf(page, '[data-test="profile-edit"]');
@@ -258,7 +260,7 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
       const fold = await boxOf(page, '[data-test="ways-in-summary"]');
       const filters = await boxOf(page, '[data-test="category-filter"]');
       const gaps = { 'title to Issuer': card.top - head.bottom, 'Issuer to tabs': tabs.top - card.bottom, 'tabs to Add or import': fold.top - tabs.bottom, 'Add or import to the filters': filters.top - fold.bottom };
-      for (const [name, gap] of Object.entries(gaps)) expect(Math.abs(gap - 12), `${name}: ${gap.toFixed(1)}px`).toBeLessThanOrEqual(0.5);
+      for (const [name, gap] of Object.entries(gaps)) expect(Math.abs(gap - 4), `${name}: ${gap.toFixed(1)}px`).toBeLessThanOrEqual(0.5);
       // 2px border + 8px + the 44px line + 8px + 2px.
       expect(Math.abs(card.height - 64), `Issuer card ${card.height.toFixed(1)}px`).toBeLessThanOrEqual(0.5);
       // What the trim must not take (c71509): the two 44px targets and the
@@ -267,6 +269,30 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
       expect(fold.height, '"Add or import" is a 44px target').toBeGreaterThanOrEqual(44);
       expect(Math.round(card.left), 'the 16px page inset').toBe(16);
       expect(await noSideScroll(page)).toBe(true);
+    });
+  }
+
+  // Under the tabs, on a phone (design_agent c73534 on system_3 #11020): a
+  // tab whose first block draws its own edge (Transactions' "Add or import",
+  // Clients' "Add client") starts 4px under the strip, as c73520 set. A tab
+  // whose first block is plain text (Invoices' "Work done in", the Book's
+  // "Counting with" sentence) starts 8px under it, so the text does not hang
+  // off the strip. Pinned so a later trim cannot take the 8px back.
+  for (const theme of ['light', 'dark'] as const) {
+    test(`on a 390×844 phone each tab's first block sits 4px under the tabs, 8px where it is plain text, ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await open(page, theme);
+      const want: Record<string, number> = { Transactions: 4, Invoices: 8, Book: 8, Clients: 4 };
+      for (const [name, gap] of Object.entries(want)) {
+        await page.getByRole('tab', { name, exact: true }).click();
+        await expect(page.getByRole('tab', { name, exact: true })).toHaveAttribute('aria-selected', 'true');
+        const measured = await page.locator('.tabs').evaluate((tabs) => {
+          const panel = tabs.nextElementSibling as HTMLElement;
+          const first = [...panel.children].find((el) => el.getBoundingClientRect().height > 2 && getComputedStyle(el).position !== 'absolute');
+          return first!.getBoundingClientRect().top - tabs.getBoundingClientRect().bottom;
+        });
+        expect(Math.abs(measured - gap), `${name}: ${measured.toFixed(1)}px under the tabs`).toBeLessThanOrEqual(0.5);
+      }
     });
   }
 
