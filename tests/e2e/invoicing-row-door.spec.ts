@@ -449,9 +449,14 @@ test.describe('#11664 the phone menu button has a bar behind it', () => {
     await open(page);
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
     expect(await bar(page).evaluate((el) => getComputedStyle(el).borderBottomColor)).toBe('rgba(0, 0, 0, 0)');
-    const withBar = await page.screenshot({ clip: { x: 0, y: 0, width: 390, height: 120 } });
+    // `animations: 'disabled'` ends every running transition before each
+    // capture. Without it the two captures caught first paint's colour
+    // transitions (a card's border, under the bar's foot) at two moments and
+    // differed by 1-7 per channel below the bar, in most runs (system_3 #12112).
+    const shot = { clip: { x: 0, y: 0, width: 390, height: 120 }, animations: 'disabled' } as const;
+    const withBar = await page.screenshot(shot);
     await bar(page).evaluate((el) => ((el as HTMLElement).style.display = 'none'));
-    const withoutBar = await page.screenshot({ clip: { x: 0, y: 0, width: 390, height: 120 } });
+    const withoutBar = await page.screenshot(shot);
     expect(withBar.equals(withoutBar)).toBe(true);
   });
 
