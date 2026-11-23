@@ -16,7 +16,7 @@ interface Fake {
 }
 const newFake = (): Fake => ({ requests: [] });
 
-const CLIENT = { id: 1, name: 'Galerie Nord', address: 'Nordweg 2', email: '', paypal_email: 'gallery@example.test', phone: '', instagram_url: '', telegram_url: '', notes: '', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' };
+const CLIENT = { id: 1, name: 'Galerie Nord', address: 'Nordweg 2', email: '', paypal_email: 'kasse@galerie-nord.example', phone: '', instagram_url: '', telegram_url: '', notes: '', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' };
 const PAYMENTS = [
   { id: 1, kind: 'incoming', entry: 'manual', source: 'manual', transaction_id: 'M-1', method: 'bank_transfer', reference: '', paid_on: '2026-07-14T00:00:00Z', currency: 'EUR', gross_cents: 35000, sender_name: 'Galerie Nord', sender_email: '', note: 'Wandbild Juli', category: 'paid_work', client_id: 1, on_invoice: false },
   { id: 2, kind: 'incoming', entry: 'manual', source: 'manual', transaction_id: 'M-2', method: 'bank_transfer', reference: '', paid_on: '2026-07-15T00:00:00Z', currency: 'EUR', gross_cents: 5000, sender_name: 'Aunt Ada', sender_email: '', note: 'Birthday', category: 'gift', client_id: null, on_invoice: false },
@@ -134,6 +134,32 @@ test.describe('#11669 the client editor asks before an exit throws away an edit'
     expect(writes(fake)).toEqual([]);
   });
 
+  // #12121: the server stores the PayPal email trimmed and lower-cased, so
+  // the same address in other case is no edit (§3.166 Decision 1).
+  test('the PayPal email retyped in other case is no edit: Esc closes without asking', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await openEdit(page);
+    const paypal = editor(page).getByLabel('PayPal email');
+    await expect(paypal).toHaveValue('kasse@galerie-nord.example');
+    await paypal.fill(' Kasse@Galerie-Nord.EXAMPLE ');
+    await page.keyboard.press('Escape');
+    await expect(ask(page)).toHaveCount(0);
+    await expect(editor(page)).toHaveCount(0);
+    expect(writes(fake)).toEqual([]);
+  });
+
+  test('a different PayPal email still asks on Esc', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await openEdit(page);
+    await editor(page).getByLabel('PayPal email').fill('kasse2@galerie-nord.example');
+    await page.keyboard.press('Escape');
+    await expect(ask(page)).toBeVisible();
+    await expect(editor(page)).toBeVisible();
+    expect(writes(fake)).toEqual([]);
+  });
+
   test('a new client with a typed name asks; while Save runs no exit closes or asks', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
@@ -149,26 +175,6 @@ test.describe('#11669 the client editor asks before an exit throws away an edit'
     await expect(ask(page)).toHaveCount(0);
     fake.release!();
     await expect(editor(page)).toHaveCount(0);
-  });
-
-  test('PayPal email retypes with different case do not ask on Esc', async ({ page }) => {
-    const fake = newFake();
-    await open(page, fake);
-    await openEdit(page);
-    const paypalInput = editor(page).getByLabel('PayPal email');
-    // The client's PayPal email is 'gallery@example.test'; retype with capital G
-    await paypalInput.fill('Gallery@example.test');
-    // Esc should close without asking because only the case changed,
-    // which the server would normalize anyway.
-    await page.keyboard.press('Escape');
-    await expect(editor(page)).toHaveCount(0);
-    await expect(ask(page)).toHaveCount(0);
-    // But a truly different address should still ask
-    await openEdit(page);
-    await paypalInput.fill('other@example.test');
-    await page.keyboard.press('Escape');
-    await expect(ask(page)).toBeVisible();
-    expect(writes(fake)).toEqual([]);
   });
 });
 
