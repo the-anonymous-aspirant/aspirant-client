@@ -33,22 +33,37 @@
         <AspInput v-model="form.payee" label="Paid to (optional)" data-test="expense-payee" />
       </template>
 
-      <div v-if="!addingCategory" class="manual-form__full full-select">
-        <AspSelect v-model="form.category" searchable :options="categoryOptions" label="Category" data-test="expense-category" />
-        <button type="button" class="add-category-link" data-test="expense-add-category-link" @click="startAddingCategory">
-          + Add a category
-        </button>
-      </div>
-      <div v-else class="manual-form__full add-category">
-        <AspInput v-model="newCategoryName" label="New category name" data-test="expense-new-category-name" />
-        <div class="add-category__actions">
-          <AspButton size="sm" variant="secondary" type="button" data-test="expense-add-category-cancel" @click="addingCategory = false">
-            Cancel
-          </AspButton>
-          <AspButton size="sm" :loading="savingCategory" type="button" data-test="expense-add-category-save" @click="saveCategory">
-            Save category
-          </AspButton>
-        </div>
+      <!-- A new category is typed in the list and saved with the expense;
+           one ze added is removed or restored under the field (§3.161
+           Decisions 1-4, system_3 #11580). Under the field, in this order:
+           the action when it can act, one muted line, a refusal's reason. -->
+      <div class="manual-form__full full-select category-field">
+        <AspSelect
+          v-model="form.category"
+          searchable
+          addable
+          search-placeholder="Type to filter or add"
+          :options="categoryOptions"
+          label="Category"
+          data-test="expense-category"
+          @add="addCategory"
+        />
+        <AspButton
+          v-if="categoryUnder.action"
+          variant="ghost"
+          size="sm"
+          type="button"
+          class="category-field__action"
+          :loading="categoryBusy"
+          :disabled="saving"
+          :aria-label="categoryUnder.action.aria"
+          :data-kind="categoryUnder.action.kind"
+          data-test="expense-category-action"
+          @click="runCategoryAction(categoryUnder.action)"
+        >
+          {{ categoryUnder.action.label }}
+        </AspButton>
+        <p class="manual-form__hint" data-test="expense-category-hint">{{ categoryUnder.line }}</p>
         <p v-if="categoryError" class="manual-form__error" role="alert" data-test="expense-category-error">{{ categoryError }}</p>
       </div>
 
@@ -132,10 +147,10 @@
   import UnsentAsk from './UnsentAsk.vue';
   import { unsentGuard } from './unsentGuard.js';
   import { historyLines } from './auditHistory.js';
+  import { categoryState, findCategory, namesWithOwn } from './expenseCategories.js';
   import {
     SOURCE_LABELS,
     centsFromEuros,
-    createExpenseCategory,
     createManualExpense,
     decimalFromMinor,
     errorOf,
@@ -144,8 +159,16 @@
     listAuditEvents,
     patchExpense,
     removeExpense,
+    removeExpenseCategory,
+    restoreExpenseCategory,
     uploadExpenseReceipt,
   } from './api.js';
+
+  // A refusal about the category itself shows under the field; any other
+  // under the form (§3.161 Decision 2). invalid_category: a typed name that
+  // cannot be a category; removed_category: a category removed since the list
+  // was loaded (aspirant-server invoicing_expense_categories.go).
+  const CATEGORY_REFUSALS = ['invalid_category', 'removed_category'];
 
   // A receipt picked on a new entry is checked at the pick, from the file
   // itself, so a refusal comes before the expense is created (system_3
@@ -195,15 +218,24 @@
       categories: { type: Array, default: () => [] },
       expense: { type: Object, default: null },
     },
-    emits: ['update:open', 'changed', 'category-added'],
+    // category-updated: a category Remove or Restore changed, as the server
+    // now has it, for the page's list. categories-changed: a Save added or
+    // restored a category, so the page reloads its list.
+    emits: ['update:open', 'changed', 'category-updated', 'categories-changed'],
     data() {
       return {
         form: blankForm(),
         saving: false,
         error: '',
-        addingCategory: false,
-        newCategoryName: '',
-        savingCategory: false,
+        // A name chosen from the select's add row: in the field and in its
+        // options until it is saved or dropped (§3.161 Decision 2).
+        added: '',
+        // A category removed here while the expense is not saved with it: the
+        // field returned to `justRemovedField`, and until it changes the
+        // action offers the removed one back (§3.161 Decision 4).
+        justRemoved: '',
+        justRemovedField: '',
+        categoryBusy: false,
         categoryError: '',
         history: [],
         historyLoaded: false,
@@ -236,7 +268,7 @@
       // dialog: a close between the create and the upload would leave an
       // upload running that nobody sees fail.
       unsentBusy() {
-        return this.saving || this.savingCategory || this.removing;
+        return this.saving || this.categoryBusy || this.removing;
       },
       sourceName() {
         if (!this.editing) return '';
@@ -247,13 +279,33 @@
       bankPayee() {
         return this.imported ? this.expense.reference || '' : '';
       },
-      // Zir categories, plus the row's own while the list is still loading
-      // or no longer holds it, so the select always shows what is stored.
+      // The category the expense is saved with; '' on a new expense.
+      savedCategory() {
+        return this.editing ? this.expense.category || 'other' : '';
+      },
+      // Zir live categories (§3.161 Decision 5), then the one the expense is
+      // saved with when it is not among them (removed, or the list is still
+      // loading), then the field's own value: a name just added, or one the
+      // list does not hold yet. The select always shows what is stored.
       categoryOptions() {
-        const options = this.categories.map((c) => ({ value: c.name, label: c.name }));
+        const names = namesWithOwn(this.categories, this.savedCategory);
         const current = this.form.category;
-        if (current && !options.some((o) => o.value === current)) options.push({ value: current, label: current });
-        return options;
+        if (current && !names.includes(current)) names.push(current);
+        return names.map((n) => ({ value: n, label: n }));
+      },
+      // The action and the muted line under the field (expenseCategories.js).
+      categoryUnder() {
+        return categoryState({
+          field: this.form.category,
+          saved: this.savedCategory,
+          categories: this.categories,
+          added: this.added,
+          justRemoved: this.form.category === this.justRemovedField ? this.justRemoved : '',
+        });
+      },
+      // Save sends the name as a new category only while the field holds it.
+      sendsNewCategory() {
+        return !!this.added && this.form.category === this.added;
       },
       today() {
         const d = new Date();
@@ -261,12 +313,21 @@
       },
     },
     watch: {
+      // Choosing another category drops a name added here, and ends the
+      // offer to restore one just removed; a reason under the field was
+      // about the value it held.
+      'form.category'(value) {
+        if (this.added && value !== this.added) this.added = '';
+        if (this.justRemoved && value !== this.justRemovedField) this.justRemoved = '';
+        this.categoryError = '';
+      },
       open(isOpen) {
         if (isOpen) {
           this.form = this.expense ? formFrom(this.expense) : blankForm();
           this.error = '';
-          this.addingCategory = false;
-          this.newCategoryName = '';
+          this.added = '';
+          this.justRemoved = '';
+          this.justRemovedField = '';
           this.categoryError = '';
           this.confirmingRemove = false;
           this.clearReceipt();
@@ -292,29 +353,51 @@
           this.historyLoaded = true;
         }
       },
-      startAddingCategory() {
-        this.addingCategory = true;
-        this.newCategoryName = '';
-        this.categoryError = '';
+      // The add row hands over the trimmed text; nothing is sent until Save.
+      addCategory(name) {
+        this.added = name;
+        this.form.category = name;
       },
-      async saveCategory() {
-        const name = this.newCategoryName.trim();
-        if (!name) {
-          this.categoryError = 'Enter a name for the category.';
-          return;
-        }
-        this.savingCategory = true;
+      // Remove and Restore act at once, with no confirmation, and Cancel does
+      // not undo them; neither saves the expense or closes the dialog. A
+      // failure says the server's reason under the field and changes nothing
+      // (§3.161 Decision 4).
+      async runCategoryAction(action) {
+        const category = findCategory(this.categories, action.name);
+        if (!category) return;
+        this.categoryBusy = true;
         this.categoryError = '';
         try {
-          const category = await createExpenseCategory({ name });
-          this.$emit('category-added', category);
-          this.form.category = category.name;
-          this.addingCategory = false;
+          if (action.kind === 'remove') {
+            this.$emit('category-updated', await removeExpenseCategory(category.id));
+            // Not saved with it: the field goes back to the saved category
+            // (Other on a new expense), and the action offers the removed one
+            // back until the field changes, so a second tap undoes the remove
+            // and never removes a different category.
+            if (category.name !== this.savedCategory) {
+              this.justRemoved = category.name;
+              this.justRemovedField = this.savedCategory || 'other';
+              this.form.category = this.justRemovedField;
+            }
+          } else {
+            this.$emit('category-updated', await restoreExpenseCategory(category.id));
+            if (this.justRemoved === category.name) {
+              this.justRemoved = '';
+              this.form.category = category.name;
+            }
+          }
         } catch (err) {
           this.categoryError = errorOf(err).message;
         } finally {
-          this.savingCategory = false;
+          this.categoryBusy = false;
         }
+      },
+      // A refusal of the category goes under its field, the rest under the
+      // form.
+      showRefusal(err) {
+        const { code, message } = errorOf(err);
+        if (CATEGORY_REFUSALS.includes(code)) this.categoryError = message;
+        else this.error = message;
       },
       check() {
         if (this.imported) return '';
@@ -329,6 +412,7 @@
         const now = this.form;
         const patch = {};
         if (now.category !== was.category) patch.category = now.category;
+        if (patch.category && this.sendsNewCategory) patch.create_category = true;
         if (now.note.trim() !== was.note) patch.note = now.note.trim();
         if (this.imported) return patch;
         if (now.paid_on !== was.paid_on) patch.paid_on = now.paid_on;
@@ -394,6 +478,8 @@
         if (this.error) return;
         if (this.editing) return this.saveEdit();
         this.saving = true;
+        this.categoryError = '';
+        const newCategory = this.sendsNewCategory;
         try {
           let expense;
           try {
@@ -401,15 +487,18 @@
               paid_on: this.form.paid_on,
               amount_cents: centsFromEuros(this.form.amount),
               category: this.form.category,
+              ...(newCategory ? { create_category: true } : {}),
               payee: this.form.payee.trim(),
               reference: this.form.reference.trim(),
               note: this.form.note.trim(),
             });
           } catch (err) {
-            // Nothing was created; the picked file stays picked.
-            this.error = errorOf(err).message;
+            // Nothing was created, the category neither (the server saves
+            // both or neither); the picked file stays picked.
+            this.showRefusal(err);
             return;
           }
+          if (newCategory) this.$emit('categories-changed');
           // The expense exists now and is kept whatever its receipt does: the
           // form never removes it again, and a second Save would make a twin.
           // So the dialog closes either way and the tab says what happened;
@@ -438,12 +527,14 @@
           return;
         }
         this.saving = true;
+        this.categoryError = '';
         try {
           await patchExpense(this.expense.id, patch);
+          if (patch.create_category) this.$emit('categories-changed');
           this.$emit('update:open', false);
           this.$emit('changed');
         } catch (err) {
-          this.error = errorOf(err).message;
+          this.showRefusal(err);
         } finally {
           this.saving = false;
         }
@@ -557,25 +648,20 @@
     gap: var(--space-2xs);
   }
 
-  .add-category-link {
+  /* Left edge on the field's edge, like the action under "What it was
+     for"; a long name wraps the label, never clips it (§3.161 Decision 3). */
+  .category-field__action {
     align-self: flex-start;
-    background: none;
-    border: none;
-    padding: 0;
-    font-size: var(--text-sm);
-    color: var(--text-link, var(--brand-accent));
-    cursor: pointer;
-    text-decoration: underline;
+    max-width: 100%;
+    height: auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
   }
 
-  .add-category {
-    gap: var(--space-sm);
-  }
-
-  .add-category__actions {
-    display: flex;
-    gap: var(--space-sm);
-    justify-content: flex-end;
+  /* The line under the field wraps too; a long name never clips. */
+  .category-field .manual-form__hint {
+    overflow-wrap: anywhere;
   }
 
   /* What the bank recorded, as plain text in two columns (§3.22: nothing

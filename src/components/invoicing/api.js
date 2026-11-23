@@ -144,8 +144,16 @@ export const deleteExpenseReceipt = (expenseId) => axios.delete(expenseReceiptUr
 // top (operator's own ask, #10424).
 export const listExpenseCategories = () =>
   axios.get(`${base}/expense-categories`).then((r) => r.data.categories || []);
-export const createExpenseCategory = (category) =>
-  axios.post(`${base}/expense-categories`, category).then((r) => r.data.category);
+// A category ze added can be removed and restored (§3.161 Decision 4, server
+// system_3 #11579). Removing keeps it on every expense that has it; it is
+// only no longer offered for a new choice. Each answers the category as it
+// now stands, `removed_at` set or null. The starters and Private are refused
+// (`builtin_category`). A new category is added by an expense's own Save,
+// with `create_category: true` beside its `category`.
+export const removeExpenseCategory = (id) =>
+  axios.post(`${base}/expense-categories/${id}/remove`).then((r) => r.data.category);
+export const restoreExpenseCategory = (id) =>
+  axios.post(`${base}/expense-categories/${id}/restore`).then((r) => r.data.category);
 export const patchPayment = (id, patch) => axios.patch(`${base}/payments/${id}`, patch).then((r) => r.data.payment);
 // A payment entered by hand (#8409): always incoming paid work, audited.
 // Returns { payment, client }: `client` is present only when `new_client_name`

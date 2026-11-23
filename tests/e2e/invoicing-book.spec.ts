@@ -89,6 +89,19 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     }
     if (path === '/invoicing/expenses/manual' && method === 'POST') {
       const body = JSON.parse(req.postData() || '{}');
+      // A typed category saves with its expense, both or neither (server
+      // system_3 #11579): a name over 100 characters is refused, as the
+      // server's expenseCategoryNameRefusal does.
+      if (body.create_category) {
+        if ([...String(body.category)].length > 100) {
+          return json(route, 400, { error: { code: 'invalid_category', message: 'category must be one line of 1-100 characters' } });
+        }
+        if (!fake.categories.some((c) => c.name.toLowerCase() === String(body.category).toLowerCase())) {
+          fake.categories.push({ id: fake.nextCategoryId, name: body.category, counts_as: 'other', created_at: '2026-07-20T00:00:00Z', removed_at: null });
+          fake.nextCategoryId += 1;
+        }
+        delete body.create_category;
+      }
       if (!fake.categories.some((c) => c.name === body.category)) {
         return json(route, 400, { error: { code: 'invalid_field', message: 'category is not one of your expense categories' } });
       }
@@ -240,35 +253,44 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
     });
   });
 
-  test('adding a category inline makes it usable on the same expense', async ({ page }) => {
+  // system_3 #11580 (§3.161): a new category is typed in the list and
+  // saved with the expense.
+  test('a category typed in the list is saved with the expense', async ({ page }) => {
     const fake = newFake();
     await openTransactions(page, fake);
     await openWaysIn(page);
     await page.locator('[data-test="expense-new"]').click();
-    await page.locator('[data-test="expense-add-category-link"]').click();
-    await page.locator('[data-test="expense-new-category-name"]').fill('Guitar strings');
-    await page.locator('[data-test="expense-add-category-save"]').click();
-    await expect(page.locator('[data-test="expense-add-category-link"]')).toBeVisible();
-
     await page.locator('[data-test="expense-date"]').fill('2026-07-20');
     await page.locator('[data-test="expense-amount"]').fill('12,00');
     await page.getByRole('combobox', { name: 'Category' }).click();
-    await page.getByRole('option', { name: 'Guitar strings', exact: true }).click();
+    await page.keyboard.type('Guitar strings');
+    await page.getByRole('option', { name: 'Add “Guitar strings”' }).click();
+    await expect(page.getByRole('combobox', { name: 'Category' })).toContainText('Guitar strings');
     await page.locator('[data-test="expense-save"]').click();
 
     await showBook(page);
     await expect(page.locator('[data-test="book-row"]')).toContainText('Guitar strings');
+    const posts = fake.requests.filter((r) => r.method === 'POST' && r.path === '/invoicing/expenses/manual');
+    expect(JSON.parse(posts[0].body)).toMatchObject({ category: 'Guitar strings', create_category: true });
+    expect(fake.requests.some((r) => r.method === 'POST' && r.path === '/invoicing/expense-categories'), 'no separate category request').toBe(false);
   });
 
-  test('a duplicate category name is refused', async ({ page }) => {
+  test('a refused category name keeps the dialog open, the reason under the field', async ({ page }) => {
     const fake = newFake();
     await openTransactions(page, fake);
     await openWaysIn(page);
     await page.locator('[data-test="expense-new"]').click();
-    await page.locator('[data-test="expense-add-category-link"]').click();
-    await page.locator('[data-test="expense-new-category-name"]').fill('Travel');
-    await page.locator('[data-test="expense-add-category-save"]').click();
-    await expect(page.locator('[data-test="expense-category-error"]')).toContainText('already exists');
+    await page.locator('[data-test="expense-date"]').fill('2026-07-20');
+    await page.locator('[data-test="expense-amount"]').fill('12,00');
+    await page.getByRole('combobox', { name: 'Category' }).click();
+    const long = 'Studio snacks '.repeat(8).trim();
+    await page.keyboard.type(long);
+    await page.getByRole('option', { name: `Add “${long}”` }).click();
+    await page.locator('[data-test="expense-save"]').click();
+    await expect(page.locator('[data-test="expense-category-error"]')).toHaveText('category must be one line of 1-100 characters');
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Category' })).toContainText(long);
+    expect(fake.expenses).toHaveLength(0);
   });
 
 });
