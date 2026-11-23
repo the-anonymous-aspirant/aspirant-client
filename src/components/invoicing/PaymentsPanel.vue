@@ -524,7 +524,7 @@
         <!-- The one button inside an expense card, as on the Book's card
              (§3.159 Decision 3, system_3 #11501). A press opens the receipt
              and not the card (`onCardTap`). -->
-        <AspButton v-if="row.expense" variant="ghost" size="sm" class="card-receipt" data-test="expense-receipt" @click="openReceipt(row)">Receipt</AspButton>
+        <AspButton v-if="row.expense" variant="ghost" size="sm" class="card-receipt" data-test="expense-receipt" @click="openReceipt(row)">{{ receiptLabel(row) }}</AspButton>
       </li>
     </ul>
     <AspDataTable
@@ -657,7 +657,7 @@
             <AspButton variant="secondary" size="sm" data-test="payment-edit" @click="openEdit(row.payment)">Edit</AspButton>
           </template>
           <template v-else-if="row.expense">
-            <AspButton variant="secondary" size="sm" data-test="expense-receipt" @click="openReceipt(row)">Receipt</AspButton>
+            <AspButton variant="secondary" size="sm" data-test="expense-receipt" @click="openReceipt(row)">{{ receiptLabel(row) }}</AspButton>
             <AspButton variant="secondary" size="sm" data-test="expense-edit" @click="openExpenseEdit(row.expense)">Edit</AspButton>
           </template>
         </span>
@@ -746,7 +746,7 @@
     removePayments,
     createDraft,
   } from './api.js';
-  import { invoiceState, transactionRows } from './ledgerRows.js';
+  import { invoiceState, receiptButtonLabel, transactionRows } from './ledgerRows.js';
   import { groupByMonth, landedRows, monthKey, monthSpanLabel, openGroupKeys } from './listGroups.js';
   import { countsInBook } from './bookSelection.js';
 
@@ -918,8 +918,11 @@
           // The last of the row's values, as the row reads (§3.143 Decision 3).
           { key: 'amount', label: 'Amount', align: 'right', sortable: false, width: '8rem', role: 'figure' },
           // The row's door and, for an expense, Receipt left of it (§3.159
-          // Decision 3). Wide enough for both `sm` buttons on one line.
-          { key: 'actions', label: '', sortable: false, align: 'right', width: '10rem' },
+          // Decision 3). Wide enough for both `sm` buttons on one line: 12rem
+          // since "Add receipt" (system_3 #11791), 103px + 8px + Edit's 54px
+          // + 24px of cell padding = 189px. At 10rem the pair ran 29px left,
+          // over the amount.
+          { key: 'actions', label: '', sortable: false, align: 'right', width: '12rem' },
         ],
       };
     },
@@ -1602,6 +1605,12 @@
         this.editExpense = expense;
         this.expenseEditOpen = true;
         await this.loadExpenseCategories();
+      },
+      // "Receipt" or "Add receipt", from the list's has_receipt (system_3
+      // #11791, design spec on #11630). The dialog's `changed` refetches the
+      // list, so the label follows an attach or a remove.
+      receiptLabel(row) {
+        return receiptButtonLabel(row.expense);
       },
       // The dialog's lead names the expense as the Book's does: its day, its
       // amount and who it went to.

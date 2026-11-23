@@ -39,6 +39,14 @@ export function sourceLabel(row) {
   return SOURCE_LABELS[row.source] || row.source || '';
 }
 
+// An expense's receipt button (system_3 #11791, design spec on #11630):
+// "Add receipt" only when the list says none is attached; "Receipt" when one
+// is, and when the list does not say (an older server), because an unknown is
+// not shown as "none" (D2).
+export function receiptButtonLabel(expense) {
+  return expense && expense.has_receipt === false ? 'Add receipt' : 'Receipt';
+}
+
 // A payment's invoice as its row reads it: "Invoice 2026-014", "Draft", or
 // nothing. The server names only the live invoice, never a cancelled one
 // (aspirant-server `invoice`, system_3 #10666); a list without the field
