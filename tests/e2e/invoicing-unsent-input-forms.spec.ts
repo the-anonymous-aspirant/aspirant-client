@@ -16,7 +16,7 @@ interface Fake {
 }
 const newFake = (): Fake => ({ requests: [] });
 
-const CLIENT = { id: 1, name: 'Galerie Nord', address: 'Nordweg 2', email: '', paypal_email: '', phone: '', instagram_url: '', telegram_url: '', notes: '', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' };
+const CLIENT = { id: 1, name: 'Galerie Nord', address: 'Nordweg 2', email: '', paypal_email: 'gallery@example.test', phone: '', instagram_url: '', telegram_url: '', notes: '', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' };
 const PAYMENTS = [
   { id: 1, kind: 'incoming', entry: 'manual', source: 'manual', transaction_id: 'M-1', method: 'bank_transfer', reference: '', paid_on: '2026-07-14T00:00:00Z', currency: 'EUR', gross_cents: 35000, sender_name: 'Galerie Nord', sender_email: '', note: 'Wandbild Juli', category: 'paid_work', client_id: 1, on_invoice: false },
   { id: 2, kind: 'incoming', entry: 'manual', source: 'manual', transaction_id: 'M-2', method: 'bank_transfer', reference: '', paid_on: '2026-07-15T00:00:00Z', currency: 'EUR', gross_cents: 5000, sender_name: 'Aunt Ada', sender_email: '', note: 'Birthday', category: 'gift', client_id: null, on_invoice: false },
@@ -149,6 +149,26 @@ test.describe('#11669 the client editor asks before an exit throws away an edit'
     await expect(ask(page)).toHaveCount(0);
     fake.release!();
     await expect(editor(page)).toHaveCount(0);
+  });
+
+  test('PayPal email retypes with different case do not ask on Esc', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await openEdit(page);
+    const paypalInput = editor(page).getByLabel('PayPal email');
+    // The client's PayPal email is 'gallery@example.test'; retype with capital G
+    await paypalInput.fill('Gallery@example.test');
+    // Esc should close without asking because only the case changed,
+    // which the server would normalize anyway.
+    await page.keyboard.press('Escape');
+    await expect(editor(page)).toHaveCount(0);
+    await expect(ask(page)).toHaveCount(0);
+    // But a truly different address should still ask
+    await openEdit(page);
+    await paypalInput.fill('other@example.test');
+    await page.keyboard.press('Escape');
+    await expect(ask(page)).toBeVisible();
+    expect(writes(fake)).toEqual([]);
   });
 });
 
