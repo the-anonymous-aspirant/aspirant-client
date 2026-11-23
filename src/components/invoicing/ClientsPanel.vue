@@ -239,6 +239,21 @@
         />
         <AspInput v-model="form.email" type="email" label="Email" />
         <AspInput v-model="form.paypal_email" type="email" label="PayPal email" hint="Imported payments from this address are linked to the client." />
+        <!-- Matching only: never on an invoice, the draft editor, the export
+             or the client list (#12084, #12086). What is loaded shows in groups
+             of four; what ze types is kept exactly as typed (c75345 2). -->
+        <AspInput
+          ref="iban"
+          v-model="form.iban"
+          label="IBAN"
+          hint="Imported N26 payments from this account are linked to the client."
+          :error="fieldErrors.iban"
+          autocomplete="off"
+          autocapitalize="characters"
+          autocorrect="off"
+          spellcheck="false"
+          data-test="client-iban-input"
+        />
         <!-- Phone and zir social links are zirs, not the invoice's (operator
              c61586): never printed. A refusal shows on its own field, in
              place of its hint, with zir text kept (as #9993). -->
@@ -301,19 +316,20 @@
   import PayersDialog from './PayersDialog.vue';
   import { groupByLetter, letterKey } from './listGroups.js';
   import { loadDismissed, pairKey, reviewOf, reviewSentences, saveDismissed } from './clientReview.js';
-  import { FIELD_REFUSALS, clientsCsvUrl, createClient, downloadBlob, errorOf, formatBerlinDay, formatDay, formatMoney, listInvoices, listPayerCandidates, payersSavedLine, safeSocialUrl, socialHandle, updateClient } from './api.js';
+  import { FIELD_REFUSALS, clientsCsvUrl, createClient, downloadBlob, errorOf, formatBerlinDay, formatDay, formatMoney, groupIban, listInvoices, listPayerCandidates, payersSavedLine, safeSocialUrl, socialHandle, updateClient } from './api.js';
 
   // The longest book shown flat (§3.145 Decision 3, amended 2026-11-14).
   const FLAT_MAX = 10;
 
-  const blank = () => ({ name: '', address: '', email: '', paypal_email: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
-  const noErrors = () => ({ phone: '', instagram_url: '', telegram_url: '' });
+  const blank = () => ({ name: '', address: '', email: '', paypal_email: '', iban: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
+  const noErrors = () => ({ iban: '', phone: '', instagram_url: '', telegram_url: '' });
   // A field as the server stores it on save (aspirant-server handlers/invoicing.go),
-  // where that is more than a trim: the PayPal email lower-cased (system_3 #12121).
-  // The unsent test compares these, so a retype Save would store unchanged is no edit
-  // (design_conventions §3.166 Decision 1).
+  // where that is more than a trim: the PayPal email lower-cased (system_3 #12121),
+  // the IBAN with every space removed and upper case (#12086). The unsent test
+  // compares these, so a retype Save would store unchanged is no edit (§3.166 D1).
   const asStored = {
     paypal_email: (v) => v.trim().toLowerCase(),
+    iban: (v) => v.replace(/\s+/g, '').toUpperCase(),
   };
 
   // The people Flower invoices (spec §4.2). The name is required here
@@ -447,6 +463,9 @@
         this.revealNew();
       },
       // Editing a refused field clears its refusal.
+      'form.iban'() {
+        this.fieldErrors.iban = '';
+      },
       'form.phone'() {
         this.fieldErrors.phone = '';
       },
@@ -602,6 +621,7 @@
           address: row.address,
           email: row.email,
           paypal_email: row.paypal_email,
+          iban: groupIban(row.iban),
           phone: row.phone || '',
           instagram_url: row.instagram_url || '',
           telegram_url: row.telegram_url || '',
