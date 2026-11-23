@@ -849,7 +849,7 @@
   /* Above the phone layout a line reads across: the three inputs level with
      each other, the total and Remove beside them (system_3 #11508, Design ack
      c71195; operator c70806 on #10985). The row aligned to its bottom edge
-     before, so the "Save as a category on this device" link under
+     before, so the "Save as a suggestion on this device" link under
      Description lifted that input one line above the other two. Aligned to
      the top, the link hangs under its own field and moves nothing. */
   @media (min-width: 641px) {

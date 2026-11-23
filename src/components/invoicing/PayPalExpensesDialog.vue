@@ -42,6 +42,7 @@
   import UnsentAsk from './UnsentAsk.vue';
   import { unsentGuard } from './unsentGuard.js';
   import { confirmPayPalExpenses, errorOf, listExpenseCategories } from './api.js';
+  import { liveNames } from './expenseCategories.js';
 
   // Every book has this category (the server seeds it): the default, and the
   // fallback when the list cannot be read.
@@ -112,7 +113,9 @@
     methods: {
       async loadCategories() {
         try {
-          const names = (await listExpenseCategories()).map((c) => c.name).filter(Boolean);
+          // Live categories only: a removed one is not offered for a new choice
+          // (§3.161 Decision 5, system_3 #11580).
+          const names = liveNames(await listExpenseCategories()).filter(Boolean);
           if (names.length) this.categories = names;
         } catch (err) {
           this.categories = [EXPENSE_CATEGORY_DEFAULT];

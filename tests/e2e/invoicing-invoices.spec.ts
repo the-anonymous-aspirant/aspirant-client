@@ -671,7 +671,7 @@ test.describe('#10032 the invoicing fields explain themselves', () => {
 
 // system_3 #11508 (epic #11497 item 9; Design ack c71195): above the phone
 // layout an invoice line reads across. The row used to align to its bottom
-// edge, so the "Save as a category on this device" link under Description
+// edge, so the "Save as a suggestion on this device" link under Description
 // lifted that input a line above Quantity and Unit price.
 test.describe('#11508 an invoice line\'s inputs sit on one line', () => {
   test.skip(({ isMobile }) => isMobile, 'the phone keeps its stacked block per line (§3.114)');

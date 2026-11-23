@@ -684,7 +684,8 @@
       v-model:open="expenseOpen"
       :categories="expenseCategories"
       @changed="onExpenseSaved"
-      @category-added="expenseCategories = [...expenseCategories, $event]"
+      @category-updated="onCategoryUpdated"
+      @categories-changed="loadExpenseCategories"
     />
     <!-- The same dialog edits an expense (§3.143 Decision 5, system_3 #10695). -->
     <ManualExpenseDialog
@@ -692,7 +693,8 @@
       :expense="editExpense"
       :categories="expenseCategories"
       @changed="changed"
-      @category-added="expenseCategories = [...expenseCategories, $event]"
+      @category-updated="onCategoryUpdated"
+      @categories-changed="loadExpenseCategories"
     />
     <!-- An expense's receipt, the dialog the Book opens (§3.159 Decision 3,
          system_3 #11501). -->
@@ -749,6 +751,7 @@
   import { invoiceState, receiptButtonLabel, transactionRows } from './ledgerRows.js';
   import { groupByMonth, landedRows, monthKey, monthSpanLabel, openGroupKeys } from './listGroups.js';
   import { countsInBook } from './bookSelection.js';
+  import { liveNames, withCategory } from './expenseCategories.js';
 
   // "2 of 5 kept their category: 2026-08-12 €40.00, 2026-08-14 €25.00 (on an
   // issued invoice; cancel it first)." One shared reason closes the line;
@@ -1122,15 +1125,23 @@
       // In the Edit expense dialog's order, the server's own, so one
       // category is never in two places in two lists (system_3 #11567, D5);
       // a category only the rows carry follows, in the order first seen.
+      // Never one ze removed: Set category is a new choice for many rows,
+      // and a removed category is not offered for a new choice (§3.161
+      // Decision 5, system_3 #11580). So the fallback adds only a name zir
+      // whole list, removed ones included, does not hold at all (design ack
+      // c75159). Before the list has loaded the client cannot tell, and the
+      // server's removed_category refusal is the guard.
       setCategoryOptions() {
         if (!this.selectedExpenses.length) return this.categoryOptions;
         const names = [...this.expenseCategoryNames];
-        for (const e of this.expenses) if (e.category && !names.includes(e.category)) names.push(e.category);
+        const known = new Set(this.expenseCategories.map((c) => c.name));
+        for (const e of this.expenses) if (e.category && !names.includes(e.category) && !known.has(e.category)) names.push(e.category);
         return names.map((n) => ({ value: n, label: n }));
       },
-      // Zir expense categories, in the order the server lists them.
+      // Zir live expense categories, in the order the server lists them: the
+      // ones offered for a new choice (§3.161 Decision 5).
       expenseCategoryNames() {
-        return this.expenseCategories.map((c) => c.name);
+        return liveNames(this.expenseCategories);
       },
       // Not invoiceable: money out, or money in not marked Paid work.
       notPaidWork() {
@@ -1739,6 +1750,12 @@
       async openExpense() {
         this.expenseOpen = true;
         await this.loadExpenseCategories();
+      },
+      // A Remove or Restore in the expense dialog: the category as the server
+      // now has it, in place, so every select on the page follows at once
+      // (§3.161 Decision 4).
+      onCategoryUpdated(category) {
+        this.expenseCategories = withCategory(this.expenseCategories, category);
       },
       async loadExpenseCategories() {
         try {

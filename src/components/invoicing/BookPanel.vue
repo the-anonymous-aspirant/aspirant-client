@@ -310,7 +310,8 @@
       :expense="editExpense"
       :categories="expenseCategories"
       @changed="changed"
-      @category-added="expenseCategories = [...expenseCategories, $event]"
+      @category-updated="onCategoryUpdated"
+      @categories-changed="reloadExpenseCategories"
     />
   </section>
 </template>
@@ -341,6 +342,7 @@
   import { fillEmptyMonths, groupByMonth, landedRows, monthKey, monthLabel, openGroupKeys } from './listGroups.js';
   import { BOOK_PDF_BUTTON, bookPdfCaption, bookPdfDoc, bookPdfFileName } from './bookPdf.js';
   import { INCOME_ORDER, WORK_ONLY, countableExpenseNames, countingSentence, countsInBook, selectionName } from './bookSelection.js';
+  import { stillListed, withCategory } from './expenseCategories.js';
 
   // The income-and-expenses book (system_3 #10414-C): payments and
   // hand-entered expenses merged into one dated list, grouped by month, with
@@ -544,10 +546,12 @@
       incomeChoices() {
         return INCOME_ORDER.map((value) => ({ value, label: CATEGORY_LABELS[value] || value }));
       },
-      // Zir expense categories, without Private (never offered). Any category
-      // the selection already names is listed too, so no tick is hidden.
+      // Zir expense categories, without Private (never offered), and without
+      // one ze removed unless an expense still has it (§3.161 Decision 5).
+      // Any category the selection already names is listed too, so no tick
+      // is hidden.
       expenseChoices() {
-        const names = new Set(countableExpenseNames(this.expenseCategories));
+        const names = new Set(countableExpenseNames(stillListed(this.expenseCategories, this.expenses)));
         if (this.selection) for (const n of this.selection.expense) names.add(n);
         return [...names].sort((a, b) => a.localeCompare(b));
       },
@@ -796,6 +800,21 @@
       },
       onExpenseChanged() {
         this.changed();
+      },
+      // After a Save that added or restored a category: every select and the
+      // ticks follow at once.
+      // A Remove or Restore in the expense dialog: the category as the server
+      // now has it, in place, so every select on the page follows at once
+      // (§3.161 Decision 4).
+      onCategoryUpdated(category) {
+        this.expenseCategories = withCategory(this.expenseCategories, category);
+      },
+      async reloadExpenseCategories() {
+        try {
+          this.expenseCategories = await listExpenseCategories();
+        } catch {
+          // The next dialog open or "Change what counts" loads it again.
+        }
       },
       async onChangeToggle(event) {
         if (!event.target.open || this.categoriesLoaded) return;

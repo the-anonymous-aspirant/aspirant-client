@@ -63,9 +63,12 @@
         const q = (this.modelValue || '').trim().toLowerCase();
         return q ? this.categories.filter((c) => c.toLowerCase().includes(q)) : this.categories;
       },
-      // One small action under the field: save a new text as a category, or
-      // remove one ze saved. The defaults are never removable. Stays here,
-      // not in SuggestField, because it is this field's own capability
+      // One small action under the field: save a new text as a suggestion on
+      // this device, or remove one ze saved. The defaults are never
+      // removable. The device list is called suggestions so it is not taken
+      // for zir expense categories, which live in zir account (§3.161
+      // Decision 6, system_3 #11580); what is stored is unchanged. Stays
+      // here, not in SuggestField, because it is this field's own capability
       // (§3.142 Decision 2: "the category Save and Remove stay in
       // LineDescriptionInput.vue").
       action() {
@@ -73,9 +76,9 @@
         const text = (this.modelValue || '').trim();
         if (!text || !this.canStore || isDefault(text)) return null;
         if (isSaved(text)) {
-          return { label: 'Remove from this device’s categories', aria: `Remove “${text}” from this device’s categories`, test: 'line-desc-remove', run: () => this.change(removeCategory, text) };
+          return { label: 'Remove from this device’s suggestions', aria: `Remove “${text}” from this device’s suggestions`, test: 'line-desc-remove', run: () => this.change(removeCategory, text) };
         }
-        return { label: 'Save as a category on this device', aria: `Save “${text}” as a category on this device`, test: 'line-desc-save', run: () => this.change(saveCategory, text) };
+        return { label: 'Save as a suggestion on this device', aria: `Save “${text}” as a suggestion on this device`, test: 'line-desc-save', run: () => this.change(saveCategory, text) };
       },
     },
     methods: {

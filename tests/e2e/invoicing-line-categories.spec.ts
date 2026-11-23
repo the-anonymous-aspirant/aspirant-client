@@ -106,7 +106,21 @@ test.describe('#9928 Invoices app — "What it was for" suggests categories and 
     await note(page).fill('  tattoo (Small) ');
     await expect(page.locator('[data-test="line-desc-save"]')).toHaveCount(0);
     await note(page).fill('Cover-up');
-    await expect(page.locator('[data-test="line-desc-save"]')).toHaveText('Save as a category on this device');
+    await expect(page.locator('[data-test="line-desc-save"]')).toHaveText('Save as a suggestion on this device');
+    // system_3 #11580 (§3.161 Decision 6): the device list is called
+    // suggestions, in the accessible name too.
+    await expect(page.locator('[data-test="line-desc-save"]')).toHaveAttribute('aria-label', 'Save “Cover-up” as a suggestion on this device');
+  });
+
+  // system_3 #11580: the rename changed no stored byte, so an entry saved by
+  // an earlier build, under the same key, is still listed and removable.
+  test('an entry saved before the rename is still listed, and its action reads Remove', async ({ page }) => {
+    await page.addInitScript(() => window.localStorage.setItem('invoicing.lineCategories', JSON.stringify(['Flash sheet'])));
+    await openDialog(page, { posts: [] });
+    await note(page).click();
+    expect(await shown(page, note(page))).toEqual([...DEFAULTS, 'Flash sheet']);
+    await note(page).fill('Flash sheet');
+    await expect(page.locator('[data-test="line-desc-remove"]')).toHaveText('Remove from this device’s suggestions');
   });
 
   test('zir own category is saved, survives a reload, and can be removed again', async ({ page }) => {
@@ -114,7 +128,8 @@ test.describe('#9928 Invoices app — "What it was for" suggests categories and 
     const field = note(page);
     await field.fill('Cover-up');
     await page.locator('[data-test="line-desc-save"]').click();
-    await expect(page.locator('[data-test="line-desc-remove"]')).toHaveText('Remove from this device’s categories');
+    await expect(page.locator('[data-test="line-desc-remove"]')).toHaveText('Remove from this device’s suggestions');
+    await expect(page.locator('[data-test="line-desc-remove"]')).toHaveAttribute('aria-label', 'Remove “Cover-up” from this device’s suggestions');
     await field.fill('');
     await field.click();
     expect(await shown(page, field)).toEqual([...DEFAULTS, 'Cover-up']);

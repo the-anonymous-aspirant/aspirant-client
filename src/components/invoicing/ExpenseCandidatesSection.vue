@@ -73,6 +73,8 @@
       // already_imported, removed, deleted_earlier, possible_duplicate_of).
       items: { type: Array, default: () => [] },
       // The owner's expense category names, in zir book's order.
+      // Names, live ones only: the dialogs leave out a category ze removed
+      // (§3.161 Decision 5).
       categories: { type: Array, default: () => [] },
       disabled: { type: Boolean, default: false },
     },
