@@ -36,80 +36,104 @@
       No flows registered yet. POST one to <code>/api/browser-flows</code> to get started.
     </div>
 
-    <div v-else class="matrix-card" data-test="browser-flows-matrix" ref="matrixCard">
-      <table>
-        <thead>
-          <tr>
-            <th class="flow-col">Flow</th>
-            <th class="grid-head">Last {{ maxRuns }} runs →</th>
-            <th class="actions-col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="row in rows"
-            :key="row.flow.id"
-            :data-test="`flow-row-${row.flow.id}`"
-          >
-            <td class="flow-col">
-              <div class="flow-name">
-                <router-link :to="`/admin/browser-flows/${row.flow.id}`">
-                  {{ row.flow.name }}
-                </router-link>
-              </div>
-            </td>
-            <td>
-              <div class="grid">
-                <span
-                  v-for="n in row.emptyCells"
-                  :key="`empty-${row.flow.id}-${n}`"
-                  class="cell cell-empty"
-                  title="(no run)"
-                ></span>
-                <router-link
-                  v-for="run in row.runs"
-                  :key="run.id"
-                  :class="['cell', `cell-${cellStatus(run.status)}`]"
-                  :to="`/admin/browser-flows/${row.flow.id}/runs/${run.id}`"
-                  :title="`${run.status} — ${run.started_at} — ${run.output_rows_count} row(s)`"
-                  :data-test="`cell-${row.flow.id}-${run.id}`"
-                ></router-link>
-              </div>
-            </td>
-            <td>
-              <div class="row-actions">
-                <AspTooltip :content="row.flow.enabled ? 'trigger this flow' : 'flow disabled'">
-                  <AspButton
-                    variant="secondary"
-                    size="sm"
-                    type="button"
-                    :disabled="!row.flow.enabled || acting.has(row.flow.id)"
-                    :data-test="`trigger-${row.flow.id}`"
-                    @click="onTrigger(row.flow.id)"
-                  >
-                    ▶ Start
-                  </AspButton>
-                </AspTooltip>
-                <AspTooltip
-                  v-if="row.latestRun && row.latestRun.status === 'running'"
-                  content="signal the driver to stop"
-                >
-                  <AspButton
-                    variant="destructive"
-                    size="sm"
-                    type="button"
-                    :disabled="acting.has(row.flow.id)"
-                    :data-test="`cancel-${row.flow.id}`"
-                    @click="onCancel(row.flow.id, row.latestRun.id)"
-                  >
-                    ✕ Cancel
-                  </AspButton>
-                </AspTooltip>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div v-else class="matrix-card" data-test="browser-flows-matrix">
+      <!-- The card keeps its padding and does not scroll; the run strip
+           scrolls inside it, so a run scrolled past the sticky Flow column is
+           clipped at the scroller's edge and never shows left of a name. The
+           viewport does not scroll either, so the edge fades (#4529) stay
+           pinned to what is hidden (system_3 #11008, design c76151; §3.119). -->
+      <div
+        :class="[
+          'matrix-viewport',
+          {
+            'matrix-viewport--overflow-start': overflowStart,
+            'matrix-viewport--overflow-end': overflowEnd,
+          },
+        ]"
+        :style="{ '--flow-col-width': `${flowColWidth}px` }"
+        data-test="browser-flows-viewport"
+      >
+        <div
+          ref="matrixScroll"
+          class="matrix-scroll"
+          data-test="browser-flows-scroll"
+          @scroll.passive="measureOverflow"
+        >
+          <table>
+            <thead>
+              <tr>
+                <th ref="flowHead" class="flow-col">Flow</th>
+                <th class="grid-head">Last {{ maxRuns }} runs →</th>
+                <th class="actions-col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in rows"
+                :key="row.flow.id"
+                :data-test="`flow-row-${row.flow.id}`"
+              >
+                <td class="flow-col">
+                  <div class="flow-name">
+                    <router-link :to="`/admin/browser-flows/${row.flow.id}`">
+                      {{ row.flow.name }}
+                    </router-link>
+                  </div>
+                </td>
+                <td>
+                  <div class="grid">
+                    <span
+                      v-for="n in row.emptyCells"
+                      :key="`empty-${row.flow.id}-${n}`"
+                      class="cell cell-empty"
+                      title="(no run)"
+                    ></span>
+                    <router-link
+                      v-for="run in row.runs"
+                      :key="run.id"
+                      :class="['cell', `cell-${cellStatus(run.status)}`]"
+                      :to="`/admin/browser-flows/${row.flow.id}/runs/${run.id}`"
+                      :title="`${run.status} — ${run.started_at} — ${run.output_rows_count} row(s)`"
+                      :data-test="`cell-${row.flow.id}-${run.id}`"
+                    ></router-link>
+                  </div>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <AspTooltip :content="row.flow.enabled ? 'trigger this flow' : 'flow disabled'">
+                      <AspButton
+                        variant="secondary"
+                        size="sm"
+                        type="button"
+                        :disabled="!row.flow.enabled || acting.has(row.flow.id)"
+                        :data-test="`trigger-${row.flow.id}`"
+                        @click="onTrigger(row.flow.id)"
+                      >
+                        ▶ Start
+                      </AspButton>
+                    </AspTooltip>
+                    <AspTooltip
+                      v-if="row.latestRun && row.latestRun.status === 'running'"
+                      content="signal the driver to stop"
+                    >
+                      <AspButton
+                        variant="destructive"
+                        size="sm"
+                        type="button"
+                        :disabled="acting.has(row.flow.id)"
+                        :data-test="`cancel-${row.flow.id}`"
+                        @click="onCancel(row.flow.id, row.latestRun.id)"
+                      >
+                        ✕ Cancel
+                      </AspButton>
+                    </AspTooltip>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <div v-if="!loadError" class="legend" data-test="browser-flows-legend">
@@ -148,6 +172,9 @@
         loadError: null,
         acting: new Set(),
         maxRuns: MAX_RUNS,
+        overflowStart: false,
+        overflowEnd: false,
+        flowColWidth: 0,
       };
     },
     computed: {
@@ -169,6 +196,9 @@
           };
         });
       },
+    },
+    beforeUnmount() {
+      if (this.resizeObserver) this.resizeObserver.disconnect();
     },
     watch: {
       legacy: {
@@ -214,13 +244,36 @@
         this.scrollGridToLatest();
       },
       // Runs read oldest-left, newest-right (`rows` computed above); open the
-      // card scrolled to its right end so the newest run is on first screen
-      // instead of past the fold (system_3 #11846).
+      // strip scrolled to its right end so the newest run is on first screen
+      // instead of past the fold (system_3 #11846). The Flow column is sticky,
+      // so the names stay beside their runs (#11008).
       scrollGridToLatest() {
         this.$nextTick(() => {
-          const el = this.$refs.matrixCard;
-          if (el) el.scrollLeft = el.scrollWidth;
+          const el = this.$refs.matrixScroll;
+          if (!el) return;
+          el.scrollLeft = el.scrollWidth;
+          this.measureOverflow();
+          if (!this.resizeObserver && typeof ResizeObserver !== 'undefined') {
+            this.resizeObserver = new ResizeObserver(() => this.measureOverflow());
+          }
+          if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+            this.resizeObserver.observe(el);
+          }
         });
+      },
+      // Which edges hide runs, for the #4529 fades: as AspDataTable measures
+      // it, with 1px for sub-pixel rounding at either end. The start fade sits
+      // just right of the sticky Flow column, so it needs that column's width.
+      measureOverflow() {
+        const el = this.$refs.matrixScroll;
+        if (!el) return;
+        const maxScroll = el.scrollWidth - el.clientWidth;
+        const overflows = maxScroll > 1;
+        this.overflowStart = overflows && el.scrollLeft > 1;
+        this.overflowEnd = overflows && el.scrollLeft < maxScroll - 1;
+        const head = this.$refs.flowHead;
+        this.flowColWidth = head ? head.offsetWidth : 0;
       },
       async onTrigger(flowId) {
         if (this.acting.has(flowId)) return;
@@ -295,7 +348,46 @@
     border-radius: 8px;
     padding: 1rem 1.25rem;
     box-shadow: var(--shadow-sm);
+  }
+  .matrix-viewport {
+    position: relative;
+  }
+  .matrix-scroll {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* The #4529 edge fades, drawn only on a side where runs are hidden. Each
+     dissolves into the card's own surface. The start fade sits just right of
+     the sticky Flow column, over the runs scrolled under it. */
+  .matrix-viewport::before,
+  .matrix-viewport::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2.5rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms ease;
+    z-index: 2;
+  }
+  .matrix-viewport::before {
+    left: var(--flow-col-width, 0px);
+    background: linear-gradient(to right, var(--surface-card), transparent);
+  }
+  .matrix-viewport::after {
+    right: 0;
+    background: linear-gradient(to left, var(--surface-card), transparent);
+  }
+  .matrix-viewport--overflow-start::before,
+  .matrix-viewport--overflow-end::after {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .matrix-viewport::before,
+    .matrix-viewport::after {
+      transition: none;
+    }
   }
   table {
     border-collapse: collapse;
@@ -311,8 +403,29 @@
   th {
     font-weight: 600;
   }
-  th.flow-col {
+  /* The row-header column is sticky-left (§3.119), on the card's own
+     surface so the runs pass under the name, and above a run scaled by
+     :hover. Not the DS's --z-index-sticky: that ties with the phone's top
+     bar and would paint over it (design c76151). */
+  th.flow-col,
+  td.flow-col {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--surface-card);
     min-width: 14rem;
+  }
+  /* §3.119's 16ch floor on a phone. An overflowing auto-layout table ignores
+     `width` alone, so both are set; the name wraps. A name with no space in
+     it (a domain, say) may break anywhere, or its one long word would hold
+     the column wider than the floor (system_3 #11008). */
+  @media (max-width: 767.98px) {
+    th.flow-col,
+    td.flow-col {
+      min-width: 16ch;
+      width: 16ch;
+      overflow-wrap: anywhere;
+    }
   }
   th.grid-head {
     text-align: center;
@@ -348,13 +461,21 @@
     text-decoration: none;
     transition: transform 0.05s ease-in-out;
     flex-shrink: 0;
+    /* The card's ink, not the global link tint, so currentColor below is the
+       ink of the surface the cells sit on (D9, §3.18). */
+    color: inherit;
   }
+  /* Marks on .matrix-card take the card's ink, not a page token: the card is
+     dark in both themes, where --border-control falls below 3:1 on the light
+     theme's card (system_3 #11008, design c76151). */
   .cell:hover {
     transform: scale(1.15);
-    outline: 1px solid var(--border-control);
+    outline: 1px solid color-mix(in srgb, currentColor 50%, transparent);
   }
+  /* "No run" is an outlined empty cell, as the legend draws it. */
   .cell-empty {
-    background: var(--surface-card-inner);
+    background: transparent;
+    border: 1.5px solid color-mix(in srgb, currentColor 50%, transparent);
     cursor: default;
     pointer-events: none;
   }
