@@ -102,10 +102,8 @@ for (const theme of ['light', 'dark'] as const) {
 test('Checked at is a full date, time and zone, not a bare time', async ({ page }) => {
   await open(page);
   const checkedAt = page.locator('.info-row', { hasText: 'Checked at' }).locator('.info-value');
-  const text = (await checkedAt.textContent())!;
-  expect(text).toMatch(/\d{4}/); // a year
-  expect(text).toMatch(/[A-Za-z]{2,5}$/); // a zone abbreviation, e.g. UTC/GMT+1
-  expect(text.split(':').length, 'still carries hh:mm:ss').toBeGreaterThanOrEqual(3);
+  // The house spelling (§3.120 Q5; #11010, UX walk AA8), not the viewer's locale.
+  await expect(checkedAt).toHaveText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC$/);
 });
 
 test('the Server card\'s "database" check reads Database, with a real status colour', async ({ page }) => {

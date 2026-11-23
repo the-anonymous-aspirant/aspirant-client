@@ -41,7 +41,7 @@ const ADMIN_NEW_TAB_TITLES = ['Penpot Design', 'Histoire — Design System', 'Sy
 
 const ADMIN_ROUTED_TITLES = [
   'Assets',
-  'User Resources',
+  'Users',
   'Voice Commander',
   'System Health',
   'Advisor',
@@ -136,7 +136,7 @@ test.describe('#4842 AdminView registry', () => {
     await page.goto('/admin');
     await dismissMobileSidebarIfPresent(page);
 
-    await page.locator('.application-card', { hasText: 'User Resources' }).click();
+    await page.locator('.application-card', { hasText: 'Users' }).click();
     await expect(page).toHaveURL(/\/admin\/users$/);
   });
 

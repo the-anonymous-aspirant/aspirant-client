@@ -101,22 +101,22 @@ const routes = [
   // The start of recovery (#5339). Public for the same reason as the rest of
   // this flow: whoever needs it cannot sign in, which is the whole problem.
   { path: '/forgot-password', component: ForgotPasswordView, meta: { title: 'Forgot password' } },
-  { path: '/admin', component: AdminView, meta: ADMIN },
-  { path: '/admin/users', component: UserAdmin, meta: ADMIN },
-  { path: '/admin/assets', component: Assets, meta: ADMIN },
-  { path: '/admin/voice-commander', component: VoiceCommander, meta: ADMIN },
-  { path: '/admin/system-health', component: SystemHealth, meta: ADMIN },
-  { path: '/admin/import-failures', component: ImportFailures, meta: ADMIN },
-  { path: '/admin/advisor', component: Advisor, meta: ADMIN },
-  { path: '/admin/browser-flows', component: BrowserFlows, meta: ADMIN },
-  { path: '/admin/browser-flows/:id', component: FlowDetail, meta: ADMIN },
-  { path: '/admin/browser-flows/:id/runs/:run_id', component: RunForensic, meta: ADMIN },
-  { path: '/admin/tools/kvitto', component: KvittoMaker, meta: ADMIN },
+  { path: '/admin', component: AdminView, meta: { ...ADMIN, title: 'Admin' } },
+  { path: '/admin/users', component: UserAdmin, meta: { ...ADMIN, title: 'Users' } },
+  { path: '/admin/assets', component: Assets, meta: { ...ADMIN, title: 'Assets' } },
+  { path: '/admin/voice-commander', component: VoiceCommander, meta: { ...ADMIN, title: 'Voice Commander' } },
+  { path: '/admin/system-health', component: SystemHealth, meta: { ...ADMIN, title: 'System Health' } },
+  { path: '/admin/import-failures', component: ImportFailures, meta: { ...ADMIN, title: 'Failed imports' } },
+  { path: '/admin/advisor', component: Advisor, meta: { ...ADMIN, title: 'Advisor' } },
+  { path: '/admin/browser-flows', component: BrowserFlows, meta: { ...ADMIN, title: 'Browser Flows' } },
+  { path: '/admin/browser-flows/:id', component: FlowDetail, meta: { ...ADMIN, title: 'Browser Flows' } },
+  { path: '/admin/browser-flows/:id/runs/:run_id', component: RunForensic, meta: { ...ADMIN, title: 'Browser Flows' } },
+  { path: '/admin/tools/kvitto', component: KvittoMaker, meta: { ...ADMIN, title: 'Kvitto Maker' } },
   // The admin-only card editor (system_3 #8634 / #8645, operator decision 1).
   // :tab is one of the shell's sections; the server gates every /cardgen/* route.
   // :id (#8753, §3.52) addresses one template or card inside the templates /
   // cards sections, so an editor survives a reload and a link can land on it.
-  { path: '/admin/cardgen/:tab?/:id?', component: CardgenApp, meta: ADMIN },
+  { path: '/admin/cardgen/:tab?/:id?', component: CardgenApp, meta: { ...ADMIN, title: 'Card Editor' } },
 
   // /about was the starter template's swatch board; retired (system_3 #9254,
   // operator ruling c57325). Old links land on the home page, not the 404.

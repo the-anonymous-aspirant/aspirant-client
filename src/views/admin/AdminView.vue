@@ -75,12 +75,12 @@
     },
     {
       title: 'Assets',
-      description: 'Image files and stuff',
+      description: 'Files stored in asset storage',
       route: '/admin/assets',
       icon: 'default',
     },
     {
-      title: 'User Resources',
+      title: 'Users',
       description: 'User accounts and permissions',
       route: '/admin/users',
       icon: 'default_user',

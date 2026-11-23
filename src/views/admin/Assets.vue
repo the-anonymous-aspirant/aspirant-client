@@ -14,8 +14,11 @@
         </template>
       </div>
       <div class="toolbar-actions">
-        <label class="btn btn-upload" for="asset-upload">Upload</label>
-        <input id="asset-upload" type="file" class="file-input-hidden" @change="onFileSelected" />
+        <!-- The page's one primary action, in the primary amber: green is a
+             status colour (D8; system_3 #11010, UX walk AA8). A real button,
+             so it is reached by Tab, which the old <label for> was not. -->
+        <AspButton variant="primary" data-test="asset-upload" @click="$refs.fileInput.click()">Upload</AspButton>
+        <input id="asset-upload" ref="fileInput" type="file" class="file-input-hidden" @change="onFileSelected" />
       </div>
     </div>
 
@@ -378,11 +381,6 @@
   .btn:hover {
     filter: brightness(1.15);
     transform: translateY(-1px);
-  }
-
-  .btn-upload {
-    background-color: var(--feedback-success);
-    color: var(--text-on-dark);
   }
 
   .file-input-hidden {

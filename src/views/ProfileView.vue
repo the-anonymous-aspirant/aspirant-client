@@ -276,6 +276,11 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-lg);
+    /* The card is dark in both themes, so its ink is the card's, not the
+       page's: a ghost button mixes its amber into currentColor, and on the
+       light page's dark ink "Draw an icon" read dim brown here (D9, §3.121;
+       system_3 #11010, UX walk AA3/AA8). */
+    color: var(--text-on-dark);
   }
 
   /* Page ink: the title is on the page ground now, not on the card. */

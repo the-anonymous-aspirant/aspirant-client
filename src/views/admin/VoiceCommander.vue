@@ -921,7 +921,8 @@ export default {
 
 .record-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
   margin: 0 0 var(--space-md) 0;
 }
 
@@ -977,7 +978,8 @@ export default {
 
 .messages-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
   margin: 0 0 var(--space-md) 0;
 }
 
@@ -1075,7 +1077,8 @@ export default {
 
 .filter-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
   margin: 0 0 var(--space-md) 0;
 }
 
@@ -1127,7 +1130,8 @@ export default {
 
 .tasks-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
   margin: 0 0 var(--space-md) 0;
 }
 
@@ -1297,7 +1301,8 @@ export default {
 
 .notes-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
   margin: 0 0 var(--space-md) 0;
 }
 
@@ -1423,7 +1428,8 @@ export default {
 
 .vocabulary-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
   margin: 0 0 var(--space-md) 0;
 }
 

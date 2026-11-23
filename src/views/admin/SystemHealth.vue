@@ -308,6 +308,7 @@ import axios from 'axios';
 import ReadState from '../../components/ReadState.vue';
 import { AspButton, AspModal } from '@aspirant/design-system';
 import { joinNames, serverVerdict } from './healthVerdict.js';
+import { utcStamp } from '../../utils/utcStamp.js';
 
 // The rollup's readable service name for a container, by the same rule as
 // aspirant-server's serviceNameFromContainer (handlers/service_usage_rollup.go):
@@ -329,14 +330,9 @@ const DAY = { day: 'numeric', month: 'short', timeZone: 'UTC' };
 const formatDay = (iso) => new Date(iso).toLocaleDateString('en-GB', DAY);
 
 // A full date, time and zone, not "4:17:01 AM" with neither (system_3 #11007,
-// UX walk AA5): `dateStyle`/`timeStyle` cannot combine with `timeZoneName`
-// (throws), so every part is spelled out.
-const CHECKED_AT = {
-  year: 'numeric', month: 'short', day: 'numeric',
-  hour: 'numeric', minute: '2-digit', second: '2-digit',
-  timeZoneName: 'short',
-};
-const formatCheckedAt = (d) => d.toLocaleString(undefined, CHECKED_AT);
+// UX walk AA5), in the house spelling `YYYY-MM-DD HH:MM UTC` (§3.120 Q5,
+// #11010), not the viewer's locale.
+const formatCheckedAt = (d) => utcStamp(d);
 
 // The reads that each have their own section. The usage read is an addition
 // to the containers, not a section, and keeps its own quiet failure.
@@ -809,7 +805,8 @@ export default {
 
 .health-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-xl);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
   margin: 0 0 var(--space-md) 0;
   display: flex;
   align-items: center;
@@ -875,7 +872,9 @@ export default {
 
 .section-header h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-xl);
+  /* A section heading on the page ground, not in a card: the section
+     step (§3.120 Q1, #11010). */
+  font-size: var(--text-lg);
   margin: 0;
 }
 

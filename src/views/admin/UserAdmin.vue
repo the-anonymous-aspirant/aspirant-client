@@ -1,6 +1,6 @@
 <template>
   <div class="user-admin-view page">
-    <h1>User Management</h1>
+    <h1>Users</h1>
     <h2 class="page-subtitle">User accounts and permissions</h2>
 
     <!-- Sign-up kill-switch (system_3 #5291, server half #5289). A labelled
@@ -180,6 +180,7 @@
   import axios from 'axios';
   import { AspBadge, AspButton, AspDataTable, AspModal } from '@aspirant/design-system';
   import UserForm from '../../components/UserForm.vue';
+  import { utcStamp } from '../../utils/utcStamp.js';
 
   // The tier an account is restored to when it is unblocked, if nothing else is
   // known. Blocking records the account's previous tier so unblock puts it back
@@ -236,9 +237,12 @@
         // sortable:false throughout — the native table had no sort; preserve parity.
         columns: [
           { key: 'ID', label: 'ID', sortable: false },
-          { key: 'username', label: 'Username', sortable: false },
+          // On a phone card the username heads it and the role, which is
+          // also where Blocked shows, sits at the right (§3.122 P5; system_3
+          // #11010, UX walk AA8). It was a bare ID number.
+          { key: 'username', label: 'Username', sortable: false, role: 'identity' },
           { key: 'email', label: 'Email', sortable: false },
-          { key: 'access_role', label: 'Role', sortable: false },
+          { key: 'access_role', label: 'Role', sortable: false, role: 'figure' },
           // The column moderation actually turns on: an account that never
           // followed its verification link is what a bot sign-up looks like
           // from here (server half: #5290).
@@ -406,8 +410,7 @@
         this.showUserForm = false;
       },
       formatDate(dateString) {
-        if (!dateString) return '—';
-        return new Date(dateString).toLocaleDateString();
+        return utcStamp(dateString);
       },
     },
     mounted() {

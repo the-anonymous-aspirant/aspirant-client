@@ -537,7 +537,8 @@ export default {
 
 .sources-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
   margin: 0 0 var(--space-sm) 0;
 }
 
@@ -659,7 +660,8 @@ export default {
 
 .chat-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
   margin: 0 0 var(--space-md) 0;
 }
 
@@ -826,7 +828,8 @@ export default {
 
 .documents-card h3 {
   color: var(--text-heading-card);
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-bold);
   margin: 0 0 var(--space-md) 0;
 }
 
