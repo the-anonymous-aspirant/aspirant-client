@@ -308,6 +308,13 @@
 
   const blank = () => ({ name: '', address: '', email: '', paypal_email: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
   const noErrors = () => ({ phone: '', instagram_url: '', telegram_url: '' });
+  // A field as the server stores it on save (aspirant-server handlers/invoicing.go),
+  // where that is more than a trim: the PayPal email lower-cased (system_3 #12121).
+  // The unsent test compares these, so a retype Save would store unchanged is no edit
+  // (design_conventions §3.166 Decision 1).
+  const asStored = {
+    paypal_email: (v) => v.trim().toLowerCase(),
+  };
 
   // The people Flower invoices (spec §4.2). The name is required here
   // because the server requires it. The address is optional: an invoice up
@@ -616,11 +623,12 @@
       closeNow() {
         this.editorOpen = false;
       },
-      // What Save would send, normalised: fields typed and put back compare
-      // equal again.
+      // What Save would send, normalised as the server stores it: fields typed
+      // and put back compare equal again (asStored above; every other field
+      // is trimmed).
       unsentValue() {
         const f = this.form;
-        return Object.fromEntries(Object.keys(f).map((k) => [k, String(f[k] ?? '').trim()]));
+        return Object.fromEntries(Object.keys(f).map((k) => [k, (asStored[k] || ((v) => v.trim()))(String(f[k] ?? ''))]));
       },
       async save() {
         if (!this.form.name.trim()) {
