@@ -277,11 +277,21 @@ export function safeSocialUrl(kind, url) {
   return typeof url === 'string' && url.startsWith(prefix) && url.length > prefix.length ? url : '';
 }
 
-// The server's field refusals for a phone and the two links (#10002), in zir words.
+// An IBAN as a statement prints it, in groups of four, so it can be checked
+// against one (system_3 #12086). The server stores it without spaces and
+// strips them again on save; "" stays "".
+export function groupIban(iban) {
+  const compact = String(iban || '').replace(/\s+/g, '').toUpperCase();
+  return compact.replace(/(.{4})(?=.)/g, '$1 ');
+}
+
+// The server's field refusals for a phone, the two links (#10002) and an IBAN
+// (#12086), in zir words.
 export const FIELD_REFUSALS = {
   invalid_phone: { field: 'phone', text: 'Use digits, spaces and + - ( ) / . only, at most 40 characters.' },
   invalid_instagram: { field: 'instagram_url', text: 'Use an Instagram name (@name) or a link to an Instagram profile.' },
   invalid_telegram: { field: 'telegram_url', text: 'Use a Telegram name (@name) or a t.me link.' },
+  invalid_iban: { field: 'iban', text: 'Not a valid IBAN. Check each character against the original.' },
 };
 
 export const CATEGORY_LABELS = {
