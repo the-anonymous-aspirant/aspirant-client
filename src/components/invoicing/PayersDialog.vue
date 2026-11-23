@@ -47,6 +47,7 @@
                 />
               </SuggestField>
               <p v-if="paypalEmailNote(row)" class="payer-row__muted" data-test="payers-row-paypal">{{ paypalEmailNote(row) }}</p>
+              <p v-if="ibanNote(row)" class="payer-row__muted" data-test="payers-row-iban">{{ ibanNote(row) }}</p>
             </div>
           </div>
         </li>
@@ -219,6 +220,19 @@
         const m = this.matchOf(row);
         if (!row.paypal_email || m.state !== 'same' || m.client.paypal_email) return '';
         return `Their PayPal email will be saved on ${m.client.name}.`;
+      },
+      // The same for an N26 payer's IBAN (system_3 #12232): an existing
+      // client with none gets the row's, when the row carries one that no
+      // client has yet. The server says so with booleans only, and the note
+      // never shows the IBAN. A client picked by hand rather than the
+      // offered one is read from the book's own list.
+      ibanNote(row) {
+        const m = this.matchOf(row);
+        if (!row.carries_iban || m.state !== 'same') return '';
+        const offered = row.same_client && row.same_client.id === m.client.id;
+        const hasIban = offered ? !!row.same_client.has_iban : !!m.client.iban;
+        if (hasIban) return '';
+        return `Their IBAN will be saved on ${m.client.name}.`;
       },
       close(value) {
         if (this.saving || value) return;

@@ -224,6 +224,51 @@ test.describe('#10550 Add payers to your client book', () => {
     await expect(rows(page).nth(2).locator('[data-test="payers-row-paypal"]')).toHaveText('Their PayPal email will be saved on Galerie Nord.');
   });
 
+  // system_3 #12232: an N26 row says its IBAN will be saved on an existing
+  // client only when the row carries one (carries_iban) and the client has
+  // none (has_iban, or the book's own list for a client picked by hand).
+  // The server serves booleans only, so no IBAN can appear here at all.
+  const n26Row = (over: Json = {}) => payer({ key: 'name:mara esempio', payer: 'MARA ESEMPIO', tidied_name: 'Mara Esempio', payment_ids: [51, 52], payment_count: 2, carries_iban: true, same_client: { id: 1, name: 'Mara Esempio', paypal_email: '', has_iban: false }, ...over });
+  const ibanCases: Array<[string, Json, string | null]> = [
+    ['carries one and the client has none: the note shows', {}, 'Their IBAN will be saved on Mara Esempio.'],
+    ['the client has one already: no note', { same_client: { id: 1, name: 'Mara Esempio', paypal_email: '', has_iban: true } }, null],
+    ['the row carries none: no note', { carries_iban: false }, null],
+  ];
+  for (const [label, over, want] of ibanCases) {
+    test(`an N26 row matched to a client in the book: ${label}`, async ({ page }) => {
+      const fake = newFake({ payers: [n26Row(over)] });
+      await open(page, fake);
+      await openFromImport(page);
+      await check(page, 0).check();
+      await expect(rows(page).nth(0).locator('[data-test="payers-row-book-line"]')).toHaveText('In your client book.');
+      const note = rows(page).nth(0).locator('[data-test="payers-row-iban"]');
+      if (want) await expect(note).toHaveText(want);
+      else await expect(note).toHaveCount(0);
+      await expect(rows(page).nth(0).locator('[data-test="payers-row-paypal"]')).toHaveCount(0);
+    });
+  }
+
+  test('the IBAN note never shows on a new-client row, and follows a client picked by hand', async ({ page }) => {
+    const fake = newFake({
+      clients: [{ id: 1, name: 'Mara Esempio', paypal_email: '', iban: '' }, { id: 2, name: 'Galerie Nord', paypal_email: '', iban: 'DE89370400440532013000' }],
+      payers: [payer({ carries_iban: true })],
+    });
+    await open(page, fake);
+    await openFromImport(page);
+    await check(page, 0).check();
+    const note = rows(page).nth(0).locator('[data-test="payers-row-iban"]');
+    // Luca Beispiel is not in the book: a new client, no note (the new client gets it silently, as for PayPal).
+    await expect(rows(page).nth(0).locator('[data-test="payers-row-book-line"]')).toContainText('Not in your client book yet');
+    await expect(note).toHaveCount(0);
+    const name = rows(page).nth(0).locator('[data-test="payers-row-name"]');
+    await name.fill('Mara Esempio');
+    await expect(note).toHaveText('Their IBAN will be saved on Mara Esempio.');
+    await name.fill('Galerie Nord');
+    await expect(rows(page).nth(0).locator('[data-test="payers-row-book-line"]')).toHaveText('In your client book.');
+    await expect(note).toHaveCount(0);
+    await expect(page.locator('[data-test="payers-dialog"]')).not.toContainText('DE89');
+  });
+
   test('the Clients tab offers Add from payments only while candidates exist', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
