@@ -1279,7 +1279,7 @@ test.describe('#12271 N26 import — the line adds up to every row of the file',
     await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
 
     await expect(summary(page)).toHaveText(
-      'N26: read 5 rows from 1 file. Money out: 1 expense added to your book, 1 already imported, 1 not added. 2 rows of €0.00 left out.',
+      'N26: read 5 rows from 1 file. Money out: 1 expense added to your book, 1 already in your expenses, 1 not added. 2 rows of €0.00 left out.',
     );
     await expect(page.locator('[data-test="n26-summary-in"]')).toHaveCount(0);
     await expectSummaryAddsUp(page);

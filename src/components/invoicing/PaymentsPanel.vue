@@ -992,7 +992,9 @@
         const parts = [];
         const added = s.expenses_added || 0;
         if (added) parts.push({ key: 'added', text: `${added} expense${added === 1 ? '' : 's'} added to your book` });
-        if (s.expenses_already) parts.push({ key: 'already', text: `${s.expenses_already} already imported` });
+        // The dialog's own word for that row, "Already in your expenses"
+        // (design c76712 on #12271, choice b).
+        if (s.expenses_already) parts.push({ key: 'already', text: `${s.expenses_already} already in your expenses` });
         if (s.expenses_not_added) parts.push({ key: 'not-added', text: `${s.expenses_not_added} not added` });
         if (s.expenses_removed_earlier) parts.push({ key: 'removed', prior: true, count: s.expenses_removed_earlier });
         if (s.expenses_deleted_earlier) parts.push({ key: 'deleted', prior: true, text: this.deletedClause(s.expenses_deleted_earlier) });
