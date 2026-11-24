@@ -120,12 +120,13 @@
     <AspCard v-if="n26Summary" class="summary" padding="sm" data-test="n26-summary">
       <p class="summary__line">
         N26: read {{ n26Summary.rows_read }} row{{ n26Summary.rows_read === 1 ? '' : 's' }} from
-        {{ n26Summary.files }} file{{ n26Summary.files === 1 ? '' : 's' }}:
-        <strong>{{ n26Summary.imported }}</strong> imported, {{ n26Summary.duplicates }} already imported,
-        {{ n26Summary.skipped }} skipped<template v-if="n26Summary.paypal_transfers">, <span data-test="n26-summary-paypal">{{ n26PayPalClause }}</span></template><template v-if="n26Summary.space_transfers">, <span data-test="n26-summary-space-transfer">{{ n26SpaceTransferClause }}</span></template><template v-if="n26Summary.removed_earlier"> ·&nbsp;<span data-test="n26-summary-removed">{{ n26Summary.removed_earlier }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-in" @click="openRemoved('in')">restore it on Transactions</button></span></template><template v-if="n26Summary.deleted_earlier"> ·&nbsp;<span data-test="n26-summary-deleted">{{ deletedClause(n26Summary.deleted_earlier) }}</span></template>.<template v-if="n26Summary.failures.length">
+        {{ n26Summary.files }} file{{ n26Summary.files === 1 ? '' : 's' }}<template v-if="n26Headed">.</template><template v-else>:</template><template v-if="!n26Headed || n26Summary.payment_rows">
+          {{ ' ' }}<span data-test="n26-summary-in"><template v-if="n26Headed">Money in: </template><strong>{{ n26Summary.imported }}</strong> imported, {{ n26Summary.duplicates }} already imported,
+          {{ n26Summary.skipped }} skipped<template v-if="n26Summary.looked_alike">, <span data-test="n26-summary-looked-alike">{{ n26LookedAlikeClause }}</span></template><template v-if="!n26Headed"><template v-for="part in n26LeftOut" :key="part.key">, <span :data-test="`n26-summary-${part.key}`">{{ part.text }}</span></template></template><template v-if="n26Summary.removed_earlier"> ·&nbsp;<span data-test="n26-summary-removed">{{ n26Summary.removed_earlier }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-in" @click="openRemoved('in')">restore it on Transactions</button></span></template><template v-if="n26Summary.deleted_earlier"> ·&nbsp;<span data-test="n26-summary-deleted">{{ deletedClause(n26Summary.deleted_earlier) }}</span></template>.</span></template><template v-if="n26Headed">
+          {{ ' ' }}<span data-test="n26-summary-expenses">Money out: <template v-for="(part, i) in n26MoneyOut" :key="part.key"><template v-if="i && part.prior"> ·&nbsp;</template><template v-else-if="i">, </template><span :data-test="`n26-summary-expenses-${part.key}`"><template v-if="part.key === 'removed'">{{ part.count }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-out" @click="openRemoved('out')">restore it on Transactions</button></template><template v-else>{{ part.text }}</template></span></template>.</span><template v-if="n26LeftOut.length">
+          {{ ' ' }}<span data-test="n26-summary-left-out"><template v-for="(part, i) in n26LeftOut" :key="part.key"><template v-if="i">, </template><span :data-test="`n26-summary-${part.key}`">{{ part.text }}</span></template>.</span></template></template><template v-if="n26Summary.failures.length">
           {{ ' ' }}<span data-test="n26-summary-failures">{{ n26FailureLine }}</span></template><template v-if="(n26Summary.unreadable || []).length">
-          {{ ' ' }}<span data-test="n26-summary-unreadable">{{ n26UnreadableLine }}</span></template><template v-if="expenseParts(n26Expenses).length">
-          {{ ' ' }}<span data-test="n26-summary-expenses"><template v-if="!n26Expenses.added">Expenses: </template><template v-for="(part, i) in expenseParts(n26Expenses)" :key="part.key"><template v-if="i"> ·&nbsp;</template><span :data-test="`n26-summary-expenses-${part.key}`"><template v-if="part.key === 'removed'">{{ part.count }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-out" @click="openRemoved('out')">restore it on Transactions</button></template><template v-else>{{ part.text }}</template></span></template>.</span></template><template v-if="payerCandidates.length">
+          {{ ' ' }}<span data-test="n26-summary-unreadable">{{ n26UnreadableLine }}</span></template><template v-if="payerCandidates.length">
           {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span></template>
       </p>
       <!-- Its own line under the sentence, as a bordered button: at the end
@@ -961,13 +962,49 @@
           deleted: exp.deleted + this.paypalExpensePrior.deleted,
         };
       },
-      n26Expenses() {
+      // The N26 line's shapes (system_3 #12271): with no money out it reads
+      // as before, one sentence; with money out, "Money in:" (when there is
+      // any) and "Money out:" are two sentences, and the rows left out follow
+      // both, since a Space move is counted in either direction. A failure
+      // stays the last sentence.
+      n26Headed() {
+        return Boolean(this.n26Summary && this.n26Summary.expense_rows);
+      },
+      // The money-out sentence: today's parts plus the rows not added; a
+      // zero is not printed (c66307). The prior rows keep their "·".
+      n26MoneyOut() {
         const s = this.n26Summary || {};
-        return {
-          added: s.expenses_added || 0,
-          removed: s.expenses_removed_earlier || 0,
-          deleted: s.expenses_deleted_earlier || 0,
-        };
+        const parts = [];
+        const added = s.expenses_added || 0;
+        if (added) parts.push({ key: 'added', text: `${added} expense${added === 1 ? '' : 's'} added to your book` });
+        if (s.expenses_already) parts.push({ key: 'already', text: `${s.expenses_already} already imported` });
+        if (s.expenses_not_added) parts.push({ key: 'not-added', text: `${s.expenses_not_added} not added` });
+        if (s.expenses_removed_earlier) parts.push({ key: 'removed', prior: true, count: s.expenses_removed_earlier });
+        if (s.expenses_deleted_earlier) parts.push({ key: 'deleted', prior: true, text: this.deletedClause(s.expenses_deleted_earlier) });
+        return parts;
+      },
+      // The rows the server left out of the N26 files, in the line's order.
+      n26LeftOut() {
+        const s = this.n26Summary || {};
+        const parts = [];
+        if (s.paypal_transfers) parts.push({ key: 'paypal', text: this.n26PayPalClause });
+        if (s.space_transfers) parts.push({ key: 'space-transfer', text: this.n26SpaceTransferClause });
+        if (s.zero_amounts) {
+          const zero = formatMoney(0, 'EUR');
+          parts.push({
+            key: 'zero',
+            text: s.zero_amounts === 1 ? `1 row of ${zero} left out` : `${s.zero_amounts} rows of ${zero} left out`,
+          });
+        }
+        return parts;
+      },
+      // A look-alike row the review left unticked and ze did not send
+      // (#12271 ruling 2): not zir own skip.
+      n26LookedAlikeClause() {
+        const n = (this.n26Summary && this.n26Summary.looked_alike) || 0;
+        return n === 1
+          ? '1 looked like a payment already in your book and was not imported'
+          : `${n} looked like payments already in your book and were not imported`;
       },
       incoming() {
         return this.payments.filter((p) => p.kind === 'incoming');

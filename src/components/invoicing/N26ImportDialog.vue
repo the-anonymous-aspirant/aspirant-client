@@ -264,6 +264,10 @@
       spaceTransferTotal() {
         return this.files.reduce((n, file) => n + this.spaceTransferSkipped(file), 0);
       },
+      // Rows of 0.00 the server counted and left out (system_3 #12271).
+      zeroAmountTotal() {
+        return this.files.reduce((n, file) => n + ((file.skipped && file.skipped.zero_amount) || 0), 0);
+      },
       nothingLine() {
         if (this.rows.length || this.expenseRows.length) return 'Nothing new to import: every row is already imported.';
         if (this.paypalTotal && this.spaceTransferTotal) {
@@ -347,7 +351,8 @@
           !(file.candidates || []).length &&
           !(file.expense_candidates || []).length &&
           !this.paypalSkipped(file) &&
-          !this.spaceTransferSkipped(file)
+          !this.spaceTransferSkipped(file) &&
+          !(file.skipped && file.skipped.zero_amount)
         );
       },
       // Name the stored payment a look-alike row matches, when it is loaded.
@@ -398,7 +403,8 @@
       },
       // However the dialog is dismissed, the summary is still emitted, so a
       // file that could not be read stays named after it closes (c60358
-      // item 2, D2); every row left unticked counts as skipped.
+      // item 2, D2). A row not sent is skipped, or not added on the money-out
+      // side (system_3 #12271).
       close(value) {
         if (this.confirming || value) return;
         this.finish(this.paymentsResult || { confirmed: 0, duplicates: 0 }, this.sentRows, null);
@@ -435,6 +441,20 @@
         const paymentDuplicates = result.duplicates + alreadyImported
           - payPrior.removed - payPrior.deleted
           - (result.removed_earlier || 0) - (result.deleted_earlier || 0);
+        // A row that looks like a stored payment starts unticked; not sent,
+        // it is counted on its own: "skipped" is only zir own unticking
+        // (system_3 #12271 ruling 2, §3.130 Decision 4).
+        const lookedAlike = this.rows
+          .filter(({ f, r, row }) => !row.already_imported && row.possible_duplicate_of && !this.isSent(f, r)).length;
+        // The money-out side the same way: every expense row is added,
+        // already in the book (removed and deleted earlier apart), or not
+        // added. Only what a press sent counts as sent, so a dismissal after
+        // a refused expense confirm reads every offered row as not added
+        // (#12271 review points 1-3).
+        const expAlready = this.expenseRows.filter(({ row }) => row.already_imported).length;
+        const expSent = (ex.confirmed || 0) + (ex.duplicates || 0);
+        const expRemoved = expPrior.removed + (ex.removed_earlier || 0);
+        const expDeleted = expPrior.deleted + (ex.deleted_earlier || 0);
         this.$emit('imported', {
           files: this.files.length,
           failures: this.files
@@ -444,20 +464,28 @@
           // dialog closes, like a failure (design_agent c65358, §3.127
           // Decision 5).
           unreadable: this.files.filter((file) => !file.error && this.unreadableStatement(file)).map((file) => file.filename),
-          // The PayPal transfers and the Space moves were read too,
-          // so the line adds up.
-          rows_read: this.rows.length + this.paypalTotal + this.spaceTransferTotal,
+          // Every data row of the files: money in, money out, and the rows
+          // left out, so the line adds up to the files picked (system_3
+          // #12271, amending #10634's payment rows only).
+          rows_read: this.rows.length + this.expenseRows.length
+            + this.paypalTotal + this.spaceTransferTotal + this.zeroAmountTotal,
+          payment_rows: this.rows.length,
+          expense_rows: this.expenseRows.length,
           paypal_transfers: this.paypalTotal,
           space_transfers: this.spaceTransferTotal,
+          zero_amounts: this.zeroAmountTotal,
           imported: result.confirmed,
           duplicates: Math.max(0, paymentDuplicates),
           removed_earlier: removedEarlier,
           deleted_earlier: deletedEarlier,
-          skipped: this.rows.length - alreadyImported - posted.length,
+          looked_alike: lookedAlike,
+          skipped: this.rows.length - alreadyImported - posted.length - lookedAlike,
           // Outgoing rows added to the expense book (system_3 #10432).
-          expenses_added: expenses ? expenses.confirmed : 0,
-          expenses_removed_earlier: expPrior.removed + (ex.removed_earlier || 0),
-          expenses_deleted_earlier: expPrior.deleted + (ex.deleted_earlier || 0),
+          expenses_added: ex.confirmed || 0,
+          expenses_already: Math.max(0, expAlready + (ex.duplicates || 0) - expRemoved - expDeleted),
+          expenses_removed_earlier: expRemoved,
+          expenses_deleted_earlier: expDeleted,
+          expenses_not_added: this.expenseRows.length - expAlready - expSent,
         });
         this.$emit('update:open', false);
       },

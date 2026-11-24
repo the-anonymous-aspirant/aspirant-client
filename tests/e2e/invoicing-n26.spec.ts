@@ -207,14 +207,24 @@ const summary = (page: Page) => page.locator('[data-test="n26-summary"]');
 // read = imported + already imported + skipped + left out, on every path
 // (design_agent c61091), + removed and deleted earlier when only payments
 // carry those flags (#10634, design_agent c66252).
+// The line adds up to every data row of the files (§3.130 Decision 4 as
+// system_3 #12271 amends it): the money-in counts, plus the leading count of
+// every other part of the line, money out and left out included.
 async function expectSummaryAddsUp(page: Page): Promise<void> {
   const text = (await summary(page).innerText()).replace(/\s+/g, ' ');
-  const m = text.match(
-    /read (\d+) rows? .*?: (\d+) imported, (\d+) already imported, (\d+) skipped(?:, (\d+) transfers? from PayPal left out(?: \([^)]*\))?)?(?:, (\d+) moves? between your account and (?:a Space|your Spaces) left out)?(?:[^·.]*? · (\d+) removed earlier: restore it on Transactions)?(?:[^·.]*? · (\d+) deleted earlier)?/,
-  );
-  expect(m, text).not.toBeNull();
-  const [read, imported, already, skipped, paypalLeftOut, spaceLeftOut, removed, deleted] = m!.slice(1).map((v) => Number(v || 0));
-  expect(read, text).toBe(imported + already + skipped + paypalLeftOut + spaceLeftOut + removed + deleted);
+  const read = Number(text.match(/read (\d+) rows?/)![1]);
+  let accounted = 0;
+  for (const t of await summary(page).locator('[data-test="n26-summary-in"]').allInnerTexts()) {
+    const m = t.replace(/\s+/g, ' ').match(/(\d+) imported, (\d+) already imported, (\d+) skipped/);
+    expect(m, t).not.toBeNull();
+    accounted += Number(m![1]) + Number(m![2]) + Number(m![3]);
+  }
+  const parts = summary(page).locator([
+    'n26-summary-looked-alike', 'n26-summary-removed', 'n26-summary-deleted',
+    'n26-summary-paypal', 'n26-summary-space-transfer', 'n26-summary-zero',
+  ].map((t) => `[data-test="${t}"]`).join(', ') + ', [data-test^="n26-summary-expenses-"]');
+  for (const t of await parts.allInnerTexts()) accounted += Number(t.trim().match(/^(\d+)/)![1]);
+  expect(read, text).toBe(accounted);
 }
 const checkbox = (page: Page, i: number) => page.locator('[data-test="n26-row"]').nth(i).locator('input[type="checkbox"]');
 
@@ -320,7 +330,11 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await page.locator('[data-test="n26-confirm"]').click();
     const posted = JSON.parse(confirmRequests(fake)[0].body).rows;
     expect(posted.map((r: Json) => r.transaction_id)).toEqual([statementRow(4).transaction_id]);
-    await expect(summary(page)).toHaveText('N26: read 4 rows from 1 file: 1 imported, 1 already imported, 2 skipped.');
+    // The two the review left unticked are not zir skips (system_3 #12271 ruling 2).
+    await expect(summary(page)).toHaveText(
+      'N26: read 4 rows from 1 file: 1 imported, 1 already imported, 0 skipped, 2 looked like payments already in your book and were not imported.',
+    );
+    await expectSummaryAddsUp(page);
   });
 
   test('a file the server cannot read shows its error, and stays named in the summary after the dialog closes', async ({ page }) => {
@@ -741,10 +755,11 @@ test.describe('#10432-A1 N26 import — outgoing rows as work expenses', () => {
       payee_name: 'Colorificio Esempio', note: 'Pigmenti e tele', category: 'materials and supplies',
     }]);
 
-    // The payment line still adds up; the expenses get their own sentence.
+    // Money in and money out are a sentence each, and the two add up to
+    // the files (system_3 #12271).
     await expectSummaryAddsUp(page);
-    await expect(summary(page)).toContainText('N26: read 3 rows from 2 files: 3 imported, 0 already imported, 0 skipped.');
-    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
+    await expect(summary(page)).toContainText('N26: read 5 rows from 2 files. Money in: 3 imported, 0 already imported, 0 skipped.');
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('Money out: 1 expense added to your book, 1 not added.');
   });
 
   test('expenses alone: with every payment unticked, only the expense confirm is called', async ({ page }) => {
@@ -763,7 +778,7 @@ test.describe('#10432-A1 N26 import — outgoing rows as work expenses', () => {
     expect(confirmRequests(fake)).toHaveLength(0);
     // Left on its default, the category is the catch-all.
     expect(JSON.parse(expenseConfirms(fake)[0].body).rows[0].category).toBe('other');
-    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('Money out: 1 expense added to your book.');
     await expectSummaryAddsUp(page);
   });
 
@@ -776,7 +791,7 @@ test.describe('#10432-A1 N26 import — outgoing rows as work expenses', () => {
     for (let i = 0; i < 2; i++) await checkbox(page, i).uncheck();
     await expenseCheck(page, 0).check();
     await page.locator('[data-test="n26-confirm"]').click();
-    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('Money out: 1 expense added to your book.');
     const confirmAt = fake.requests.findIndex((r) => r.method === 'POST' && r.path === '/invoicing/expenses/import-n26/confirm');
     await expect.poll(() => fake.requests.slice(confirmAt + 1).some((r) => r.method === 'GET' && r.path === '/invoicing/expenses')).toBe(true);
 
@@ -793,7 +808,7 @@ test.describe('#10432-A1 N26 import — outgoing rows as work expenses', () => {
     for (let i = 0; i < 2; i++) await checkbox(page, i).uncheck();
     await expenseCheck(page, 0).check();
     await page.locator('[data-test="n26-confirm"]').click();
-    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('Money out: 1 expense added to your book.');
     await expect(page.locator('[data-test="summary-landed"]')).toHaveText('The new rows are in June 2026.');
     const june = page.locator('[data-test="ledger-group"][data-group="2026-06"]');
     await expect(june).toHaveAttribute('open', '');
@@ -836,7 +851,7 @@ test.describe('#10432-A1 N26 import — outgoing rows as work expenses', () => {
     expect(confirmRequests(fake), 'the payments are not posted twice').toHaveLength(1);
     expect(expenseConfirms(fake)).toHaveLength(2);
     await expect(summary(page)).toContainText('2 imported');
-    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('Money out: 1 expense added to your book.');
   });
 
   test('when the category list cannot be read, the picker still offers the catch-all', async ({ page }) => {
@@ -961,12 +976,12 @@ test.describe('#10634 N26 import — removed and deleted rows are named and coun
     await page.locator('[data-test="n26-confirm"]').click();
     await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
     expect(expenseConfirms(fake)).toHaveLength(0);
-    // "rows read" counts payment rows only, so expense rows are counted on
-    // the expense sentence, never on the payment one: the payment sentence
-    // must add up (§3.130; the #10634 dogfood found the mixed count, c66307).
-    // With no expense added, the sentence opens "Expenses:" so no zero shows.
+    // Expense rows are counted on the money-out sentence, never on the
+    // money-in one, so each sentence adds up (§3.130; c66307), and "rows
+    // read" counts both (system_3 #12271). A zero is not printed.
     await expect(summary(page)).toHaveText(
-      'N26: read 2 rows from 1 file: 2 imported, 0 already imported, 0 skipped. Expenses: 1 removed earlier: restore it on Transactions · 1 deleted earlier.',
+      'N26: read 4 rows from 1 file. Money in: 2 imported, 0 already imported, 0 skipped. ' +
+        'Money out: 1 removed earlier: restore it on Transactions · 1 deleted earlier.',
     );
     await expect(page.locator('[data-test="n26-summary-removed"]')).toHaveCount(0);
     await expect(page.locator('[data-test="n26-summary-deleted"]')).toHaveCount(0);
@@ -999,8 +1014,8 @@ test.describe('#10634 N26 import — removed and deleted rows are named and coun
     // The live dogfood shape: before the fix this read "· 2 removed earlier
     // … · 2 deleted earlier" on the payment sentence, 6 accounted of 4 read.
     await expect(summary(page)).toHaveText(
-      'N26: read 4 rows from 1 file: 1 imported, 1 already imported, 0 skipped · 1 removed earlier: restore it on Transactions · 1 deleted earlier. ' +
-        '1 expense added to your book · 1 removed earlier: restore it on Transactions · 1 deleted earlier.',
+      'N26: read 7 rows from 1 file. Money in: 1 imported, 1 already imported, 0 skipped · 1 removed earlier: restore it on Transactions · 1 deleted earlier. ' +
+        'Money out: 1 expense added to your book · 1 removed earlier: restore it on Transactions · 1 deleted earlier.',
     );
     await expectSummaryAddsUp(page);
     // The expense sentence's counts are the response's flagged expense rows (c66309).
@@ -1131,7 +1146,7 @@ test.describe('#12321 N26 import — a second press sends what the button names'
     expect(sentIds(fake, 0)).toEqual([statementRow(1).transaction_id, statementRow(2).transaction_id]);
     expect(expenseConfirms(fake)).toHaveLength(2);
     await expect(summary(page)).toContainText('2 imported');
-    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('Money out: 1 expense added to your book.');
     await expectSummaryAddsUp(page);
   });
 
@@ -1180,6 +1195,127 @@ test.describe('#12321 N26 import — a second press sends what the button names'
     await page.locator('[data-test="unsent-discard"]').click();
     await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
     await expect(summary(page)).toContainText('1 imported, 0 already imported, 1 skipped');
+    // The expense the refused press sent was not added (#12271 review point 3).
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('Money out: 1 not added.');
+    await expectSummaryAddsUp(page);
+  });
+});
+
+// system_3 #12271 (the #11498 review's C3-17): "read N rows" is every data row
+// of the files picked, and the line accounts for each of them. The parse
+// answer below is the one a 29-row CSV export gets (the review's invented
+// walk file): 17 payments in, 8 rows of money out, 1 transfer from PayPal,
+// 2 moves to and from Spaces, and 1 row of 0.00.
+const twentyNine = (): Json => ({
+  filename: 'export.csv',
+  document_kind: 'n26_csv_export',
+  candidates: Array.from({ length: 17 }, (_, i) => confirmation({
+    document_kind: 'n26_csv_export',
+    transaction_id: `csv-in-000000000000000000${String(i + 1).padStart(2, '0')}`,
+    paid_on: `2026-09-${String(i + 1).padStart(2, '0')}`,
+    gross_cents: 1000 * (i + 1),
+    net_cents: 1000 * (i + 1),
+    sender_name: i % 2 ? 'Ada Muster' : 'Luca Beispiel',
+    note: `Auftrag ${i + 1}`,
+  })),
+  expense_candidates: Array.from({ length: 8 }, (_, i) => outgoingRow(1, {
+    transaction_id: `csv-out-00000000000000000${i + 1}`,
+    paid_on: `2026-09-2${i + 1}`,
+    amount_cents: 500 + i,
+  })),
+  skipped: { paypal_transfer: 1, space_transfer: 2, zero_amount: 1 },
+});
+
+test.describe('#12271 N26 import — the line adds up to every row of the file', () => {
+  const LEFT_OUT =
+    '1 transfer from PayPal left out (its payments come in through PayPal), ' +
+    '2 moves between your account and your Spaces left out (your own money), 1 row of €0.00 left out.';
+  const uploadCsv = async (page: Page) => {
+    await openWaysIn(page);
+    await page.locator('[data-test="n26-file-input"]').setInputFiles([csv('export.csv')]);
+    await expect(page.locator('[data-test="n26-review"]')).toBeVisible();
+  };
+
+  test('a 29-row export: money in, money out and the rows left out add up to 29', async ({ page }) => {
+    const fake = newFake({ parsed: { 'export.csv': twentyNine() } });
+    await open(page, fake);
+    await uploadCsv(page);
+    for (let i = 0; i < 7; i++) await expenseCheck(page, i).check();
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+
+    await expect(summary(page)).toHaveText(
+      'N26: read 29 rows from 1 file. Money in: 17 imported, 0 already imported, 0 skipped. ' +
+        `Money out: 7 expenses added to your book, 1 not added. ${LEFT_OUT}`,
+    );
+    await expectSummaryAddsUp(page);
+  });
+
+  test('dismissed without importing, every row is still accounted for', async ({ page }) => {
+    const fake = newFake({ parsed: { 'export.csv': twentyNine() } });
+    await open(page, fake);
+    await uploadCsv(page);
+    await page.locator('[data-test="n26-cancel"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+    expect(confirmRequests(fake)).toHaveLength(0);
+    expect(expenseConfirms(fake)).toHaveLength(0);
+
+    await expect(summary(page)).toHaveText(
+      `N26: read 29 rows from 1 file. Money in: 0 imported, 0 already imported, 17 skipped. Money out: 8 not added. ${LEFT_OUT}`,
+    );
+    await expectSummaryAddsUp(page);
+  });
+
+  test('money out only: no money-in sentence, and the rows left out follow', async ({ page }) => {
+    const fake = newFake({
+      parsed: {
+        'export.csv': { ...twentyNine(), candidates: [], expense_candidates: [outgoingRow(1), outgoingRow(2, { already_imported: true }), outgoingRow(3)], skipped: { zero_amount: 2 } },
+      },
+    });
+    await open(page, fake);
+    await uploadCsv(page);
+    await expenseCheck(page, 0).check();
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+
+    await expect(summary(page)).toHaveText(
+      'N26: read 5 rows from 1 file. Money out: 1 expense added to your book, 1 already imported, 1 not added. 2 rows of €0.00 left out.',
+    );
+    await expect(page.locator('[data-test="n26-summary-in"]')).toHaveCount(0);
+    await expectSummaryAddsUp(page);
+  });
+
+  test('neither: a statement whose only row is 0.00 reads it, and is not called empty', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['statement.pdf'] = { filename: 'statement.pdf', document_kind: 'n26_account_statement', candidates: [], skipped: { zero_amount: 1 } };
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+    await page.locator('[data-test="n26-close"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+
+    await expect(summary(page)).toHaveText('N26: read 1 row from 1 file: 0 imported, 0 already imported, 0 skipped, 1 row of €0.00 left out.');
+    await expect(page.locator('[data-test="n26-summary-unreadable"]')).toHaveCount(0);
+    await expectSummaryAddsUp(page);
+  });
+
+  test('a look-alike ze ticks is imported; one left unticked is counted apart from zir skips', async ({ page }) => {
+    const fake = newFake();
+    fake.parsed['statement.pdf'].candidates = [
+      statementRow(1, { possible_duplicate_of: 10 }),
+      statementRow(2, { possible_duplicate_of: 10 }),
+      statementRow(3),
+      statementRow(4),
+    ];
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+    await checkbox(page, 0).check();
+    await checkbox(page, 3).uncheck();
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+
+    await expect(summary(page)).toHaveText(
+      'N26: read 4 rows from 1 file: 2 imported, 0 already imported, 1 skipped, 1 looked like a payment already in your book and was not imported.',
+    );
     await expectSummaryAddsUp(page);
   });
 });
