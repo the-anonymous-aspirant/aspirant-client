@@ -220,15 +220,17 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await expect(page.locator('[data-test="invoice-pdf"]')).toHaveAttribute('href', '/api/invoicing/invoices/100/pdf');
   });
 
-  test('a refused issue shows the server reason and stays a draft', async ({ page }) => {
+  // system_3 #12274: the refusal is worded by the app from its code and
+  // figures; the server's sentence is never shown as written.
+  test('a refused issue says why in the app\'s words and stays a draft', async ({ page }) => {
     const fake = newFake();
-    fake.issueFailure = { status: 422, body: { error: { code: 'line_items_incomplete', message: 'line item 1 needs a description, a quantity above zero and a price above zero' } } };
+    fake.issueFailure = { status: 422, body: { error: { code: 'line_items_incomplete', message: 'line item 1 needs a description, a quantity above zero and a price above zero', details: { position: 1 } } } };
     await open(page, fake);
     await createFromTwo(page);
 
     await page.locator('[data-test="draft-issue"]').click();
     await page.locator('[data-test="issue-confirm-button"]').click();
-    await expect(page.locator('[data-test="invoice-error"]')).toContainText('needs a description');
+    await expect(page.locator('[data-test="invoice-error"]')).toHaveText('Line 1 needs a description, a quantity above zero and a price above zero.');
     await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
   });
 
@@ -240,7 +242,13 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];
     fake.issueFailure = {
       status: 422,
-      body: { error: { code: 'client_incomplete', message: "the client has no postal address, and this invoice totals 470,00 € gross: above 250,00 € an invoice must name the recipient's full address (§14 Abs. 4 UStG, §34a UStDV). Add the client's postal address to issue it" } },
+      body: {
+        error: {
+          code: 'client_address_required',
+          message: "the client has no postal address, and this invoice totals 470,00 € gross: above 250,00 € an invoice must name the recipient's full address (§14 Abs. 4 UStG, §34a UStDV). Add the client's postal address to issue it",
+          details: { total_cents: 47000, limit_cents: 25000, currency: 'EUR' },
+        },
+      },
     };
     await open(page, fake);
     await createFromTwo(page);
@@ -254,7 +262,9 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     );
     await page.locator('[data-test="draft-issue"]').click();
     await page.locator('[data-test="issue-confirm-button"]').click();
-    await expect(page.locator('[data-test="invoice-error"]')).toContainText('470,00 € gross: above 250,00 €');
+    await expect(page.locator('[data-test="invoice-error"]')).toHaveText(
+      "This invoice totals €470.00. Above €250.00 an invoice needs the client's postal address. Add it under Clients.",
+    );
     await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
   });
 
