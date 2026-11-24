@@ -584,22 +584,19 @@
         <span class="nowrap">{{ formatDay(row.paid_on) }}</span>
         <span class="muted" data-test="row-source">{{ row.source }}</span>
       </template>
-      <!-- Who, then what it was for under it, as on the phone card: a column
-           of its own left too little width for the selects at 1280 with the
-           sidebar open (#8407). -->
+      <!-- The Book's line, "{who} · {what}", wrapping as the Book's does
+           (system_3 #12275 ruling 1; §3.159 Decision 6: one header, one cell
+           content). Under it one muted line, only for what that line does not
+           say (ruling 2). The payer's e-mail is in Edit payment (#12287 review
+           point 2). -->
       <template #cell-who="{ row }">
-        <span class="sender" data-test="row-who">{{ row.who || row.what || '—' }}</span>
-        <span v-if="row.payment && row.payment.sender_email" class="muted">{{ row.payment.sender_email }}</span>
-        <span v-if="row.who && row.what" class="note note--cell" data-test="row-what">{{ row.what }}</span>
-        <template v-if="row.payment">
-          <!-- A hand-entered payment's method and reference; no extra column
-               for Delete (the table fills 968px). -->
-          <span v-if="row.payment.entry === 'manual'" class="muted manual-line" data-test="payment-manual">{{ manualLine(row.payment) }}</span>
-          <!-- The client as text, as on the phone card; changed in Edit
-               payment. A payment with none says so, so a missing client is
-               seen before a review opens (Design ack c71060, D2). -->
-          <span class="client-line" :class="{ muted: !clientNameOf(row.payment) }" data-test="row-client">{{ clientNameOf(row.payment) || 'No client' }}</span>
-        </template>
+        <span class="who-what" data-test="row-who-what"><span class="who-what__who" data-test="row-who">{{ row.who || row.what || '—' }}</span><template
+          v-if="row.who && row.what"
+        >{{ ' · ' }}<span class="who-what__what" data-test="row-what">{{ row.what }}</span></template></span>
+        <span v-if="row.payment && rowDetail(row.payment).length" class="muted row-detail" data-test="row-detail"><template
+          v-for="(part, i) in rowDetail(row.payment)"
+          :key="part.test"
+        ><template v-if="i">{{ ' · ' }}</template><span :data-test="part.test">{{ part.text }}</span></template></span>
       </template>
       <template #cell-category="{ row }">
         <div v-if="row.payment" class="cell-select">
@@ -787,6 +784,7 @@
   import { countsInBook } from './bookSelection.js';
   import { liveNames, withCategory } from './expenseCategories.js';
   import { PROXY_MAX_BYTES, refusalOf } from './refusals.js';
+  import { namesAreSame } from './payerMatch.js';
 
   // "2 of 5 kept their category: 2026-08-12 €40.00, 2026-08-14 €25.00 (on an
   // issued invoice; cancel it first)." One shared reason closes the line;
@@ -1632,6 +1630,19 @@
       // an N26 row whose payer is PayPal. The PayPal payments it sums are
       // the paid work, so the transfer itself can never be (#9940-A1,
       // operator c61402).
+      // The desktop row's muted line (system_3 #12275 ruling 2): a
+      // hand-entered payment's method and reference, then the client only
+      // when it is not the payer ("the same" by §3.142 Decision 4, as #12287
+      // rules for the card) or is missing. A row whose payer is its client
+      // prints the name once.
+      rowDetail(payment) {
+        const parts = [];
+        if (payment.entry === 'manual') parts.push({ test: 'payment-manual', text: this.manualLine(payment) });
+        const client = this.clientNameOf(payment);
+        if (!client) parts.push({ test: 'row-client', text: 'No client' });
+        else if (!namesAreSame(client, payment.sender_name)) parts.push({ test: 'row-client', text: `Client: ${client}` });
+        return parts;
+      },
       // The phone card's client, as text (#11019-A4); '' when none is linked.
       clientNameOf(payment) {
         const c = payment.client_id ? this.clients.find((x) => x.id === payment.client_id) : null;
@@ -2479,14 +2490,23 @@
     min-width: 0;
     padding: 0 var(--space-xs);
     gap: var(--space-2xs);
+    /* A wrapped label grows the trigger instead of spilling out of it. */
+    height: auto;
+    min-height: var(--asp-select-height, 34px);
   }
 
+  /* No category label is cut (system_3 #12275 ruling 3): the column is as
+     wide as the longest starter option, and a longer name (the server takes
+     100 characters) wraps in the trigger instead of ending in an ellipsis
+     (review point 2). */
   .cell-select :deep(.select__value) {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
   }
+
+
 
   .paid-work-reason {
     display: block;
@@ -2730,6 +2750,21 @@
   .note {
     white-space: pre-line;
     overflow-wrap: anywhere;
+  }
+
+  /* The Book's "{who} · {what}" (BookPanel's .description): one run of
+     text that wraps, the purpose muted after the payer. */
+  .who-what {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+
+  .who-what__what {
+    color: var(--text-muted);
+  }
+
+  .row-detail {
+    margin-top: var(--space-2xs);
   }
 
   .note--cell {

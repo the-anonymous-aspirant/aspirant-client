@@ -394,7 +394,8 @@ test.describe('#10630 Transactions: one list of money in and out', () => {
     await expect(row(page, 'N26-P1').locator('[data-test="row-invoice"]')).toHaveText('Invoice 2026-014');
     await expect(row(page, 'PP-P2').locator('[data-test="row-invoice"]')).toHaveText('Draft');
     await expect(row(page, 'M-p3').locator('[data-test="row-invoice"]')).toHaveCount(0);
-    await expect(row(page, 'N26-P1').locator('[data-test="row-client"]')).toContainText('Galerie Nord');
+    // The client shows where it is not the payer (system_3 #12275 ruling 2).
+    await expect(row(page, 'PP-P2').locator('[data-test="row-client"]')).toContainText('Galerie Nord');
     await expect(row(page, 'N26-P1').locator('[data-test="payment-category"], [data-test="row-category"]')).toContainText('Paid work');
     // Money out has its category, and no client or invoice.
     // An expense's category is a select on a wide screen (system_3 #11567)

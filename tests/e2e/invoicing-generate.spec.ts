@@ -734,13 +734,16 @@ test.describe('#11506 Generate invoice on a Transactions row', () => {
 test.describe('#11506 the client on a desktop row', () => {
   test.skip(({ isMobile }) => isMobile, 'the phone card already reads the client as text (#11019-A4)');
 
+  // Since system_3 #12275 (ruling 2) the client is on the row's one muted
+  // line, and only when it is not the payer: a payer who is the client prints
+  // the name once.
   test('reads as text under who, and a payment with none says "No client" in muted ink', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await openTransactions(page, newFake());
-    await expect(txnRow(page, 1).locator('[data-test="row-client"]')).toHaveText('Galerie Nord');
-    await expect(txnRow(page, 1).locator('[data-test="row-client"]')).not.toHaveClass(/muted/);
+    await expect(txnRow(page, 1).locator('[data-test="row-who"]')).toHaveText('Galerie Nord');
+    await expect(txnRow(page, 1).locator('[data-test="row-client"]')).toHaveCount(0);
     await expect(txnRow(page, 6).locator('[data-test="row-client"]')).toHaveText('No client');
-    await expect(txnRow(page, 6).locator('[data-test="row-client"]')).toHaveClass(/muted/);
+    await expect(txnRow(page, 6).locator('[data-test="row-detail"]')).toHaveClass(/muted/);
     await expect(page.getByRole('columnheader', { name: 'Invoice', exact: true }).first()).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Client', exact: true })).toHaveCount(0);
   });
