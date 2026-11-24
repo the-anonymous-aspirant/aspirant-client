@@ -230,12 +230,23 @@
           <p v-if="statsState === 'none'" class="client-stats__state muted" data-test="client-stats-none">No issued invoices.</p>
           <p v-if="statsState === 'failed'" class="client-stats__state muted" data-test="client-stats-failed">Invoice figures could not be loaded.</p>
         </div>
-        <AspInput v-model="form.name" label="Name" required />
+        <!-- A refusal of the name or the address prints at its field, with
+             zir text kept (system_3 #12264, #12298). A name already in the
+             book is asked about there, not refused: two people can share a
+             name, and the name is what the invoice prints. "Open" is an exit
+             like any other, so with something typed it asks first (§3.166). -->
+        <AspInput ref="name" v-model="form.name" label="Name" required :error="nameLine" data-test="client-name-input" />
+        <div v-if="nameAsk" class="client-form__ask" data-test="client-name-ask">
+          <AspButton variant="ghost" size="sm" data-test="client-name-open" :aria-label="`Open ${nameAsk.name}`" @click="openNamesake">Open</AspButton>
+        </div>
         <AspTextarea
+          ref="address"
           v-model="form.address"
           label="Postal address"
           :rows="3"
           hint="Needed for invoices over 250 € gross."
+          :error="fieldErrors.address"
+          data-test="client-address-input"
         />
         <AspInput v-model="form.email" type="email" label="Email" />
         <AspInput v-model="form.paypal_email" type="email" label="PayPal email" hint="Imported payments from this address are linked to the client." />
@@ -282,8 +293,10 @@
              more than 5000 characters with a message shown below, and the
              text stays here to shorten (design ack c61704, system_3 #9987). -->
         <AspTextarea
+          ref="notes"
           v-model="form.notes"
           label="Notes"
+          :error="fieldErrors.notes"
           :rows="4"
           hint="Never printed on an invoice or included in an export."
           data-test="client-notes-input"
@@ -294,7 +307,7 @@
         <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
         <ModalActions v-else>
           <AspButton variant="secondary" :disabled="saving" data-test="client-cancel" @click="onEditorOpenChange(false)">Cancel</AspButton>
-          <AspButton :loading="saving" data-test="client-save" @click="save">Save</AspButton>
+          <AspButton :loading="saving" class="client-save" data-test="client-save" @click="save">{{ saveLabel }}</AspButton>
         </ModalActions>
       </template>
     </AspModal>
@@ -322,7 +335,15 @@
   const FLAT_MAX = 10;
 
   const blank = () => ({ name: '', address: '', email: '', paypal_email: '', iban: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
-  const noErrors = () => ({ iban: '', phone: '', instagram_url: '', telegram_url: '' });
+  const noErrors = () => ({ name: '', address: '', iban: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
+  // The server's refusals of these fields print its own sentence at the field
+  // (system_3 #12264): the sentence says which bound was passed.
+  const OWN_SENTENCE = { invalid_name: 'name', invalid_address: 'address', invalid_notes: 'notes' };
+  // The press that confirms a second client of one name must begin at least
+  // this long after the question appeared, and after the key that raised it
+  // was released (system_3 #12313's rule, which #12264 adopts). The time is
+  // read with performance.now(), never Date (#12313 review point 1).
+  const ASK_DEAF_MS = 600;
   // A field as the server stores it on save (aspirant-server handlers/invoicing.go),
   // where that is more than a trim: the PayPal email lower-cased (system_3 #12121),
   // the IBAN with every space removed and upper case (#12086). The unsent test
@@ -357,6 +378,13 @@
         saving: false,
         error: '',
         fieldErrors: noErrors(),
+        // The client of the same name the server named (409 client_exists),
+        // while the form asks whether this is a second one; null otherwise.
+        nameAsk: null,
+        askArmedAt: 0,
+        askKeyHeld: false,
+        // The namesake "Open" goes to once the editor has closed.
+        pendingOpen: null,
         stats: null,
         // loading | ready | none | failed (#10006)
         statsState: 'loading',
@@ -396,6 +424,15 @@
       // While a save runs, no exit closes and none asks.
       unsentBusy() {
         return this.saving;
+      },
+      nameLine() {
+        return this.nameAsk ? `${this.nameAsk.name} is already in your client book.` : this.fieldErrors.name;
+      },
+      // While the form asks, the primary says what a press does now.
+      saveLabel() {
+        if (!this.nameAsk) return 'Save';
+        const typed = this.form.name.trim();
+        return this.editing ? `Save as a second ${typed}` : `Add a second ${typed}`;
       },
       // "Show them" narrows the list to the clients the review line is
       // about; otherwise it is the whole book.
@@ -451,6 +488,7 @@
     },
     beforeUnmount() {
       if (this.narrowQuery) this.narrowQuery.removeEventListener('change', this.onNarrowChange);
+      this.stopKeyWatch();
     },
     watch: {
       // Once nothing is left to review, the list is the whole book again.
@@ -462,7 +500,24 @@
         this.refreshPayerCandidates();
         this.revealNew();
       },
+      // Any change to the form takes the question back (#12313 review point
+      // 3); the next Save asks again if the name is still the same.
+      form: {
+        deep: true,
+        handler() {
+          this.disarmNameAsk();
+        },
+      },
       // Editing a refused field clears its refusal.
+      'form.name'() {
+        this.fieldErrors.name = '';
+      },
+      'form.address'() {
+        this.fieldErrors.address = '';
+      },
+      'form.notes'() {
+        this.fieldErrors.notes = '';
+      },
       'form.iban'() {
         this.fieldErrors.iban = '';
       },
@@ -582,6 +637,7 @@
         this.form = blank();
         this.error = '';
         this.fieldErrors = noErrors();
+        this.disarmNameAsk();
         this.editorOpen = true;
         this.takeUnsentBaseline();
       },
@@ -629,6 +685,7 @@
         };
         this.error = '';
         this.fieldErrors = noErrors();
+        this.disarmNameAsk();
         this.editorOpen = true;
         // An edit's baseline is the row as copied (system_3 #11669).
         this.takeUnsentBaseline();
@@ -641,7 +698,48 @@
         this.requestClose();
       },
       closeNow() {
+        const next = this.pendingOpen;
+        this.pendingOpen = null;
+        this.disarmNameAsk();
         this.editorOpen = false;
+        // "Open" on the namesake: the editor shows that client instead.
+        if (next) this.startEdit(next);
+      },
+      // "Keep editing" after "Open" asked: stay on this form.
+      unsentKeptEditing() {
+        this.pendingOpen = null;
+      },
+      openNamesake() {
+        const ask = this.nameAsk;
+        if (!ask) return;
+        this.pendingOpen = this.clients.find((c) => c.id === ask.id) || ask;
+        this.requestClose();
+      },
+      disarmNameAsk() {
+        this.nameAsk = null;
+        this.askKeyHeld = false;
+        this.stopKeyWatch();
+      },
+      stopKeyWatch() {
+        if (this.onAskKeyUp) window.removeEventListener('keyup', this.onAskKeyUp, true);
+        this.onAskKeyUp = null;
+      },
+      // The question appears at the Name field and focus goes there (#12298
+      // ruling 1). A key that raised it must be released before a press can
+      // confirm: a held Enter repeats its click (#12313 review point 2).
+      askAboutNamesake(other, byKey) {
+        this.nameAsk = { ...other };
+        this.askArmedAt = performance.now();
+        this.stopKeyWatch();
+        this.askKeyHeld = byKey;
+        if (byKey) {
+          this.onAskKeyUp = () => {
+            this.askKeyHeld = false;
+            this.stopKeyWatch();
+          };
+          window.addEventListener('keyup', this.onAskKeyUp, true);
+        }
+        this.$nextTick(() => this.$refs.name && this.$refs.name.focus());
       },
       // What Save would send, normalised as the server stores it: fields typed
       // and put back compare equal again (asStored above; every other field
@@ -650,24 +748,48 @@
         const f = this.form;
         return Object.fromEntries(Object.keys(f).map((k) => [k, (asStored[k] || ((v) => v.trim()))(String(f[k] ?? ''))]));
       },
-      async save() {
+      async save(event) {
+        // A click from a key has no pointer detail; a submit is Enter in a field.
+        const byKey = !event || event.type === 'submit' || event.detail === 0;
+        // While the form asks, only a press on the primary confirms: never
+        // Enter in a field, never a press too soon or with the key still down.
+        let confirmSecond = false;
+        if (this.nameAsk) {
+          if (!event || event.type !== 'click' || event.repeat) return;
+          if (this.askKeyHeld || performance.now() - this.askArmedAt < ASK_DEAF_MS) return;
+          confirmSecond = true;
+        }
         if (!this.form.name.trim()) {
-          this.error = 'A client needs a name.';
+          this.fieldErrors.name = 'A client needs a name.';
+          this.$nextTick(() => this.$refs.name && this.$refs.name.focus());
           return;
         }
         this.saving = true;
         this.error = '';
+        const body = confirmSecond ? { ...this.form, confirm_second_client: true } : this.form;
         try {
-          if (this.editing) await updateClient(this.editing.id, this.form);
+          if (this.editing) await updateClient(this.editing.id, body);
           else {
             this.revealFrom = new Set(this.clients.map((c) => c.id));
-            await createClient(this.form);
+            await createClient(body);
           }
+          this.disarmNameAsk();
           this.editorOpen = false;
           this.$emit('changed');
         } catch (err) {
           this.revealFrom = null;
           const { code, message } = errorOf(err);
+          const namesake = code === 'client_exists' && err.response && err.response.data && err.response.data.client;
+          if (namesake && namesake.id) {
+            this.askAboutNamesake(namesake, byKey);
+            return;
+          }
+          if (OWN_SENTENCE[code]) {
+            const field = OWN_SENTENCE[code];
+            this.fieldErrors[field] = message;
+            this.$nextTick(() => this.$refs[field] && this.$refs[field].focus());
+            return;
+          }
           const refusal = FIELD_REFUSALS[code];
           if (refusal) {
             this.fieldErrors[refusal.field] = refusal.text;
@@ -963,6 +1085,29 @@
   .client-form__error {
     color: var(--feedback-error);
     margin: 0;
+  }
+
+  /* "Open" sits right under the question it answers: the form's gap is
+     taken back so it reads as part of the Name field (system_3 #12264). */
+  .client-form__ask {
+    margin-top: calc(-1 * var(--space-sm));
+  }
+
+  /* While the form asks, the primary carries the typed name, up to 200
+     characters: it wraps inside the footer instead of running out of it. */
+  .client-save {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+    text-align: center;
+    max-width: 100%;
+  }
+
+  /* The label is a flex item: without min-width 0 a name of one long word
+     keeps its full width and runs out of the button on both sides. */
+  .client-save :deep(.btn__label) {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   @media (max-width: 640px) {
