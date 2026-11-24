@@ -198,6 +198,25 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await expect(page.locator('[data-test="manual-payer-line"]')).toHaveText('Close to a client in your book:');
   });
 
+  // system_3 #12319, ruling 5: a choice that was made is shown as made. After
+  // "Add … as a new client" the line says what Save does and the buttons go,
+  // as they go after "Use"; the new client's optional fields appear.
+  test('"Add as new" shows the choice as made, and typing opens it again', async ({ page }) => {
+    await open(page, newFake({ clients: [{ id: 1, name: 'Mara Esempio' }] }));
+    await openWaysIn(page);
+    await page.locator('[data-test="manual-new"]').click();
+    const payer = page.locator('[data-test="manual-payer"]');
+    const line = page.locator('[data-test="manual-payer-line"]');
+    await payer.fill('Mara E.');
+    await page.locator('[data-test="manual-payer-add-new"]').click();
+    await expect(line).toHaveText('Save adds “Mara E.” as a new client.');
+    await expect(page.locator('[data-test="manual-payer-choices"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="manual-new-client-email"]')).toBeVisible();
+    await payer.fill('Mara Es');
+    await expect(line).toHaveText('Close to a client in your book:');
+    await expect(page.locator('[data-test="manual-payer-add-new"]')).toHaveText('Add “Mara Es” as a new client');
+  });
+
   // §3.142 Decision 3: adding a new payer and saving are one transaction; the
   // server's own refusal (a name already in the book, raced in) surfaces as
   // the save error, never a silent duplicate.
