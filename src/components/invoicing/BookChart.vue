@@ -26,7 +26,7 @@
 
 <script>
   import { AspChart } from '@aspirant/design-system';
-  import { formatMoney } from './api.js';
+  import { berlinMonthKey, formatMoney } from './api.js';
   import { axisProbe, monthAxis, moneyTick } from './chartAxis.js';
 
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -77,9 +77,10 @@
       expenseMonths() {
         return this.expenses.map((e) => monthOf(e.paid_on));
       },
+      // Today's month in Berlin (system_3 #12269), the same shape as every
+      // other month in `months`.
       currentKey() {
-        const today = this.now || new Date();
-        return `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
+        return berlinMonthKey(this.now || new Date());
       },
       months() {
         const seen = [...this.incomeMonths, ...this.expenseMonths].filter(Boolean);

@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { seedTrustedSessionAs, dismissMobileSidebarIfPresent } from './helpers/mockBackend';
+import { berlinMonthKey } from '../../src/components/invoicing/api.js';
 
 /** Invoices app, E3 (system_3 #8367-E3, #9897): the issued-invoices ZIP
  *  download (behind the §5 validation screen) and the invoices-per-month
@@ -19,8 +20,8 @@ interface Fake {
   requests: string[];
 }
 
-async function open(page: Page, fake: Fake): Promise<void> {
-  await page.clock.setFixedTime(new Date('2026-09-15T12:00:00Z'));
+async function open(page: Page, fake: Fake, now = new Date('2026-09-15T12:00:00Z')): Promise<void> {
+  await page.clock.setFixedTime(now);
   await page.route(/\/api\//, (route) => json(route, 404, { error: { code: 'not_found', message: 'not stubbed' } }));
   await page.route(/\/api\/invoicing\//, async (route) => {
     const url = new URL(route.request().url());
@@ -419,5 +420,30 @@ test.describe('#12282 chart labels wrap, never rotate; captions are sentences', 
       'Issued invoices by the month the work was done. Cancelled invoices are left out. Sep so far: €90.00.',
     );
     await expect(page.locator('[data-test="stat-clients-range"]')).toHaveText('Clients you have invoiced, counted from the month of their first invoice. 1 so far.');
+  });
+});
+
+// system_3 #12269 (the #11498 review's C3-15): the charts' current month, the
+// one they call "so far", is the month in Berlin. At 23:30 UTC on the last
+// day of a month it is already 01:30 on the 1st in Berlin, and the UTC month
+// is still the one before.
+test.describe('#12269 the charts\' current month is Berlin\'s', () => {
+  test('berlinMonthKey reads the month in Berlin, not in UTC', () => {
+    const lateOnTheThirtieth = new Date('2026-06-30T23:30:00Z');
+    expect(lateOnTheThirtieth.getUTCMonth() + 1).toBe(6);
+    expect(berlinMonthKey(lateOnTheThirtieth)).toBe('2026-07');
+    // Winter time: one hour ahead, and the year turns.
+    expect(berlinMonthKey(new Date('2026-12-31T23:30:00Z'))).toBe('2027-01');
+    expect(berlinMonthKey(new Date('2026-12-31T22:30:00Z'))).toBe('2026-12');
+    expect(berlinMonthKey(new Date('2026-07-01T00:30:00Z'))).toBe('2026-07');
+    expect(berlinMonthKey('2026-06-30T21:59:59Z')).toBe('2026-06');
+    expect(berlinMonthKey('')).toBe('');
+  });
+
+  test('the invoices chart runs to the Berlin month at 23:30 UTC on its last day', async ({ page }) => {
+    await open(page, newFake(), new Date('2026-09-30T23:30:00Z'));
+    const chart = page.locator('[data-test="invoices-chart"]');
+    await expect(chart).toHaveAttribute('data-labels', 'Jul 2026,Aug 2026,Sep 2026,Oct 2026');
+    await expect(chart).toHaveAttribute('data-counts', '2,0,1,0');
   });
 });

@@ -34,7 +34,7 @@
 
 <script>
   import { AspChart } from '@aspirant/design-system';
-  import { formatMoney, listInvoices } from './api.js';
+  import { berlinMonthKey, formatMoney, listInvoices } from './api.js';
   import { axisProbe, monthAxis, moneyTick } from './chartAxis.js';
 
   // An invoice holds one currency; a missing one reads as EUR.
@@ -134,8 +134,7 @@
       },
       // Today's month key, the same shape as every other month in `months`.
       currentKey() {
-        const today = this.now || new Date();
-        return `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
+        return berlinMonthKey(this.now || new Date());
       },
       months() {
         const seen = [...this.issued.map((i) => monthOf(i.issue_date)), ...this.serviceMonths].filter(Boolean);
