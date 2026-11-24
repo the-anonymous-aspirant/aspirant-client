@@ -44,7 +44,16 @@
       </fieldset>
       <AspCheckbox v-model="form.is_kleinunternehmer" label="Kleinunternehmerin under § 19 UStG (no VAT charged)" />
       <div class="profile-form__numbers">
-        <AspInput v-model="form.invoice_number_prefix" label="Invoice number prefix" :label-hint="hints.prefix" hint="For example 2026." required />
+        <AspInput
+          ref="invoice_number_prefix"
+          v-model="form.invoice_number_prefix"
+          label="Invoice number prefix"
+          :label-hint="hints.prefix"
+          hint="For example 2026."
+          :error="fieldErrors.invoice_number_prefix"
+          required
+          data-test="profile-prefix"
+        />
         <AspInput
           v-model="form.next_invoice_number"
           type="number"
@@ -126,9 +135,10 @@
   // Edits the issuer header printed on every invoice (spec §4.1). The admin
   // seeds it and the owner edits it; issued invoices keep the snapshot taken
   // when they were issued, so nothing here changes an issued invoice.
-  // aspirant-server answers a refused phone or link with its own code
-  // (system_3 #9967, #10002); FIELD_REFUSALS maps each to its field and words.
-  const noErrors = () => ({ phone: '', instagram_url: '', telegram_url: '' });
+  // aspirant-server answers a refused phone, link or prefix with its own code
+  // (system_3 #9967, #10002, #12272); FIELD_REFUSALS maps each to its field
+  // and words.
+  const noErrors = () => ({ phone: '', instagram_url: '', telegram_url: '', invoice_number_prefix: '' });
 
   export default {
     name: 'ProfileEditor',

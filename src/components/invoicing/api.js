@@ -300,6 +300,10 @@ export const FIELD_REFUSALS = {
   invalid_instagram: { field: 'instagram_url', text: 'Use an Instagram name (@name) or a link to an Instagram profile.' },
   invalid_telegram: { field: 'telegram_url', text: 'Use a Telegram name (@name) or a t.me link.' },
   invalid_iban: { field: 'iban', text: 'Not a valid IBAN. Check each character against the original.' },
+  // The prefix's hyphens (system_3 #12272): the app prints <prefix>-<number>.
+  prefix_ends_with_hyphen: { field: 'invoice_number_prefix', text: 'The prefix cannot end with a hyphen: the app adds one before the number.' },
+  prefix_starts_with_hyphen: { field: 'invoice_number_prefix', text: 'The prefix cannot start with a hyphen.' },
+  prefix_double_hyphen: { field: 'invoice_number_prefix', text: 'The prefix cannot hold two hyphens in a row.' },
 };
 
 export const CATEGORY_LABELS = {

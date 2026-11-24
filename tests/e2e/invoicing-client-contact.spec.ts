@@ -45,6 +45,17 @@ const refuse = (body: Json): Json | null => {
   return null;
 };
 
+// As aspirant-server (system_3 #12272): a new or changed prefix may not end
+// with, start with, or double a hyphen; an unchanged stored one is not checked.
+const refusePrefix = (body: Json, stored: Json): Json | null => {
+  const prefix = String(body.invoice_number_prefix || '').trim();
+  if (prefix === stored.invoice_number_prefix) return null;
+  if (prefix.endsWith('-')) return { code: 'prefix_ends_with_hyphen', message: 'The prefix cannot end with a hyphen: the app adds one before the number.' };
+  if (prefix.startsWith('-')) return { code: 'prefix_starts_with_hyphen', message: 'The prefix cannot start with a hyphen.' };
+  if (prefix.includes('--')) return { code: 'prefix_double_hyphen', message: 'The prefix cannot hold two hyphens in a row.' };
+  return null;
+};
+
 interface Fake {
   invoices?: Json[];
   invoicesFail?: boolean;
@@ -78,7 +89,7 @@ async function open(page: Page, fake: Fake, tab = 'Clients'): Promise<void> {
     if (path === '/invoicing/profile' && method === 'GET') return json(route, 200, { saved: true, profile: fake.profile, has_logo: false });
     if (path === '/invoicing/profile' && method === 'PUT') {
       const body = JSON.parse(req.postData() || '{}');
-      const r = refuse(body);
+      const r = refuse(body) || refusePrefix(body, fake.profile);
       if (r) return json(route, 400, { error: r });
       fake.profile = { ...body, instagram_url: normalise('instagram', body.instagram_url), telegram_url: normalise('telegram', body.telegram_url) };
       return json(route, 200, { profile: fake.profile, saved: true });
@@ -313,6 +324,55 @@ test.describe('#10003 Issuer profile — zir social links', () => {
     await expect(pform(page).locator('.field').filter({ has: page.getByLabel('Instagram', { exact: true }) })).toContainText('Use an Instagram name (@name) or a link to an Instagram profile.');
     await expect(ig).toBeFocused();
     await expect(pform(page)).toBeVisible();
+  });
+});
+
+// system_3 #12272: the app prints <prefix>-<number>, so a prefix's stray
+// hyphen printed 2026--001. The server refuses it with a code per rule; the
+// sentence stands at the prefix field.
+test.describe("#12272 Issuer profile — the prefix's hyphens", () => {
+  const openProfile = async (page: Page, fake: Fake) => {
+    await open(page, fake, '');
+    await page.getByRole('button', { name: 'Edit profile' }).click();
+  };
+  const pform = (page: Page) => page.locator('[data-test="profile-form"]');
+  const prefixField = (page: Page) => pform(page).locator('.field').filter({ has: page.getByLabel('Invoice number prefix', { exact: true }) });
+
+  for (const [value, text] of [
+    ['2026-', 'The prefix cannot end with a hyphen: the app adds one before the number.'],
+    ['-2026', 'The prefix cannot start with a hyphen.'],
+    ['20--26', 'The prefix cannot hold two hyphens in a row.'],
+  ] as const) {
+    test(`"${value}" is refused at the prefix field, keeps the text and takes focus`, async ({ page }) => {
+      const fake = newFake();
+      await openProfile(page, fake);
+      const input = pform(page).getByLabel('Invoice number prefix', { exact: true });
+      await input.fill(value);
+      await page.locator('[data-test="profile-save"]').click();
+      await expect(prefixField(page)).toContainText(text);
+      await expect(input).toHaveValue(value);
+      await expect(input).toBeFocused();
+      await expect(pform(page)).toBeVisible();
+      // Only the field says it: no second copy at the foot of the form.
+      await expect(pform(page).getByText(text)).toHaveCount(1);
+      expect(fake.profile.invoice_number_prefix).toBe('2026');
+      // Fixed, it saves.
+      await input.fill('RE-26');
+      await page.locator('[data-test="profile-save"]').click();
+      await expect(pform(page)).toBeHidden();
+      expect(fake.profile.invoice_number_prefix).toBe('RE-26');
+    });
+  }
+
+  test('a stored prefix ending in a hyphen keeps saving the other fields', async ({ page }) => {
+    const fake = newFake();
+    fake.profile.invoice_number_prefix = '2026-';
+    await openProfile(page, fake);
+    await expect(pform(page).getByLabel('Invoice number prefix', { exact: true })).toHaveValue('2026-');
+    await pform(page).getByLabel('Telegram').fill('@flower_studio');
+    await page.locator('[data-test="profile-save"]').click();
+    await expect(pform(page)).toBeHidden();
+    expect(lastBody(fake, 'PUT', /^\/invoicing\/profile$/)).toMatchObject({ invoice_number_prefix: '2026-', telegram_url: '@flower_studio' });
   });
 });
 
