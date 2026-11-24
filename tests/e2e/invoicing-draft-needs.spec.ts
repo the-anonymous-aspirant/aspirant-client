@@ -149,10 +149,14 @@ test.describe('#12274 a draft says what issuing needs', () => {
   test('a zero price, an empty quantity, no client and no service date are each marked', async ({ page }) => {
     const fake = newFake(
       [payment(1, { client_id: 1 }), payment(2, { client_id: 2, sender_name: 'Galerie Nord', gross_cents: 6000 })],
-      [draft(10, [1, 2], { client_id: null, service_date_from: null, service_date_to: null, line_items: [{ id: 1, position: 1, description: 'Wandbild', quantity_milli: 0, unit_price_cents: 0, line_total_cents: 0 }] })],
+      [draft(10, [1, 2], { client_id: null, client_name: '', line_items: [{ id: 1, position: 1, description: 'Wandbild', quantity_milli: 0, unit_price_cents: 0, line_total_cents: 0 }] })],
     );
     await open(page, fake);
+    // The list shows a draft under the month its work was done, so the dates
+    // are cleared in the dialog, not in the fixture.
     await openFromList(page);
+    await page.locator('[data-test="draft-to"]').fill('');
+    await page.locator('[data-test="draft-from"]').fill('');
 
     await expect(page.locator('[data-test="draft-needed-client"]')).toHaveText('Needed to issue: choose the client. The 2 payments name different clients.');
     await expect(page.locator('[data-test="draft-needed-date"]')).toHaveText('Needed to issue: the day the work was done.');
@@ -258,11 +262,12 @@ test.describe('#12274 the total, what the draft covers, and a difference', () =>
     await expect(accept(page)).toHaveText('Accept with this difference');
     await expect(page.locator('[data-test="review-accept-difference"]')).toHaveText('The total (€35.00) differs from the payments it covers (€350.00).');
 
-    // Two presses 120 ms apart at one point: armed, nothing sent.
-    const box = (await accept(page).boundingBox())!;
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-    await page.waitForTimeout(120);
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    // A double tap: two presses in one task, so their time stamps are
+    // milliseconds apart however loaded the host is. Armed, nothing sent.
+    await accept(page).evaluate((el) => {
+      (el as HTMLElement).click();
+      (el as HTMLElement).click();
+    });
     await expect(accept(page)).toHaveText('Issue now');
     await expect(page.locator('[data-test="issue-confirm"]')).toHaveText('Press Issue now to issue it with this difference.');
     expect(fake.requests).toEqual([]);
