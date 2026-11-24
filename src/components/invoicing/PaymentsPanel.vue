@@ -1225,6 +1225,11 @@
       onDraft() {
         return this.selectedPayments.filter((r) => r.payment.invoice && r.payment.invoice.status === 'draft').length;
       },
+      // How many drafts those are: the caption's noun follows the drafts, not
+      // the payments (design_agent c76454 item 3).
+      draftsInTheWay() {
+        return new Set(this.selectedPayments.filter((r) => r.payment.invoice && r.payment.invoice.status === 'draft').map((r) => r.payment.invoice.id)).size;
+      },
       // Create invoice is drawn: always on a desktop, and in the phone's bar
       // only as "As 1 invoice", with two or more ticked.
       createShown() {
@@ -1247,9 +1252,24 @@
         // payment (system_3 #12263; #12288: a "transaction", not a "row").
         const d = this.onDraft;
         if (!d || !this.createShown) return '';
+        // In the phone's bar an armed Remove's line shows alone: both
+        // together are three lines, past the bar's cap (c76454 item 4).
+        if (this.narrow && this.confirmingRemove) return '';
         if (n === 1) return 'This payment is already on a draft. Open it from its “Draft” link.';
-        if (d === 1) {
-          return `1 of the ${n} selected is already on a draft. To put them on one invoice, delete that draft first: open it from that payment's “Draft” link.`;
+        const drafts = this.draftsInTheWay;
+        // All on one draft: they are on one invoice already (c76454 item 3).
+        if (d === n && drafts === 1) return `The ${n} selected are already on one draft. Open it from its “Draft” link.`;
+        const are = d === 1 ? 'is' : 'are';
+        // The bar's shorter form, in two lines at 360px; "For 1 invoice" is
+        // the held button's own words (c76454 items 1 and 2).
+        if (this.narrow) {
+          return drafts === 1
+            ? `${d} of the ${n} ${are} on a draft. For 1 invoice, delete that draft from its “Draft” link.`
+            : `${d} of the ${n} are on drafts. For 1 invoice, delete those drafts from their “Draft” links.`;
+        }
+        if (drafts === 1) {
+          const from = d === 1 ? "that payment's “Draft” link" : 'one of their “Draft” links';
+          return `${d} of the ${n} selected ${are} already on a draft. To put them on one invoice, delete that draft first: open it from ${from}.`;
         }
         return `${d} of the ${n} selected are already on drafts. To put them on one invoice, delete those drafts first: open each from its payment's “Draft” link.`;
       },
