@@ -44,7 +44,7 @@
       >
         <AspCheckbox
           :model-value="selected.includes(row.key)"
-          :aria-label="`Select ${row.transaction_id}`"
+          :aria-label="`Select ${rowName(row)}`"
           data-test="removed-select"
           @update:model-value="toggle(row.key, $event)"
         />
@@ -64,7 +64,7 @@
 <script>
   import { AspButton, AspCheckbox } from '@aspirant/design-system';
   import { errorOf, formatDay, formatMoney, rowAction } from './api.js';
-  import { transactionRows } from './ledgerRows.js';
+  import { rowName, transactionRows } from './ledgerRows.js';
 
   // The removed view of Transactions (§3.143 Decision 6, system_3 #10633): the
   // rows ze removed, in the list's own row format, with Restore and an armed
@@ -111,6 +111,7 @@
     },
     methods: {
       formatDay,
+      rowName,
       signedAmount(row) {
         const amount = formatMoney(row.amount_cents, row.currency);
         return row.direction === 'out' ? `-${amount}` : amount;

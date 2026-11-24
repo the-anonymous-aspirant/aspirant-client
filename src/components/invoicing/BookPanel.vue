@@ -338,7 +338,7 @@
     putBookSelection,
     updateBookPreset,
   } from './api.js';
-  import { bookInvoice, expenseParts, newestFirst, paymentParts, receiptButtonLabel } from './ledgerRows.js';
+  import { bookInvoice, expenseParts, newestFirst, paymentParts, receiptButtonLabel, rowName } from './ledgerRows.js';
   import { fillEmptyMonths, groupByMonth, landedRows, monthKey, monthLabel, openGroupKeys } from './listGroups.js';
   import { BOOK_PDF_BUTTON, bookPdfCaption, bookPdfDoc, bookPdfFileName } from './bookPdf.js';
   import { INCOME_ORDER, WORK_ONLY, countableExpenseNames, countingSentence, countsInBook, selectionName } from './bookSelection.js';
@@ -941,14 +941,9 @@
         this.receiptOpen = true;
       },
       // The card's body button's name (system_3 #11661): what it opens, and
-      // the row, named as Transactions names it (#11567): the transaction id,
-      // or a hand-entered row's date and "who · what".
+      // the row, named as Transactions names it (#11567, #12257; rowName).
       cardBodyName(row) {
-        const record = row.payment || row.expense;
-        const what = record && record.entry === 'manual'
-          ? `${this.formatDay(row.paid_on)} · ${[row.who, row.what].filter(Boolean).join(' · ') || '—'}`
-          : (record && record.transaction_id) || this.formatDay(row.paid_on);
-        return `${row.type === 'in' ? 'Edit payment' : 'Edit expense'} for ${what}`;
+        return `${row.type === 'in' ? 'Edit payment' : 'Edit expense'} for ${rowName(row)}`;
       },
       // §3.143 Decision 7: the row opens the dialog it opens on Transactions.
       async openEdit(row) {

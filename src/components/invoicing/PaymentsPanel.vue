@@ -415,7 +415,7 @@
         <span v-if="selectable(row)" class="card-check">
           <AspCheckbox
             :model-value="selected.includes(row.key)"
-            :aria-label="`Select ${row.transaction_id}`"
+            :aria-label="`Select ${rowRef(row)}`"
             data-test="payment-select"
             @update:model-value="toggle(row.key, $event)"
           />
@@ -513,7 +513,7 @@
               class="card-generate"
               :disabled="generating || creating || removing"
               :loading="generating && generatingRow === row.payment.id"
-              :aria-label="`Generate invoice for ${row.transaction_id}`"
+              :aria-label="`Generate invoice for ${rowRef(row)}`"
               data-test="row-generate"
               @click="generateRow(row.payment)"
             >
@@ -540,7 +540,7 @@
         <AspCheckbox
           v-if="selectable(row)"
           :model-value="selected.includes(row.key)"
-          :aria-label="`Select ${row.transaction_id}`"
+          :aria-label="`Select ${rowRef(row)}`"
           data-test="payment-select"
           @update:model-value="toggle(row.key, $event)"
         />
@@ -623,7 +623,7 @@
           size="sm"
           :disabled="generating || creating || removing"
           :loading="generating && generatingRow === row.payment.id"
-          :aria-label="`Generate invoice for ${row.transaction_id}`"
+          :aria-label="`Generate invoice for ${rowRef(row)}`"
           data-test="row-generate"
           @click="generateRow(row.payment)"
         >
@@ -748,7 +748,7 @@
     removePayments,
     createDraft,
   } from './api.js';
-  import { invoiceState, receiptButtonLabel, transactionRows } from './ledgerRows.js';
+  import { invoiceState, receiptButtonLabel, rowName, transactionRows } from './ledgerRows.js';
   import { groupByMonth, landedRows, monthKey, monthSpanLabel, openGroupKeys } from './listGroups.js';
   import { countsInBook } from './bookSelection.js';
   import { liveNames, withCategory } from './expenseCategories.js';
@@ -1524,22 +1524,14 @@
         if (expense.category && !names.includes(expense.category)) names.push(expense.category);
         return names.map((n) => ({ value: n, label: n }));
       },
-      // A row's select is named by its transaction id. A hand-entered row has
-      // an id the server makes up and never prints ("M-…"), so it is named by
-      // its date and "who · what" instead (design ack on #11567).
+      // A row's controls are named by rowRef (#11567, #12257).
       categoryNameFor(row) {
         return `Category for ${this.rowRef(row)}`;
       },
-      // How a control names its row: the transaction id, or for a
-      // hand-entered row, whose id the server makes up and never prints, its
-      // date and "who · what" (design ack on #11567).
+      // How a control names its row: its shown reference, or else its date
+      // and "who · what" (#11567, #12257; ledgerRows.js rowName).
       rowRef(row) {
-        const record = row.payment || row.expense;
-        if (record && record.entry === 'manual') {
-          const what = [row.who, row.what].filter(Boolean).join(' · ') || '—';
-          return `${formatDay(row.paid_on)} · ${what}`;
-        }
-        return row.transaction_id;
+        return rowName(row);
       },
       // "Open draft for <row>", "Open invoice 2026-003", and for an issued
       // invoice with no number "Open invoice for <row>" (design ack c71992).

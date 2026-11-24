@@ -1,7 +1,7 @@
 // How a movement of money is named and ordered, in one place for the Book
 // and Transactions (§3.140 Decision 3, §3.143 Decision 3, system_3 #10630).
 // Payer- and bank-written text is only ever rendered as text interpolation.
-import { CATEGORY_LABELS, SOURCE_LABELS } from './api.js';
+import { CATEGORY_LABELS, SOURCE_LABELS, formatDay } from './api.js';
 
 // "What it was for" as two parts (design_agent's Design ack c64353 on
 // system_3 #10459): `who`, the counterparty in body ink, then `what`, the
@@ -31,6 +31,37 @@ export const paymentParts = (p) => describeRow(p.sender_name, p.note);
 // fallback and is never shown as a counterparty.
 export const expenseParts = (e) =>
   e.entry === 'import' ? describeRow(e.reference, e.note) : describeRow(e.payee, e.note || e.reference);
+
+// The reference a row may be named by (system_3 #12257): the server's
+// `shown_reference`, the provider's own id, or empty when the server made the
+// id up (an N26 statement or CSV row). A hand-entered row is never named by
+// it (#11567). A server from before #12257 serves no `shown_reference`; its
+// rows keep the transaction id they were named by then.
+export function shownReference(record) {
+  if (!record || record.entry === 'manual') return '';
+  if (record.shown_reference === undefined) return record.transaction_id || '';
+  return String(record.shown_reference || '').trim();
+}
+
+// How a control names a ledger row (#11567, #12257): its shown reference,
+// or else its date and "who · what".
+export function rowName(row) {
+  const ref = shownReference(row.payment || row.expense);
+  if (ref) return ref;
+  return `${formatDay(row.paid_on)} · ${[row.who, row.what].filter(Boolean).join(' · ') || '—'}`;
+}
+
+// The same for a payment record as an invoice serves it.
+export function paymentName(p) {
+  return rowName({ ...paymentParts(p), paid_on: p.paid_on, payment: p });
+}
+
+// A covered payment's line on an invoice: its date, payer and note, and its
+// shown reference when it has one (#12257).
+export function paymentSummary(p) {
+  const { who, what } = paymentParts(p);
+  return [formatDay(p.paid_on), [who, what].filter(Boolean).join(' · ') || '—', shownReference(p)].filter(Boolean).join(' · ');
+}
 
 // "N26", "PayPal" or "By hand": a fact about the row, read on its muted date
 // line (§3.143 Decision 3).

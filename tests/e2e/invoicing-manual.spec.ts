@@ -319,8 +319,8 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
       // once a row is ticked (system_3 #11371); two rows put both buttons
       // in it (one alone offers Generate only).
       if (narrow) {
-        await page.getByRole('checkbox', { name: 'Select M-0011223344556677' }).check();
-        await page.getByRole('checkbox', { name: 'Select M-0011223344556678' }).check();
+        await page.locator('[data-row-key="p40"]').getByRole('checkbox', { name: /^Select / }).check();
+        await page.locator('[data-row-key="p42"]').getByRole('checkbox', { name: /^Select / }).check();
       }
       await expect(page.locator('[data-test="generate-selected"]')).toHaveClass(/btn--primary/);
       await expect(page.locator('[data-test="create-invoice"]')).toHaveClass(/btn--secondary/);

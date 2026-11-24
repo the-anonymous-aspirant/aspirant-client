@@ -62,7 +62,7 @@
           <h3>Payments covered</h3>
           <ul>
             <li v-for="p in detail.payments" :key="p.id">
-              {{ formatDay(p.paid_on) }} · {{ p.transaction_id }} · {{ formatMoney(p.gross_cents, p.currency) }}
+              {{ paymentSummary(p) }} · {{ formatMoney(p.gross_cents, p.currency) }}
             </li>
           </ul>
         </section>
@@ -145,7 +145,7 @@
 
         <p class="covers">
           Covers {{ detail.payments.length }} payment(s):
-          <span v-for="p in detail.payments" :key="p.id" class="covers__item">{{ p.transaction_id }} ({{ formatMoney(p.gross_cents, p.currency) }})</span>
+          <span v-for="p in detail.payments" :key="p.id" class="covers__item">{{ paymentName(p) }} ({{ formatMoney(p.gross_cents, p.currency) }})</span>
         </p>
         <ul v-if="detail.warnings.length" class="warnings" data-test="draft-warnings">
           <li v-for="w in detail.warnings" :key="w">{{ warningText(w) }}</li>
@@ -249,6 +249,7 @@
   import UnsentAsk from './UnsentAsk.vue';
   import { unsentGuard } from './unsentGuard.js';
   import { FIELD_HINTS } from './fieldHints.js';
+  import { paymentName, paymentSummary } from './ledgerRows.js';
   import {
     KLEINBETRAG_LIMIT_CENTS,
     STATUS_LABELS,
@@ -456,6 +457,8 @@
     methods: {
       formatDay,
       formatMoney,
+      paymentName,
+      paymentSummary,
       decimalFromMinor,
       async load() {
         this.clearPreview();
