@@ -110,7 +110,7 @@
          "Invoice list (single PDF)" below (#9960, design ack c61576). Shows
          only when one of the other kinds is on screen. -->
     <p v-if="!loadError && hasUnselectable" class="caption" data-test="merge-left-out">
-      Only issued invoices can be ticked for the PDF: a draft has no PDF yet, and a cancelled invoice's PDF does not show it was cancelled.
+      Only issued invoices can be ticked for the PDF: a draft has no PDF yet, and a cancelled invoice is left out.
     </p>
     <details
       v-for="group in groups"
