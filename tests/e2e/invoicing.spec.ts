@@ -1019,3 +1019,46 @@ test.describe('#11671 the PayPal expense review asks before an exit throws away 
     expect(ppxConfirms(fake)).toEqual([]);
   });
 });
+
+// system_3 #12271 ruling 3: a row whose transaction id is in the book with
+// another amount, currency or date is named, and the stored row is kept. The
+// server lists the ids under `differing` and counts each as already imported.
+test.describe('#12271 PayPal import — a row that differs from the book is named', () => {
+  const withDiffering = (differing: string[]) => ({
+    status: 200,
+    body: {
+      summary: {
+        rows_read: 6, imported: 1, duplicates: 5, skipped: 0, withdrawals: 0, skipped_reasons: {},
+        removed_earlier: 0, deleted_earlier: 0, differing,
+      },
+    },
+  });
+
+  test('one id, up to three, and "and N more" past three; none says nothing', async ({ page }) => {
+    const ids = ['PPC3EUR00001', 'PPC3EUR00002', 'PPC3EUR00003', 'PPC3EUR00004', 'PPC3EUR00005'];
+    const fake = newFake({
+      importResponses: [withDiffering(ids.slice(0, 1)), withDiffering(ids.slice(0, 3)), withDiffering(ids), withDiffering([])],
+    });
+    await importPayPal(page, fake);
+    const line = page.locator('[data-test="import-summary"] .summary__line');
+    const differing = page.locator('[data-test="paypal-summary-differing"]');
+    await expect(line).toHaveText(
+      'PayPal CSV: read 6 rows: 1 imported, 5 already imported, 0 skipped. ' +
+        '1 row differs from what is in your book and was not changed: PPC3EUR00001.',
+    );
+
+    await page.locator('[data-test="payments-file"]').setInputFiles(paypalCsv);
+    await expect(differing).toHaveText(
+      '3 rows differ from what is in your book and were not changed: PPC3EUR00001, PPC3EUR00002, PPC3EUR00003.',
+    );
+
+    await page.locator('[data-test="payments-file"]').setInputFiles(paypalCsv);
+    await expect(differing).toHaveText(
+      '5 rows differ from what is in your book and were not changed: PPC3EUR00001, PPC3EUR00002, PPC3EUR00003 and 2 more.',
+    );
+
+    await page.locator('[data-test="payments-file"]').setInputFiles(paypalCsv);
+    await expect(line).toHaveText('PayPal CSV: read 6 rows: 1 imported, 5 already imported, 0 skipped.');
+    await expect(differing).toHaveCount(0);
+  });
+});

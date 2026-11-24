@@ -97,7 +97,8 @@
              comma follows directly (system_3 #10040: a break here rendered
              "3 imported , 0 already imported"). -->
         PayPal {{ paypalNoun }}: read {{ summary.rows_read }} rows: <strong>{{ summary.imported }}</strong> imported<template v-if="summary.withdrawals"> (including {{ summary.withdrawals }} bank withdrawals)</template>,
-        <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ paypalPrior.already }} already imported, {{ summary.skipped }} skipped<template v-if="paypalPrior.removed"> ·&nbsp;<span data-test="paypal-summary-removed">{{ paypalPrior.removed }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-in" @click="openRemoved('in')">restore it on Transactions</button></span></template><template v-if="paypalPrior.deleted"> ·&nbsp;<span data-test="paypal-summary-deleted">{{ deletedClause(paypalPrior.deleted) }}</span></template>.<template v-if="expenseParts(paypalExpenses).length">
+        <template v-if="summary.refunds">{{ summary.refunds }} set to Refund, </template>{{ paypalPrior.already }} already imported, {{ summary.skipped }} skipped<template v-if="paypalPrior.removed"> ·&nbsp;<span data-test="paypal-summary-removed">{{ paypalPrior.removed }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-in" @click="openRemoved('in')">restore it on Transactions</button></span></template><template v-if="paypalPrior.deleted"> ·&nbsp;<span data-test="paypal-summary-deleted">{{ deletedClause(paypalPrior.deleted) }}</span></template>.<template v-if="paypalDifferingLine">
+          {{ ' ' }}<span data-test="paypal-summary-differing">{{ paypalDifferingLine }}</span></template><template v-if="expenseParts(paypalExpenses).length">
           {{ ' ' }}<span data-test="paypal-summary-expenses"><template v-if="!paypalExpenses.added">Expenses: </template><template v-for="(part, i) in expenseParts(paypalExpenses)" :key="part.key"><template v-if="i"> ·&nbsp;</template><span :data-test="`paypal-summary-expenses-${part.key}`"><template v-if="part.key === 'removed'">{{ part.count }} removed earlier: <button type="button" class="summary__link" data-test="removed-link-out" @click="openRemoved('out')">restore it on Transactions</button></template><template v-else>{{ part.text }}</template></span></template>.</span></template><template v-if="paypalCopyKept">
           {{ ' ' }}<span data-test="paypal-summary-copy-kept">{{ paypalCopyKept }}</span></template><template v-if="payerCandidates.length">
           {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span></template>
@@ -943,6 +944,20 @@
       // skipped, so counting them here too would break the line's sum
       // (§3.130; #10634 dogfood, c66307). They are counted on the expense
       // sentence instead (paypalExpenses).
+      // A row whose id is in the book with another amount, currency or date
+      // (system_3 #12271 ruling 3): the server keeps the stored row and
+      // names the row; it is still counted as already imported. At most
+      // three ids, then how many more (the review's point 7).
+      paypalDifferingLine() {
+        const ids = (this.summary && this.summary.differing) || [];
+        const n = ids.length;
+        if (!n) return '';
+        const shown = ids.slice(0, 3).join(', ');
+        const list = n > 3 ? `${shown} and ${n - 3} more` : shown;
+        return n === 1
+          ? `1 row differs from what is in your book and was not changed: ${list}.`
+          : `${n} rows differ from what is in your book and were not changed: ${list}.`;
+      },
       paypalPrior() {
         const s = this.summary || {};
         return {
