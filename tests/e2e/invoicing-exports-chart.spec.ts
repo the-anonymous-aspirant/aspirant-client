@@ -281,3 +281,37 @@ test.describe('#9948 Invoices app — the exports say what they hold', () => {
     await expect(page.locator('[data-test="export-zip"]')).toBeDisabled();
   });
 });
+
+// system_3 #12258: "Income per month" adds euros only, and its caption says
+// how many invoices it left out. The other two charts still count them.
+test.describe('#12258 Income per month counts euro invoices', () => {
+  test('a dollar invoice is left out of the income and named in the caption', async ({ page }) => {
+    const fake = newFake();
+    fake.issued = [
+      served(1, 1, '2026-07-10', '2026-07-28', 35000),
+      { ...served(2, 2, '2026-07-12', '2026-07-30', 10000), currency: 'USD' },
+      served(3, 1, '2026-09-01', '2026-09-02', 9000),
+    ];
+    await open(page, fake);
+    const chart = page.locator('[data-test="invoices-chart"]');
+    await expect(chart).toHaveAttribute('data-labels', 'Jul 2026,Aug 2026,Sep 2026');
+    await expect(chart).toHaveAttribute('data-income', '350,0,90');
+    await expect(chart).toHaveAttribute('data-counts', '2,0,1');
+    await expect(chart).toHaveAttribute('data-clients', '2,2,2');
+    await expect(page.locator('[data-test="stat-income-range"]')).toHaveText(
+      'issued invoices, by the month the work was done, cancelled invoices left out; low €0.00 in Aug · high €350.00 in Jul · Sep so far €90.00; 1 invoice in another currency (USD) is not counted',
+    );
+  });
+
+  test('two, in two currencies, are counted and named once each, in order', async ({ page }) => {
+    const fake = newFake();
+    fake.issued = [
+      served(1, 1, '2026-07-10', '2026-07-28', 35000),
+      { ...served(2, 2, '2026-07-12', '2026-07-30', 10000), currency: 'USD' },
+      { ...served(3, 2, '2026-08-12', '2026-08-30', 10000), currency: 'GBP' },
+      { ...served(4, 2, '2026-08-13', '2026-08-30', 10000), currency: 'USD' },
+    ];
+    await open(page, fake);
+    await expect(page.locator('[data-test="stat-income-range"]')).toContainText('; 3 invoices in other currencies (GBP, USD) are not counted');
+  });
+});

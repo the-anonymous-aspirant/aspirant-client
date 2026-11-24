@@ -1315,3 +1315,119 @@ test.describe('#11748 Transactions\' checkbox leads the design system\'s card', 
     await expect(first.locator('[data-test="payment-select"]')).toBeVisible();
   });
 });
+
+// system_3 #12258 (ruling items 1 and 2; design ack c76261): the Book counts
+// euros. A row in another currency is listed at its own amount with "Not
+// counted: not in euros", and left out of every total: the month, the period
+// line, the chart and the PDF. The counting line, and the PDF after its
+// counting sentence and under its all-months total, say how many.
+test.describe('#12258 the Book counts euros', () => {
+  const DAY = new Date('2026-09-15T12:00:00Z');
+  const dollarBook = () =>
+    newFake({
+      payments: [
+        incomeRow(), // 2026-07-14, €350.00
+        incomeRow({ id: 30, source: 'paypal', entry: 'import', transaction_id: 'PP-INVENTED-1', currency: 'USD', gross_cents: 10000, sender_name: 'Example Collector', note: 'Print sale', paid_on: '2026-07-16T00:00:00Z' }),
+      ],
+      expenses: [
+        expenseRow(101), // 2026-07-20, €45.99
+        expenseRow(102, { source: 'paypal', entry: 'import', transaction_id: 'PP-INVENTED-2', currency: 'USD', amount_cents: 2500, note: 'Font licence', paid_on: '2026-08-03T00:00:00Z' }),
+      ],
+    });
+  const bookRow = (page: Page, key: string) => page.locator(`[data-test="book-row"][data-row-key="${key}"]`);
+  const monthHead = (page: Page, key: string) => page.locator(`[data-test="book-month"][data-group="${key}"] [data-test="month-head"]`);
+  const SENTENCE = '2 entries in other currencies (USD) are not counted.';
+
+  test('a dollar row is listed at its own amount, says it is not counted, and no total adds it', async ({ page }) => {
+    await page.clock.setFixedTime(DAY);
+    await open(page, dollarBook());
+
+    await expect(page.locator('[data-test="book-not-counted"]')).toHaveText(SENTENCE);
+    // July: the euro rows alone.
+    await expect(monthHead(page, '2026-07')).toContainText('In €350.00');
+    await expect(monthHead(page, '2026-07')).toContainText('Out €45.99');
+    await expect(monthHead(page, '2026-07')).toContainText('Result €304.01');
+    await expect(bookRow(page, 'p30')).toContainText('US$100.00');
+    await expect(bookRow(page, 'p30').locator('[data-test="book-row-not-counted"]')).toHaveText('Not counted: not in euros');
+    await expect(bookRow(page, 'p10').locator('[data-test="book-row-not-counted"]')).toHaveCount(0);
+    await expect(bookRow(page, 'e101').locator('[data-test="book-row-not-counted"]')).toHaveCount(0);
+
+    // August, the newest month with entries and so the one open, holds the
+    // dollar expense alone: listed, and every total is zero.
+    await expect(page.locator('[data-test="book-month"][data-group="2026-08"]')).toHaveAttribute('open', '');
+    await expect(bookRow(page, 'e102')).toContainText('-US$25.00');
+    await expect(bookRow(page, 'e102').locator('[data-test="book-row-not-counted"]')).toHaveText('Not counted: not in euros');
+    await expect(monthHead(page, '2026-08')).toContainText('In €0.00');
+    await expect(monthHead(page, '2026-08')).toContainText('Out €0.00');
+
+    await expect(page.locator('[data-test="book-period-quarter"]')).toHaveText(/This quarter, Q3 2026\s*In €350\.00\s*Out €45\.99\s*Result €304\.01/);
+    await expect(page.locator('[data-test="book-period-year"]')).toHaveText(/Year to date, 2026\s*In €350\.00\s*Out €45\.99\s*Result €304\.01/);
+
+    // The chart draws euros only, and says nothing of its own.
+    const chart = page.locator('[data-test="book-chart"]');
+    await expect(chart).toHaveAttribute('data-income', '350,0,0');
+    await expect(chart).toHaveAttribute('data-expenses', '45.99,0,0');
+
+    // The receipt dialog names the expense in its own currency.
+    await bookRow(page, 'e102').locator('[data-test="book-expense-receipt"]').click();
+    await expect(page.getByRole('dialog')).toContainText('US$25.00');
+  });
+
+  test('one entry reads in the singular', async ({ page }) => {
+    await page.clock.setFixedTime(DAY);
+    const fake = dollarBook();
+    fake.expenses = fake.expenses.filter((e) => e.id !== 102);
+    await open(page, fake);
+    await expect(page.locator('[data-test="book-not-counted"]')).toHaveText('1 entry in another currency (USD) is not counted.');
+  });
+
+  test('a book in euros only has no clause and no row line', async ({ page }) => {
+    await page.clock.setFixedTime(DAY);
+    await open(page, newFake({ payments: [incomeRow()], expenses: [expenseRow(101)] }));
+    await expect(page.locator('[data-test="book-counting-line"]')).toBeVisible();
+    await expect(page.locator('[data-test="book-not-counted"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="book-row-not-counted"]')).toHaveCount(0);
+  });
+
+  async function press(page: Page) {
+    await page.evaluate(() => {
+      document.addEventListener('book-pdf', (e) => { (window as any).__bookPdf = JSON.stringify((e as CustomEvent).detail); }, { once: true });
+    });
+    const done = page.waitForEvent('download');
+    await page.locator('[data-test="book-pdf"]').click();
+    await done;
+    return JSON.parse(await page.evaluate(() => (window as any).__bookPdf)).doc as Json;
+  }
+
+  test('the PDF lists the dollar rows at their own amounts, totals euros as the screen does, and says so twice', async ({ page }) => {
+    await page.clock.setFixedTime(DAY);
+    await open(page, dollarBook());
+    const doc = await press(page);
+    const counting = (await page.locator('[data-test="book-counting-line"]').textContent())!.trim();
+    expect(doc.content[1].text).toBe(`${counting} ${SENTENCE}`);
+
+    const tables = (doc.content as Json[]).filter((n) => n.table);
+    const headTotals = (label: string) => tables.find((t) => t.table.body[0][0].columns[0].text === label)!.table.body[0][0].columns[1].text;
+    expect(headTotals('July 2026')).toBe('In €350.00    Out -€45.99    Result €304.01');
+    expect(headTotals('August 2026')).toBe('In €0.00    Out €0.00    Result €0.00');
+    const all = JSON.stringify(doc.content);
+    expect(all).toContain('US$100.00');
+    expect(all).toContain('-US$25.00');
+    expect(all.match(/Not counted: not in euros/g)).toHaveLength(2);
+
+    // The all-months total, then the sentence again under it.
+    const last = (doc.content as Json[]).at(-1)!;
+    expect(last.stack[1].columns[1].text).toBe('In €350.00    Out -€45.99    Result €304.01');
+    expect(last.stack[2].text).toBe(SENTENCE);
+  });
+
+  test('a one-month PDF counts what that month leaves out', async ({ page }) => {
+    await page.clock.setFixedTime(DAY);
+    await open(page, dollarBook());
+    await page.getByRole('combobox', { name: 'Paid in' }).click();
+    await page.getByRole('option', { name: 'July 2026', exact: true }).click();
+    const doc = await press(page);
+    expect(doc.content[1].text).toMatch(/ 1 entry in another currency \(USD\) is not counted\.$/);
+    expect(JSON.stringify(doc.content)).not.toContain('All months in this file');
+  });
+});

@@ -18,6 +18,9 @@ const RIGHT = 'right';
 
 export const BOOK_PDF_BUTTON = 'Book entries (PDF)';
 export const BOOK_PDF_NOT_LOADED = 'Available once the Book has loaded.';
+// A Book row in another currency: listed, with its own amount, and not in
+// any total (system_3 #12258).
+export const NOT_COUNTED_ROW = 'Not counted: not in euros';
 
 // ── File name ────────────────────────────────────────────────────────────
 
@@ -119,15 +122,18 @@ function cell(col, row, fmt) {
     case 'paid_on':
       return { text: fmt.day(row.paid_on), noWrap: true };
     case 'description':
+      // A row in another currency is listed, not counted, and says so as
+      // the Book does (system_3 #12258).
+      if (row.counted === false) return { text: [whoAndWhat(row), { text: `\n${NOT_COUNTED_ROW}`, style: 'muted' }] };
       return { text: whoAndWhat(row) };
     case 'category':
       return { text: row.categoryLabel || '' };
     case 'invoice':
       return { text: (row.issuedInvoice && row.issuedInvoice.number) || '' };
     case 'in':
-      return { text: row.type === 'in' ? fmt.money(row.amount_cents) : '', alignment: RIGHT, noWrap: true };
+      return { text: row.type === 'in' ? fmt.money(row.amount_cents, row.currency) : '', alignment: RIGHT, noWrap: true };
     default:
-      return { text: row.type === 'out' ? fmt.signedMoney(-row.amount_cents) : '', alignment: RIGHT, noWrap: true };
+      return { text: row.type === 'out' ? fmt.signedMoney(-row.amount_cents, row.currency) : '', alignment: RIGHT, noWrap: true };
   }
 }
 
@@ -177,7 +183,7 @@ function emptyMonth(month) {
 // uncategorisedSentence: the tab's continuation, or '' when there is none.
 // withInvoice: the tab has the Invoice column (system_3 #11509).
 // fmt: { day, money, signedMoney }, the tab's formatters.
-export function bookPdfDoc({ months, selectionName, scope, madeOn, countingSentence, uncategorisedSentence = '', withInvoice = false, fmt }) {
+export function bookPdfDoc({ months, selectionName, scope, madeOn, countingSentence, notCountedSentence = '', uncategorisedSentence = '', withInvoice = false, fmt }) {
   const cols = columns(withInvoice);
   const title = `Book entries · ${selectionName} · ${scope} · made ${madeOn}`;
   const total = months.reduce((t, m) => ({ inCents: t.inCents + (m.inCents || 0), outCents: t.outCents + (m.outCents || 0) }), { inCents: 0, outCents: 0 });
@@ -185,7 +191,9 @@ export function bookPdfDoc({ months, selectionName, scope, madeOn, countingSente
 
   const content = [
     { text: title, style: 'title' },
-    { text: [countingSentence, uncategorisedSentence].filter(Boolean).join(' '), style: 'counting', margin: [0, 4, 0, 0] },
+    // What is left out comes directly after what counts: rows in another
+    // currency (design ack c76261 on system_3 #12258), then Uncategorised.
+    { text: [countingSentence, notCountedSentence, uncategorisedSentence].filter(Boolean).join(' '), style: 'counting', margin: [0, 4, 0, 0] },
   ];
   if (!months.length) content.push({ text: 'No entries', style: 'muted', margin: [0, 14, 0, 0] });
   for (const month of months) content.push(month.empty || !month.rows.length ? emptyMonth(month) : monthTable(month, cols, fmt));
@@ -203,6 +211,8 @@ export function bookPdfDoc({ months, selectionName, scope, madeOn, countingSente
           ],
           margin: [0, 6, 0, 0],
         },
+        // Again under the total, for a reader who turns straight to it.
+        ...(notCountedSentence ? [{ text: notCountedSentence, style: 'counting', margin: [0, 4, 0, 0] }] : []),
       ],
       margin: [0, 18, 0, 0],
     });

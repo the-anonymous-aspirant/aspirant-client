@@ -1151,3 +1151,46 @@ test.describe('#11753 the ticked toolbar stays inside its box', () => {
     });
   }
 });
+
+// system_3 #12258 (design ack c76261): an invoice holds one currency. With a
+// euro and a dollar payment ticked, Create invoice ("As 1 invoice" on a phone)
+// cannot act and its own line says why; Generate makes one draft per payment,
+// so it stays enabled and makes two.
+test.describe('#12258 a selection in two currencies', () => {
+  const tickRow = (page: Page, id: number) => txnRow(page, id).getByRole('checkbox', { name: /^Select / }).check();
+  const currencyCaption = (page: Page) => page.locator('[data-test="create-currency-hint"]');
+
+  test('Create invoice is disabled with the reason; Generate stays enabled and makes two drafts', async ({ page, isMobile }) => {
+    const fake = newFake();
+    fake.payments.find((p) => p.id === 2)!.currency = 'USD';
+    await openTransactions(page, fake);
+
+    // One currency: no line, Create can act.
+    await tickRow(page, 1);
+    await tickRow(page, 3);
+    await expect(createInvoice(page)).toBeEnabled();
+    await expect(currencyCaption(page)).toHaveCount(0);
+    await txnRow(page, 3).getByRole('checkbox', { name: /^Select / }).uncheck();
+
+    await tickRow(page, 2);
+    await expect(createInvoice(page)).toBeDisabled();
+    await expect(currencyCaption(page)).toHaveText('The 2 selected are in different currencies (€ and US$), so they cannot go on one invoice.');
+    await expect(createInvoice(page)).toHaveAttribute('aria-describedby', 'create-currency-hint');
+    await expect(pairCaption(page)).toHaveCount(0);
+    if (isMobile) {
+      await expect(createInvoice(page)).toHaveText('As 1 invoice');
+      await expect(generateSelected(page)).toHaveText('As 2 invoices');
+    } else {
+      await expect(generateSelected(page)).toHaveText('Generate 2 invoices');
+      // The pair's "Create invoice puts all 2 on one" would contradict it.
+      await expect(page.locator('[data-test="generate-pair-hint"]')).toHaveCount(0);
+    }
+    await expect(generateSelected(page)).toBeEnabled();
+    await expect(generateSelected(page)).not.toHaveAttribute('aria-describedby', 'create-currency-hint');
+
+    await generateSelected(page).click();
+    expect(fake.requests[0]).toMatchObject({ method: 'POST', path: '/invoicing/invoices/generate', body: JSON.stringify({ payment_ids: [1, 2] }) });
+    await expect(dialog(page)).toContainText('Invoice 1 / 2');
+    expect(fake.invoices.filter((i) => i.status === 'draft')).toHaveLength(2);
+  });
+});
