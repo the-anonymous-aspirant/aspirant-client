@@ -154,7 +154,11 @@ async function mock(page: Page, fake: Fake): Promise<void> {
         return json(route, 200, detailOf(fake, inv));
       }
       if (m[2] && method === 'POST') {
-        if (fake.refuseIssue[inv.id]) return json(route, 422, { error: { code: 'client_address_missing', message: fake.refuseIssue[inv.id] } });
+        // The server's own shape since system_3 #12274: a code, its
+        // sentence (never shown) and the figures the dialog words.
+        if (fake.refuseIssue[inv.id]) {
+          return json(route, 422, { error: { code: 'client_address_required', message: fake.refuseIssue[inv.id], details: { total_cents: 30000, limit_cents: 25000, currency: 'EUR' } } });
+        }
         const number = fake.next++;
         Object.assign(inv, { status: 'issued', number, invoice_number: `2026-${String(number).padStart(3, '0')}`, issue_date: '2026-11-16T00:00:00Z' });
         for (const p of fake.payments) if (inv.payment_ids.includes(p.id)) p.invoice = { id: inv.id, status: 'issued', invoice_number: inv.invoice_number };
@@ -386,7 +390,10 @@ test.describe('#11505 generate, then review one at a time', () => {
     await generateButton(page).click();
     await expect(dialog(page)).toContainText('Invoice 1 / 3');
     await page.locator('[data-test="review-accept"]').click();
-    await expect(page.locator('[data-test="invoice-error"]')).toHaveText('The client has no postal address; an invoice over 250.00 € must name it.');
+    // In the app's words, from the refusal's figures (system_3 #12274).
+    await expect(page.locator('[data-test="invoice-error"]')).toHaveText(
+      "This invoice totals €300.00. Above €250.00 an invoice needs the client's postal address. Add it under Clients.",
+    );
     await expect(dialog(page)).toContainText('Invoice 1 / 3');
     expect(fake.invoices.find((i) => i.id === 10)).toMatchObject({ status: 'draft' });
     expect(fake.next).toBe(2);
