@@ -206,8 +206,9 @@ test.describe('/admin/browser-flows — native matrix', () => {
 
   // system_3 #11846: runs read oldest-left, newest-right; the card used to
   // open scrolled to its left edge, so on a narrow card the newest run sat
-  // past the right edge, unreachable without scrolling. The card now opens
-  // scrolled to its right end.
+  // past the right edge, unreachable without scrolling. The run strip now
+  // opens scrolled to its right end. Since #11008 the strip scrolls inside
+  // the card (`browser-flows-scroll`), which keeps its padding.
   for (const [width, height] of [[390, 844], [768, 1024]] as const) {
     test(`at ${width}x${height}: the newest run is visible on the first screen, no scroll`, async ({ page }) => {
       await page.setViewportSize({ width, height });
@@ -216,18 +217,18 @@ test.describe('/admin/browser-flows — native matrix', () => {
       await page.goto('/admin/browser-flows');
       await dismissMobileSidebarIfPresent(page);
 
-      const card = page.locator('[data-test="browser-flows-matrix"]');
+      const strip = page.locator('[data-test="browser-flows-scroll"]');
       const newest = page.locator('[data-test="cell-flow-a-run-a2"]');
       await expect(newest).toBeVisible();
 
-      const overflowed = await card.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
-      expect(overflowed, 'fixture must actually overflow the card, or this test proves nothing').toBe(true);
+      const overflowed = await strip.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+      expect(overflowed, 'fixture must actually overflow the strip, or this test proves nothing').toBe(true);
 
-      const [cellRect, cardRect] = await Promise.all([
+      const [cellRect, stripRect] = await Promise.all([
         newest.evaluate((el) => el.getBoundingClientRect().right),
-        card.evaluate((el) => el.getBoundingClientRect().right),
+        strip.evaluate((el) => el.getBoundingClientRect().right),
       ]);
-      expect(cellRect, 'newest run cell must end at or before the card\'s right edge').toBeLessThanOrEqual(cardRect + 0.5);
+      expect(cellRect, 'newest run cell must end at or before the strip\'s right edge').toBeLessThanOrEqual(stripRect + 0.5);
 
       // The page itself still does not scroll sideways.
       const pageOverflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
@@ -242,13 +243,113 @@ test.describe('/admin/browser-flows — native matrix', () => {
     await page.goto('/admin/browser-flows');
     await dismissMobileSidebarIfPresent(page);
 
-    const card = page.locator('[data-test="browser-flows-matrix"]');
+    const strip = page.locator('[data-test="browser-flows-scroll"]');
     await expect(page.locator('[data-test="cell-flow-a-run-a2"]')).toBeVisible();
-    const { scrollLeft, overflowed } = await card.evaluate((el) => ({
+    const { scrollLeft, overflowed } = await strip.evaluate((el) => ({
       scrollLeft: el.scrollLeft,
       overflowed: el.scrollWidth > el.clientWidth + 1,
     }));
     expect(overflowed).toBe(false);
     expect(scrollLeft).toBe(0);
+    const viewport = page.locator('[data-test="browser-flows-viewport"]');
+    await expect(viewport, 'no fade where nothing is hidden').not.toHaveClass(/overflow-start|overflow-end/);
+  });
+
+  // system_3 #11008 (design c76151, §3.119): opening the strip at its newest
+  // run pushed the Flow column off the card's left edge, so on a phone the
+  // runs could not be told apart by flow. The column is sticky-left with a
+  // 16ch floor below 768px, and the #4529 fades mark the side runs hide on.
+  const sticky = (page: Page) => page.locator('[data-test="flow-row-flow-a"] td.flow-col');
+  const strip = (page: Page) => page.locator('[data-test="browser-flows-scroll"]');
+  const viewport = (page: Page) => page.locator('[data-test="browser-flows-viewport"]');
+
+  /** The element painted just inside the strip's left edge, on flow-a's row. */
+  async function leftmostPainted(page: Page): Promise<string> {
+    const [box, row] = await Promise.all([
+      strip(page).evaluate((el) => el.getBoundingClientRect().left),
+      page.locator('[data-test="flow-row-flow-a"]').evaluate((el) => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; }),
+    ]);
+    return page.evaluate(([x, y]) => {
+      const hit = document.elementFromPoint(x, y);
+      return hit?.closest('td.flow-col') ? 'flow-col' : (hit?.className?.toString() ?? 'nothing');
+    }, [box + 2, row]);
+  }
+
+  async function widths(page: Page): Promise<{ column: number; ch16: number }> {
+    return sticky(page).evaluate((el) => {
+      const probe = document.createElement('span');
+      probe.style.cssText = 'display:inline-block;width:16ch';
+      el.appendChild(probe);
+      const ch16 = probe.getBoundingClientRect().width;
+      probe.remove();
+      return { column: el.getBoundingClientRect().width, ch16 };
+    });
+  }
+
+  test('at 390: the name stays beside its runs, flush with the strip, at the 16ch floor', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    seedBrowserFlows([FLOWS[0]]);
+    seedBrowserFlowRuns([RUNS[0], RUNS[1]]);
+    await page.goto('/admin/browser-flows');
+    await dismissMobileSidebarIfPresent(page);
+    await expect(page.locator('[data-test="cell-flow-a-run-a2"]')).toBeVisible();
+
+    const opened = await strip(page).evaluate((el) => el.scrollLeft);
+    expect(opened, 'opened at the newest run (#11846)').toBeGreaterThan(0);
+    await expect(sticky(page).locator('a')).toBeInViewport();
+    const [nameLeft, stripLeft] = await Promise.all([
+      sticky(page).evaluate((el) => el.getBoundingClientRect().left),
+      strip(page).evaluate((el) => el.getBoundingClientRect().left),
+    ]);
+    expect(Math.abs(nameLeft - stripLeft), 'the name sits flush with the strip\'s left edge').toBeLessThanOrEqual(0.5);
+    expect(await leftmostPainted(page), 'no run cell shows left of the name').toBe('flow-col');
+
+    const { column, ch16 } = await widths(page);
+    expect(Math.abs(column - ch16), `column ${column}px vs 16ch ${ch16}px`).toBeLessThanOrEqual(1);
+
+    // The runs pass under the name, never over it.
+    expect(await sticky(page).evaluate((el) => getComputedStyle(el).position)).toBe('sticky');
+    expect(await sticky(page).evaluate((el) => getComputedStyle(el).backgroundColor)).not.toMatch(/rgba\(0, 0, 0, 0\)/);
+
+    // Scrolled to the left end the name has not moved.
+    await strip(page).evaluate((el) => { el.scrollLeft = 0; });
+    expect(await sticky(page).evaluate((el) => el.getBoundingClientRect().left)).toBeCloseTo(nameLeft, 0);
+    const pageOverflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+    expect(pageOverflows).toBe(false);
+  });
+
+  test('at 768 the Flow column keeps its 14rem', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    seedBrowserFlows([FLOWS[0]]);
+    seedBrowserFlowRuns([RUNS[0], RUNS[1]]);
+    await page.goto('/admin/browser-flows');
+    await dismissMobileSidebarIfPresent(page);
+    await expect(page.locator('[data-test="cell-flow-a-run-a2"]')).toBeVisible();
+    const column = await sticky(page).evaluate((el) => el.getBoundingClientRect().width);
+    const rem14 = await page.evaluate(() => 14 * parseFloat(getComputedStyle(document.documentElement).fontSize));
+    expect(column).toBeGreaterThanOrEqual(rem14 - 0.5);
+  });
+
+  test('at 390 the edge fades show only where runs are hidden', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    seedBrowserFlows([FLOWS[0]]);
+    seedBrowserFlowRuns([RUNS[0], RUNS[1]]);
+    await page.goto('/admin/browser-flows');
+    await dismissMobileSidebarIfPresent(page);
+    await expect(page.locator('[data-test="cell-flow-a-run-a2"]')).toBeVisible();
+
+    // As opened, at the newest run: older runs are hidden to the left.
+    await expect(viewport(page)).toHaveClass(/matrix-viewport--overflow-start/);
+    await expect(viewport(page)).not.toHaveClass(/matrix-viewport--overflow-end/);
+    // The start fade begins just right of the sticky name.
+    const [fadeLeft, column] = await Promise.all([
+      viewport(page).evaluate((el) => parseFloat(getComputedStyle(el, '::before').left)),
+      sticky(page).evaluate((el) => (el as HTMLElement).offsetWidth),
+    ]);
+    expect(fadeLeft).toBeCloseTo(column, 0);
+
+    await strip(page).evaluate((el) => { el.scrollLeft = 0; });
+    await expect(viewport(page)).toHaveClass(/matrix-viewport--overflow-end/);
+    await expect(viewport(page)).not.toHaveClass(/matrix-viewport--overflow-start/);
   });
 });

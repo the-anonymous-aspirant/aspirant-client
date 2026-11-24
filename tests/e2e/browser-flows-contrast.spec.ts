@@ -63,7 +63,9 @@ const AA = 4.5;
  *  measurement as contrastRatio, reading `prop` on `el` itself rather than
  *  its `color`, against the nearest ancestor's own opaque background. WCAG's
  *  non-text floor (UX walk AA6, system_3 #11008). */
-async function nonTextContrastRatio(locator: Locator, prop: 'backgroundColor' | 'borderTopColor'): Promise<number> {
+type MarkProp = 'backgroundColor' | 'borderTopColor' | 'outlineColor';
+
+async function nonTextContrastRatio(locator: Locator, prop: MarkProp): Promise<number> {
   return locator.first().evaluate((el, cssProp) => {
     const parse = (s: string) => {
       let m = s.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
@@ -84,9 +86,14 @@ async function nonTextContrastRatio(locator: Locator, prop: 'backgroundColor' | 
       const c = parse(getComputedStyle(n).backgroundColor);
       if (c && c.a === 1) bg = c;
     }
-    const fg = parse(getComputedStyle(el)[cssProp as 'backgroundColor' | 'borderTopColor']);
+    const fg = parse(getComputedStyle(el)[cssProp as MarkProp]);
     if (!fg || !bg || fg.a === 0) return 0;
-    const l1 = lum(fg);
+    // A translucent mark (the grid's outlines are a color-mix with
+    // transparent, #11008) is measured as it lands on the background.
+    const eff = fg.a < 1
+      ? { r: fg.r * fg.a + bg.r * (1 - fg.a), g: fg.g * fg.a + bg.g * (1 - fg.a), b: fg.b * fg.a + bg.b * (1 - fg.a) }
+      : fg;
+    const l1 = lum(eff);
     const l2 = lum(bg);
     return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
   }, prop);
@@ -188,7 +195,7 @@ for (const theme of ['light', 'dark'] as const) {
       await open(page, '/admin/browser-flows');
       const legend = page.locator('[data-test="browser-flows-legend"]');
       await expect(legend).toBeVisible();
-      const marks: Array<[string, Locator, 'backgroundColor' | 'borderTopColor']> = [
+      const marks: Array<[string, Locator, MarkProp]> = [
         ['success', legend.locator('.cell-success'), 'backgroundColor'],
         ['running', legend.locator('.cell-running'), 'backgroundColor'],
         ['blocked', legend.locator('.cell-blocked'), 'backgroundColor'],
@@ -201,6 +208,39 @@ for (const theme of ['light', 'dark'] as const) {
         const ratio = await nonTextContrastRatio(loc, prop);
         expect(ratio, `${name} @ ${theme}: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(NON_TEXT_AA);
       }
+    });
+
+    // system_3 #11008 (design c76151): the grid's "no run" cells were filled
+    // squares while the legend promised an outline. They are outlines now, in
+    // the card's own ink: the card is dark in both themes, where the page's
+    // --border-control measured 2.21:1 on the light theme's card.
+    test('grid "no run" cells are outlines in the card ink, 3:1 on the card, the size of a run cell', async ({ page }) => {
+      await open(page, '/admin/browser-flows');
+      const empty = page.locator('[data-test="browser-flows-matrix"] .cell-empty');
+      await expect(empty).toHaveCount(19);
+      const run = page.locator(`[data-test="cell-${FLOW.id}-${RUN.id}"]`);
+      const [fill, width, emptyBox, runBox] = await Promise.all([
+        empty.first().evaluate((el) => getComputedStyle(el).backgroundColor),
+        empty.first().evaluate((el) => parseFloat(getComputedStyle(el).borderTopWidth)),
+        empty.first().evaluate((el) => { const r = el.getBoundingClientRect(); return [r.width, r.height]; }),
+        run.evaluate((el) => { const r = el.getBoundingClientRect(); return [r.width, r.height]; }),
+      ]);
+      expect(fill, 'no fill').toMatch(/^rgba?\([\d.\s,]*,?\s*0\)$|^transparent$/);
+      expect(width, 'a visible outline').toBeGreaterThan(0);
+      expect(emptyBox, 'the outline sits inside the cell (border-box)').toEqual(runBox);
+      const ratio = await nonTextContrastRatio(empty, 'borderTopColor');
+      test.info().annotations.push({ type: 'ratio', description: `no-run outline @ ${theme}: ${ratio.toFixed(2)}:1` });
+      expect(ratio, `no-run outline @ ${theme}: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(NON_TEXT_AA);
+    });
+
+    test('a hovered run cell outlines in the card ink, 3:1 on the card', async ({ page }) => {
+      await open(page, '/admin/browser-flows');
+      const run = page.locator(`[data-test="cell-${FLOW.id}-${RUN.id}"]`);
+      await run.hover();
+      await expect.poll(() => run.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe('solid');
+      const ratio = await nonTextContrastRatio(run, 'outlineColor');
+      test.info().annotations.push({ type: 'ratio', description: `hover outline @ ${theme}: ${ratio.toFixed(2)}:1` });
+      expect(ratio, `hover outline @ ${theme}: ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(NON_TEXT_AA);
     });
 
     // system_3 #11455: the floor above passed in dark while the legend still
