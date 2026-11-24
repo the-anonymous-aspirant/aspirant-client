@@ -78,6 +78,8 @@ const spend = (id: number, day: string, cents: number, over: Json = {}): Json =>
 interface Fake {
   payments: Json[];
   expenses: Json[];
+  clients?: Json[];
+  invoices?: Json[];
 }
 
 // Three months: November (2 in, 1 out), October (1 in, 1 out), September (1 in).
@@ -98,8 +100,8 @@ async function open(page: Page, fake: Fake): Promise<void> {
     const path = new URL(req.url()).pathname.replace(/^\/api/, '');
     const method = req.method();
     if (path === '/invoicing/profile') return json(route, 200, { saved: true, profile: { full_name: 'F', address: 'A', steuernummer: '12/345/67890', is_kleinunternehmer: true, invoice_number_prefix: '2026', next_invoice_number: 1 } });
-    if (path === '/invoicing/clients') return json(route, 200, { clients: [] });
-    if (path === '/invoicing/invoices') return json(route, 200, { invoices: [] });
+    if (path === '/invoicing/clients') return json(route, 200, { clients: fake.clients ?? [] });
+    if (path === '/invoicing/invoices') return json(route, 200, { invoices: fake.invoices ?? [] });
     if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: fake.payments });
     if (path === '/invoicing/expenses' && method === 'GET') return json(route, 200, { expenses: fake.expenses });
     if (path === '/invoicing/book/selection' && method === 'GET') {
@@ -138,9 +140,9 @@ test.describe('#10636 Transactions folds by month', () => {
   test('the newest month starts open, older months are folded, each with its count; rows run newest day first', async ({ page }) => {
     await open(page, newFake());
     expect(await states(ledgerGroups(page))).toEqual(['2026-11:open', '2026-10:folded', '2026-09:folded']);
-    await expect(ledgerSummary(page, '2026-11')).toHaveText('November 2026 · 3');
-    await expect(ledgerSummary(page, '2026-10')).toHaveText('October 2026 · 2');
-    await expect(ledgerSummary(page, '2026-09')).toHaveText('September 2026 · 1');
+    await expect(ledgerSummary(page, '2026-11')).toHaveText('November 2026 · 3 transactions');
+    await expect(ledgerSummary(page, '2026-10')).toHaveText('October 2026 · 2 transactions');
+    await expect(ledgerSummary(page, '2026-09')).toHaveText('September 2026 · 1 transaction');
     await expect(ledgerRows(page)).toHaveCount(3);
     const txns = await ledgerRows(page).evaluateAll((els) => els.map((e) => e.getAttribute('data-txn')));
     expect(txns).toEqual(['M-p4', 'M-e2', 'M-p3']);
@@ -157,7 +159,7 @@ test.describe('#10636 Transactions folds by month', () => {
     await direction.getByRole('radio', { name: 'Out' }).click();
     await expect(ledgerGroups(page)).toHaveCount(2);
     expect(await states(ledgerGroups(page))).toEqual(['2026-11:open', '2026-10:open']);
-    await expect(ledgerSummary(page, '2026-11')).toHaveText('November 2026 · 1');
+    await expect(ledgerSummary(page, '2026-11')).toHaveText('November 2026 · 1 transaction');
     await expect(ledgerRows(page)).toHaveCount(2);
 
     await direction.getByRole('radio', { name: 'All' }).click();
@@ -198,7 +200,7 @@ test.describe('#10636 Transactions folds by month', () => {
     await page.locator('[data-test="expense-save"]').click();
     await expect(page.getByRole('dialog', { name: 'Enter expense by hand' })).toBeHidden();
 
-    await expect(ledgerSummary(page, '2026-09')).toHaveText('September 2026 · 2');
+    await expect(ledgerSummary(page, '2026-09')).toHaveText('September 2026 · 2 transactions');
     expect(await states(ledgerGroups(page))).toEqual(['2026-11:folded', '2026-10:folded', '2026-09:open']);
     await expect(ledgerGroup(page, '2026-09').locator('[data-test="expense-row"]', { hasText: 'Brushes' })).toBeInViewport();
   });
@@ -274,5 +276,101 @@ test.describe('#10636 the Book folds by month', () => {
     expect(november).toHaveLength(7);
     expect(new Set(november).size).toBe(7);
     expect(await edges('2026-10')).toEqual(november);
+  });
+});
+
+// system_3 #12277: a group's table caption repeated the fold head right above
+// it. Ruling 1: kept for a screen reader, not drawn, on all four tabs.
+// Ruling 2: a Transactions head names its noun. Ruling 3: the Book's month
+// head takes the size and weight of the other three, with no line under it,
+// and stays an h3. The tables are the desktop layout; a phone draws cards.
+test.describe('#12277 a group says once which group it is', () => {
+  test.skip(({ isMobile }) => isMobile, 'the tables are the desktop layout');
+
+  const client = (id: number, name: string): Json => ({ id, name, address: 'Weg 1', email: '', paypal_email: '', notes: '' });
+  const NAMES = ['Anna Muster', 'Bea Probe', 'Carl Beispiel', 'Dora Test', 'Emil Platzhalter', 'Frida Exempel', 'Gerd Testsson', 'Hanna Muster', 'Ida Probe', 'Jan Beispiel', 'Kai Test'];
+  const invoice = (id: number, status: string, number: string | null, issued: string | null): Json => ({
+    id, status, client_id: 1, client_name: 'Galerie Nord', invoice_number: number,
+    issue_date: issued ? `${issued}T00:00:00Z` : null,
+    // Work done in November: the tab opens on that month's work.
+    service_date_from: '2026-11-01T00:00:00Z', service_date_to: '2026-11-01T00:00:00Z',
+    vat_rate_bp: 1900, total_cents: 1000 * id, currency: 'EUR',
+  });
+  const fullFake = (clients = 11): Fake => ({
+    ...newFake(),
+    clients: NAMES.slice(0, clients).map((n, i) => client(i + 1, n)),
+    invoices: [invoice(1, 'draft', null, null), invoice(2, 'issued', '2026-001', '2026-11-03'), invoice(3, 'issued', '2026-002', '2026-11-10')],
+  });
+
+  // The caption is the table's name to a screen reader, and has no box: it
+  // is clipped to a point and the column heads start at the table's top edge.
+  async function captionIsNotDrawn(group: ReturnType<Page['locator']>, name: string): Promise<void> {
+    const table = group.getByRole('table');
+    await expect(table).toBeVisible();
+    await expect(table).toHaveAccessibleName(name);
+    const box = await table.evaluate((t) => {
+      const c = (t as HTMLTableElement).caption!.getBoundingClientRect();
+      const head = t.querySelector('thead')!.getBoundingClientRect();
+      return { w: c.width, h: c.height, gap: head.top - t.getBoundingClientRect().top };
+    });
+    expect(box.w, 'caption width').toBeLessThanOrEqual(1);
+    expect(box.h, 'caption height').toBeLessThanOrEqual(1);
+    expect(Math.abs(box.gap), 'column heads at the table top').toBeLessThan(1);
+  }
+
+  async function openFold(group: ReturnType<Page['locator']>, summary: string): Promise<void> {
+    if (!(await group.evaluate((d) => (d as HTMLDetailsElement).open))) await group.locator(summary).click();
+  }
+
+  test('Transactions: the head counts transactions, and the caption is not drawn', async ({ page }) => {
+    await open(page, fullFake());
+    await expect(ledgerSummary(page, '2026-11')).toHaveText('November 2026 · 3 transactions');
+    await expect(ledgerSummary(page, '2026-09')).toHaveText('September 2026 · 1 transaction');
+    await captionIsNotDrawn(ledgerGroup(page, '2026-11'), 'Money in and out: November 2026');
+  });
+
+  test('Invoices: a month and Drafts keep their heads, and neither caption is drawn', async ({ page }) => {
+    await open(page, fullFake());
+    await page.getByRole('tab', { name: 'Invoices' }).click();
+    const month = page.locator('[data-test="invoice-group"][data-group="2026-11"]');
+    await expect(month.locator('[data-test="invoice-group-summary"]')).toHaveText('November 2026 · 2 invoices');
+    await openFold(month, '[data-test="invoice-group-summary"]');
+    await captionIsNotDrawn(month, 'Invoices: November 2026');
+    const drafts = page.locator('[data-test="invoice-group"][data-group="drafts"]');
+    await expect(drafts.locator('[data-test="invoice-group-summary"]')).toHaveText('Drafts · 1');
+    await openFold(drafts, '[data-test="invoice-group-summary"]');
+    await captionIsNotDrawn(drafts, 'Invoices: Drafts');
+  });
+
+  test('Clients: a letter\'s head counts its clients, and its caption is not drawn', async ({ page }) => {
+    await open(page, fullFake(11));
+    await page.getByRole('tab', { name: 'Clients' }).click();
+    const letter = page.locator('[data-test="client-group"][data-letter="A"]');
+    await expect(letter.locator('[data-test="client-group-summary"]')).toHaveText('A · 1 client');
+    await openFold(letter, '[data-test="client-group-summary"]');
+    await captionIsNotDrawn(letter, 'Clients: A');
+  });
+
+  test('Clients: a book of 10 or fewer does not fold, and its "Clients" caption is not drawn', async ({ page }) => {
+    await open(page, fullFake(3));
+    await page.getByRole('tab', { name: 'Clients' }).click();
+    await captionIsNotDrawn(page.locator('[data-test="client-list"]'), 'Clients');
+  });
+
+  test('Book: the month head is an h3 at the other heads\' size and weight, with no line under it; the caption is not drawn', async ({ page }) => {
+    await open(page, fullFake());
+    const ref = await ledgerSummary(page, '2026-11').evaluate((e) => {
+      const cs = getComputedStyle(e);
+      return { size: cs.fontSize, weight: cs.fontWeight };
+    });
+    await page.getByRole('tab', { name: 'Book' }).click();
+    const november = bookMonth(page, '2026-11');
+    await expect(november.getByRole('heading', { level: 3, name: 'November 2026' })).toBeVisible();
+    const head = await november.locator('[data-test="month-head"]').evaluate((e) => {
+      const label = getComputedStyle(e.querySelector('h3')!);
+      return { size: label.fontSize, weight: label.fontWeight, rule: getComputedStyle(e).borderBottomWidth };
+    });
+    expect(head).toEqual({ size: ref.size, weight: ref.weight, rule: '0px' });
+    await captionIsNotDrawn(november, 'Book entries for November 2026');
   });
 });

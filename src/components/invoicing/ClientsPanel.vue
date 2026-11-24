@@ -699,6 +699,24 @@
     margin-top: var(--space-xs);
   }
 
+  /* The table's caption repeats the fold head right above it, or the tab's own name
+     when the book does not fold, so it is
+     kept for a screen reader and not drawn (system_3 #12277 ruling 1). The
+     design system draws any caption it is passed and has no hidden form, so
+     the app hides it here (an app-layer override, as §3.114 makes for
+     AspSegmented). */
+  .client-group :deep(.data-table__caption),
+  .client-list :deep(.data-table__caption) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
   .client-group :deep(table),
   .client-list :deep(table) {
     table-layout: fixed;

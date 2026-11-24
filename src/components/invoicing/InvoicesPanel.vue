@@ -844,6 +844,22 @@
     font-weight: 600;
   }
 
+  /* The table's caption repeats the fold head right above it, so it is
+     kept for a screen reader and not drawn (system_3 #12277 ruling 1). The
+     design system draws any caption it is passed and has no hidden form, so
+     the app hides it here (an app-layer override, as §3.114 makes for
+     AspSegmented). */
+  .invoice-group :deep(.data-table__caption) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
   .invoice-group > :deep(*:not(summary)) {
     margin-top: var(--space-xs);
   }
