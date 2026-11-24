@@ -15,17 +15,17 @@
     <div v-else class="stats">
       <figure class="stat" data-test="stat-clients">
         <figcaption><h4>Clients over time</h4></figcaption>
-        <AspChart type="line" :data="clientsData" :options="optionsFor('position', clientTotals)" :plugins="[plotAreaProbe]" :height="140" aria-label="Clients over time, running total by the month of each client's first invoiced work" />
+        <AspChart type="line" :data="clientsData" :options="optionsFor('position', clientTotals)" :plugins="[plotAreaProbe, axisProbe]" :height="140" aria-label="Clients over time, running total by the month of each client's first invoiced work" />
         <p class="stat__range muted" data-test="stat-clients-range">{{ clientsCaption }}</p>
       </figure>
       <figure class="stat" data-test="stat-income">
         <figcaption><h4>Income per month</h4></figcaption>
-        <AspChart type="bar" :data="incomeData" :options="optionsFor('money', incomeEuros)" :plugins="[plotAreaProbe]" :height="140" aria-label="Income per month in euros, issued invoices by the month the work was done" />
+        <AspChart type="bar" :data="incomeData" :options="optionsFor('money', incomeEuros)" :plugins="[plotAreaProbe, axisProbe]" :height="140" aria-label="Income per month in euros, issued invoices by the month the work was done" />
         <p class="stat__range muted" data-test="stat-income-range">{{ incomeCaption }}</p>
       </figure>
       <figure class="stat" data-test="stat-invoices">
         <figcaption><h4>Invoices issued per month</h4></figcaption>
-        <AspChart type="bar" :data="chartData" :options="optionsFor('count', counts)" :plugins="[plotAreaProbe]" :height="140" aria-label="Invoices issued per month" />
+        <AspChart type="bar" :data="chartData" :options="optionsFor('count', counts)" :plugins="[plotAreaProbe, axisProbe]" :height="140" aria-label="Invoices issued per month" />
         <p class="stat__range muted" data-test="stat-invoices-range">{{ invoiceCountCaption }}</p>
       </figure>
     </div>
@@ -35,6 +35,7 @@
 <script>
   import { AspChart } from '@aspirant/design-system';
   import { formatMoney, listInvoices } from './api.js';
+  import { axisProbe, monthAxis, moneyTick } from './chartAxis.js';
 
   // An invoice holds one currency; a missing one reads as EUR.
   const inEuros = (invoice) => (invoice.currency || 'EUR') === 'EUR';
@@ -43,9 +44,6 @@
   // areas start at the same x and one month sits at one x in every chart
   // (design_agent on #10005).
   const Y_AXIS_WIDTH = 56;
-
-  // Compact money ticks, one decimal (§3.120 Q4): €950, €1.2k.
-  const moneyTick = (v) => (Math.abs(v) >= 1000 ? `€${(v / 1000).toFixed(1)}k` : `€${Math.round(v)}`);
 
   // Records each chart's plot area and month positions on its wrapper, so the
   // alignment can be measured from the page (Chart.js itself is not reachable
@@ -114,7 +112,7 @@
       now: { type: Date, default: null },
     },
     data() {
-      return { invoices: [], plotAreaProbe };
+      return { invoices: [], plotAreaProbe, axisProbe };
     },
     computed: {
       issued() {
@@ -186,25 +184,32 @@
         // between months on screen (design_agent on #10005, D2).
         return { labels: this.labels, datasets: [{ label: 'Clients', data: this.clientTotals, stepped: true, tension: 0, fill: false }] };
       },
-      // Each caption states its own extremes and the part-month bar in
-      // words (UX walk AM7, system_3 #11024; §3.66f's "low N · high M" text
-      // convention over a shape to decode), so the axis never has to carry
-      // a reading no bar or tick can show by itself.
+      // Each caption is sentences (system_3 #12282 ruling 4): what the
+      // chart counts, then its own figures in words, the current month "so
+      // far" among them (UX walk AM7, #11024; §3.66f), so the axis never
+      // has to carry a reading no bar or tick can show by itself.
       incomeCaption() {
         const money = (v) => formatMoney(Math.round(v * 100));
-        const base = `issued invoices, by the month the work was done, cancelled invoices left out; ${this.seriesCaption(this.incomeEuros, money)}`;
+        const base = `Issued invoices by the month the work was done. Cancelled invoices are left out. ${this.seriesCaption(this.incomeEuros, money)}`;
+        // The invoices the euro sum leaves out, as their own sentence
+        // (system_3 #12258, in #12282's sentence form).
         const other = this.otherCurrencies;
         if (!other.length) return base;
         const codes = [...new Set(other.map((i) => i.currency))].sort().join(', ');
-        const clause = other.length === 1 ? `1 invoice in another currency (${codes}) is not counted` : `${other.length} invoices in other currencies (${codes}) are not counted`;
-        return `${base}; ${clause}`;
+        const clause = other.length === 1 ? `1 invoice in another currency (${codes}) is not counted.` : `${other.length} invoices in other currencies (${codes}) are not counted.`;
+        return `${base} ${clause}`;
       },
       invoiceCountCaption() {
-        return `per month, by issue date, cancelled invoices left out; ${this.seriesCaption(this.counts, String)}`;
+        const invoices = (v) => `${v} invoice${v === 1 ? '' : 's'}`;
+        return `Issued invoices by the month of issue. Cancelled invoices are left out. ${this.seriesCaption(this.counts, invoices)}`;
       },
+      // A running total has no low and high: its low is always its first
+      // month (#12282 ruling 3). It keeps its "so far".
       clientsCaption() {
-        const clients = (v) => `${v} client${v === 1 ? '' : 's'}`;
-        return `running total; each client counts from the month of the work on their first issued invoice; ${this.seriesCaption(this.clientTotals, clients)}`;
+        const t = this.clientTotals;
+        const i = this.months.indexOf(this.currentKey);
+        const now = i >= 0 ? t[i] : t[t.length - 1];
+        return `Clients you have invoiced, counted from the month of their first invoice. ${now} so far.`;
       },
     },
     watch: {
@@ -234,7 +239,7 @@
             tooltip: money ? { callbacks: { label: (ctx) => formatMoney(Math.round(ctx.parsed.y * 100)) } } : {},
           },
           scales: {
-            x: { offset: true },
+            x: monthAxis(),
             y: {
               ...this.paddedDomain(values || [], kind),
               afterFit: (axis) => {
@@ -259,14 +264,12 @@
       monthShort(i) {
         return this.labels[i].split(' ')[0];
       },
-      // "low N in <month> · high M in <month>", naming the current month
-      // "so far" wherever it falls (an extreme or its own third clause) —
-      // the operator's converged caption preference (§3.66f/D4), extended
-      // with month names since this axis spans many of them, unlike the
-      // fixed rolling window §3.66f was written against. A flat series (one
-      // month, or every month tied) has no extremes to contrast, so it
-      // collapses to a single reading instead of a redundant "low X · high
-      // X" (the #3993 suppression §3.66f restores, carried to this axis).
+      // "Lowest N in <month>, highest M in <month>.", naming the current
+      // month "so far" wherever it falls (an extreme, or a sentence of its
+      // own): the operator's converged caption preference (§3.66f/D4) with
+      // month names, written as a sentence (#12282 ruling 4). A flat series
+      // (one month, or every month tied) has no extremes to contrast, so it
+      // collapses to one reading (the #3993 suppression §3.66f restores).
       seriesCaption(values, fmt) {
         if (!values.length) return '';
         const curI = this.months.indexOf(this.currentKey);
@@ -277,12 +280,10 @@
           if (v < values[loI]) loI = i;
         });
         const soFar = (i) => (i === curI ? ' so far' : '');
-        if (values[hiI] === values[loI]) {
-          return curI >= 0 ? `${this.monthShort(curI)} so far ${fmt(values[curI])}` : `${fmt(values[hiI])} in ${this.monthShort(hiI)}`;
-        }
-        const parts = [`low ${fmt(values[loI])} in ${this.monthShort(loI)}${soFar(loI)}`, `high ${fmt(values[hiI])} in ${this.monthShort(hiI)}${soFar(hiI)}`];
-        if (curI >= 0 && curI !== hiI && curI !== loI) parts.push(`${this.monthShort(curI)} so far ${fmt(values[curI])}`);
-        return parts.join(' · ');
+        const current = curI >= 0 ? `${this.monthShort(curI)} so far: ${fmt(values[curI])}.` : '';
+        if (values[hiI] === values[loI]) return current || `${fmt(values[hiI])} in ${this.monthShort(hiI)}.`;
+        const extremes = `Lowest ${fmt(values[loI])} in ${this.monthShort(loI)}${soFar(loI)}, highest ${fmt(values[hiI])} in ${this.monthShort(hiI)}${soFar(hiI)}.`;
+        return curI >= 0 && curI !== hiI && curI !== loI ? `${extremes} ${current}` : extremes;
       },
       async load() {
         try {
@@ -323,10 +324,11 @@
     font-size: var(--text-sm);
   }
 
+  /* Sentences, left-aligned under the chart (#12282 ruling 4). */
   .stat__range {
     margin: var(--space-2xs) 0 0;
     font-size: var(--text-xs, 0.75rem);
-    text-align: center;
+    text-align: left;
   }
 
   .muted {
