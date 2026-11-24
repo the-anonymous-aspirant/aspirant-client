@@ -135,7 +135,7 @@
               <AspInput v-model="line.quantity" :label="captioned(i) ? 'Quantity' : ''" :aria-label="`Quantity, line ${i + 1}`" />
             </div>
             <div class="line__num">
-              <AspInput v-model="line.price" :label="captioned(i) ? 'Unit price (€)' : ''" :label-hint="captioned(i) ? hints.unitPrice : null" :aria-label="`Unit price, line ${i + 1}`" />
+              <AspInput v-model="line.price" :label="captioned(i) ? priceLabel : ''" :label-hint="captioned(i) ? priceHint : null" :aria-label="`Unit price, line ${i + 1}`" />
             </div>
             <span class="line__total">{{ lineTotalLabel(line) }}</span>
             <AspButton variant="ghost" size="sm" class="line__remove" :aria-label="`Remove line ${i + 1}`" @click="form.lines.splice(i, 1)">Remove</AspButton>
@@ -389,22 +389,31 @@
       draftCurrency() {
         return (this.invoice && this.invoice.currency) || 'EUR';
       },
-      // The draft's gross as the server computes it at issue (aspirant-server
-      // recomputeTotals): each line rounds q×p/1000, the VAT rounds
-      // net×bp/10000, and a Kleinunternehmerin charges none. Read from the
-      // form, so it follows unsaved edits. A line that is not yet a number
-      // counts for nothing (issuing refuses it anyway); a VAT rate that is not
-      // a number leaves the gross unknown (null).
+      // With VAT charged, a draft is priced from what was received: the
+      // price holds its VAT (aspirant-server #12261). As a
+      // Kleinunternehmerin there is no tax to be inside.
+      priceLabel() {
+        // No-break spaces keep the bracket whole: a phone's narrow column
+        // wraps it as "Unit price" over "(€, incl. VAT)".
+        return this.kleinunternehmer ? 'Unit price (€)' : 'Unit price (€,\u00a0incl.\u00a0VAT)';
+      },
+      priceHint() {
+        return this.kleinunternehmer ? this.hints.unitPrice : this.hints.unitPriceGross;
+      },
+      // The draft's gross as the server computes it (aspirant-server
+      // recomputeTotals): each line rounds q×p/1000, and the lines are what
+      // was received, so their sum is the gross with or without VAT; the VAT
+      // is the share inside it. Read from the form, so it follows unsaved
+      // edits. A line that is not yet a number counts for nothing (issuing
+      // refuses it anyway).
       draftGrossCents() {
-        let net = 0;
+        let gross = 0;
         for (const line of this.form.lines) {
           const q = milliFromDecimal(line.quantity);
           const p = centsFromEuros(line.price);
-          if (q !== null && p !== null) net += Math.round((q * p) / 1000);
+          if (q !== null && p !== null) gross += Math.round((q * p) / 1000);
         }
-        if (this.kleinunternehmer) return net;
-        const bp = centsFromEuros(this.form.vat_percent);
-        return bp === null ? null : net + Math.round((net * bp) / 10000);
+        return gross;
       },
       // §33 UStDV, as aspirant-server's InvoiceNeedsRecipientAddress: above
       // 250 € gross, or in any other currency, the address is required.

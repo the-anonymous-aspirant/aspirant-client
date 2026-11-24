@@ -432,7 +432,9 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     expect(fake.requests.slice(sent).filter((r) => r.method !== 'GET'), 'nothing is saved while ze types').toEqual([]);
   });
 
-  test('with VAT charged, the warning counts the gross, not the net', async ({ page, isMobile }) => {
+  // system_3 #12261: with VAT charged a draft is priced from what was
+  // received, so the typed price already holds its VAT.
+  test('with VAT charged, the typed price is the gross the warning counts', async ({ page, isMobile }) => {
     const fake = newFake();
     fake.kleinunternehmer = false;
     fake.clients = [{ id: 1, name: 'Galerie Nord', address: '', email: '', paypal_email: '' }];
@@ -440,11 +442,11 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await createFromOne(page, isMobile, 'TX2');
     const note = page.locator('[data-test="draft-no-address"]');
     const price = page.getByLabel('Unit price, line 1');
-    await price.fill('210');
-    await expect(note).toHaveAttribute('data-level', 'neutral'); // 210 + 19% = 249.90
-    await price.fill('211');
-    await expect(note).toHaveAttribute('data-level', 'caution'); // 211 + 19% = 251.09
-    await expect(page.locator('[data-test="draft-no-address-text"]')).toContainText('totals €251.09 gross');
+    await price.fill('250');
+    await expect(note).toHaveAttribute('data-level', 'neutral');
+    await price.fill('250.01');
+    await expect(note).toHaveAttribute('data-level', 'caution');
+    await expect(page.locator('[data-test="draft-no-address-text"]')).toContainText('totals €250.01 gross');
   });
 
   test('an invoice in another currency needs the address at any total', async ({ page, isMobile }) => {
@@ -613,6 +615,33 @@ test.describe('#10032 the invoicing fields explain themselves', () => {
     await editor.getByText('Service date (from)', { exact: true }).click();
     await expect(page.locator('[data-test="draft-from"]')).toBeFocused();
   });
+
+  // system_3 #12261 (design_agent c76335, c76345): with VAT charged a draft
+  // is priced from what was received, so the price and the rate read as tax
+  // inside; the caption stays one line at a phone's width and a desktop's.
+  for (const width of [390, 1440]) {
+    test(`with VAT charged, Unit price says incl. VAT and both texts say tax inside, at ${width}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const fake = newFake();
+      fake.kleinunternehmer = false;
+      await open(page, fake);
+      await createFromTwo(page);
+      const editor = page.locator('[data-test="invoice-editor"]');
+      await tapEach(page, editor, {
+        'VAT rate (%)': 'The tax inside the price. Usually 19.',
+        'Unit price (€, incl. VAT)': 'The price for one, tax included.',
+      }, width < 640 ? 8 : 6); // Client, two dates, VAT rate, and Description + Unit price (on a phone, on each line)
+      await expect(editor.getByText('Unit price (€)', { exact: true })).toHaveCount(0);
+      await editor.locator('[data-test="draft-lines"]').screenshot({ path: test.info().outputPath(`lines-${width}.png`) });
+      const caption = (await editor.getByText('Unit price (€, incl. VAT)', { exact: true }).first().boundingBox())!;
+      // One line on a desktop; on a phone at most two, broken before the bracket.
+      expect(caption.height, 'the caption\'s lines').toBeLessThan(width < 640 ? 48 : 24);
+      // The inputs of a line still start level.
+      const qty = (await page.getByLabel('Quantity, line 1').boundingBox())!;
+      const price = (await page.getByLabel('Unit price, line 1').boundingBox())!;
+      expect(Math.abs(qty.y - price.y), 'Quantity and Unit price start level').toBeLessThanOrEqual(1);
+    });
+  }
 
   // §3.142 Decision 2 (design_agent c65348 on #10539): "Paid by" replaces
   // Client and "Payer (optional)", and carries no "?" hint of its own —

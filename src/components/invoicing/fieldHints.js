@@ -9,9 +9,12 @@ export const FIELD_HINTS = {
   serviceFrom: 'The day the work was done, or the first day if it ran over several days.',
   serviceUntil: 'The last day, if the work ran over several days.',
   client: 'Who the invoice is for. Their name and address are printed on it.',
-  vatRate: 'The tax added on top of the price. Usually 19.',
+  vatRate: 'The tax inside the price. Usually 19.',
   description: 'What the work was. This is the line on the invoice.',
   unitPrice: 'The price for one, before tax.',
+  // With VAT charged a draft is priced from what was received, so the price
+  // and the rate read as tax inside (system_3 #12261, design_agent c76335).
+  unitPriceGross: 'The price for one, tax included.',
   reference: 'A number from the bank or the payer, if there is one.',
   payer: 'Who sent the money, if not the client.',
   whatFor: 'Becomes the invoice line if you invoice this payment.',
