@@ -35,7 +35,14 @@ export function importPayPalCSV(file, dateOrder) {
   if (dateOrder) form.append('date_order', dateOrder);
   return axios
     .post(`${base}/payments/import`, form)
-    .then((r) => ({ summary: r.data.summary, expenseCandidates: r.data.expense_candidates || [] }));
+    .then((r) => ({
+      summary: r.data.summary,
+      expenseCandidates: r.data.expense_candidates || [],
+      // The file's reversals and refunds that undo a payment already in the
+      // book, each with that payment (system_3 #12259). Absent from a server
+      // before it: then none.
+      undone: r.data.undone || [],
+    }));
 }
 
 // The outgoing PayPal payments the owner ticked, each with zir category:

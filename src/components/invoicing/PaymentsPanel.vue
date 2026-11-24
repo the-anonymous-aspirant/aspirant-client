@@ -102,6 +102,29 @@
           {{ ' ' }}<span data-test="paypal-summary-copy-kept">{{ paypalCopyKept }}</span></template><template v-if="payerCandidates.length">
           {{ ' ' }}<span data-test="payers-clause">{{ payersClause }}</span></template>
       </p>
+      <!-- A reversal or refund in the file that takes back a payment already
+           in the book: one lead-in, then one line each naming the payment, the
+           day the money went back, what the Book does with the payment now,
+           and its issued invoice, with the payment's door. It advises nothing
+           (system_3 #12259, design_agent c76311): the step that corrects the
+           Book is its own spec. The import changed nothing. -->
+      <div v-if="paypalUndone.length" class="summary__undone" data-test="paypal-undone">
+        <p class="summary__line" data-test="paypal-undone-lead">{{ undoneLead }}</p>
+        <ul class="summary__undone-list">
+          <li v-for="u in paypalUndone" :key="u.transaction_id" class="summary__undone-line" data-test="paypal-undone-line" :data-payment="u.payment.id">
+            <span class="summary__undone-text" data-test="paypal-undone-text">{{ undoneText(u) }}</span>
+            <AspButton
+              v-if="undonePayment(u)"
+              variant="secondary"
+              size="sm"
+              data-test="paypal-undone-open"
+              :aria-label="`Open the payment of ${formatMoney(u.payment.gross_cents, u.payment.currency)}${u.payment.sender_name ? ` from ${u.payment.sender_name}` : ''} on ${formatDay(u.payment.paid_on)}`"
+              @click="openEdit(undonePayment(u))"
+              >Open</AspButton
+            >
+          </li>
+        </ul>
+      </div>
       <!-- Its own line under the sentence, as a bordered button: at the end
            of the sentence in text style it was easy to miss (operator c70806
            on #10985; Design ack c71154 on system_3 #11507). No count on it:
@@ -886,6 +909,8 @@
         // The last PayPal file's outgoing payments, offered as expenses
         // (system_3 #10438), and how many the owner added.
         paypalExpenseCandidates: [],
+        // The last PayPal file's rows that undo a stored payment (#12259).
+        paypalUndone: [],
         paypalExpensesOpen: false,
         paypalExpensesAdded: 0,
         // What the PayPal expense confirm counted as removed or deleted
@@ -953,6 +978,12 @@
       // The expense sentence's counts: expenses added, and outgoing rows
       // matching an expense ze removed or deleted for good, from the
       // review's flags plus any its confirm met (c66307).
+      // design_agent c76311 answer 1, counted by payment: a partial refund and
+      // a later reversal of the same payment are one payment, two lines.
+      undoneLead() {
+        const n = new Set(this.paypalUndone.map((u) => u.payment.id)).size;
+        return n === 1 ? '1 payment you already imported was refunded or reversed:' : `${n} payments you already imported were refunded or reversed:`;
+      },
       paypalExpenses() {
         const exp = countPrior(this.paypalExpenseCandidates);
         return {
@@ -1612,6 +1643,33 @@
         this.editPayment = payment;
         this.editOpen = true;
       },
+      // design_agent c76311 answers 2-4: the payment as the list shows it,
+      // the undo row's own day, then what the Book does with the payment
+      // today and its issued invoice. The payer's name comes from the file:
+      // text interpolation only.
+      undoneText(u) {
+        const p = u.payment;
+        const gross = formatMoney(p.gross_cents, p.currency);
+        const from = p.sender_name ? ` from ${p.sender_name}` : '';
+        const verb = u.kind === 'refund' ? 'refunded' : 'reversed';
+        const parts = [
+          u.full
+            ? `${gross}${from}, ${formatDay(p.paid_on)}, was ${verb} in full on ${formatDay(u.paid_on)}.`
+            : `${formatMoney(u.amount_cents, p.currency)} of ${gross}${from}, ${formatDay(p.paid_on)}, was ${verb} on ${formatDay(u.paid_on)}.`,
+        ];
+        // The panel's own Book test, on the payment as it is now: a category
+        // changed since the import changes the sentence.
+        const listed = this.undonePayment(u);
+        if (listed) parts.push(this.inBook({ direction: 'in', payment: listed }) ? 'The Book still counts it in full.' : 'It is not in the Book.');
+        if (u.invoice) parts.push(`It is on invoice ${u.invoice.invoice_number}.`);
+        return parts.join(' ');
+      },
+      // The payment as the list holds it, for its Edit dialog and the Book
+      // sentence. A payment this same import stored is there once the list
+      // has reloaded.
+      undonePayment(u) {
+        return this.payments.find((p) => p.id === u.payment.id) || null;
+      },
       async openExpenseEdit(expense) {
         this.editExpense = expense;
         this.expenseEditOpen = true;
@@ -1799,15 +1857,21 @@
         this.payerCandidates = [];
         this.paypalExpensesAdded = 0;
         this.paypalExpensePrior = { removed: 0, deleted: 0 };
+        this.paypalUndone = [];
         try {
-          const { summary, expenseCandidates } = await importPayPalCSV(this.pendingFile, dateOrder);
+          const { summary, expenseCandidates, undone } = await importPayPalCSV(this.pendingFile, dateOrder);
           this.summary = summary;
+          this.paypalUndone = undone;
           this.needsDateOrder = false;
           this.refreshPayerCandidates();
           this.importChanged();
-          // Offer the outgoing payments only when one is new to the book.
-          this.paypalExpenseCandidates = expenseCandidates;
-          this.paypalExpensesOpen = expenseCandidates.some((row) => !row.already_imported);
+          // Offer the outgoing payments only when one is new to the book. A
+          // refund or reversal of a stored payment is left out, as an outgoing
+          // refund always was: counted as an expense it would not be tied to
+          // its payment (design_agent c76311 answer 7, system_3 #12259).
+          const offered = expenseCandidates.filter((row) => !row.refund_of);
+          this.paypalExpenseCandidates = offered;
+          this.paypalExpensesOpen = offered.some((row) => !row.already_imported);
         } catch (err) {
           const failure = errorOf(err);
           if (failure.code === 'date_order_ambiguous') {
@@ -2199,6 +2263,35 @@
 
   .summary__line {
     margin: 0;
+  }
+
+  .summary__undone {
+    margin-top: var(--space-xs);
+  }
+
+  .summary__undone-list {
+    list-style: none;
+    margin: var(--space-xs) 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  /* The line's text, then its door at the right edge, as a row's door sits
+     (§3.159 Decision 3). On a phone the door wraps under the text. */
+  .summary__undone-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-xs) var(--space-sm);
+  }
+
+  .summary__undone-text {
+    flex: 1 1 20rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   /* The card's one action, on its own line under the sentence. */
