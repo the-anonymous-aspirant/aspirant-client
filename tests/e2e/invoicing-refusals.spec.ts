@@ -4,6 +4,7 @@ import {
   SENTENCES,
   STALE,
   n26FileLine,
+  ownEntry,
   refusalOf,
   reviewRowName,
 } from '../../src/components/invoicing/refusals.js';
@@ -154,6 +155,12 @@ test.describe('#12300 refusals: every code has a sentence', () => {
       expect(r.field).toBe('');
       expect(r.known).toBe(false);
       expect(n26FileLine({ code })).toBe(n26FileLine({ code: 'brand_new_code' }));
+    }
+    // The dialogs read their own field tables through it too.
+    const table = { name: 'name', paid_on: 'paid_on' };
+    expect(ownEntry(table, 'paid_on')).toBe('paid_on');
+    for (const key of ['constructor', 'toString', '__proto__', '', undefined, null, 7]) {
+      expect(ownEntry(table, key as never)).toBeUndefined();
     }
     expect(line({ code: 'empty_file', field: 'constructor' })).toBe('This file is empty.');
     expect(line({ code: 'too_large', field: 'toString', limit: 5 })).toBe(

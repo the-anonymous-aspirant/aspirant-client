@@ -423,7 +423,7 @@
           // the server's.
           const { field, text } = refusalOf(errorOf(err), { form: 'profile' });
           if (logoChanged) this.partialSave = PARTIAL_SAVE;
-          if (field in this.fieldErrors) {
+          if (Object.hasOwn(this.fieldErrors, field)) {
             this.fieldErrors[field] = text;
             focusAfterRefusal(this, field);
             return;

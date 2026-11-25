@@ -34,7 +34,7 @@ function figure(n) {
 // `table[key]` would also find what Object.prototype holds, so a code or
 // field such as "constructor" would read a function (security's nit on
 // PR 574).
-function ownEntry(table, key) {
+export function ownEntry(table, key) {
   return typeof key === 'string' && Object.hasOwn(table, key) ? table[key] : undefined;
 }
 

@@ -185,7 +185,7 @@
     uploadExpenseReceipt,
   } from './api.js';
   import { focusAfterRefusal } from './refusalFocus.js';
-  import { refusalOf } from './refusals.js';
+  import { ownEntry, refusalOf } from './refusals.js';
 
   const noFieldErrors = () => ({ paid_on: '', amount: '', payee: '', reference: '', note: '' });
 
@@ -457,9 +457,10 @@
         if (CATEGORY_REFUSALS.includes(answer.code) || field === 'category') {
           this.categoryError = text;
           focusAfterRefusal(this, 'category');
-        } else if (SERVER_FIELDS[field]) {
-          this.fieldErrors[SERVER_FIELDS[field]] = text;
-          focusAfterRefusal(this, SERVER_FIELDS[field]);
+        } else if (ownEntry(SERVER_FIELDS, field)) {
+          const own = ownEntry(SERVER_FIELDS, field);
+          this.fieldErrors[own] = text;
+          focusAfterRefusal(this, own);
         } else {
           this.error = text;
           focusAfterRefusal(this, button);

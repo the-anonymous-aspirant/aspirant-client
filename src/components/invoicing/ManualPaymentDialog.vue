@@ -234,7 +234,7 @@
     removePayment,
   } from './api.js';
   import { focusAfterRefusal } from './refusalFocus.js';
-  import { refusalOf } from './refusals.js';
+  import { ownEntry, refusalOf } from './refusals.js';
 
   const noFieldErrors = () => ({ paid_on: '', amount: '', sender_name: '', reference: '', note: '', new_client_address: '', new_client_email: '' });
 
@@ -518,7 +518,7 @@
       // The server's refusal, in this dialog's words and at its field.
       refuseAnswer(err, button = 'saveButton') {
         const r = refusalOf(errorOf(err), { form: 'payment' });
-        this.refuse({ field: SERVER_FIELDS[r.field] || '', text: r.text }, button);
+        this.refuse({ field: ownEntry(SERVER_FIELDS, r.field) || '', text: r.text }, button);
       },
       refuse(refusal, button = 'saveButton') {
         if (refusal.field) {

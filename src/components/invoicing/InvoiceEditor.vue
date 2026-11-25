@@ -290,7 +290,7 @@
     updateDraft,
   } from './api.js';
   import { focusAfterRefusal } from './refusalFocus.js';
-  import { refusalOf } from './refusals.js';
+  import { ownEntry, refusalOf } from './refusals.js';
 
   // A line's server field, as the editor's part of that line.
   const LINE_PARTS = { quantity_milli: 'quantity', unit_price_cents: 'price' };
@@ -771,7 +771,7 @@
           const answer = errorOf(err);
           const r = refusalOf(answer, { form: 'draft' });
           const line = answer.item ? this.form.lines[answer.item - 1] : null;
-          const part = LINE_PARTS[answer.field];
+          const part = ownEntry(LINE_PARTS, answer.field);
           if (line && part) {
             const value = part === 'quantity' ? line.quantity : line.price;
             this.lineErrors = { ...this.lineErrors, [line.key]: { text: r.text, part, value } };
