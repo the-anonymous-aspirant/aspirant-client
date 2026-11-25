@@ -74,7 +74,7 @@
             <!-- Nothing can make an already-imported row importable, so it
                  has no checkbox at all: absent, not disabled (§3.22,
                  design_agent c60363). The spacer keeps its text in line. -->
-            <span v-if="row.already_imported" class="n26-row__nocheck" aria-hidden="true" />
+            <span v-if="row.already_imported || isSent(f, r)" class="n26-row__nocheck" aria-hidden="true" />
             <AspCheckbox
               v-else
               :model-value="isChecked(f, r)"
@@ -94,7 +94,11 @@
               <!-- A match to a payment ze removed, or deleted for good, is
                    not in zir book, so it does not say "Already imported"
                    (§3.143 Decision 6). -->
-              <span v-if="priorFlag(row)" class="n26-row__muted" data-test="n26-row-prior">{{ priorFlag(row) }}</span>
+              <!-- Sent by an earlier press of this review and answered as
+                   stored: nothing can make it importable again, so it has
+                   no checkbox (system_3 #12321, §3.22). -->
+              <span v-if="isSent(f, r)" class="n26-row__muted" data-test="n26-row-sent">Imported.</span>
+              <span v-else-if="priorFlag(row)" class="n26-row__muted" data-test="n26-row-prior">{{ priorFlag(row) }}</span>
               <span v-else-if="row.already_imported" class="n26-row__muted" data-test="n26-row-imported">Already imported</span>
               <span v-else-if="row.possible_duplicate_of" class="n26-row__muted" data-test="n26-row-duplicate">{{ duplicateLine(row) }}</span>
             </div>
@@ -156,6 +160,14 @@
   } from './api.js';
   import { liveNames } from './expenseCategories.js';
 
+  // Two payment-confirm answers as one: every count added.
+  function addResults(a, b) {
+    if (!a) return { ...b };
+    const out = { ...a };
+    for (const [k, v] of Object.entries(b || {})) if (typeof v === 'number') out[k] = (out[k] || 0) + v;
+    return out;
+  }
+
   // Every book has this category (the server seeds it), so it is the
   // default and the fallback when the list cannot be read.
   const EXPENSE_CATEGORY_DEFAULT = 'other';
@@ -185,8 +197,12 @@
         // Per outgoing row, keyed like `checked`: { checked, category }.
         expenseState: {},
         categories: [EXPENSE_CATEGORY_DEFAULT],
-        // The payments half of a confirm that already went through, so a
-        // retry after the expenses half failed does not post them again.
+        // The payment rows a press of this review sent and the server
+        // answered as stored, keyed like `checked`, and the counts of those
+        // answers added up (system_3 #12321). A later press sends every
+        // ticked row not among them, so a row ticked after a half-failed
+        // press is sent too, and none is sent twice.
+        sent: {},
         paymentsResult: null,
         confirming: false,
         error: '',
@@ -207,8 +223,12 @@
       importable() {
         return [...this.rows, ...this.expenseRows].some(({ row }) => !row.already_imported);
       },
+      // The ticked payment rows the button will send: never one already sent.
       checkedRows() {
-        return this.rows.filter(({ f, r }) => this.isChecked(f, r)).map(({ row }) => row);
+        return this.rows.filter(({ f, r }) => this.isChecked(f, r) && !this.isSent(f, r)).map(({ row }) => row);
+      },
+      sentRows() {
+        return this.rows.filter(({ f, r }) => this.isSent(f, r)).map(({ row }) => row);
       },
       // The ticked outgoing rows as the expense confirm takes them.
       checkedExpenses() {
@@ -271,6 +291,7 @@
             expenseState[`${f}:${r}`] = { checked: false, category: EXPENSE_CATEGORY_DEFAULT };
           }
           this.expenseState = expenseState;
+          this.sent = {};
           this.paymentsResult = null;
           this.error = '';
           if (this.expenseRows.length) this.loadCategories();
@@ -340,8 +361,14 @@
       isChecked(f, r) {
         return !!this.checked[`${f}:${r}`];
       },
+      isSent(f, r) {
+        return !!this.sent[`${f}:${r}`];
+      },
+      // The line of a half-failed press names that press's state: a change
+      // of tick clears it (system_3 #12321).
       setChecked(f, r, on) {
         this.checked = { ...this.checked, [`${f}:${r}`]: on };
+        this.error = '';
       },
       async loadCategories() {
         try {
@@ -364,6 +391,7 @@
       },
       setExpenseChecked(key, on) {
         this.expenseState = { ...this.expenseState, [key]: { ...this.expenseState[key], checked: on } };
+        this.error = '';
       },
       setExpenseCategory(key, category) {
         this.expenseState = { ...this.expenseState, [key]: { ...this.expenseState[key], category } };
@@ -373,7 +401,7 @@
       // item 2, D2); every row left unticked counts as skipped.
       close(value) {
         if (this.confirming || value) return;
-        this.finish(this.paymentsResult || { confirmed: 0, duplicates: 0 }, this.paymentsResult ? this.checkedRows : [], null);
+        this.finish(this.paymentsResult || { confirmed: 0, duplicates: 0 }, this.sentRows, null);
       },
       // Esc, the scrim, the corner ✕, Cancel or Close, and Back: each asks
       // first when a tick or a category was changed (§3.166).
@@ -433,26 +461,36 @@
         });
         this.$emit('update:open', false);
       },
+      // Each press sends every ticked row the button names: the payments not
+      // sent before, then the expenses (system_3 #12321, §3.130 Decision 4).
+      // The confirm answers with counts, not rows, so the rows of a payments
+      // request that succeeded are marked sent here; the result line adds
+      // up every press.
       async confirm() {
+        const keys = this.rows.filter(({ f, r }) => this.isChecked(f, r) && !this.isSent(f, r)).map(({ f, r }) => `${f}:${r}`);
         const rows = this.checkedRows;
         const expenses = this.checkedExpenses;
         if (!rows.length && !expenses.length) return;
         this.confirming = true;
         this.error = '';
+        let paymentsSent = false;
         try {
-          if (!this.paymentsResult) {
-            this.paymentsResult = rows.length ? await confirmN26Rows(rows) : { confirmed: 0, duplicates: 0 };
+          if (rows.length) {
+            const res = await confirmN26Rows(rows);
+            this.paymentsResult = addResults(this.paymentsResult, res);
+            this.sent = { ...this.sent, ...Object.fromEntries(keys.map((k) => [k, true])) };
+            paymentsSent = true;
           }
           const expenseResult = expenses.length ? await confirmN26Expenses(expenses) : { confirmed: 0, duplicates: 0 };
           this.confirming = false;
-          this.finish(this.paymentsResult, rows, expenseResult);
+          this.finish(this.paymentsResult || { confirmed: 0, duplicates: 0 }, this.sentRows, expenseResult);
         } catch (err) {
-          // When the payments went through and the expenses did not, say so:
-          // Import again posts only the expenses.
+          // When this press's payments went through and its expenses did
+          // not, say so: the next press sends only what is still ticked.
           const message = errorOf(err).message;
-          this.error = this.paymentsResult && rows.length
-            ? `The payments were imported, but the expenses were not: ${message}`
-            : message;
+          if (paymentsSent) this.error = `The payments were imported, but the expenses were not: ${message}`;
+          else if (!rows.length) this.error = `The expenses were not imported: ${message}`;
+          else this.error = message;
           this.confirming = false;
         }
       },

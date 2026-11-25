@@ -1097,3 +1097,89 @@ test.describe('#11671 the N26 review asks before an exit throws away a changed t
     await expect(review(page)).toHaveCount(0);
   });
 });
+
+// --- #12321: a second press after a half-failed import sends every ticked row ---
+
+const EXPENSE_FAILURE = { status: 400, body: { error: { code: 'invalid_row', message: 'row 0: category is not one of your expense categories' } } };
+const sentIds = (fake: Fake, i: number) => (JSON.parse(confirmRequests(fake)[i].body).rows as Json[]).map((r) => r.transaction_id);
+const rowSent = (page: Page, i: number) => page.locator('[data-test="n26-row"]').nth(i).locator('[data-test="n26-row-sent"]');
+
+test.describe('#12321 N26 import — a second press sends what the button names', () => {
+  test('payments ticked after a failed expenses-only press are sent, and the line adds up', async ({ page }) => {
+    const fake = withOutgoing([outgoingRow(1)], { expenseConfirmFailure: EXPENSE_FAILURE });
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+    for (let i = 0; i < 2; i++) await checkbox(page, i).uncheck();
+    await expenseCheck(page, 0).check();
+    await expect(page.locator('[data-test="n26-confirm"]')).toHaveText('Import 1 expense');
+    await page.locator('[data-test="n26-confirm"]').click();
+
+    // No payment was ticked, so the line names only the expenses.
+    await expect(page.locator('[data-test="n26-error"]')).toHaveText(
+      'The expenses were not imported: row 0: category is not one of your expense categories');
+    expect(confirmRequests(fake)).toHaveLength(0);
+
+    // A changed tick clears the first press's line.
+    for (let i = 0; i < 2; i++) await checkbox(page, i).check();
+    await expect(page.locator('[data-test="n26-error"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="n26-confirm"]')).toHaveText('Import 2 payments and 1 expense');
+
+    fake.expenseConfirmFailure = undefined;
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+    expect(confirmRequests(fake)).toHaveLength(1);
+    expect(sentIds(fake, 0)).toEqual([statementRow(1).transaction_id, statementRow(2).transaction_id]);
+    expect(expenseConfirms(fake)).toHaveLength(2);
+    await expect(summary(page)).toContainText('2 imported');
+    await expect(page.locator('[data-test="n26-summary-expenses"]')).toHaveText('1 expense added to your book.');
+    await expectSummaryAddsUp(page);
+  });
+
+  test('a payment the first press imported reads "Imported." with no checkbox, and is not counted or sent again', async ({ page }) => {
+    const fake = withOutgoing([outgoingRow(1)], { expenseConfirmFailure: EXPENSE_FAILURE });
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+    await checkbox(page, 1).uncheck();
+    await expenseCheck(page, 0).check();
+    await page.locator('[data-test="n26-confirm"]').click();
+
+    await expect(page.locator('[data-test="n26-error"]')).toHaveText(
+      'The payments were imported, but the expenses were not: row 0: category is not one of your expense categories');
+    await expect(rowSent(page, 0)).toHaveText('Imported.');
+    await expect(checkbox(page, 0)).toHaveCount(0);
+    await expect(rowSent(page, 1)).toHaveCount(0);
+    await expect(page.locator('[data-test="n26-confirm"]')).toHaveText('Import 1 expense');
+
+    await checkbox(page, 1).check();
+    await expect(page.locator('[data-test="n26-error"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="n26-confirm"]')).toHaveText('Import 1 payment and 1 expense');
+
+    fake.expenseConfirmFailure = undefined;
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+    expect(confirmRequests(fake)).toHaveLength(2);
+    expect(sentIds(fake, 0)).toEqual([statementRow(1).transaction_id]);
+    expect(sentIds(fake, 1), 'the imported row is not sent twice').toEqual([statementRow(2).transaction_id]);
+    expect(fake.payments.filter((p) => p.source === 'n26')).toHaveLength(2);
+    await expect(summary(page)).toContainText('2 imported, 0 already imported, 0 skipped');
+    await expectSummaryAddsUp(page);
+  });
+
+  test('closed after a half-failed press, the line counts the payment that went in', async ({ page }) => {
+    const fake = withOutgoing([outgoingRow(1)], { expenseConfirmFailure: EXPENSE_FAILURE });
+    await open(page, fake);
+    await upload(page, ['statement.pdf']);
+    await checkbox(page, 1).uncheck();
+    await expenseCheck(page, 0).check();
+    await page.locator('[data-test="n26-confirm"]').click();
+    await expect(rowSent(page, 0)).toHaveText('Imported.');
+
+    // Ticked after the press and never sent: it is skipped, not imported.
+    await checkbox(page, 1).check();
+    await page.locator('[data-test="n26-cancel"]').click();
+    await page.locator('[data-test="unsent-discard"]').click();
+    await expect(page.locator('[data-test="n26-review"]')).toBeHidden();
+    await expect(summary(page)).toContainText('1 imported, 0 already imported, 1 skipped');
+    await expectSummaryAddsUp(page);
+  });
+});
