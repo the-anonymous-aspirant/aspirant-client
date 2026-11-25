@@ -225,7 +225,7 @@ test.describe('#10694 Edit a payment', () => {
     await expect(remove).toHaveText('Remove');
     await remove.click();
     await expect(remove).toHaveText('Remove this payment');
-    await expect(dialog.locator('[data-test="edit-remove-effect"]')).toHaveText('It is also taken off draft D-12.');
+    await expect(dialog.locator('[data-test="edit-remove-effect"]')).toHaveText('It is also taken off draft D-12. Restore puts it back.');
     expect(fake.requests.some((r) => r.path.endsWith('/remove'))).toBe(false);
     await remove.click();
     await expect(dialog).toBeHidden();

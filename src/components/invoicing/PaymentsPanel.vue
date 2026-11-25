@@ -1228,13 +1228,15 @@
         return n ? `Remove (${n})` : 'Remove';
       },
       // What else an armed Remove does: a payment on a draft comes off it,
-      // as the server does on remove (aspirant-server invoicing_remove.go).
+      // as the server does on remove (aspirant-server invoicing_remove.go),
+      // and the way back, since Restore puts it back on that draft (system_3
+      // #12318 review point 6).
       removeConsequence() {
         const k = this.selectedPayments.filter((r) => r.payment.invoice && r.payment.invoice.status === 'draft').length;
         if (!k) return '';
-        if (this.selected.length === 1) return 'It is also taken off its draft invoice.';
-        if (k === this.selected.length) return 'They are also taken off their draft invoices.';
-        return `${k} of them ${k === 1 ? 'is' : 'are'} also taken off ${k === 1 ? 'its draft invoice' : 'their draft invoices'}.`;
+        if (this.selected.length === 1) return 'It is also taken off its draft invoice. Restore puts it back.';
+        if (k === this.selected.length) return 'They are also taken off their draft invoices. Restore puts them back.';
+        return `${k} of them ${k === 1 ? 'is' : 'are'} also taken off ${k === 1 ? 'its draft invoice' : 'their draft invoices'}. Restore puts ${k === 1 ? 'it' : 'them'} back.`;
       },
       // The shown rows a checkbox can act on: not on an issued invoice
       // (§3.129 Decisions 4 and 6, design_agent c62100 on #10010).

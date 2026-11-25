@@ -137,7 +137,9 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/book/selection') return json(route, 200, { selection: { preset: 'work_only', changed: false, income: ['paid_work'], expense_all: true, expense: [] }, presets: [] });
     if (path === '/invoicing/invoices' && method === 'GET') {
       const status = url.searchParams.get('status');
-      return json(route, 200, { invoices: fake.invoices.filter((i) => !status || i.status === status) });
+      // Each row carries how many payments it covers, as the server's list
+      // does (system_3 #12318 review point 5).
+      return json(route, 200, { invoices: fake.invoices.filter((i) => !status || i.status === status).map((i) => ({ ...i, payment_count: i.payment_ids.length })) });
     }
     if (path === '/invoicing/invoices/generate' && method === 'POST') {
       const body = JSON.parse(req.postData() || '{}');
@@ -343,16 +345,37 @@ test.describe('#11505 generate, then review one at a time', () => {
 
   test('a draft of the month that no listed payment points at is reviewed too', async ({ page }) => {
     const fake = newFake();
-    // Started by hand; its payment was removed since, so no payment names it.
+    // Its payment is not in the list the page read (payment 9), so no row
+    // names the draft; the server's list says it covers one.
     fake.invoices.push({ id: 5, status: 'draft', client_id: 1, client_name: 'Galerie Nord', invoice_number: null, number: null, issue_date: null,
-      service_date_from: '2026-10-01T00:00:00Z', service_date_to: '2026-10-01T00:00:00Z', vat_rate_bp: 1900, total_cents: 5000, currency: 'EUR', payment_ids: [],
+      service_date_from: '2026-10-01T00:00:00Z', service_date_to: '2026-10-01T00:00:00Z', vat_rate_bp: 1900, total_cents: 5000, currency: 'EUR', payment_ids: [9],
       line_items: [{ id: 500, position: 1, description: 'By hand', quantity_milli: 1000, unit_price_cents: 5000, line_total_cents: 5000 }] });
     await open(page, fake);
     await expect(scope(page)).toHaveText('3 payments to draft · 1 draft waiting');
     await generateButton(page).click();
-    // 1 October comes before the 3rd: the hand-made draft is first of four.
+    // 1 October comes before the 3rd: that draft is first of four.
     await expect(dialog(page)).toContainText('Invoice 1 / 4');
     await expect(description(page)).toHaveValue('By hand');
+  });
+
+  // system_3 #12318 ruling 5: a draft that covers no payment (its payment
+  // was removed) cannot be issued, so the review neither counts, opens nor
+  // sums it up.
+  test('a draft of the month that covers no payment is not counted, reviewed or summed up', async ({ page }) => {
+    const fake = newFake();
+    fake.invoices.push({ id: 5, status: 'draft', client_id: 1, client_name: 'Galerie Nord', invoice_number: null, number: null, issue_date: null,
+      service_date_from: '2026-10-01T00:00:00Z', service_date_to: '2026-10-01T00:00:00Z', vat_rate_bp: 1900, total_cents: 5000, currency: 'EUR', payment_ids: [],
+      line_items: [{ id: 500, position: 1, description: 'By hand', quantity_milli: 1000, unit_price_cents: 5000, line_total_cents: 5000 }] });
+    await open(page, fake);
+    await expect(scope(page)).toHaveText('3 payments to draft');
+    await generateButton(page).click();
+    await expect(dialog(page)).toContainText('Invoice 1 / 3');
+    await expect(description(page)).toHaveValue('Work 1');
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toBeHidden();
+    await expect(summary(page)).toHaveText('October 2026: 3 left as drafts.');
+    // It stays a draft in the list, where ze can open or delete it.
+    expect(fake.invoices.find((i) => i.id === 5)).toMatchObject({ status: 'draft' });
   });
 
   test('a second press reviews the draft left from before together with the new one', async ({ page }) => {

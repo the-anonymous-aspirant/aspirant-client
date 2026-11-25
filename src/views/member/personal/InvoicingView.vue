@@ -332,6 +332,10 @@
           }
           if (month) {
             for (const row of await listInvoices({ status: 'draft' })) {
+              // A draft that covers no payment cannot be issued, so it is
+              // not reviewed, counted or summed up (system_3 #12318 ruling
+              // 5). A server without the count leaves every draft in.
+              if (row.payment_count === 0) continue;
               if (workMonth(row) === month && !queue.has(row.id)) queue.set(row.id, String(row.service_date_from || row.issue_date || ''));
             }
           }

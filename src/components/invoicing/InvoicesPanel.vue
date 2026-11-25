@@ -392,7 +392,9 @@
         // The month's drafts, from the invoice list once it is read; until
         // then, the drafts its payments are on (one over two payments counts
         // once).
-        if (this.allRows) return this.allRows.filter((r) => r.status === 'draft' && workMonth(r) === this.month).length;
+        // A draft that covers no payment is not one (system_3 #12318
+        // ruling 5): it cannot be issued, so the review leaves it out.
+        if (this.allRows) return this.allRows.filter((r) => r.status === 'draft' && r.payment_count !== 0 && workMonth(r) === this.month).length;
         return new Set(this.monthCandidates.filter((p) => p.invoice && p.invoice.status === 'draft').map((p) => p.invoice.id)).size;
       },
       generateCount() {

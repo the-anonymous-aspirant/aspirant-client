@@ -689,13 +689,17 @@ test.describe('#10631 Transactions: selection actions for both directions', () =
       await expect(bulkRemove(page)).toBeDisabled();
     }
 
-    // PP-P2 is on a draft: the armed button says it comes off.
+    // PP-P2 is on a draft: the armed button says it comes off, and the way
+    // back (system_3 #12318 review point 6).
     await select(page, 'PP-P2').check();
+    await bulkRemove(page).click();
+    await expect(bulkRemove(page)).toHaveText('Remove 1 row');
+    await expect(page.locator('[data-test="bulk-remove-consequence"]')).toHaveText('It is also taken off its draft invoice. Restore puts it back.');
     await select(page, 'M-e2').check();
     await expect(bulkRemove(page)).toHaveText('Remove (2)');
     await bulkRemove(page).click();
     await expect(bulkRemove(page)).toHaveText('Remove 2 rows');
-    await expect(page.locator('[data-test="bulk-remove-consequence"]')).toHaveText('1 of them is also taken off its draft invoice.');
+    await expect(page.locator('[data-test="bulk-remove-consequence"]')).toHaveText('1 of them is also taken off its draft invoice. Restore puts it back.');
     expect(sent(fake, 'POST', /\/remove$/)).toHaveLength(0);
 
     // A change to the selection disarms it: the count it names is the count it removes.

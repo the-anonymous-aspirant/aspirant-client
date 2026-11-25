@@ -149,7 +149,7 @@
             {{ confirmingRemove ? 'Remove this payment' : 'Remove' }}
           </AspButton>
           <span v-if="confirmingRemove && draft" class="manual-form__hint remove-effect" data-test="edit-remove-effect">
-            It is also taken off draft {{ draftLabel }}.
+            It is also taken off draft {{ draftLabel }}. Restore puts it back.
           </span>
         </template>
         <template v-if="issued">
