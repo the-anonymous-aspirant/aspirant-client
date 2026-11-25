@@ -12,6 +12,10 @@
     <section v-if="book" class="counting" aria-label="What the Book counts" data-test="book-counting">
       <p class="muted counting__line">
         <span data-test="book-counting-line">{{ sentence }}</span>
+        <!-- A total never adds two currencies: rows in another currency are
+             listed but not counted, and this says how many (system_3 #12258,
+             design ack c76261). -->
+        <template v-if="notCountedSentence">{{ ' ' }}<span data-test="book-not-counted">{{ notCountedSentence }}</span></template>
         <template v-if="uncountedUncategorised">
           {{ ' ' }}<span data-test="book-uncategorised">{{ uncategorisedSentence }}</span>
           {{ ' ' }}<AspButton variant="ghost" size="sm" data-test="book-review-uncategorised" @click="$emit('review-uncategorised')">Review them</AspButton>
@@ -152,7 +156,7 @@
               <div class="book-card__top">
                 <span class="nowrap">{{ formatDay(row.paid_on) }}</span>
                 <strong class="nowrap amount" :class="row.type === 'in' ? 'in-amount' : 'out-amount'">
-                  {{ row.type === 'in' ? formatMoney(row.amount_cents) : formatSignedMoney(-row.amount_cents) }}
+                  {{ row.type === 'in' ? formatMoney(row.amount_cents, row.currency) : formatSignedMoney(-row.amount_cents, row.currency) }}
                 </strong>
               </div>
               <span class="description" data-test="book-row-description">
@@ -171,6 +175,7 @@
                 <span class="muted card-door" aria-hidden="true" data-test="card-door">Edit</span>
               </span>
               <span v-if="row.issuedInvoice && row.issuedInvoice.line" class="muted" data-test="book-row-invoice">{{ row.issuedInvoice.line }}</span>
+              <span v-if="!row.counted" class="muted" data-test="book-row-not-counted">{{ NOT_COUNTED_ROW }}</span>
               </button>
               <div v-if="row.type === 'out'" class="book-card__expense-actions">
                 <AspButton variant="ghost" size="sm" data-test="book-expense-receipt" @click="openReceipt(row)">
@@ -197,16 +202,17 @@
               <span v-if="row.what" :class="{ muted: !!row.who }">{{ row.what }}</span>
               <template v-if="!row.who && !row.what">—</template>
             </span>
+            <span v-if="!row.counted" class="muted not-counted" data-test="book-row-not-counted">{{ NOT_COUNTED_ROW }}</span>
           </template>
           <template #cell-category="{ row }"><span class="muted">{{ row.categoryLabel }}</span></template>
           <template #cell-invoice="{ row }">
             <span v-if="row.issuedInvoice && row.issuedInvoice.number" class="invoice-number" data-test="book-row-invoice">{{ row.issuedInvoice.number }}</span>
           </template>
           <template #cell-in="{ row }">
-            <span v-if="row.type === 'in'" class="nowrap in-amount">{{ formatMoney(row.amount_cents) }}</span>
+            <span v-if="row.type === 'in'" class="nowrap in-amount">{{ formatMoney(row.amount_cents, row.currency) }}</span>
           </template>
           <template #cell-out="{ row }">
-            <span v-if="row.type === 'out'" class="nowrap out-amount">{{ formatSignedMoney(-row.amount_cents) }}</span>
+            <span v-if="row.type === 'out'" class="nowrap out-amount">{{ formatSignedMoney(-row.amount_cents, row.currency) }}</span>
           </template>
           <!-- The row's door, in the last column on every tab (§3.159
                Decision 3, system_3 #11501; #11497 item 7, operator c70806 on
@@ -224,7 +230,7 @@
       </details>
       </template>
 
-      <BookChart :payments="countedPayments" :expenses="countedExpenses" />
+      <BookChart :payments="euroPayments" :expenses="euroExpenses" />
     </template>
 
     <!-- Export is the last part of every tab that exports, below the list and
@@ -340,7 +346,7 @@
   } from './api.js';
   import { bookInvoice, expenseParts, newestFirst, paymentParts, receiptButtonLabel, rowName } from './ledgerRows.js';
   import { fillEmptyMonths, groupByMonth, landedRows, monthKey, monthLabel, openGroupKeys } from './listGroups.js';
-  import { BOOK_PDF_BUTTON, bookPdfCaption, bookPdfDoc, bookPdfFileName } from './bookPdf.js';
+  import { BOOK_PDF_BUTTON, NOT_COUNTED_ROW, bookPdfCaption, bookPdfDoc, bookPdfFileName } from './bookPdf.js';
   import { INCOME_ORDER, WORK_ONLY, countableExpenseNames, countingSentence, countsInBook, selectionName } from './bookSelection.js';
   import { stillListed, withCategory } from './expenseCategories.js';
 
@@ -382,10 +388,27 @@
 
   const uncategorisedText = (n) => (n === 1 ? '1 payment is still Uncategorised and not counted.' : `${n} payments are still Uncategorised and not counted.`);
 
+  // The Book counts euros (system_3 #12258): a row in another currency is
+  // listed with its own amount, and left out of every total.
+  const BOOK_CURRENCY = 'EUR';
+  const inEuros = (record) => (record.currency || BOOK_CURRENCY) === BOOK_CURRENCY;
+
+  // "2 entries in other currencies (USD) are not counted.", or '' for none.
+  // The same sentence opens the PDF and closes its all-months total.
+  function notCountedText(rows) {
+    const other = rows.filter((r) => !r.counted);
+    if (!other.length) return '';
+    const codes = [...new Set(other.map((r) => r.currency))].sort().join(', ');
+    return other.length === 1
+      ? `1 entry in another currency (${codes}) is not counted.`
+      : `${other.length} entries in other currencies (${codes}) are not counted.`;
+  }
+
   function totalsOf(rows) {
     let inCents = 0;
     let outCents = 0;
     for (const row of rows) {
+      if (!row.counted) continue;
       if (row.type === 'in') inCents += row.amount_cents;
       else outCents += row.amount_cents;
     }
@@ -427,6 +450,7 @@
         pdfDownloading: false,
         pdfError: '',
         pdfButton: BOOK_PDF_BUTTON,
+        NOT_COUNTED_ROW,
         // The month the export is scoped to, "YYYY-MM", or '' for the whole
         // book. Not remembered between visits: an export scoped by a
         // forgotten choice would be a wrong file that looks right. It stays
@@ -517,6 +541,17 @@
         if (!this.selection) return [];
         return this.expenses.filter((e) => countsInBook(this.selection, { direction: 'out', category: e.category }));
       },
+      // What the chart draws: the counted rows in euros (system_3 #12258).
+      // It says nothing of its own; the counting line above it does.
+      euroPayments() {
+        return this.countedPayments.filter(inEuros);
+      },
+      euroExpenses() {
+        return this.countedExpenses.filter(inEuros);
+      },
+      notCountedSentence() {
+        return notCountedText(this.rows);
+      },
       uncountedUncategorised() {
         if (!this.selection || this.selection.income.includes('uncategorised')) return 0;
         return this.payments.filter((p) => p.kind === 'incoming' && p.category === 'uncategorised').length;
@@ -573,6 +608,8 @@
             // renders nothing, which put this object in every empty cell.
             issuedInvoice: bookInvoice(p),
             amount_cents: p.gross_cents,
+            currency: p.currency || BOOK_CURRENCY,
+            counted: inEuros(p),
             payment: p,
           }));
         const outgoing = this.countedExpenses.map((e) => ({
@@ -586,6 +623,8 @@
           ...expenseParts(e),
           categoryLabel: e.category,
           amount_cents: e.amount_cents,
+          currency: e.currency || BOOK_CURRENCY,
+          counted: inEuros(e),
           expense: e,
         }));
         // Newest day first, and on one day the row entered last first: the
@@ -731,9 +770,9 @@
         this.revealCount = 0;
         this.$emit('changed');
       },
-      formatSignedMoney(cents) {
+      formatSignedMoney(cents, currency) {
         const sign = cents < 0 ? '-' : '';
-        return `${sign}${formatMoney(Math.abs(cents))}`;
+        return `${sign}${formatMoney(Math.abs(cents), currency)}`;
       },
       async downloadBookReport() {
         if (this.reportDownloading) return;
@@ -771,6 +810,8 @@
           madeOn: this.today,
           countingSentence: this.sentence,
           uncategorisedSentence: this.uncountedUncategorised && uncounted ? uncategorisedText(uncounted) : '',
+          // In another currency, among the rows the file lists (#12258).
+          notCountedSentence: notCountedText(this.pdfMonths.flatMap((m) => m.rows)),
           // The file has the tab's columns, Invoice among them (system_3 #11509).
           withInvoice: true,
           fmt: { day: formatDay, money: formatMoney, signedMoney: this.formatSignedMoney },
@@ -937,7 +978,7 @@
       },
       openReceipt(row) {
         this.receiptExpenseId = row.id;
-        this.receiptExpenseLabel = `${this.formatDay(row.paid_on)} · ${this.formatMoney(row.amount_cents)}${row.who ? ` · ${row.who}` : ''}`;
+        this.receiptExpenseLabel = `${this.formatDay(row.paid_on)} · ${this.formatMoney(row.amount_cents, row.currency)}${row.who ? ` · ${row.who}` : ''}`;
         this.receiptOpen = true;
       },
       // The card's body button's name (system_3 #11661): what it opens, and
@@ -1165,6 +1206,11 @@
   .description {
     display: block;
     overflow-wrap: anywhere;
+  }
+
+  /* Under the row's who and what, on a line of its own (#12258). */
+  .not-counted {
+    display: block;
   }
 
   .muted {

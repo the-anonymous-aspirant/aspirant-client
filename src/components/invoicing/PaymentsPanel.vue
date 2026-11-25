@@ -289,9 +289,9 @@
           <AspButton
             v-if="!narrow || barPair"
             variant="secondary"
-            :disabled="!canCreate || removing || generating"
+            :disabled="!canCreateOne || removing || generating"
             :loading="creating"
-            :aria-describedby="createCaption ? 'create-invoice-hint' : undefined"
+            :aria-describedby="createDescribedBy"
             :aria-label="barPair ? `Create one invoice from the ${selected.length} selected payments` : undefined"
             class="block-on-phone bar-pair"
             data-test="create-invoice"
@@ -333,6 +333,12 @@
                paid work is invoiced). One line for the pair. -->
           <p v-if="createCaption" id="create-invoice-hint" class="create__hint" data-test="create-invoice-hint">
             {{ createCaption }}
+          </p>
+          <!-- Create invoice's own reason: one invoice holds one currency.
+               Generate stays enabled, as it makes one draft per payment
+               (system_3 #12258, design ack c76261). -->
+          <p v-if="currencyCaption" id="create-currency-hint" class="create__hint" data-test="create-currency-hint">
+            {{ currencyCaption }}
           </p>
           <!-- Generate's own reason, when the pair's line has nothing to say
                (§3.114; Design ack c71060). -->
@@ -757,6 +763,17 @@
   // issued invoice; cancel it first)." One shared reason closes the line;
   // mixed reasons follow each row.
   // `row` is a Transactions row (ledgerRows.js), of either direction.
+  // "€", "US$": the symbol formatMoney prints for a code, or the code itself
+  // where Intl does not know it.
+  function currencySymbol(code) {
+    try {
+      const part = new Intl.NumberFormat('en-GB', { style: 'currency', currency: code }).formatToParts(0).find((p) => p.type === 'currency');
+      return part ? part.value : code;
+    } catch {
+      return code;
+    }
+  }
+
   function bulkFailureLine(failed, total) {
     const k = failed.length;
     const head = `${k} of ${total} kept ${k === 1 ? 'its' : 'their'} category: `;
@@ -1150,6 +1167,24 @@
       canCreate() {
         return this.selected.length > 0 && this.notPaidWork === 0;
       },
+      // The ticked payments' currencies, sorted: one invoice holds one
+      // (system_3 #12258), so Create invoice needs exactly one.
+      selectedCurrencies() {
+        return [...new Set(this.selectedPayments.map((r) => r.payment.currency || 'EUR'))].sort();
+      },
+      canCreateOne() {
+        return this.canCreate && this.selectedCurrencies.length === 1;
+      },
+      currencyCaption() {
+        if (!this.canCreate || this.selectedCurrencies.length < 2) return '';
+        const symbols = this.selectedCurrencies.map(currencySymbol);
+        const list = `${symbols.slice(0, -1).join(', ')} and ${symbols[symbols.length - 1]}`;
+        return `The ${this.selected.length} selected are in different currencies (${list}), so they cannot go on one invoice.`;
+      },
+      createDescribedBy() {
+        if (this.createCaption) return 'create-invoice-hint';
+        return this.currencyCaption ? 'create-currency-hint' : undefined;
+      },
       // Why Create invoice and Generate invoices cannot act, in terms the
       // owner can fix from the panel (§3.114); neither quietly invoices the
       // Paid work subset (D13). One line for the pair: both are disabled for
@@ -1199,7 +1234,9 @@
       pairHint() {
         const n = this.selected.length;
         // On a phone the bar's lead line and labels already say it.
-        if (this.narrow || !this.generatable || n < 2) return '';
+        // With two currencies ticked, Create invoice's own line says why it
+        // cannot put them on one.
+        if (this.narrow || !this.generatable || n < 2 || this.currencyCaption) return '';
         return `Generate makes one invoice per payment. Create invoice puts all ${n} on one.`;
       },
       generateDescribedBy() {

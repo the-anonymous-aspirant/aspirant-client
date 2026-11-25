@@ -36,6 +36,8 @@
   import { AspChart } from '@aspirant/design-system';
   import { formatMoney, listInvoices } from './api.js';
 
+  // An invoice holds one currency; a missing one reads as EUR.
+  const inEuros = (invoice) => (invoice.currency || 'EUR') === 'EUR';
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   // The y-axis labels of all three charts take the same width, so the plot
   // areas start at the same x and one month sits at one x in every chart
@@ -161,8 +163,13 @@
       counts() {
         return this.months.map((k) => this.issued.filter((i) => monthOf(i.issue_date) === k).length);
       },
+      // Euro invoices only: a total never adds two currencies (system_3
+      // #12258). The caption says how many it leaves out.
       incomeEuros() {
-        return this.months.map((k) => this.issued.reduce((s, i, n) => (this.serviceMonths[n] === k ? s + (Number(i.total_cents) || 0) : s), 0) / 100);
+        return this.months.map((k) => this.issued.reduce((s, i, n) => (this.serviceMonths[n] === k && inEuros(i) ? s + (Number(i.total_cents) || 0) : s), 0) / 100);
+      },
+      otherCurrencies() {
+        return this.issued.filter((i) => !inEuros(i));
       },
       // Clients by the end of each month (a running total).
       clientTotals() {
@@ -185,7 +192,12 @@
       // a reading no bar or tick can show by itself.
       incomeCaption() {
         const money = (v) => formatMoney(Math.round(v * 100));
-        return `issued invoices, by the month the work was done, cancelled invoices left out; ${this.seriesCaption(this.incomeEuros, money)}`;
+        const base = `issued invoices, by the month the work was done, cancelled invoices left out; ${this.seriesCaption(this.incomeEuros, money)}`;
+        const other = this.otherCurrencies;
+        if (!other.length) return base;
+        const codes = [...new Set(other.map((i) => i.currency))].sort().join(', ');
+        const clause = other.length === 1 ? `1 invoice in another currency (${codes}) is not counted` : `${other.length} invoices in other currencies (${codes}) are not counted`;
+        return `${base}; ${clause}`;
       },
       invoiceCountCaption() {
         return `per month, by issue date, cancelled invoices left out; ${this.seriesCaption(this.counts, String)}`;
