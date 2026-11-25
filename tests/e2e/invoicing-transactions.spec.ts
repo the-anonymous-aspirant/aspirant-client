@@ -109,7 +109,8 @@ test.describe('#10627 Invoices app: Transactions, its lead and four ways in', ()
   // invoicing.spec.ts ('the intro shows only before first use').
   test('a book in use shows no page lead', async ({ page }) => {
     await open(page, newFake());
-    await expect(page.locator('[data-test="profile-card"]')).toBeVisible();
+    // The page has loaded: the complete profile's Issuer line (system_3 #12276).
+    await expect(page.locator('[data-test="profile-line"]')).toBeVisible();
     await expect(page.locator('.page-subtitle')).toHaveCount(0);
   });
 

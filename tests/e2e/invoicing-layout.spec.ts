@@ -18,11 +18,11 @@ const draft = { ...issued, id: 102, status: 'draft', invoice_number: null, issue
 const covered = { id: 10, kind: 'incoming', entry: 'manual', source: 'manual', transaction_id: 'TX1', method: 'bank_transfer', reference: '', paid_on: '2026-07-14T00:00:00Z', currency: 'EUR', gross_cents: 35000, sender_name: 'Galerie Nord', sender_email: 'pay@galerie.test', note: 'Wandbild Juli', category: 'paid_work', client_id: 1, on_invoice: true, on_issued_invoice: false, invoice: null };
 const item = { id: 1, position: 1, description: 'Wandbild Juli, Acryl auf Leinwand, 120 × 80 cm', quantity_milli: 1000, unit_price_cents: 35000, line_total_cents: 35000 };
 
-async function mock(page: Page, { steuernummer = '12/345/67890', payments = null as Json[] | null } = {}): Promise<void> {
+async function mock(page: Page, { steuernummer = '12/345/67890', payments = null as Json[] | null, fullName = 'Flower Example' } = {}): Promise<void> {
   await page.route(/\/api\//, (route) => json(route, 404, { error: { code: 'not_found', message: 'not stubbed' } }));
   await page.route(/\/api\/invoicing\//, (route) => {
     const path = new URL(route.request().url()).pathname.replace(/^\/api/, '');
-    if (path === '/invoicing/profile') return json(route, 200, { saved: true, profile: { full_name: 'Flower Example', address: 'Beispielstraße 1\n10117 Berlin', steuernummer, email: '', is_kleinunternehmer: true, invoice_number_prefix: '2026', next_invoice_number: 2 } });
+    if (path === '/invoicing/profile') return json(route, 200, { saved: true, profile: { full_name: fullName, address: 'Beispielstraße 1\n10117 Berlin', steuernummer, email: '', is_kleinunternehmer: true, invoice_number_prefix: '2026', next_invoice_number: 2 } });
     if (path === '/invoicing/clients') return json(route, 200, { clients: [{ id: 1, name: 'Galerie Nord', address: 'Nordweg 2\n13353 Berlin', email: 'info@galerie.test', paypal_email: 'pay@galerie.test' }] });
     if (path === '/invoicing/payments' && payments) return json(route, 200, { payments });
     if (path === '/invoicing/payments') {
@@ -44,14 +44,16 @@ async function mock(page: Page, { steuernummer = '12/345/67890', payments = null
   });
 }
 
-async function open(page: Page, theme: 'light' | 'dark', opts?: { steuernummer?: string; payments?: Json[] }): Promise<void> {
+async function open(page: Page, theme: 'light' | 'dark', opts?: { steuernummer?: string; payments?: Json[]; fullName?: string }): Promise<void> {
   await mock(page, opts);
   await seedTrustedSessionAs(page, 'vinoly');
   await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
   await page.emulateMedia({ colorScheme: theme });
   await page.goto('/member/personal/invoicing');
   await dismissMobileSidebarIfPresent(page);
-  await expect(page.locator('[data-test="profile-card"]')).toBeVisible();
+  // The Issuer: the quiet line while the profile is complete, the card while
+  // something is missing (system_3 #12276).
+  await expect(page.locator('[data-test="profile-line"], [data-test="profile-card"]')).toBeVisible();
 }
 
 const leftOf = (page: Page, selector: string) =>
@@ -86,13 +88,10 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
       await open(page, theme);
       const narrow = await page.evaluate(() => window.matchMedia('(max-width: 640px)').matches);
       const edge = await leftOf(page, 'h1');
-      expect(await leftOf(page, '[data-test="profile-card"]'), 'card').toBe(edge);
+      // A complete profile's Issuer is a line of text on the page edge
+      // (system_3 #12276); the card and its gutter are checked below.
+      expect(await leftOf(page, '[data-test="profile-line"]'), 'Issuer line').toBe(edge);
       expect(await leftOf(page, '.tabs'), 'tabs').toBe(edge);
-      // The Issuer is one line now (system_3 #11019-A1); its first text still
-      // sits on the cards' gutter.
-      const inset = await page.locator('[data-test="profile-card"]').evaluate((card) =>
-        Math.round(card.querySelector('.issuer-line__items')!.getBoundingClientRect().left - card.getBoundingClientRect().left));
-      expect(inset, 'card text at card.left + 2px border + 16px').toBe(18);
 
       for (const tab of ['Transactions', 'Invoices', 'Clients']) {
         await page.getByRole('tab', { name: tab }).click();
@@ -106,7 +105,13 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
 
   test('the guardrail states are visible: missing Steuernummer on the card and in the draft, the Create invoice caption', async ({ page, isMobile }) => {
     await open(page, 'light', { steuernummer: '' });
-    await expect(page.locator('[data-test="steuernummer-missing"]')).toContainText('Missing: needed to issue');
+    await expect(page.locator('[data-test="profile-missing"]')).toHaveText('Missing: Steuernummer, needed to issue');
+    // The card is drawn while something is missing (system_3 #12276). It
+    // shares the page edge, and its text sits on the cards' gutter.
+    expect(await leftOf(page, '[data-test="profile-card"]'), 'card').toBe(await leftOf(page, 'h1'));
+    const inset = await page.locator('[data-test="profile-card"]').evaluate((card) =>
+      Math.round(card.querySelector('.issuer-line__items')!.getBoundingClientRect().left - card.getBoundingClientRect().left));
+    expect(inset, 'card text at card.left + 2px border + 16px').toBe(18);
     // Below 640px nothing of the bar is on the page while nothing is ticked
     // (system_3 #11371), so this caption only shows once a row is ticked.
     if (!isMobile) {
@@ -215,11 +220,11 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
     // Nothing between them but the list's own gap.
     expect(top - summaryBottom, 'first card starts directly under the summary').toBeGreaterThanOrEqual(0);
     expect(top - summaryBottom, 'first card starts directly under the summary').toBeLessThanOrEqual(12);
-    const cardHeight = await page.locator('[data-test="profile-card"]').evaluate((el) => el.getBoundingClientRect().height);
-    // One line since system_3 #11019-A1 (was 132px). On a phone its padding
-    // above and below the 44px line is 8px since #11576: 2px border + 8px +
-    // 44px + 8px + 2px = 64px.
-    expect(cardHeight, 'Issuer card one line, at most 66px on a phone').toBeLessThanOrEqual(66);
+    // A complete profile draws no card (system_3 #12276; it was 64px here),
+    // and its line is one line: the 44px Edit and the text beside it.
+    await expect(page.locator('[data-test="profile-card"]')).toHaveCount(0);
+    const lineHeight = await page.locator('[data-test="profile-line"]').evaluate((el) => el.getBoundingClientRect().height);
+    expect(lineHeight, 'Issuer line one line, the 44px Edit').toBeLessThanOrEqual(44.5);
   });
 
   // The brief's target for #11019 (§3.157, "The budget"): two cards whole on
@@ -257,20 +262,21 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
       // c71509 on #11019 set the gaps at 12px; c73520 on #11020 took them to
       // 4px so the Invoice filter's line fits the same budget.
       const head = await boxOf(page, '.page-head');
-      const card = await boxOf(page, '[data-test="profile-card"]');
-      const line = await boxOf(page, '[data-test="profile-edit"]');
+      // A complete profile's Issuer is the quiet line, not a card (system_3
+      // #12276): 44px, the Edit target, where the card was 64px.
+      const issuer = await boxOf(page, '[data-test="profile-line"]');
+      const edit = await boxOf(page, '[data-test="profile-edit"]');
       const tabs = await boxOf(page, '.tabs');
       const fold = await boxOf(page, '[data-test="ways-in-summary"]');
       const filters = await boxOf(page, '[data-test="category-filter"]');
-      const gaps = { 'title to Issuer': card.top - head.bottom, 'Issuer to tabs': tabs.top - card.bottom, 'tabs to Add or import': fold.top - tabs.bottom, 'Add or import to the filters': filters.top - fold.bottom };
+      const gaps = { 'title to Issuer': issuer.top - head.bottom, 'Issuer to tabs': tabs.top - issuer.bottom, 'tabs to Add or import': fold.top - tabs.bottom, 'Add or import to the filters': filters.top - fold.bottom };
       for (const [name, gap] of Object.entries(gaps)) expect(Math.abs(gap - 4), `${name}: ${gap.toFixed(1)}px`).toBeLessThanOrEqual(0.5);
-      // 2px border + 8px + the 44px line + 8px + 2px.
-      expect(Math.abs(card.height - 64), `Issuer card ${card.height.toFixed(1)}px`).toBeLessThanOrEqual(0.5);
+      expect(issuer.height, `Issuer line ${issuer.height.toFixed(1)}px`).toBeLessThanOrEqual(44.5);
       // What the trim must not take (c71509): the two 44px targets and the
       // page's 16px side inset.
-      expect(line.height, 'the Issuer line is a 44px target').toBeGreaterThanOrEqual(44);
+      expect(edit.height, 'the Issuer Edit is a 44px target').toBeGreaterThanOrEqual(44);
       expect(fold.height, '"Add or import" is a 44px target').toBeGreaterThanOrEqual(44);
-      expect(Math.round(card.left), 'the 16px page inset').toBe(16);
+      expect(Math.round(issuer.left), 'the 16px page inset').toBe(16);
       expect(await noSideScroll(page)).toBe(true);
     });
   }
@@ -299,17 +305,54 @@ test.describe('#8400 Invoices app layout (spec #8399, §3.114)', () => {
     });
   }
 
+  // system_3 #12276 review point 3: "the line wraps before the button" is
+  // measured, with a 30-character name on the narrowest phones. A name that
+  // does not fit beside Edit puts Edit on the next line; the name is never
+  // clipped and nothing scrolls sideways.
+  for (const width of [390, 360]) {
+    test(`a 30-character issuer name at ${width}px wraps whole, with Edit whole`, async ({ page }) => {
+      const name = 'Friederike Testperson-Beispiel';
+      expect(name.length).toBe(30);
+      await page.setViewportSize({ width, height: 844 });
+      await open(page, 'light', { fullName: name });
+      const line = page.locator('[data-test="profile-line"]');
+      await expect(line.locator('[data-test="profile-name"]')).toHaveText(name);
+      const m = await line.evaluate((el) => {
+        const text = el.querySelector('.issuer-quiet__text') as HTMLElement;
+        const edit = el.querySelector('[data-test="profile-edit"]') as HTMLElement;
+        const r = el.getBoundingClientRect();
+        const e = edit.getBoundingClientRect();
+        return {
+          height: r.height,
+          textClipped: text.scrollWidth > text.clientWidth + 1,
+          editClipped: edit.scrollWidth > edit.clientWidth + 1,
+          editInside: e.left >= r.left - 0.5 && e.right <= r.right + 0.5,
+          editHeight: e.height,
+        };
+      });
+      console.log(`ISSUER@${width}`, JSON.stringify(m));
+      expect(m.textClipped, 'the name is never clipped').toBe(false);
+      expect(m.editClipped, 'Edit is whole').toBe(false);
+      expect(m.editInside, 'Edit stays inside the line').toBe(true);
+      expect(m.editHeight, 'Edit is a 44px target').toBeGreaterThanOrEqual(44);
+      expect(await noSideScroll(page), 'no sideways scroll').toBe(true);
+    });
+  }
+
   test('at desktop width the spacing above the list is unchanged', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'chromium', 'the desktop layout; a phone has the tighter spacing above');
     await page.setViewportSize({ width: 1440, height: 900 });
     await open(page, 'light', { payments: needInvoice });
     const head = await boxOf(page, '.page-head');
-    const card = await boxOf(page, '[data-test="profile-card"]');
+    // The Issuer is the quiet line, not the 80px card (system_3 #12276).
+    const issuer = await boxOf(page, '[data-test="profile-line"]');
+    const edit = await boxOf(page, '[data-test="profile-edit"]');
     const tabs = await boxOf(page, '.tabs');
     const waysIn = await boxOf(page, '[data-test="manual-new"]');
-    expect(Math.abs(card.top - head.bottom - 16), 'title to Issuer').toBeLessThanOrEqual(0.5);
-    expect(Math.abs(tabs.top - card.bottom - 16), 'Issuer to tabs').toBeLessThanOrEqual(0.5);
+    expect(Math.abs(issuer.top - head.bottom - 16), 'title to Issuer').toBeLessThanOrEqual(0.5);
+    expect(Math.abs(tabs.top - issuer.bottom - 16), 'Issuer to tabs').toBeLessThanOrEqual(0.5);
     expect(Math.abs(waysIn.top - tabs.bottom - 16), 'tabs to the ways in').toBeLessThanOrEqual(0.5);
-    expect(Math.abs(card.height - 80), `Issuer card ${card.height.toFixed(1)}px`).toBeLessThanOrEqual(0.5);
+    // One line: as tall as its Edit button.
+    expect(Math.abs(issuer.height - edit.height), `Issuer line ${issuer.height.toFixed(1)}px, Edit ${edit.height.toFixed(1)}px`).toBeLessThanOrEqual(0.5);
   });
 });

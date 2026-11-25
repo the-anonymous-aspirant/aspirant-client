@@ -30,40 +30,34 @@
     />
 
     <template v-else>
-      <!-- One line, and the line is the door (system_3 #11019-A1, UX walk AM2;
-           Design ack c69874 item 3, applying §3.114 decision 5): who issues,
-           and whether issuing is possible. Every field, the Steuernummer and
-           the invoice-number sequence included, is one tap away in the profile
-           editor; only the Steuernummer's absence stays here, because that is
-           what stops an invoice (D2). The card was 132px on a phone. -->
+      <!-- Who issues the invoices (§3.157 Decision 3, as system_3 #12276
+           amends it: S2, the loudest thing on a page answers its question).
+           While the profile holds everything issuing needs (a name, an
+           address and a Steuernummer, as invoicing_issue.go checks it), the
+           Issuer is one muted line under the title: it needs nothing from
+           zir. Only while something is missing does it take the dark card,
+           which says what. In both the name is text and the bordered "Edit"
+           is the one control, the door to the profile editor (#12276 review
+           point 1: one door form in every state). Its accessible name stays
+           c69874's "Edit profile: {name}", plus what is missing. -->
+      <p v-if="profileComplete" class="issuer-quiet" data-test="profile-line">
+        <span class="issuer-quiet__text">Invoices are issued as <span class="issuer-quiet__name" data-test="profile-name">{{ profile.full_name }}</span></span>
+        <AspButton variant="secondary" size="sm" class="issuer-edit" data-test="profile-edit" :aria-label="issuerLabel" @click="profileOpen = true">Edit</AspButton>
+      </p>
       <!-- padding md, not sm: the card's text stays on the cards' shared
            gutter, card edge + 2px border + 16px (§3.114 one gutter per
-           nesting level), and so does this line. -->
-      <AspCard class="profile-card" padding="md" data-test="profile-card">
-        <!-- The accessible name is c69874's "Edit profile: {name}", plus the
-             blocker when there is one: an aria-label replaces the content, and
-             the badge must not go silent for a screen reader (D2).
-             The line stays native, not AspButton (system_3 #11473). Every
-             AspButton variant is a centred, single-line box with one label
-             slot. This is a full-width row: the name wraps, the badge sits
-             beside it and Edit is pushed to the far end, so a variant would
-             have its display, alignment, wrapping and padding all overridden. -->
-        <button
-          type="button"
-          class="issuer-line"
-          data-test="profile-edit"
-          :aria-label="issuerLabel"
-          @click="profileOpen = true"
-        >
+           nesting level). -->
+      <AspCard v-else class="profile-card" padding="md" data-test="profile-card">
+        <div class="issuer-line">
           <span class="issuer-line__items">
             <!-- The name wraps and is never clipped. The separator ends the
                  name, so a wrapped line never starts with "·" (UX walk AM9,
                  system_3 #11027). -->
-            <span class="issuer-line__name"><span v-if="!profileSaved" class="muted" data-test="profile-unsaved">No profile yet. Add who issues your invoices</span><span v-else data-test="profile-name">{{ profile.full_name || '—' }}</span><template v-if="!profile.steuernummer">&nbsp;<span class="muted" aria-hidden="true">·</span></template></span>
-            <AspBadge v-if="!profile.steuernummer" status="caution" data-test="steuernummer-missing">Missing: needed to issue</AspBadge>
+            <span class="issuer-line__name"><span v-if="!profileSaved" class="muted" data-test="profile-unsaved">No profile yet. Add who issues your invoices</span><span v-else-if="profile.full_name" data-test="profile-name">{{ profile.full_name }}</span><span v-else class="muted" data-test="profile-name">No name yet</span>&nbsp;<span class="muted" aria-hidden="true">·</span></span>
+            <AspBadge status="caution" data-test="profile-missing">{{ missingLine }}</AspBadge>
           </span>
-          <span class="issuer-line__door muted" aria-hidden="true">Edit</span>
-        </button>
+          <AspButton variant="secondary" size="sm" class="issuer-edit" data-test="profile-edit" :aria-label="issuerLabel" @click="profileOpen = true">Edit</AspButton>
+        </div>
       </AspCard>
 
       <AspSegmented v-model="tab" :options="tabs" as="tabs" aria-label="Invoices sections" class="tabs" />
@@ -135,7 +129,7 @@
 </template>
 
 <script>
-  import { AspBadge, AspCard, AspEmptyState, AspSegmented } from '@aspirant/design-system';
+  import { AspBadge, AspButton, AspCard, AspEmptyState, AspSegmented } from '@aspirant/design-system';
   import ReadState from '../../../components/ReadState.vue';
   import ClientsPanel from '../../../components/invoicing/ClientsPanel.vue';
   import PaymentsPanel from '../../../components/invoicing/PaymentsPanel.vue';
@@ -154,6 +148,7 @@
     name: 'InvoicingView',
     components: {
       AspBadge,
+      AspButton,
       AspCard,
       AspEmptyState,
       AspSegmented,
@@ -211,10 +206,36 @@
       };
     },
     computed: {
+      // What issuing needs and the profile lacks, in the profile editor's
+      // order (#12276 review point 2; invoicing_issue.go checks the same
+      // three). Empty while nothing is saved: that state has its own line.
+      missingFields() {
+        if (!this.profileSaved) return [];
+        const p = this.profile;
+        const blank = (v) => !String(v || '').trim();
+        return [
+          blank(p.full_name) && 'name',
+          blank(p.address) && 'address',
+          blank(p.steuernummer) && 'Steuernummer',
+        ].filter(Boolean);
+      },
+      profileComplete() {
+        return this.profileSaved && this.missingFields.length === 0;
+      },
+      // "Missing: Steuernummer, needed to issue"; two or three are joined
+      // with "and" ("Missing: address and Steuernummer, ..."). With no
+      // profile saved it keeps today's "Missing: needed to issue": the line
+      // before it already says what to add.
+      missingLine() {
+        const f = this.missingFields;
+        if (!f.length) return 'Missing: needed to issue';
+        const list = f.length > 1 ? `${f.slice(0, -1).join(', ')} and ${f[f.length - 1]}` : f[0];
+        return `Missing: ${list}, needed to issue`;
+      },
       // c69874 item 3: "Edit profile: {name}", and the blocker when present.
       issuerLabel() {
         const who = this.profileSaved ? this.profile.full_name || 'no name' : 'no profile yet';
-        const missing = this.profile.steuernummer ? '' : '. Steuernummer missing: needed to issue';
+        const missing = this.profileComplete ? '' : `. ${this.missingLine}`;
         return `Edit profile: ${who}${missing}`;
       },
       nextNumberLabel() {
@@ -422,35 +443,39 @@
     color: var(--text-on-dark);
   }
 
-  /* The whole line is the door to the profile editor (#11019-A1). A native
-     button keeps keyboard, focus ring and the 44px phone target without
-     script; it inherits the card's ink, never the UA's button colours. */
+  /* The Issuer while something is missing: the name and its badge, and the
+     bordered "Edit" pushed to the far end (#12276: the name is text, Edit is
+     the control). The text sits on the card gutter (§3.114). */
   .issuer-line {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-sm);
-    width: 100%;
     min-height: 44px;
-    /* No inline padding: the text sits on the card gutter (§3.114). */
-    padding: 0;
-    border: none;
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: inherit;
-    font: inherit;
     font-size: var(--text-sm);
-    text-align: left;
-    cursor: pointer;
   }
 
-  .issuer-line:hover {
-    background-color: var(--surface-card-inner);
+  /* The Issuer while the profile is complete (#12276 ruling 1): one muted
+     line under the title, no card. The text and the button wrap as two
+     items, so a name too long to sit beside "Edit" puts the button on the
+     next line and is never clipped. */
+  .issuer-quiet {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2xs) var(--space-sm);
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
   }
 
-  .issuer-line:focus-visible {
-    outline: var(--focus-ring-width) solid var(--focus-ring-color);
-    outline-offset: var(--focus-ring-offset);
+  .issuer-quiet__text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .issuer-edit {
+    flex-shrink: 0;
   }
 
   .issuer-line__items {
@@ -467,11 +492,6 @@
   .issuer-line__name {
     min-width: 0;
     overflow-wrap: anywhere;
-  }
-
-  .issuer-line__door {
-    flex-shrink: 0;
-    white-space: nowrap;
   }
 
   .visually-hidden {
@@ -529,6 +549,12 @@
     .invoicing-view .invoices-panel,
     .invoicing-view .book-panel {
       margin-block-start: var(--space-2xs);
+    }
+
+    /* The door is a standalone touch control on a phone, so it takes the
+       44px house target (§3.99 tier 2; #12276 ruling 3). */
+    .invoicing-view .issuer-edit {
+      min-height: 44px;
     }
 
     /* Two classes on this side: AspCard's own padding rule is scoped too, so
