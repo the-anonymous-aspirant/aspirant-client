@@ -4,6 +4,11 @@
          full-width line above the buttons, which never scroll away. It
          wraps and is never clamped; it is announced when it appears. -->
     <p v-if="refusal" class="modal-footer__refusal" role="alert" :data-test="refusalTest">{{ refusal }}</p>
+    <!-- `notice`: a question the Save press asks rather than a refusal
+         (system_3 #12295). It explains the armed primary, so it sits in
+         that button's consequence line's place: after the refusal line,
+         directly above the buttons (§3.173 Decision 1). -->
+    <slot name="notice" />
     <div class="modal-actions">
       <div v-if="$slots.destructive" class="modal-actions__destructive"><slot name="destructive" /></div>
       <div class="modal-actions__main"><slot /></div>

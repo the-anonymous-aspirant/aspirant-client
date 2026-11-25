@@ -22,6 +22,9 @@ interface Fake {
   categoriesStatus?: number;
   patchRefusal?: string;
   book?: boolean;
+  /** system_3 #12295: the expense a create looks like; answered 409
+   *  possible_duplicate until the request confirms. */
+  twin?: Json;
 }
 
 const exp = (over: Json): Json => ({
@@ -75,6 +78,9 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     }
     if (path === '/invoicing/expenses/manual' && method === 'POST') {
       const body = JSON.parse(req.postData() || '{}');
+      if (fake.twin && body.confirm_duplicate !== true) {
+        return json(route, 409, { error: { code: 'possible_duplicate', message: 'an expense with the same day, amount and payee is already in your book; send confirm_duplicate to save this one as well' }, duplicate_of: fake.twin.id, expense: fake.twin });
+      }
       const e = exp({ id: 23, transaction_id: 'M-new-e', source: 'manual', entry: 'manual', ...body, paid_on: `${body.paid_on}T00:00:00Z` });
       fake.expenses.push(e);
       return json(route, 201, { expense: e });
@@ -364,3 +370,67 @@ test('#11567 on a phone an expense card still reads its category as text', async
   await expect(row(page, 'M-hand-e').locator('[data-test="row-category"]')).toHaveText('other');
 });
 
+// system_3 #12295 ruling 3: the same question for an expense by hand, on the
+// day, the amount and the payee. The second press is #12313's armed press.
+test.describe('#12295 the same expense typed twice', () => {
+  async function typeExpense(page: Page, day: string, amount: string, payee: string) {
+    await openWaysIn(page);
+    await page.locator('[data-test="expense-new"]').click();
+    const dialog = page.getByRole('dialog', { name: 'Enter expense by hand' });
+    await dialog.locator('[data-test="expense-date"]').fill(day);
+    await dialog.locator('[data-test="expense-amount"]').fill(amount);
+    await dialog.locator('[data-test="expense-payee"]').fill(payee);
+    return dialog;
+  }
+
+  test('Save asks, and "Save as a second expense" saves it after a moment', async ({ page }) => {
+    const fake = newFake();
+    fake.twin = fake.expenses[0];
+    await open(page, fake);
+    const dialog = await typeExpense(page, '2026-10-20', '12,50', 'Copyshop Esempio');
+    // Frozen only once the dialog is open: a frozen clock stops AspModal's open
+    // from finishing.
+    await page.clock.setFixedTime(new Date('2026-11-20T10:00:00Z'));
+    const save = dialog.locator('[data-test="expense-save"]');
+    await save.click();
+    await expect(dialog.locator('[data-test="expense-twin-line"]')).toHaveText('An expense of €12.50 paid to Copyshop Esempio on that day is already in your book.');
+    await expect(save).toHaveText('Save as a second expense');
+    await expect(dialog.locator('[data-test="expense-error"]')).toHaveCount(0);
+    // A double tap's second press is not taken.
+    await save.click();
+    await page.waitForTimeout(300);
+    expect(writes(fake, 'POST')).toHaveLength(1);
+    // Changing the payee clears the question; typing it back does not bring
+    // it back until Save asks again.
+    await dialog.locator('[data-test="expense-payee"]').fill('Copyshop');
+    await expect(dialog.locator('[data-test="expense-twin"]')).toHaveCount(0);
+    await expect(save).toHaveText('Save expense');
+    await dialog.locator('[data-test="expense-payee"]').fill('Copyshop Esempio');
+    await save.click();
+    await expect(save).toHaveText('Save as a second expense');
+    await page.clock.setFixedTime(new Date('2026-11-20T10:00:01Z'));
+    await save.click();
+    await expect(dialog).toBeHidden();
+    const sent = writes(fake, 'POST');
+    expect(sent).toHaveLength(3);
+    expect(sent[0].body).not.toHaveProperty('confirm_duplicate');
+    expect(sent[2].body).toMatchObject({ paid_on: '2026-10-20', amount_cents: 1250, payee: 'Copyshop Esempio', confirm_duplicate: true });
+  });
+
+  test('an imported look-alike is named by its payee, and "Open" opens it after asking', async ({ page }) => {
+    const fake = newFake();
+    fake.twin = fake.expenses[1];
+    await open(page, fake);
+    const dialog = await typeExpense(page, '2026-10-18', '42,00', 'Bahn Beispiel');
+    await dialog.locator('[data-test="expense-save"]').click();
+    await expect(dialog.locator('[data-test="expense-twin-line"]')).toHaveText('An expense of €42.00 paid to Bahn Beispiel on that day is already in your book.');
+    await dialog.locator('[data-test="expense-twin-open"]').click();
+    await expect(page.locator('[data-test="unsent-ask"]')).toBeVisible();
+    await page.locator('[data-test="unsent-discard"]').click();
+    await expect(dialog).toBeHidden();
+    const edit = page.getByRole('dialog', { name: 'Edit expense' });
+    await expect(edit).toBeVisible();
+    await expect(edit).toContainText('Bahn Beispiel');
+    expect(writes(fake, 'POST')).toHaveLength(1);
+  });
+});
