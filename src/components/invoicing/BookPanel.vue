@@ -1131,7 +1131,6 @@
     column-gap: var(--space-sm);
     row-gap: 0;
     padding-block: var(--space-2xs);
-    border-bottom: 1px solid var(--border-subtle, currentColor);
   }
 
   .month[open] > .month__head {
@@ -1140,13 +1139,35 @@
 
   /* The layout is fixed and the columns have widths, so they line up from
      one month's table to the next (§3.145 Decision 6). */
+  /* The table's caption repeats the fold head right above it, so it is
+     kept for a screen reader and not drawn (system_3 #12277 ruling 1). The
+     design system draws any caption it is passed and has no hidden form, so
+     the app hides it here (an app-layer override, as §3.114 makes for
+     AspSegmented). */
+  .month :deep(.data-table__caption) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
   .month :deep(table) {
     table-layout: fixed;
     width: 100%;
   }
 
+  /* One head on all four tabs (system_3 #12277 ruling 3): the month stays
+     an h3, so the Book's outline is unchanged, and it takes the size and
+     weight of the Transactions, Invoices and Clients heads, with no line
+     under it. An empty month's head is the same h3 and follows. */
   .month__label {
     margin: 0;
+    font-size: inherit;
+    font-weight: 600;
   }
 
   /* A month with no entries (#11023): its head alone, no caret and nothing to
