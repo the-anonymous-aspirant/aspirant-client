@@ -216,7 +216,7 @@ test.describe('#12274 the total, what the draft covers, and a difference', () =>
 
   test('several payments: one line each and a sum; a payer-less one and a PayPal id', async ({ page }) => {
     const fake = newFake(
-      [payment(1), payment(2, { sender_name: '', gross_cents: 7000, paid_on: '2026-08-20T00:00:00Z' }), payment(3, { source: 'paypal', transaction_id: '9AB12345CD6789012', gross_cents: 2000 })],
+      [payment(1), payment(2, { sender_name: '', gross_cents: 7000, paid_on: '2026-08-20T00:00:00Z' }), payment(3, { entry: 'import', source: 'paypal', transaction_id: '9AB12345CD6789012', shown_reference: '9AB12345CD6789012', gross_cents: 2000 })],
       [draft(10, [1, 2, 3], { total_cents: 39000 })],
     );
     await open(page, fake);

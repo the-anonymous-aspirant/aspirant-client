@@ -309,7 +309,7 @@
   import UnsentAsk from './UnsentAsk.vue';
   import { unsentGuard } from './unsentGuard.js';
   import { FIELD_HINTS } from './fieldHints.js';
-  import { paymentSummary } from './ledgerRows.js';
+  import { paymentParts, paymentSummary, shownReference } from './ledgerRows.js';
   import {
     KLEINBETRAG_LIMIT_CENTS,
     STATUS_LABELS,
@@ -756,10 +756,13 @@
       },
       paymentLine(p) {
         const amount = formatMoney(p.gross_cents, p.currency);
-        const payer = String(p.sender_name || '').trim();
-        // A PayPal payment keeps PayPal's own id, which ze can look up there.
-        const paypal = p.source === 'paypal' && p.transaction_id ? ` (PayPal ${p.transaction_id})` : '';
-        return `${payer ? `${amount} from ${payer}` : amount}${paypal}, ${formatDay(p.paid_on)}`;
+        const payer = paymentParts(p).who;
+        // A payment keeps the reference it is named by elsewhere (system_3
+        // #12257): PayPal's own id, which ze can look up there, or an N26
+        // confirmation. An id the server made up is never shown.
+        const ref = shownReference(p);
+        const named = ref ? ` (${p.source === 'paypal' ? `PayPal ${ref}` : ref})` : '';
+        return `${payer ? `${amount} from ${payer}` : amount}${named}, ${formatDay(p.paid_on)}`;
       },
       // The save before an issue, with the quantity bound in its own words.
       async saveDraft(id) {
