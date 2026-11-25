@@ -52,6 +52,7 @@ const SERVER_CODES = [
   'payment_on_draft',
   'already_removed',
   'not_removed',
+  'transaction_removed',
   'payment_on_invoice',
   'invalid_category',
   'removed_category',
@@ -436,6 +437,7 @@ test.describe('#12300 ruling 2: the table, at its field', () => {
     expect(line({ code: 'paypal_transfer_not_paid_work', field: 'category' })).toBe(
       'This is a transfer from PayPal. Its PayPal payments are the paid work, so it cannot be paid work too.'
     );
+    expect(line({ code: 'transaction_removed' })).toBe('This transaction was removed. Restore it to change it.');
     expect(line({ code: 'builtin_preset_name', field: 'name' })).toBe(
       "“Work only” is the built-in preset's name. Choose another name."
     );

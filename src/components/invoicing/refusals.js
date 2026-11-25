@@ -210,6 +210,9 @@ export const SENTENCES = {
   not_found: () => STALE,
   already_removed: () => STALE,
   not_removed: () => STALE,
+  // A change to a payment or an expense that is in the removed list
+  // (system_3 #12273 item 5, server PR 248): restoring it is the way on.
+  transaction_removed: () => 'This transaction was removed. Restore it to change it.',
   not_a_draft: () => STALE,
   payment_on_issued_invoice: () => STALE,
   payment_on_invoice: () => STALE,
