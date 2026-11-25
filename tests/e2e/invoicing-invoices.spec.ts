@@ -17,6 +17,9 @@ interface Fake {
   links: Record<number, number[]>;
   requests: Array<{ method: string; path: string; body: string }>;
   issueFailure?: { status: number; body: Json };
+  // #12267: when the Storno happened, and how the PDF route answers.
+  cancelledAt?: string;
+  pdf?: { status: number; body?: Json };
   clients?: Json[];
   kleinunternehmer?: boolean;
   currency?: string;
@@ -90,6 +93,17 @@ async function mockAll(page: Page, fake: Fake): Promise<void> {
       });
       return json(route, out.length ? 201 : 200, { invoices: out, skipped: [] });
     }
+    if (/^\/invoicing\/invoices\/\d+\/pdf$/.test(path) && method === 'GET') {
+      const inv = fake.invoices.find((i) => path === `/invoicing/invoices/${i.id}/pdf`)!;
+      if (fake.pdf && fake.pdf.status !== 200) return json(route, fake.pdf.status, fake.pdf.body || {});
+      const name = inv.status === 'cancelled' ? `Rechnung-${inv.invoice_number}-storniert.pdf` : `Rechnung-${inv.invoice_number}.pdf`;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/pdf',
+        headers: { 'Content-Disposition': `attachment; filename="${name}"` },
+        body: '%PDF-1.4\n%%EOF\n',
+      });
+    }
     const m = path.match(/^\/invoicing\/invoices\/(\d+)(\/issue|\/cancel)?$/);
     if (m) {
       const inv = fake.invoices.find((i) => i.id === Number(m[1]))!;
@@ -112,7 +126,7 @@ async function mockAll(page: Page, fake: Fake): Promise<void> {
         return json(route, 200, detail(fake, inv));
       }
       if (m[2] === '/cancel') {
-        Object.assign(inv, { status: 'cancelled', cancel_reason: JSON.parse(body).reason, cancelled_at: '2026-10-22T09:00:00Z' });
+        Object.assign(inv, { status: 'cancelled', cancel_reason: JSON.parse(body).reason, cancelled_at: fake.cancelledAt || '2026-10-22T09:00:00Z' });
         return json(route, 200, detail(fake, inv));
       }
     }
@@ -579,6 +593,59 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
 // beside each field label says what the field means. On a phone a tap opens
 // it without focusing the field (DS AspLabelHint, #10033); a second tap
 // closes it. No hint repeats its field's own visible hint line.
+// A cancelled invoice never leaves the app looking valid (system_3 #12267):
+// its download is a copy marked "STORNIERT am …", the button says so, and
+// when the server cannot make the copy the dialog says that instead of a new
+// tab showing an error. The Storno's day is the Berlin day.
+test.describe('#12267 a cancelled invoice downloads marked', () => {
+  async function issueAndCancel(page: Page): Promise<void> {
+    await createFromTwo(page);
+    await page.locator('[data-test="draft-issue"]').click();
+    await page.locator('[data-test="issue-confirm-button"]').click();
+    await expect(page.locator('[data-test="invoice-number"]')).toHaveText('2026-001');
+    await expect(page.locator('[data-test="invoice-pdf"]')).toHaveText('Download PDF');
+    await page.locator('[data-test="invoice-cancel"]').click();
+    await page.getByLabel('Reason for the cancellation (Storno)').fill('Falsche Adresse');
+    await page.locator('[data-test="invoice-cancel-confirm"]').click();
+    await expect(page.locator('[data-test="invoice-status"]')).toHaveText('Cancelled');
+  }
+
+  test('the button names the mark, the file is the marked copy, and the day is Berlin\'s', async ({ page }) => {
+    const fake = newFake();
+    // 23:30 UTC on 21 October is 01:30 on 22 October in Berlin.
+    fake.cancelledAt = '2026-10-21T23:30:00Z';
+    await open(page, fake);
+    await issueAndCancel(page);
+
+    await expect(page.locator('[data-test="invoice-cancelled"]')).toHaveText('Cancelled on 2026-10-22: Falsche Adresse');
+    const link = page.locator('[data-test="invoice-pdf"]');
+    await expect(link).toHaveText('Download PDF (marked cancelled)');
+    const file = page.waitForEvent('download');
+    await link.click();
+    expect((await file).suggestedFilename()).toBe('Rechnung-2026-001-storniert.pdf');
+    await expect(page.locator('[data-test="invoice-pdf-error"]')).toHaveCount(0);
+    expect(page.context().pages()).toHaveLength(1);
+  });
+
+  test('when the marked copy cannot be made, the dialog says so and nothing downloads', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await issueAndCancel(page);
+    fake.pdf = { status: 500, body: { error: { code: 'cancelled_mark_failed', message: 'The marked copy could not be made.' } } };
+
+    let downloaded = false;
+    page.on('download', () => {
+      downloaded = true;
+    });
+    await page.locator('[data-test="invoice-pdf"]').click();
+    const error = page.locator('[data-test="invoice-pdf-error"]');
+    await expect(error).toHaveText('The marked copy could not be made.');
+    await expect(error).toHaveAttribute('role', 'alert');
+    expect(downloaded).toBe(false);
+    expect(page.context().pages()).toHaveLength(1);
+  });
+});
+
 test.describe('#10032 the invoicing fields explain themselves', () => {
   // `marks` is how many "?" the scope shows: on a phone every line item is
   // captioned, so a line's labels (and hints) repeat per line.

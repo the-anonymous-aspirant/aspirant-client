@@ -84,7 +84,7 @@ test.describe('#9960 Invoices — select and download as one PDF', () => {
     await expect(tick(page, '2026-003')).toBeVisible();
     await expect(tick(page, '2026-002')).toHaveCount(0);
     await expect(page.locator('[data-test="merge-left-out"]')).toHaveText(
-      "Only issued invoices can be ticked for the PDF: a draft has no PDF yet, and a cancelled invoice's PDF does not show it was cancelled.",
+      "Only issued invoices can be ticked for the PDF: a draft has no PDF yet, and a cancelled invoice is left out.",
     );
   });
 
@@ -149,7 +149,7 @@ test.describe('#9960 Invoices — select and download as one PDF', () => {
     const fake = newFake();
     fake.merged = {
       status: 422,
-      body: { error: { code: 'invoice_cancelled', message: 'invoice 2026-003 is cancelled; its stored PDF does not show that, so it is left out of a merged download' } },
+      body: { error: { code: 'invoice_cancelled', message: 'invoice 2026-003 is cancelled; a cancelled invoice is left out.' } },
     };
     await open(page, fake);
     await tick(page, '2026-003').check();

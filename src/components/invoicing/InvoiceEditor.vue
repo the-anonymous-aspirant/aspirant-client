@@ -18,7 +18,7 @@
           <div><dt>Total</dt><dd>{{ formatMoney(invoice.total_cents, invoice.currency) }}</dd></div>
         </dl>
         <p v-if="invoice.status === 'cancelled'" class="statement" data-test="invoice-cancelled">
-          Cancelled on {{ formatDay(invoice.cancelled_at) }}: {{ invoice.cancel_reason }}
+          Cancelled on {{ formatBerlinDay(invoice.cancelled_at) }}: {{ invoice.cancel_reason }}
         </p>
         <p v-else class="statement" data-test="invoice-readonly">
           An issued invoice can't be changed. To correct it, cancel it and issue a new one.
@@ -48,7 +48,8 @@
         </table>
         </div>
         <div class="downloads">
-          <a class="link-button" :href="pdfUrl" data-test="invoice-pdf" target="_blank" rel="noopener">Download PDF</a>
+          <a class="link-button" :href="pdfUrl" data-test="invoice-pdf" target="_blank" rel="noopener" @click="onDownload">{{ downloadLabel }}</a>
+          <p v-if="markFailed" class="error" role="alert" data-test="invoice-pdf-error">The marked copy could not be made.</p>
         </div>
         <iframe
           v-if="!narrow && previewUrl"
@@ -258,6 +259,7 @@
     decimalFromMinor,
     deleteDraft,
     errorOf,
+    formatBerlinDay,
     formatDay,
     formatMoney,
     getInvoice,
@@ -269,6 +271,12 @@
   } from './api.js';
 
   let lineKey = 0;
+
+  // The file name the server gives in Content-Disposition, if any.
+  const attachmentName = (headers) => {
+    const m = /filename="([^"]+)"/.exec((headers && headers['content-disposition']) || '');
+    return m ? m[1] : '';
+  };
 
   // One invoice (spec §4.5–4.6). A draft is edited here; issuing hands the
   // number and the date to the server, after which the invoice is a
@@ -310,6 +318,9 @@
         history: [],
         historyError: '',
         previewUrl: '',
+        // A cancelled invoice's file is a marked copy the server makes when
+        // asked; true when it could not (system_3 #12267).
+        markFailed: false,
         // Where an exit that asked goes once it is discarded: 'close', or
         // 'next' for a review's Next (system_3 #11670).
         unsentExit: 'close',
@@ -431,6 +442,11 @@
       pdfUrl() {
         return invoicePdfUrl(this.invoice.id);
       },
+      // A cancelled invoice downloads with "STORNIERT am …" across every
+      // page, and the button says so (system_3 #12267).
+      downloadLabel() {
+        return this.invoice.status === 'cancelled' ? 'Download PDF (marked cancelled)' : 'Download PDF';
+      },
     },
     watch: {
       // On a phone the confirmation sits below the fold while the button that
@@ -464,6 +480,7 @@
       },
     },
     methods: {
+      formatBerlinDay,
       formatDay,
       formatMoney,
       paymentName,
@@ -503,6 +520,7 @@
       },
       setDetail(detail) {
         this.detail = detail;
+        this.markFailed = false;
         this.loadHistory(detail.invoice.id);
         if (detail.invoice.status !== 'draft') this.loadPreview(detail.invoice.id);
         const inv = detail.invoice;
@@ -574,6 +592,28 @@
           this.previewUrl = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
         } catch (err) {
           this.previewUrl = '';
+          if (this.invoice.status === 'cancelled') this.markFailed = true;
+        }
+      },
+      // An issued invoice's link opens the stored file as it is. A cancelled
+      // one is fetched here first, so that when the server cannot make the
+      // marked copy the dialog says so instead of a new tab showing an error.
+      async onDownload(event) {
+        if (this.invoice.status !== 'cancelled') return;
+        event.preventDefault();
+        this.markFailed = false;
+        try {
+          const res = await axios.get(invoicePdfUrl(this.invoice.id), { responseType: 'blob' });
+          const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = attachmentName(res.headers) || `Rechnung-${this.invoice.invoice_number}-storniert.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+        } catch (err) {
+          this.markFailed = true;
         }
       },
       clearPreview() {
