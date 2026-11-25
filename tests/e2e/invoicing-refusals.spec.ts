@@ -147,6 +147,20 @@ test.describe('#12300 refusals: every code has a sentence', () => {
     expect(line({ code: 'unknown_field', message: 'unknown field "x"' })).toBe(FALLBACK);
   });
 
+  test("a code or field named like an Object.prototype member is unknown too", () => {
+    for (const code of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      const r = refusalOf(refusal({ code }));
+      expect(r.text).toBe(FALLBACK);
+      expect(r.field).toBe('');
+      expect(r.known).toBe(false);
+      expect(n26FileLine({ code })).toBe(n26FileLine({ code: 'brand_new_code' }));
+    }
+    expect(line({ code: 'empty_file', field: 'constructor' })).toBe('This file is empty.');
+    expect(line({ code: 'too_large', field: 'toString', limit: 5 })).toBe(
+      'This file is larger than 5 MB.'
+    );
+  });
+
   test('no answer at all, and the two 413s', () => {
     expect(refusalOf({ status: 0, code: '', message: '' }).text).toBe(
       'The server could not be reached. Try again.'

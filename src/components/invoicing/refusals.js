@@ -30,6 +30,14 @@ function figure(n) {
   return Number(n).toLocaleString('en-GB');
 }
 
+// A table's own entry for a key the server sent, or undefined. A plain
+// `table[key]` would also find what Object.prototype holds, so a code or
+// field such as "constructor" would read a function (security's nit on
+// PR 574).
+function ownEntry(table, key) {
+  return typeof key === 'string' && Object.hasOwn(table, key) ? table[key] : undefined;
+}
+
 // What a file is called on its line, by the form field it was sent in.
 const FILE_NOUN = { logo: 'The logo', receipt: 'The receipt' };
 
@@ -135,14 +143,15 @@ export const SENTENCES = {
   // ---- Files: the logo, a receipt, a PayPal file, an N26 file
   missing_file: () => '',
   empty_file: (d) => {
-    if (FILE_NOUN[d.field]) return `${FILE_NOUN[d.field]} is empty.`;
+    const noun = ownEntry(FILE_NOUN, d.field);
+    if (noun) return `${noun} is empty.`;
     if (d.field === 'file') return 'PayPal file: this file is empty.';
     return 'This file is empty.';
   },
-  too_large: (d) =>
-    FILE_NOUN[d.field]
-      ? `${FILE_NOUN[d.field]} is larger than ${d.limit || 5} MB.`
-      : 'This file is larger than 5 MB.',
+  too_large: (d) => {
+    const noun = ownEntry(FILE_NOUN, d.field);
+    return noun ? `${noun} is larger than ${d.limit || 5} MB.` : 'This file is larger than 5 MB.';
+  },
   unsupported_type: (d) =>
     d.field === 'receipt'
       ? 'The receipt must be a PDF, JPEG or PNG file.'
@@ -248,7 +257,7 @@ export function reviewRowName(rows, item, payerOf) {
 // parse answers each file's error inside a 200, as { code, message }.
 export function n26FileLine(fileError) {
   const code = fileError && fileError.code;
-  const sentence = code && SENTENCES[code];
+  const sentence = ownEntry(SENTENCES, code);
   return (sentence && sentence({ code, field: '' }, {})) || N26_UNREADABLE;
 }
 
@@ -289,8 +298,8 @@ export function refusalOf(d, ctx = {}) {
   // stays until that task words it.
   if (d.code === 'payment_on_draft' && d.message)
     return { field: d.field || '', text: d.message, known: true };
-  const sentence = SENTENCES[d.code];
+  const sentence = ownEntry(SENTENCES, d.code);
   const own = (sentence && sentence(d, ctx)) || '';
   // known: the table has a line of its own for this refusal, not the fallback.
-  return { field: d.field || CODE_FIELDS[d.code] || '', text: own || FALLBACK, known: !!own };
+  return { field: d.field || ownEntry(CODE_FIELDS, d.code) || '', text: own || FALLBACK, known: !!own };
 }
