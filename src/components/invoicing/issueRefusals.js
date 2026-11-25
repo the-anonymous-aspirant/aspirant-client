@@ -81,7 +81,9 @@ export function issueRefusalText(err) {
   if (!err || !err.response) return errorOf(err).message;
   const data = err.response.data || {};
   const envelope = data.error || {};
-  const sentence = SENTENCES[envelope.code];
+  // Own keys only: a code such as "constructor" must not reach a method of
+  // Object.prototype (security's nit on PR 575, c77377).
+  const sentence = Object.hasOwn(SENTENCES, envelope.code) ? SENTENCES[envelope.code] : null;
   return sentence ? sentence(envelope.details || {}) : ISSUE_REFUSAL_FALLBACK;
 }
 

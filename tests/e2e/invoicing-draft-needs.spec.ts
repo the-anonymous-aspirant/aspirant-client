@@ -333,6 +333,9 @@ test.describe('#12274 each refusal in the app\'s words', () => {
     ['unprintable_characters', { characters: '田' }, 'The invoice cannot print “田”. Change it in the profile, the client or the lines.'],
     ['not_a_draft', { status: 'issued' }, 'This invoice is already issued.'],
     ['something_new', {}, 'The invoice could not be issued. Your changes to the draft are saved.'],
+    // A code that names an Object.prototype member is unknown too.
+    ['constructor', {}, 'The invoice could not be issued. Your changes to the draft are saved.'],
+    ['toString', {}, 'The invoice could not be issued. Your changes to the draft are saved.'],
   ];
 
   test('every code the issue press can answer, and an unknown one', async ({ page }) => {
