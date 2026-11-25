@@ -289,7 +289,10 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     // #9835: the address is optional up to 250 € gross, and the form says so.
     await expect(form).toContainText('Needed for invoices over 250 € gross.');
     await page.locator('[data-test="client-save"]').click();
-    await expect(page.locator('[data-test="client-error"]')).toContainText('A client needs a name.');
+    // At the Name field, with focus there (system_3 #12264, #12298).
+    const name = form.getByLabel('Name');
+    await expect(name).toBeFocused();
+    await expect(page.locator(`[id="${await name.getAttribute('aria-describedby')}"]`)).toHaveText('A client needs a name.');
     expect(fake.requests.some((r) => r.method === 'POST' && r.path === '/invoicing/clients')).toBe(false);
 
     await form.getByLabel('Name').fill('Anna Example');
