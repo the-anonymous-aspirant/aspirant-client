@@ -299,7 +299,7 @@ test.describe('#12258 Income per month counts euro invoices', () => {
     await expect(chart).toHaveAttribute('data-counts', '2,0,1');
     await expect(chart).toHaveAttribute('data-clients', '2,2,2');
     await expect(page.locator('[data-test="stat-income-range"]')).toHaveText(
-      'Issued invoices by the month the work was done. Cancelled invoices are left out. Lowest €0.00 in Aug, highest €350.00 in Jul. Sep so far: €90.00. 1 invoice in another currency (USD) is not counted.',
+      'Issued invoices by the month the work was done. Cancelled invoices are left out. 1 invoice in another currency (USD) is not counted. Lowest €0.00 in Aug, highest €350.00 in Jul. Sep so far: €90.00.',
     );
   });
 

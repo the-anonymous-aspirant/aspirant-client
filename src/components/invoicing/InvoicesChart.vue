@@ -190,14 +190,19 @@
       // has to carry a reading no bar or tick can show by itself.
       incomeCaption() {
         const money = (v) => formatMoney(Math.round(v * 100));
-        const base = `Issued invoices by the month the work was done. Cancelled invoices are left out. ${this.seriesCaption(this.incomeEuros, money)}`;
-        // The invoices the euro sum leaves out, as their own sentence
-        // (system_3 #12258, in #12282's sentence form).
+        // What is counted, then what is not, then the figures (design_agent
+        // c77337 on system_3 #12282, after c76261 point 1): the
+        // invoices the euro sum leaves out are left out of every month, so
+        // their sentence stands beside the other one that says what is left out.
+        const head = 'Issued invoices by the month the work was done. Cancelled invoices are left out.';
         const other = this.otherCurrencies;
-        if (!other.length) return base;
         const codes = [...new Set(other.map((i) => i.currency))].sort().join(', ');
-        const clause = other.length === 1 ? `1 invoice in another currency (${codes}) is not counted.` : `${other.length} invoices in other currencies (${codes}) are not counted.`;
-        return `${base} ${clause}`;
+        const clause = !other.length
+          ? ''
+          : other.length === 1
+            ? ` 1 invoice in another currency (${codes}) is not counted.`
+            : ` ${other.length} invoices in other currencies (${codes}) are not counted.`;
+        return `${head}${clause} ${this.seriesCaption(this.incomeEuros, money)}`;
       },
       invoiceCountCaption() {
         const invoices = (v) => `${v} invoice${v === 1 ? '' : 's'}`;
