@@ -42,7 +42,13 @@
           data-test="profile-telegram"
         />
       </fieldset>
-      <AspCheckbox v-model="form.is_kleinunternehmer" label="Kleinunternehmerin under § 19 UStG (no VAT charged)" />
+      <div class="profile-vat">
+        <AspCheckbox v-model="form.is_kleinunternehmer" label="Kleinunternehmerin under § 19 UStG (no VAT charged)" />
+        <!-- Every draft follows the setting (system_3 #12261, ruling 3): said
+             only while the box differs from the saved setting, when Save
+             changes what the drafts read. -->
+        <p v-if="vatDraftsLine" class="profile-vat__drafts" aria-live="polite" data-test="profile-vat-drafts">{{ vatDraftsLine }}</p>
+      </div>
       <div class="profile-form__numbers">
         <AspInput v-model="form.invoice_number_prefix" label="Invoice number prefix" :label-hint="hints.prefix" hint="For example 2026." required />
         <AspInput
@@ -121,7 +127,7 @@
   import UnsentAsk from './UnsentAsk.vue';
   import { unsentGuard } from './unsentGuard.js';
   import { FIELD_HINTS } from './fieldHints.js';
-  import { FIELD_REFUSALS, deleteLogo, errorOf, getLogoBlob, saveProfile, uploadLogo } from './api.js';
+  import { FIELD_REFUSALS, deleteLogo, errorOf, getLogoBlob, getProfile, saveProfile, uploadLogo } from './api.js';
 
   // Edits the issuer header printed on every invoice (spec §4.1). The admin
   // seeds it and the owner edits it; issued invoices keep the snapshot taken
@@ -154,12 +160,20 @@
         logoStaged: null,
         logoSrc: '',
         logoError: '',
+        // The drafts the VAT setting prices, read when the editor opens.
+        draftCount: 0,
       };
     },
     computed: {
       // While a save runs, no exit closes and none asks.
       unsentBusy() {
         return this.saving;
+      },
+      vatDraftsLine() {
+        const saved = this.profile.is_kleinunternehmer !== false;
+        if (this.form.is_kleinunternehmer === saved || this.draftCount < 1) return '';
+        const n = this.draftCount;
+        return `${n} ${n === 1 ? 'draft' : 'drafts'} will be worked out again with this setting.`;
       },
       logoShown() {
         if (this.logoStaged) return this.logoStaged.action === 'upload';
@@ -187,6 +201,7 @@
           this.logoError = '';
           this.takeUnsentBaseline();
           this.loadLogo();
+          this.loadDraftCount();
         } else {
           this.logoStaged = null;
           this.setLogoSrc('');
@@ -204,6 +219,17 @@
       setLogoSrc(src) {
         if (this.logoSrc) URL.revokeObjectURL(this.logoSrc);
         this.logoSrc = src;
+      },
+      // Read fresh on every open: drafts are made and deleted on other tabs
+      // of the page. Unread, no line is drawn.
+      async loadDraftCount() {
+        this.draftCount = 0;
+        try {
+          const res = await getProfile();
+          this.draftCount = Number(res.draft_count) || 0;
+        } catch {
+          this.draftCount = 0;
+        }
       },
       async loadLogo() {
         if (!this.logoSet) {
@@ -356,6 +382,18 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: var(--space-md);
+  }
+
+  .profile-vat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+  }
+
+  .profile-vat__drafts {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-sm);
   }
 
   .profile-form__error {
