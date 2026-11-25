@@ -301,13 +301,14 @@
           hint="Never printed on an invoice or included in an export."
           data-test="client-notes-input"
         />
-        <p v-if="error" class="client-form__error" role="alert" data-test="client-error">{{ error }}</p>
       </form>
       <template #footer>
         <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
-        <ModalActions v-else>
+        <!-- A refusal that names no field is said above the buttons
+             (system_3 #12298 ruling 2); one about a field, at the field. -->
+        <ModalActions v-else :refusal="error" refusal-test="client-error">
           <AspButton variant="secondary" :disabled="saving" data-test="client-cancel" @click="onEditorOpenChange(false)">Cancel</AspButton>
-          <AspButton :loading="saving" class="client-save" data-test="client-save" @click="save">{{ saveLabel }}</AspButton>
+          <AspButton ref="saveButton" :loading="saving" class="client-save" data-test="client-save" @click="save">{{ saveLabel }}</AspButton>
         </ModalActions>
       </template>
     </AspModal>
@@ -329,6 +330,7 @@
   import PayersDialog from './PayersDialog.vue';
   import { groupByLetter, letterKey } from './listGroups.js';
   import { loadDismissed, pairKey, reviewOf, reviewSentences, saveDismissed } from './clientReview.js';
+  import { focusAfterRefusal } from './refusalFocus.js';
   import { FIELD_REFUSALS, clientsCsvUrl, createClient, downloadBlob, errorOf, formatBerlinDay, formatDay, formatMoney, groupIban, listInvoices, listPayerCandidates, payersSavedLine, safeSocialUrl, socialHandle, updateClient } from './api.js';
 
   // The longest book shown flat (§3.145 Decision 3, amended 2026-11-14).
@@ -506,6 +508,8 @@
         deep: true,
         handler() {
           this.disarmNameAsk();
+          // Any change also clears the footer's line (system_3 #12298 ruling 4).
+          this.error = '';
         },
       },
       // Editing a refused field clears its refusal.
@@ -761,7 +765,7 @@
         }
         if (!this.form.name.trim()) {
           this.fieldErrors.name = 'A client needs a name.';
-          this.$nextTick(() => this.$refs.name && this.$refs.name.focus());
+          focusAfterRefusal(this, 'name');
           return;
         }
         this.saving = true;
@@ -787,16 +791,17 @@
           if (OWN_SENTENCE[code]) {
             const field = OWN_SENTENCE[code];
             this.fieldErrors[field] = message;
-            this.$nextTick(() => this.$refs[field] && this.$refs[field].focus());
+            focusAfterRefusal(this, field);
             return;
           }
           const refusal = FIELD_REFUSALS[code];
           if (refusal) {
             this.fieldErrors[refusal.field] = refusal.text;
-            this.$nextTick(() => this.$refs[refusal.field] && this.$refs[refusal.field].focus());
+            focusAfterRefusal(this, refusal.field);
             return;
           }
           this.error = message;
+          focusAfterRefusal(this, 'saveButton');
         } finally {
           this.saving = false;
         }

@@ -1,7 +1,13 @@
 <template>
-  <div class="modal-actions">
-    <div v-if="$slots.destructive" class="modal-actions__destructive"><slot name="destructive" /></div>
-    <div class="modal-actions__main"><slot /></div>
+  <div class="modal-footer">
+    <!-- A refusal about no single field (system_3 #12298 ruling 2): one
+         full-width line above the buttons, which never scroll away. It
+         wraps and is never clamped; it is announced when it appears. -->
+    <p v-if="refusal" class="modal-footer__refusal" role="alert" :data-test="refusalTest">{{ refusal }}</p>
+    <div class="modal-actions">
+      <div v-if="$slots.destructive" class="modal-actions__destructive"><slot name="destructive" /></div>
+      <div class="modal-actions__main"><slot /></div>
+    </div>
   </div>
 </template>
 
@@ -12,12 +18,35 @@
   // wide screen shows: destructive alone at the left edge, the rest at the
   // right edge with the primary last. Below 640px the same DOM stacks in
   // reverse: primary, secondary, then the destructive action set apart.
+  //
+  // `refusal`: the dialog's line for a refused Save that names no field of
+  // the form. While the "Close without saving?" ask shows, the dialog draws
+  // the ask in place of this footer, so the line is not drawn; "Keep
+  // editing" brings it back (§3.166 Decision 3).
   export default {
     name: 'ModalActions',
+    props: {
+      refusal: { type: String, default: '' },
+      // The line's data-test: each dialog keeps the one its error had.
+      refusalTest: { type: String, default: 'footer-refusal' },
+    },
   };
 </script>
 
 <style scoped>
+  .modal-footer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    width: 100%;
+  }
+
+  .modal-footer__refusal {
+    margin: 0;
+    color: var(--feedback-error);
+    overflow-wrap: anywhere;
+  }
+
   .modal-actions {
     display: flex;
     align-items: center;

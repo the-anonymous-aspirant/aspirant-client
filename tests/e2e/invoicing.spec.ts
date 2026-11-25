@@ -293,6 +293,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     const name = form.getByLabel('Name');
     await expect(name).toBeFocused();
     await expect(page.locator(`[id="${await name.getAttribute('aria-describedby')}"]`)).toHaveText('A client needs a name.');
+    await expect(page.locator('[data-test="client-error"]')).toHaveCount(0);
     expect(fake.requests.some((r) => r.method === 'POST' && r.path === '/invoicing/clients')).toBe(false);
 
     await form.getByLabel('Name').fill('Anna Example');

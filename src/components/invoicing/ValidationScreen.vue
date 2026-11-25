@@ -27,16 +27,33 @@
             <li v-for="(w, i) in report.warnings" :key="'w' + i">{{ w.message }}</li>
           </ul>
         </template>
-        <p v-else class="lead" data-test="validation-ok">The data passes every check. The download has started.</p>
+        <!-- A success line goes when its download fails (system_3 #12298
+             ruling 4): the check passed, the download did not start. -->
+        <p v-else class="lead" data-test="validation-ok">
+          The data passes every check.<template v-if="!downloadError"> The download has started.</template>
+        </p>
       </template>
-      <p v-if="downloadError" class="error" role="alert" data-test="download-error">{{ downloadError }}</p>
     </div>
 
     <template #footer>
-      <ModalActions>
+      <!-- A failed download is said above the buttons, in view however
+           long the list (system_3 #12298 ruling 2), and the line's "Run the
+           check again" is a button beside it, as after a failed check. -->
+      <ModalActions :refusal="downloadError" refusal-test="download-error">
         <AspButton variant="secondary" @click="$emit('update:open', false)">Close</AspButton>
         <AspButton
+          v-if="state === 'failed' || downloadError"
+          ref="recheckButton"
+          variant="secondary"
+          :disabled="downloading"
+          data-test="validation-recheck"
+          @click="check"
+        >
+          Run the check again
+        </AspButton>
+        <AspButton
           v-if="report && !report.violations.length && report.warnings.length"
+          ref="downloadButton"
           :loading="downloading"
           data-test="validation-download-anyway"
           @click="download"
@@ -53,6 +70,7 @@
   import ModalActions from './ModalActions.vue';
   import { unsentGuard } from './unsentGuard.js';
   import { downloadBlob, errorOf, getValidation } from './api.js';
+  import { focusAfterRefusal } from './refusalFocus.js';
 
   // Every export runs the §5 integrity check first (spec §5): violations
   // block it and are listed here, warnings are shown and may be accepted.
@@ -119,6 +137,9 @@
           const { code, message } = errorOf(err);
           this.downloadError = code ? message : 'The export was refused or did not arrive. Run the check again.';
           this.$emit('download-failed', this.downloadError);
+          // Back on "Download anyway" when ze pressed it, else on the button
+          // that can fix it (system_3 #12298 ruling 3).
+          focusAfterRefusal(this, this.$refs.downloadButton ? 'downloadButton' : 'recheckButton');
         } finally {
           this.downloading = false;
           this.$emit('downloading', false);

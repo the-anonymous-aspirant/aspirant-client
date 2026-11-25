@@ -219,6 +219,7 @@
         <AspSegmented
           v-model="direction"
           :options="directionOptions"
+          @update:model-value="clearListLines"
           aria-label="Show money in, out or both"
           class="direction"
           data-test="direction-filter"
@@ -227,6 +228,7 @@
           <AspSelect
             v-model="categoryFilter"
             :searchable="direction !== 'in'"
+            @update:model-value="clearListLines"
             :options="filterOptions"
             aria-label="Show transactions of category"
             data-test="category-filter"
@@ -239,6 +241,7 @@
           <AspSelect
             v-model="invoiceFilter"
             :options="invoiceFilterOptions"
+            @update:model-value="clearListLines"
             aria-label="Show payments by invoice state"
             data-test="invoice-filter"
           />
@@ -1953,10 +1956,22 @@
         this.importPending = true;
         this.$emit('changed');
       },
+      // The lines about the list go when ze changes what it shows or what is
+      // selected (system_3 #12298 ruling 4). Called from zir own ticks and
+      // filters only, never from a watcher: a refused bulk action sets the
+      // selection and its line together, and must keep the line.
+      clearListLines() {
+        this.rowError = '';
+        this.bulkError = '';
+        this.createError = '';
+        this.generateError = '';
+      },
       toggle(key, on) {
+        this.clearListLines();
         this.selected = on ? [...new Set([...this.selected, key])] : this.selected.filter((x) => x !== key);
       },
       selectAllShown(on) {
+        this.clearListLines();
         const keys = this.selectableShown.map((r) => r.key);
         this.selected = on ? [...new Set([...this.selected, ...keys])] : this.selected.filter((key) => !keys.includes(key));
       },

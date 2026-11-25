@@ -233,7 +233,7 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
     await expect(page.getByRole('dialog', { name: 'Enter expense by hand' })).toBeVisible();
 
     await page.locator('[data-test="expense-save"]').click();
-    await expect(page.locator('[data-test="expense-error"]')).toHaveText('Enter the date the expense was paid.');
+    await expect(page.locator('[data-test="expense-date-error"]')).toHaveText('Enter the date the expense was paid.');
     expect(fake.requests.some((r) => r.method === 'POST')).toBe(false);
 
     await page.locator('[data-test="expense-date"]').fill('2026-07-20');

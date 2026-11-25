@@ -515,7 +515,11 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await expect(page.locator('[data-test="cancel-step"]')).toBeInViewport();
     await expect(reasonInput).toBeFocused();
     await page.locator('[data-test="invoice-cancel-confirm"]').click();
-    await expect(page.locator('[data-test="invoice-error"]')).toContainText('Give a reason');
+    // At the reason box, which has focus again (system_3 #12298).
+    const reasonField = page.locator('[data-test="cancel-step"] .field');
+    await expect(reasonField).toContainText('Give a reason for the cancellation.');
+    await expect(reasonInput).toBeFocused();
+    await expect(page.locator('[data-test="invoice-error"]')).toHaveCount(0);
     expect(fake.requests.some((r) => r.path.endsWith('/cancel'))).toBe(false);
 
     await page.getByLabel('Reason for the cancellation (Storno)').fill('Falsche Adresse');

@@ -114,7 +114,8 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     // Nothing is sent until the required fields are filled; an empty client
     // book is no longer one of them (Decision 1: saving can add the client).
     await page.locator('[data-test="manual-save"]').click();
-    await expect(page.locator('[data-test="manual-error"]')).toHaveText('Enter the date the money was received.');
+    await expect(page.locator('[data-test="manual-date-error"]')).toHaveText('Enter the date the money was received.');
+    await expect(page.locator('[data-test="manual-date"]')).toBeFocused();
     expect(fake.requests.some((r) => r.method === 'POST')).toBe(false);
 
     await page.locator('[data-test="manual-date"]').fill('2026-07-14');
@@ -169,7 +170,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await page.locator('[data-test="manual-date"]').fill('2026-07-14');
     await page.locator('[data-test="manual-amount"]').fill('90');
     await page.locator('[data-test="manual-save"]').click();
-    await expect(page.locator('[data-test="manual-error"]')).toHaveText('Choose a client from your book, or add “Mara E.” as a new client.');
+    await expect(page.locator('[data-test="manual-payer-error"]')).toHaveText('Choose a client from your book, or add “Mara E.” as a new client.');
     expect(fake.requests.some((r) => r.method === 'POST')).toBe(false);
 
     // Picking "Use" resolves it to the existing client.

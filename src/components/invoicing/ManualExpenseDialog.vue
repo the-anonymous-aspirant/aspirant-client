@@ -22,11 +22,22 @@
 
       <template v-if="!imported">
         <div class="manual-form__pair manual-form__pair--top">
-          <label class="date-field">
-            <span>Date paid</span>
-            <input v-model="form.paid_on" type="date" :max="today" data-test="expense-date" />
-          </label>
-          <AspInput v-model="form.amount" label="Amount (€)" inputmode="decimal" placeholder="45,99" data-test="expense-amount" />
+          <!-- A refusal sits at its field, outside the label (system_3 #12298). -->
+          <div class="date-field">
+            <label for="expense-date-input">Date paid</label>
+            <input
+              id="expense-date-input"
+              ref="paid_on"
+              v-model="form.paid_on"
+              type="date"
+              :max="today"
+              :aria-invalid="fieldErrors.paid_on ? 'true' : undefined"
+              :aria-describedby="fieldErrors.paid_on ? 'expense-date-error' : undefined"
+              data-test="expense-date"
+            />
+            <span v-if="fieldErrors.paid_on" id="expense-date-error" class="manual-form__error" role="alert" data-test="expense-date-error">{{ fieldErrors.paid_on }}</span>
+          </div>
+          <AspInput ref="amount" v-model="form.amount" label="Amount (€)" inputmode="decimal" placeholder="45,99" :error="fieldErrors.amount" data-test="expense-amount" />
         </div>
         <!-- Who ze paid, the row's who (§3.143 Decision 3): stored as the
              expense's payee, next to when and how much. -->
@@ -39,6 +50,7 @@
            the action when it can act, one muted line, a refusal's reason. -->
       <div class="manual-form__full full-select category-field">
         <AspSelect
+          ref="category"
           v-model="form.category"
           searchable
           addable
@@ -121,20 +133,21 @@
         <p v-else class="manual-form__hint">{{ historyLoaded ? 'No changes recorded yet.' : 'Loading…' }}</p>
       </details>
 
-      <p v-if="error" class="manual-form__error" role="alert" data-test="expense-error">{{ error }}</p>
     </form>
     <template #footer>
       <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
-      <ModalActions v-else>
+      <!-- A refusal that names no field is said above the buttons
+           (system_3 #12298 ruling 2). -->
+      <ModalActions v-else :refusal="error" refusal-test="expense-error">
         <!-- Remove arms first (§3.143 Decision 6). An expense is never on an
              invoice, so removing it changes nothing else. -->
         <template v-if="editing" #destructive>
-          <AspButton :variant="confirmingRemove ? 'destructive' : 'ghost'" :loading="removing" data-test="edit-remove" @click="remove">
+          <AspButton ref="removeButton" :variant="confirmingRemove ? 'destructive' : 'ghost'" :loading="removing" data-test="edit-remove" @click="remove">
             {{ confirmingRemove ? 'Remove this expense' : 'Remove' }}
           </AspButton>
         </template>
         <AspButton variant="secondary" :disabled="unsentBusy" data-test="expense-cancel" @click="onOpenChange(false)">Cancel</AspButton>
-        <AspButton :loading="saving" data-test="expense-save" @click="save">{{ editing ? 'Save changes' : 'Save expense' }}</AspButton>
+        <AspButton ref="saveButton" :loading="saving" data-test="expense-save" @click="save">{{ editing ? 'Save changes' : 'Save expense' }}</AspButton>
       </ModalActions>
     </template>
   </AspModal>
@@ -163,6 +176,9 @@
     restoreExpenseCategory,
     uploadExpenseReceipt,
   } from './api.js';
+  import { focusAfterRefusal } from './refusalFocus.js';
+
+  const noFieldErrors = () => ({ paid_on: '', amount: '' });
 
   // A refusal about the category itself shows under the field; any other
   // under the form (§3.161 Decision 2). invalid_category: a typed name that
@@ -227,6 +243,8 @@
         form: blankForm(),
         saving: false,
         error: '',
+        // A refusal about one field, said at that field (system_3 #12298).
+        fieldErrors: noFieldErrors(),
         // A name chosen from the select's add row: in the field and in its
         // options until it is saved or dropped (§3.161 Decision 2).
         added: '',
@@ -316,6 +334,20 @@
       // Choosing another category drops a name added here, and ends the
       // offer to restore one just removed; a reason under the field was
       // about the value it held.
+      // A line goes when what it speaks about changes (system_3 #12298
+      // ruling 4): a field's at that field's change, the footer's at any.
+      'form.paid_on'() {
+        this.fieldErrors.paid_on = '';
+      },
+      'form.amount'() {
+        this.fieldErrors.amount = '';
+      },
+      form: {
+        deep: true,
+        handler() {
+          this.error = '';
+        },
+      },
       'form.category'(value) {
         if (this.added && value !== this.added) this.added = '';
         if (this.justRemoved && value !== this.justRemovedField) this.justRemoved = '';
@@ -325,6 +357,7 @@
         if (isOpen) {
           this.form = this.expense ? formFrom(this.expense) : blankForm();
           this.error = '';
+          this.fieldErrors = noFieldErrors();
           this.added = '';
           this.justRemoved = '';
           this.justRemovedField = '';
@@ -394,16 +427,23 @@
       },
       // A refusal of the category goes under its field, the rest under the
       // form.
-      showRefusal(err) {
+      showRefusal(err, button = 'saveButton') {
         const { code, message } = errorOf(err);
-        if (CATEGORY_REFUSALS.includes(code)) this.categoryError = message;
-        else this.error = message;
+        if (CATEGORY_REFUSALS.includes(code)) {
+          this.categoryError = message;
+          focusAfterRefusal(this, 'category');
+        } else {
+          this.error = message;
+          focusAfterRefusal(this, button);
+        }
       },
+      // The client's own checks, each about one field: { field, text }, or
+      // null when Save may go ahead.
       check() {
-        if (this.imported) return '';
-        if (!this.form.paid_on) return 'Enter the date the expense was paid.';
-        if (!centsFromEuros(this.form.amount)) return 'Enter the amount paid, for example 45,99.';
-        return '';
+        if (this.imported) return null;
+        if (!this.form.paid_on) return { field: 'paid_on', text: 'Enter the date the expense was paid.' };
+        if (!centsFromEuros(this.form.amount)) return { field: 'amount', text: 'Enter the amount paid, for example 45,99.' };
+        return null;
       },
       // Only what changed: an imported expense may change its category and
       // what it was for, a hand-entered one every field ze typed.
@@ -474,8 +514,14 @@
         this.receiptError = '';
       },
       async save() {
-        this.error = this.check();
-        if (this.error) return;
+        this.error = '';
+        this.fieldErrors = noFieldErrors();
+        const refused = this.check();
+        if (refused) {
+          this.fieldErrors[refused.field] = refused.text;
+          focusAfterRefusal(this, refused.field);
+          return;
+        }
         if (this.editing) return this.saveEdit();
         this.saving = true;
         this.categoryError = '';
@@ -553,7 +599,7 @@
           this.$emit('update:open', false);
           this.$emit('changed');
         } catch (err) {
-          this.error = errorOf(err).message;
+          this.showRefusal(err, 'removeButton');
         } finally {
           this.removing = false;
           this.confirmingRemove = false;
@@ -628,6 +674,10 @@
     gap: var(--space-2xs);
     font-size: var(--text-sm);
     min-width: 0;
+  }
+
+  .date-field input[aria-invalid='true'] {
+    border-color: var(--feedback-error);
   }
 
   .date-field input {

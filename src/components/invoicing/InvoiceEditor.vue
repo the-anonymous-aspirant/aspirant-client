@@ -78,7 +78,7 @@
           </ol>
         </section>
         <div v-if="cancelling" ref="cancelStep" class="cancel-step" data-test="cancel-step">
-          <AspTextarea ref="cancelReasonInput" v-model="cancelReason" label="Reason for the cancellation (Storno)" :rows="2" required />
+          <AspTextarea ref="cancelReasonInput" v-model="cancelReason" label="Reason for the cancellation (Storno)" :rows="2" required :error="fieldErrors.cancelReason" data-test="cancel-reason" />
           <p class="hint">It stays on record as cancelled. Its payments can go on a new invoice.</p>
         </div>
       </template>
@@ -120,7 +120,7 @@
             </div>
             <input id="draft-service-until" v-model="form.service_date_to" type="date" data-test="draft-to" />
           </div>
-          <AspInput v-if="!kleinunternehmer" v-model="form.vat_percent" label="VAT rate (%)" :label-hint="hints.vatRate" class="row__vat" data-test="draft-vat" />
+          <AspInput v-if="!kleinunternehmer" ref="vat" v-model="form.vat_percent" label="VAT rate (%)" :label-hint="hints.vatRate" :error="fieldErrors.vat" class="row__vat" data-test="draft-vat" />
         </div>
 
         <div class="lines" data-test="draft-lines">
@@ -133,13 +133,29 @@
               <LineDescriptionInput v-model="line.description" :label="captioned(i) ? 'Description' : ''" :label-hint="captioned(i) ? hints.description : null" :aria-label="`Description, line ${i + 1}`" />
             </div>
             <div class="line__num">
-              <AspInput v-model="line.quantity" :label="captioned(i) ? 'Quantity' : ''" :aria-label="`Quantity, line ${i + 1}`" />
+              <AspInput
+                :ref="`line-${line.key}-quantity`"
+                v-model="line.quantity"
+                :label="captioned(i) ? 'Quantity' : ''"
+                :aria-label="`Quantity, line ${i + 1}`"
+                :error="lineRefused(line, 'quantity')"
+              />
             </div>
             <div class="line__num">
-              <AspInput v-model="line.price" :label="captioned(i) ? priceLabel : ''" :label-hint="captioned(i) ? priceHint : null" :aria-label="`Unit price, line ${i + 1}`" />
+              <AspInput
+                :ref="`line-${line.key}-price`"
+                v-model="line.price"
+                :label="captioned(i) ? priceLabel : ''"
+                :label-hint="captioned(i) ? priceHint : null"
+                :aria-label="`Unit price, line ${i + 1}`"
+                :error="lineRefused(line, 'price')"
+              />
             </div>
             <span class="line__total">{{ lineTotalLabel(line) }}</span>
             <AspButton variant="ghost" size="sm" class="line__remove" :aria-label="`Remove line ${i + 1}`" @click="form.lines.splice(i, 1)">Remove</AspButton>
+            <!-- A refusal about this line, under it, across the whole row
+                 (system_3 #12298 ruling 1). The field it names is marked. -->
+            <p v-if="lineErrors[line.key]" class="error line__error" role="alert" data-test="draft-line-error">{{ lineErrors[line.key].text }}</p>
           </div>
           <AspButton variant="secondary" size="sm" class="line__add" data-test="draft-add-line" @click="addLine()">Add line</AspButton>
         </div>
@@ -195,7 +211,6 @@
         </div>
       </template>
 
-      <p v-if="error" class="error" role="alert" data-test="invoice-error">{{ error }}</p>
     </div>
 
     <template #footer>
@@ -208,32 +223,37 @@
            Remove is (§3.143 Decision 6); Accept, the one primary, is last
            (design ack c70970). -->
       <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
-      <div v-else-if="detail && isDraft && reviewing" class="review-actions" data-test="review-actions">
-        <span class="review-actions__reject">
-          <AspButton variant="ghost" :disabled="busy || switching" data-test="review-reject" @click="reject">Reject</AspButton>
-        </span>
-        <AspButton variant="secondary" :disabled="busy || switching" data-test="review-later" @click="later">Later</AspButton>
-        <AspButton :loading="busy || switching" data-test="review-accept" @click="accept">Accept</AspButton>
+      <!-- A refusal that names no field is said above the buttons, in
+           every footer (system_3 #12298 ruling 2). -->
+      <div v-else-if="detail && isDraft && reviewing" class="review-footer">
+        <p v-if="error" class="error review-footer__refusal" role="alert" data-test="invoice-error">{{ error }}</p>
+        <div class="review-actions" data-test="review-actions">
+          <span class="review-actions__reject">
+            <AspButton variant="ghost" :disabled="busy || switching" data-test="review-reject" @click="reject">Reject</AspButton>
+          </span>
+          <AspButton variant="secondary" :disabled="busy || switching" data-test="review-later" @click="later">Later</AspButton>
+          <AspButton :loading="busy || switching" data-test="review-accept" @click="accept">Accept</AspButton>
+        </div>
       </div>
-      <ModalActions v-else-if="detail && isDraft">
+      <ModalActions v-else-if="detail && isDraft" :refusal="error" refusal-test="invoice-error">
         <template #destructive>
-          <AspButton variant="destructive" :disabled="busy" data-test="draft-delete" @click="remove">Delete draft</AspButton>
+          <AspButton ref="deleteButton" variant="destructive" :disabled="busy" data-test="draft-delete" @click="remove">Delete draft</AspButton>
         </template>
-        <AspButton variant="secondary" :loading="busy && !confirmingIssue" data-test="draft-save" @click="save">Save draft</AspButton>
+        <AspButton ref="saveButton" variant="secondary" :loading="busy && !confirmingIssue" data-test="draft-save" @click="save">Save draft</AspButton>
         <AspButton v-if="!confirmingIssue" :disabled="busy" data-test="draft-issue" @click="confirmingIssue = true">Issue invoice…</AspButton>
-        <AspButton v-else :loading="busy" data-test="issue-confirm-button" @click="issue">Issue now</AspButton>
+        <AspButton v-else ref="issueButton" :loading="busy" data-test="issue-confirm-button" @click="issue">Issue now</AspButton>
       </ModalActions>
-      <ModalActions v-else-if="detail && invoice.status === 'issued'">
+      <ModalActions v-else-if="detail && invoice.status === 'issued'" :refusal="error" refusal-test="invoice-error">
         <template #destructive>
           <AspButton v-if="!cancelling" variant="destructive" data-test="invoice-cancel" @click="cancelling = true">Cancel invoice (Storno)…</AspButton>
-          <AspButton v-else variant="destructive" :loading="busy" data-test="invoice-cancel-confirm" @click="cancel">Cancel this invoice</AspButton>
+          <AspButton v-else ref="cancelConfirmButton" variant="destructive" :loading="busy" data-test="invoice-cancel-confirm" @click="cancel">Cancel this invoice</AspButton>
         </template>
         <AspButton variant="secondary" :disabled="busy" data-test="editor-close" @click="onOpenChange(false)">Close</AspButton>
         <AspButton v-if="reviewing" :disabled="busy" data-test="review-next" @click="requestNext">Next</AspButton>
       </ModalActions>
       <!-- Not loaded, or cancelled. In a review a draft that is gone or no
            longer a draft is passed over, never a dead end. -->
-      <ModalActions v-else>
+      <ModalActions v-else :refusal="error" refusal-test="invoice-error">
         <AspButton variant="secondary" :disabled="busy" data-test="editor-close" @click="onOpenChange(false)">Close</AspButton>
         <AspButton v-if="reviewing" :disabled="busy" data-test="review-next" @click="requestNext">Next</AspButton>
       </ModalActions>
@@ -269,6 +289,10 @@
     milliFromDecimal,
     updateDraft,
   } from './api.js';
+  import { focusAfterRefusal } from './refusalFocus.js';
+
+  // A refusal the editor makes itself, carrying where it belongs.
+  const refusalAt = (at) => Object.assign(new Error(at.text), { refusal: at });
 
   let lineKey = 0;
 
@@ -312,6 +336,10 @@
         // True while a review loads its next draft over the one just decided.
         switching: false,
         error: '',
+        // Refusals about one field, said there (system_3 #12298): the VAT
+        // rate and the Storno reason, and per line { text, part, value }.
+        fieldErrors: { vat: '', cancelReason: '' },
+        lineErrors: {},
         confirmingIssue: false,
         cancelling: false,
         cancelReason: '',
@@ -449,6 +477,27 @@
       },
     },
     watch: {
+      // A line goes when what it speaks about changes (system_3 #12298
+      // ruling 4): a line's when its refused field does or it is removed,
+      // the footer's at any change.
+      form: {
+        deep: true,
+        handler(form) {
+          this.error = '';
+          const lines = new Map(form.lines.map((l) => [l.key, l]));
+          for (const [key, e] of Object.entries(this.lineErrors)) {
+            const line = lines.get(Number(key)) || lines.get(key);
+            if (!line || line[e.part] !== e.value) delete this.lineErrors[key];
+          }
+        },
+      },
+      'form.vat_percent'() {
+        this.fieldErrors.vat = '';
+      },
+      cancelReason() {
+        this.fieldErrors.cancelReason = '';
+        this.error = '';
+      },
       // On a phone the confirmation sits below the fold while the button that
       // asked for it is in the footer.
       confirmingIssue(on) {
@@ -497,6 +546,8 @@
         this.switching = keep;
         this.loadError = false;
         this.error = '';
+        this.fieldErrors = { vat: '', cancelReason: '' };
+        this.lineErrors = {};
         this.confirmingIssue = false;
         this.cancelling = false;
         this.cancelReason = '';
@@ -658,7 +709,12 @@
           const q = milliFromDecimal(line.quantity);
           const p = centsFromEuros(line.price);
           if (q === null || p === null) {
-            throw new Error(`Line ${i + 1}: enter the quantity and the price as numbers, for example 2.5 and 19.99.`);
+            throw refusalAt({
+              line: line.key,
+              part: q === null ? 'quantity' : 'price',
+              value: q === null ? line.quantity : line.price,
+              text: `Line ${i + 1}: enter the quantity and the price as numbers, for example 2.5 and 19.99.`,
+            });
           }
           lines.push({ description: line.description, quantity_milli: q, unit_price_cents: p });
         }
@@ -670,12 +726,15 @@
         };
         if (!this.kleinunternehmer) {
           const bp = centsFromEuros(this.form.vat_percent);
-          if (bp === null) throw new Error('Enter the VAT rate as a number, for example 19.');
+          if (bp === null) throw refusalAt({ field: 'vat', text: 'Enter the VAT rate as a number, for example 19.' });
           patch.vat_rate_bp = bp;
         }
         return patch;
       },
-      async run(action) {
+      // `pressed` is the ref of the button that ran it, where focus goes
+      // back after a refusal that names no field (system_3 #12298 ruling 3).
+      // In a review focus stays with the dialog instead; see holdFocus.
+      async run(action, pressed) {
         this.busy = true;
         this.error = '';
         // The pressed button is about to be disabled; see holdFocus.
@@ -684,16 +743,36 @@
           await action();
           this.$emit('changed');
         } catch (err) {
-          this.error = err && err.response ? errorOf(err).message : (err && err.toString().replace(/^Error: /, '')) || '';
+          this.refuse(err, pressed);
         } finally {
           this.busy = false;
         }
+      },
+      refuse(err, pressed) {
+        const at = err && err.refusal;
+        if (at && at.line !== undefined) {
+          this.lineErrors = { ...this.lineErrors, [at.line]: { text: at.text, part: at.part, value: at.value } };
+          focusAfterRefusal(this, `line-${at.line}-${at.part}`);
+          return;
+        }
+        if (at && at.field) {
+          this.fieldErrors[at.field] = at.text;
+          focusAfterRefusal(this, at.field === 'vat' ? 'vat' : 'cancelReasonInput');
+          return;
+        }
+        this.error = err && err.response ? errorOf(err).message : (err && err.toString().replace(/^Error: /, '')) || '';
+        if (!this.reviewing && pressed) focusAfterRefusal(this, pressed);
+      },
+      // Whether a line's field carries its line's refusal: marks the field.
+      lineRefused(line, part) {
+        const e = this.lineErrors[line.key];
+        return !!e && e.part === part;
       },
       save() {
         return this.run(async () => {
           this.setDetail(await updateDraft(this.invoice.id, this.buildPatch()));
           this.close(false);
-        });
+        }, 'saveButton');
       },
       issue() {
         return this.run(async () => {
@@ -701,13 +780,13 @@
           this.setDetail(await updateDraft(this.invoice.id, this.buildPatch()));
           this.setDetail(await issueInvoice(this.invoice.id));
           this.confirmingIssue = false;
-        });
+        }, 'issueButton');
       },
       remove() {
         return this.run(async () => {
           await deleteDraft(this.invoice.id);
           this.close(false);
-        });
+        }, 'deleteButton');
       },
       // A button that is disabled while its action runs loses focus to the
       // page (the browser's focus fixup), and the dialog then no longer hears
@@ -748,7 +827,7 @@
       },
       cancel() {
         if (!this.cancelReason.trim()) {
-          this.error = 'Give a reason for the cancellation.';
+          this.refuse(refusalAt({ field: 'cancelReason', text: 'Give a reason for the cancellation.' }));
           return;
         }
         return this.run(async () => {
@@ -756,7 +835,7 @@
           this.cancelling = false;
           // The reason is sent; the step is closed.
           this.takeUnsentBaseline();
-        });
+        }, 'cancelConfirmButton');
       },
       close(value) {
         if (value === false || value === undefined) this.$emit('update:open', false);
@@ -770,6 +849,21 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
+  }
+
+  .review-footer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    width: 100%;
+  }
+
+  .review-footer__refusal {
+    overflow-wrap: anywhere;
+  }
+
+  .line__error {
+    grid-column: 1 / -1;
   }
 
   .review-actions {

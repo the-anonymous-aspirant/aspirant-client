@@ -290,14 +290,24 @@
          §3.166; A1's guard, unsentGuard.js). -->
     <AspModal :open="presetDialogOpen" size="sm" title="Save as preset" @update:open="onPresetOpenChange">
       <div :inert="unsentAsking || undefined">
-        <AspInput v-model="presetName" label="Name" maxlength="60" data-test="book-preset-name" @keydown.enter.prevent="savePreset" />
-        <p v-if="presetError" class="error" role="alert" data-test="book-preset-error">{{ presetError }}</p>
+        <!-- A refusal of the name is said at the field; any other above
+             the buttons (system_3 #12298 rulings 1 and 2). -->
+        <AspInput
+          ref="presetNameInput"
+          v-model="presetName"
+          label="Name"
+          maxlength="60"
+          :error="presetNameError"
+          data-test="book-preset-name"
+          @keydown.enter.prevent="savePreset"
+        />
       </div>
       <template #footer>
         <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
         <template v-else>
+          <p v-if="presetError" class="error preset-footer__refusal" role="alert" data-test="book-preset-error">{{ presetError }}</p>
           <AspButton variant="secondary" type="button" :disabled="presetSaving" data-test="book-preset-cancel" @click="onPresetOpenChange(false)">Cancel</AspButton>
-          <AspButton variant="primary" type="button" :loading="presetSaving" :disabled="!presetName.trim()" data-test="book-preset-confirm" @click="savePreset">Save</AspButton>
+          <AspButton ref="presetSaveButton" variant="primary" type="button" :loading="presetSaving" :disabled="!presetName.trim()" data-test="book-preset-confirm" @click="savePreset">Save</AspButton>
         </template>
       </template>
     </AspModal>
@@ -344,6 +354,7 @@
     putBookSelection,
     updateBookPreset,
   } from './api.js';
+  import { focusAfterRefusal } from './refusalFocus.js';
   import { bookInvoice, expenseParts, newestFirst, paymentParts, receiptButtonLabel, rowName } from './ledgerRows.js';
   import { fillEmptyMonths, groupByMonth, landedRows, monthKey, monthLabel, openGroupKeys } from './listGroups.js';
   import { BOOK_PDF_BUTTON, NOT_COUNTED_ROW, bookPdfCaption, bookPdfDoc, bookPdfFileName } from './bookPdf.js';
@@ -473,6 +484,7 @@
         presetSaving: false,
         presetName: '',
         presetError: '',
+        presetNameError: '',
         // Every column but the description has a width and the layout is
         // fixed, so the columns line up from one month's table to the next
         // (§3.145 Decision 6). "Out" is wider: it carries the Receipt button.
@@ -719,6 +731,11 @@
       },
     },
     watch: {
+      // Editing the name clears what was said about it (system_3 #12298).
+      presetName() {
+        this.presetNameError = '';
+        this.presetError = '';
+      },
       // After a save from the Book's own dialogs, the month the row is in
       // now opens and the row is brought into view (§3.145 Decision 2).
       // Compared against the snapshot `changed()` took, so a change of what
@@ -920,6 +937,7 @@
       openSavePreset() {
         this.presetName = '';
         this.presetError = '';
+        this.presetNameError = '';
         this.presetDialogOpen = true;
         this.takeUnsentBaseline();
       },
@@ -943,13 +961,21 @@
         this.saving = true;
         this.presetSaving = true;
         this.presetError = '';
+        this.presetNameError = '';
         try {
           const created = await createBookPreset({ name, ...counting });
           const book = await putBookSelection({ ...counting, preset: created.preset.id });
           this.$emit('book-changed', { selection: book.selection, presets: book.presets });
           this.presetDialogOpen = false;
         } catch (err) {
-          this.presetError = errorOf(err).message;
+          const { code, message } = errorOf(err);
+          if (code === 'duplicate_preset' || (code === 'invalid_field' && /^name\b/.test(message))) {
+            this.presetNameError = message;
+            focusAfterRefusal(this, 'presetNameInput');
+          } else {
+            this.presetError = message;
+            focusAfterRefusal(this, 'presetSaveButton');
+          }
         } finally {
           this.saving = false;
           this.presetSaving = false;
@@ -1026,6 +1052,13 @@
   .error {
     color: var(--feedback-error);
     margin: 0 0 var(--space-sm);
+  }
+
+  /* The footer wraps: the line takes its own row above the buttons. */
+  .preset-footer__refusal {
+    flex-basis: 100%;
+    margin: 0;
+    overflow-wrap: anywhere;
   }
 
   /* The Export group, with the same rules as InvoicesPanel's: a heading,

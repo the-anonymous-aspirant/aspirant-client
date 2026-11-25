@@ -3,8 +3,8 @@
        included (system_3 #11669, §3.166). -->
   <AspModal :open="open" title="Issuer profile" size="md" @update:open="onOpenChange">
     <form class="profile-form" data-test="profile-form" :inert="unsentAsking || undefined" @submit.prevent="save">
-      <AspInput v-model="form.full_name" label="Full name" required />
-      <AspTextarea v-model="form.address" label="Address" hint="One line per address line." :rows="3" required />
+      <AspInput ref="full_name" v-model="form.full_name" label="Full name" required :error="fieldErrors.full_name" data-test="profile-full-name" />
+      <AspTextarea ref="address" v-model="form.address" label="Address" hint="One line per address line." :rows="3" required :error="fieldErrors.address" data-test="profile-address" />
       <AspInput v-model="form.steuernummer" label="Steuernummer (Tax number)" :label-hint="hints.steuernummer" hint="Invoices cannot be issued while this is empty." />
       <AspInput v-model="form.email" type="email" label="Email" />
       <!-- Optional; printed under the email on new invoices only when set
@@ -118,13 +118,14 @@
         </p>
         <p v-if="logoError" class="profile-form__error" role="alert" data-test="profile-logo-error">{{ logoError }}</p>
       </div>
-      <p v-if="error" class="profile-form__error" role="alert" data-test="profile-error">{{ error }}</p>
     </form>
     <template #footer>
       <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
-      <ModalActions v-else>
+      <!-- A refusal that names no field is said above the buttons
+           (system_3 #12298 ruling 2). -->
+      <ModalActions v-else :refusal="footerLine" refusal-test="profile-error">
         <AspButton variant="secondary" :disabled="saving" data-test="profile-cancel" @click="onOpenChange(false)">Cancel</AspButton>
-        <AspButton :loading="saving" data-test="profile-save" @click="save">Save</AspButton>
+        <AspButton ref="saveButton" :loading="saving" data-test="profile-save" @click="save">Save</AspButton>
       </ModalActions>
     </template>
   </AspModal>
@@ -137,6 +138,14 @@
   import { unsentGuard } from './unsentGuard.js';
   import { FIELD_HINTS } from './fieldHints.js';
   import { FIELD_REFUSALS, deleteLogo, errorOf, getLogoBlob, getProfile, saveProfile, uploadLogo } from './api.js';
+  import { focusAfterRefusal } from './refusalFocus.js';
+
+  const PARTIAL_SAVE = 'The logo was saved; the profile was not.';
+  // The two fields every invoice prints, checked before anything is sent.
+  const REQUIRED = [
+    { field: 'full_name', text: 'Enter your full name. It is printed on every invoice.' },
+    { field: 'address', text: 'Enter your address. It is printed on every invoice.' },
+  ];
 
   // Edits the issuer header printed on every invoice (spec §4.1). The admin
   // seeds it and the owner edits it; issued invoices keep the snapshot taken
@@ -144,7 +153,7 @@
   // aspirant-server answers a refused phone, link or prefix with its own code
   // (system_3 #9967, #10002, #12272); FIELD_REFUSALS maps each to its field
   // and words.
-  const noErrors = () => ({ phone: '', instagram_url: '', telegram_url: '', invoice_number_prefix: '' });
+  const noErrors = () => ({ full_name: '', address: '', phone: '', instagram_url: '', telegram_url: '', invoice_number_prefix: '' });
 
   export default {
     name: 'ProfileEditor',
@@ -162,6 +171,10 @@
         form: this.copy(this.profile),
         saving: false,
         error: '',
+        // "The logo was saved; the profile was not.": the only word that half
+        // of the Save went through, so it stays until the next Save, where
+        // `error` goes with the next change (system_3 #12298 review point 3).
+        partialSave: '',
         // The server's refusal of the phone or a link, shown on that field.
         fieldErrors: noErrors(),
         // logoSet is what the server holds; logoStaged is the unsaved change,
@@ -185,13 +198,32 @@
         const n = this.draftCount;
         return `${n} ${n === 1 ? 'draft' : 'drafts'} will be worked out again with this setting.`;
       },
+      // With a reason after it, the partial-save line leads into it, as it
+      // did before it moved (system_3 #12298).
+      footerLine() {
+        if (this.partialSave && this.error) return `${this.partialSave.replace(/\.$/, '')}: ${this.error}`;
+        return this.partialSave || this.error;
+      },
       logoShown() {
         if (this.logoStaged) return this.logoStaged.action === 'upload';
         return this.logoSet;
       },
     },
     watch: {
-      // Editing a refused field clears its refusal.
+      // Editing a refused field clears its refusal; any change clears the
+      // footer's line (system_3 #12298 ruling 4).
+      'form.full_name'() {
+        this.fieldErrors.full_name = '';
+      },
+      'form.address'() {
+        this.fieldErrors.address = '';
+      },
+      form: {
+        deep: true,
+        handler() {
+          this.error = '';
+        },
+      },
       'form.phone'() {
         this.fieldErrors.phone = '';
       },
@@ -205,6 +237,7 @@
         if (isOpen) {
           this.form = this.copy(this.profile);
           this.error = '';
+          this.partialSave = '';
           this.fieldErrors = noErrors();
           this.logoSet = this.hasLogo;
           this.logoStaged = null;
@@ -334,9 +367,18 @@
       // profile then fails, the error says so; a partial save never reads as
       // a full one.
       async save() {
-        this.saving = true;
         this.error = '';
+        this.partialSave = '';
         this.fieldErrors = noErrors();
+        // What every invoice prints is checked here first, at its field
+        // (system_3 #12298 ruling 1; the lines are #12300's).
+        const missing = REQUIRED.filter((f) => !String(this.form[f.field] || '').trim());
+        if (missing.length) {
+          for (const f of missing) this.fieldErrors[f.field] = f.text;
+          focusAfterRefusal(this, missing[0].field);
+          return;
+        }
+        this.saving = true;
         this.logoError = '';
         const logoChanged = !!this.logoStaged;
         try {
@@ -351,11 +393,13 @@
           if (refusal) {
             // On the field, in plain words; the rule stays the server's.
             this.fieldErrors[refusal.field] = refusal.text;
-            if (logoChanged) this.error = 'The logo was saved; the profile was not.';
-            this.$nextTick(() => this.$refs[refusal.field] && this.$refs[refusal.field].focus());
+            if (logoChanged) this.partialSave = PARTIAL_SAVE;
+            focusAfterRefusal(this, refusal.field);
             return;
           }
-          this.error = logoChanged ? `The logo was saved; the profile was not: ${message}` : message;
+          if (logoChanged) this.partialSave = PARTIAL_SAVE;
+          this.error = message;
+          focusAfterRefusal(this, 'saveButton');
         } finally {
           this.saving = false;
         }
