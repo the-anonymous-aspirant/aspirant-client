@@ -43,7 +43,7 @@
         <div class="manual-form__pair manual-form__pair--top">
           <label class="date-field">
             <span>Date received</span>
-            <input v-model="form.paid_on" type="date" :max="today" data-test="manual-date" />
+            <input v-model="form.paid_on" type="date" :min="earliestDay" :max="today" data-test="manual-date" />
           </label>
           <AspInput v-model="form.amount" label="Amount (€)" inputmode="decimal" placeholder="350,00" data-test="manual-amount" />
         </div>
@@ -177,6 +177,7 @@
   import { FIELD_HINTS } from './fieldHints.js';
   import { matchPayer, normalizeName, tidyName } from './payerMatch.js';
   import { historyLines } from './auditHistory.js';
+  import { EARLIEST_DAY, berlinToday, pastDateLine } from './dateChecks.js';
   import {
     CATEGORY_LABELS,
     METHOD_LABELS,
@@ -295,9 +296,12 @@
       clientOptions() {
         return [{ value: 0, label: 'No client' }, ...this.clients.map((c) => ({ value: c.id, label: c.name }))];
       },
+      earliestDay() {
+        return EARLIEST_DAY;
+      },
+      // Today in Berlin, the day the server checks against (system_3 #12312).
       today() {
-        const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return berlinToday();
       },
       // Narrowed as ze types by Decision 4's normalised "contains" (§3.142
       // Decision 2), not a plain substring match: accents, case and the
@@ -409,6 +413,9 @@
       check() {
         if (this.editing && this.imported) return '';
         if (!this.form.paid_on) return 'Enter the date the money was received.';
+        // A typed date ignores min and max, so Save checks it (#12312).
+        const dateLine = pastDateLine(this.form.paid_on, 'Enter the day the money was received.', this.today);
+        if (dateLine) return dateLine;
         const cents = centsFromEuros(this.form.amount);
         if (!cents) return 'Enter the amount received, for example 350,00.';
         if (this.payerMatch.state === 'close' && !this.resolvedAsNew && (!this.editing || this.form.sender_name.trim() !== this.payment.sender_name)) {

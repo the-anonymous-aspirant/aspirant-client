@@ -2,6 +2,8 @@
 // system_3 #10622): Clients by first letter, Invoices by month. One module, so
 // every list groups and orders the same way.
 
+import { monthLabel } from './monthAxis.js';
+
 // German order, case- and accent-insensitive: "Ärztin" sorts with A, and
 // "bauer" with "Bach". The server's `name asc` is byte order, which puts Ä
 // after Z and lowercase after capitals, so the client sorts for itself.
@@ -47,12 +49,10 @@ export function monthKey(date) {
   return /^\d{4}-\d{2}/.test(s) ? s.slice(0, 7) : '';
 }
 
-// "2026-11" -> "November 2026", in the browser's month names like every other
-// date on the page.
-export function monthLabel(key) {
-  const [y, m] = key.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-}
+// "2026-11" -> "November 2026"; a year under 1000 is printed as stored,
+// "November 0026", never as 19xx (system_3 #12312 ruling 5). One function,
+// in monthAxis.js, beside the charts' short label.
+export { monthLabel };
 
 // A payment the server will never invoice: an N26 row whose payer is PayPal is
 // the transfer of PayPal money already listed payment by payment
@@ -137,12 +137,20 @@ export function groupByMonth(rows, dateOf) {
     .map((key) => ({ key, label: key ? monthLabel(key) : 'No date', rows: months.get(key) }));
 }
 
+// More empty months in a row than this are one gap line (#12312 ruling 6).
+export const GAP_AFTER_MONTHS = 12;
+
 // The month groups from `groupByMonth` (newest first), with every month
 // between the oldest one and `throughKey` ("YYYY-MM", normally this month)
 // that has no rows added as `{ key, label, rows: [], empty: true }`. A month
 // with no entries is a real zero, and a missing one reads as no data at all
 // (D2; UX walk AM6, system_3 #11023). Nothing is added before the oldest
 // month with rows, and the undated group ('' key) stays last.
+//
+// A run of more than GAP_AFTER_MONTHS empty months is one group instead,
+// `{ key: 'gap:<from>', gap: { from, to, months }, label, rows: [], empty:
+// true }`, labelled "April 2005 to May 2026": one far-back date adds one
+// line, not hundreds of month heads (system_3 #12312 ruling 6).
 export function fillEmptyMonths(groups, throughKey) {
   const dated = groups.filter((g) => g.key);
   if (!dated.length) return groups;
@@ -150,18 +158,36 @@ export function fillEmptyMonths(groups, throughKey) {
   const oldest = dated[dated.length - 1].key;
   const newest = throughKey && throughKey > dated[0].key ? throughKey : dated[0].key;
   const out = [];
-  let [y, m] = newest.split('-').map(Number);
-  for (let guard = 0; guard < 1200; guard++) {
-    const key = `${y}-${String(m).padStart(2, '0')}`;
-    out.push(have.get(key) || { key, label: monthLabel(key), rows: [], empty: true });
-    if (key <= oldest) break;
-    m -= 1;
-    if (m < 1) {
-      m = 12;
-      y -= 1;
+  let run = [];
+  const endRun = () => {
+    if (run.length > GAP_AFTER_MONTHS) {
+      const to = run[0];
+      const from = run[run.length - 1];
+      out.push({ key: `gap:${from}`, gap: { from, to, months: run.length }, label: `${monthLabel(from)} to ${monthLabel(to)}`, rows: [], empty: true });
+    } else {
+      for (const key of run) out.push({ key, label: monthLabel(key), rows: [], empty: true });
     }
+    run = [];
+  };
+  for (let key = newest; ; key = previousMonthKey(key)) {
+    if (have.has(key)) {
+      endRun();
+      out.push(have.get(key));
+    } else {
+      run.push(key);
+    }
+    if (key <= oldest) break;
   }
+  endRun();
   return [...out, ...groups.filter((g) => !g.key)];
+}
+
+// "2026-01" -> "2025-12", the year kept at four digits as stored.
+function previousMonthKey(key) {
+  const y = Number(key.slice(0, 4));
+  const m = Number(key.slice(5, 7));
+  const [py, pm] = m === 1 ? [y - 1, 12] : [y, m - 1];
+  return `${String(py).padStart(4, '0')}-${String(pm).padStart(2, '0')}`;
 }
 
 // Which groups are open now, as a Set of keys (§3.145 Decision 3, §3.17):
@@ -214,8 +240,7 @@ export function monthSpanLabel(keys) {
   const last = sorted[sorted.length - 1];
   if (first === last) return monthLabel(first);
   if (first.slice(0, 4) === last.slice(0, 4)) {
-    const [y, m] = first.split('-').map(Number);
-    const firstName = new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long' });
+    const firstName = new Date(2000, Number(first.slice(5, 7)) - 1, 1).toLocaleDateString('en-GB', { month: 'long' });
     return `${firstName}–${monthLabel(last)}`;
   }
   return `${monthLabel(first)}–${monthLabel(last)}`;

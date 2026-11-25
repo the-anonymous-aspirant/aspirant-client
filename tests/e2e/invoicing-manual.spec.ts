@@ -85,7 +85,41 @@ async function open(page: Page, fake: Fake): Promise<void> {
   await expect(page.locator('[data-test="payments-panel"]')).toBeVisible();
 }
 
+// Tomorrow in Berlin, "YYYY-MM-DD": the first day the fields refuse
+// (system_3 #12312).
+const berlinTomorrow = () =>
+  new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + 86400000));
+
 test.describe('#8409 Invoices app — a payment entered by hand', () => {
+  // system_3 #12312 ruling 1: a date that cannot be right is refused at
+  // Save, before anything is sent. A typed date ignores min and max, so the
+  // value is checked; fill() sets it as typing does.
+  test('"Date received" refuses the year 0026 and tomorrow with their lines, and sends nothing', async ({ page }) => {
+    const fake = newFake({ clients: [] });
+    await open(page, fake);
+    await openWaysIn(page);
+    await page.locator('[data-test="manual-new"]').click();
+    const date = page.locator('[data-test="manual-date"]');
+    await expect(date).toHaveAttribute('min', '2000-01-01');
+    await page.locator('[data-test="manual-amount"]').fill('350,00');
+    for (const [value, line] of [
+      ['0026-11-03', 'Check the year. The date must be 2000 or later.'],
+      ['1999-12-31', 'Check the year. The date must be 2000 or later.'],
+      [berlinTomorrow(), 'This date is in the future. Enter the day the money was received.'],
+    ]) {
+      await date.fill(value);
+      await expect(date).toHaveValue(value);
+      await page.locator('[data-test="manual-save"]').click();
+      await expect(page.locator('[data-test="manual-error"]'), value).toHaveText(line);
+    }
+    expect(fake.requests.some((r) => r.method === 'POST')).toBe(false);
+    // 2000-01-01 itself is a day the server takes.
+    await date.fill('2000-01-01');
+    await page.locator('[data-test="manual-save"]').click();
+    await expect(page.locator('[data-test="manual-form"]')).toHaveCount(0);
+    expect(JSON.parse(fake.requests.find((r) => r.method === 'POST')!.body).paid_on).toBe('2000-01-01');
+  });
+
   test('with no payments the ways in are equal and the toolbar is hidden', async ({ page }) => {
     await open(page, newFake());
     for (const id of ['manual-new', 'payments-import', 'n26-import']) {

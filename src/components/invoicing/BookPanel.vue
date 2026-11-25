@@ -110,7 +110,11 @@
            A month with no entries is its head alone, saying so, with no fold
            to open (#11023). -->
       <template v-for="month in months" :key="month.key">
-      <div v-if="month.empty" class="month month--empty" data-test="book-month-empty" :data-group="month.key">
+      <!-- More than twelve empty months in a row are one muted line
+           (system_3 #12312 ruling 6): a slipped year adds one line, not
+           hundreds of month heads. -->
+      <p v-if="month.gap" class="month month--gap muted" data-test="book-month-gap" :data-group="month.key">{{ month.label }} · no entries</p>
+      <div v-else-if="month.empty" class="month month--empty" data-test="book-month-empty" :data-group="month.key">
         <div class="month__head month__head--empty">
           <h3 class="month__label">{{ month.label }}</h3>
           <span class="muted">No entries</span>
@@ -609,7 +613,9 @@
       // chosen month the Book has stopped showing (what counts changed) stays
       // in the list, as the Invoices tab keeps its chosen month.
       exportMonthOptions() {
-        const shown = this.months.map((m) => ({ key: m.key, label: m.label, empty: !!m.empty }));
+        // A gap line's months are left out of the list (system_3 #12312
+        // ruling 6): nothing was paid in them.
+        const shown = this.months.filter((m) => !m.gap).map((m) => ({ key: m.key, label: m.label, empty: !!m.empty }));
         if (this.exportMonth && !shown.some((m) => m.key === this.exportMonth)) {
           shown.push({ key: this.exportMonth, label: monthLabel(this.exportMonth), empty: true });
           shown.sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : 0));
@@ -1118,6 +1124,14 @@
      caret, so the column of month names stays straight. */
   .month__head--empty {
     display: flex;
+    padding-inline-start: calc(1em + var(--space-xs));
+  }
+
+  /* A run of empty months (#12312): one line, its text where a month's name
+     starts. */
+  .month--gap {
+    margin-top: 0;
+    padding-block: var(--space-2xs);
     padding-inline-start: calc(1em + var(--space-xs));
   }
 

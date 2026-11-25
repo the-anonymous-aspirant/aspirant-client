@@ -1315,3 +1315,47 @@ test.describe('#11748 Transactions\' checkbox leads the design system\'s card', 
     await expect(first.locator('[data-test="payment-select"]')).toBeVisible();
   });
 });
+
+// system_3 #12312 rulings 4 and 6: one expense dated 2005-03-14 (a slip for
+// 2025, which the server accepts) used to add 254 "No entries" heads, as many
+// "Paid in" options, and a chart from March 2005 that left this year out.
+test.describe('#12312 one far-back date in the Book', () => {
+  const DAY = new Date('2026-11-10T12:00:00Z');
+  const farBack = () =>
+    newFake({
+      payments: [incomeRow({ id: 21, note: 'November work', paid_on: '2026-11-03T00:00:00Z' })],
+      expenses: [expenseRow(101, { paid_on: '2005-03-14T00:00:00Z' })],
+    });
+
+  test('the run of empty months is one line, and "Paid in" leaves it out', async ({ page }) => {
+    await page.clock.setFixedTime(DAY);
+    await open(page, farBack());
+    const shown = await page.locator('[data-test="book-month"], [data-test="book-month-empty"], [data-test="book-month-gap"]').evaluateAll((els) =>
+      els.map((el) => `${el.getAttribute('data-test')}:${el.getAttribute('data-group')}`),
+    );
+    expect(shown).toEqual(['book-month:2026-11', 'book-month-gap:gap:2005-04', 'book-month:2005-03']);
+    await expect(page.locator('[data-test="book-month-gap"]')).toHaveText('April 2005 to October 2026 · no entries');
+
+    await page.getByRole('combobox', { name: 'Paid in' }).click();
+    const options = (await page.getByRole('option').allTextContents()).map((t) => t.trim());
+    expect(options).toEqual(['All months', 'November 2026', 'March 2005']);
+  });
+
+  test('the chart ends this month and says which entries it does not draw', async ({ page }) => {
+    await page.clock.setFixedTime(DAY);
+    await open(page, farBack());
+    const labels = ((await page.locator('[data-test="book-chart"]').getAttribute('data-labels')) || '').split(',');
+    expect(labels).toHaveLength(240);
+    expect(labels[labels.length - 1]).toBe('Nov 2026');
+    expect(labels[0]).toBe('Dec 2006');
+    await expect(page.locator('[data-test="book-chart-cut"]')).toHaveText('Entries before December 2006 are not drawn.');
+  });
+
+  test('a book of this year has no such line', async ({ page }) => {
+    await page.clock.setFixedTime(DAY);
+    await open(page, newFake({ payments: [incomeRow({ id: 21, paid_on: '2026-11-03T00:00:00Z' })], expenses: [expenseRow(101)] }));
+    await expect(page.locator('[data-test="book-chart"]')).toBeVisible();
+    await expect(page.locator('[data-test="book-chart-cut"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="book-month-gap"]')).toHaveCount(0);
+  });
+});

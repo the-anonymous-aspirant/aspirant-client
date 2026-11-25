@@ -24,7 +24,7 @@
         <div class="manual-form__pair manual-form__pair--top">
           <label class="date-field">
             <span>Date paid</span>
-            <input v-model="form.paid_on" type="date" :max="today" data-test="expense-date" />
+            <input v-model="form.paid_on" type="date" :min="earliestDay" :max="today" data-test="expense-date" />
           </label>
           <AspInput v-model="form.amount" label="Amount (€)" inputmode="decimal" placeholder="45,99" data-test="expense-amount" />
         </div>
@@ -147,6 +147,7 @@
   import UnsentAsk from './UnsentAsk.vue';
   import { unsentGuard } from './unsentGuard.js';
   import { historyLines } from './auditHistory.js';
+  import { EARLIEST_DAY, berlinToday, pastDateLine } from './dateChecks.js';
   import { categoryState, findCategory, namesWithOwn } from './expenseCategories.js';
   import {
     SOURCE_LABELS,
@@ -307,9 +308,12 @@
       sendsNewCategory() {
         return !!this.added && this.form.category === this.added;
       },
+      earliestDay() {
+        return EARLIEST_DAY;
+      },
+      // Today in Berlin, the day the server checks against (system_3 #12312).
       today() {
-        const d = new Date();
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return berlinToday();
       },
     },
     watch: {
@@ -402,6 +406,9 @@
       check() {
         if (this.imported) return '';
         if (!this.form.paid_on) return 'Enter the date the expense was paid.';
+        // A typed date ignores min and max, so Save checks it (#12312).
+        const dateLine = pastDateLine(this.form.paid_on, 'Enter the day the expense was paid.', this.today);
+        if (dateLine) return dateLine;
         if (!centsFromEuros(this.form.amount)) return 'Enter the amount paid, for example 45,99.';
         return '';
       },

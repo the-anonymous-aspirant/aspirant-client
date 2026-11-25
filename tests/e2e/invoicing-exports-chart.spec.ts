@@ -98,6 +98,25 @@ const served = (id: number, client: number, service: string, issue: string, cent
 });
 
 test.describe('#9972 Invoices app: the statistics', () => {
+  // system_3 #12312 ruling 4 (browser check C1-8): one issued invoice whose
+  // service date was typed "0026-03-11" emptied all three charts, each one
+  // point labelled "undefined 26-0". The axis now ends this month, keeps
+  // the real months, and says which entries it does not draw.
+  test('an invoice dated 0026 leaves every real month on the axis, with a line saying what is not drawn', async ({ page }) => {
+    const fake = newFake();
+    fake.issued = [served(1, 1, '0026-03-11', '2026-09-02', 35000), served(2, 2, '2026-07-10', '2026-07-28', 12000)];
+    await open(page, fake);
+    const chart = page.locator('[data-test="invoices-chart"]');
+    await expect(chart).toHaveAttribute('data-labels', /Jul 2026,Aug 2026,Sep 2026$/);
+    const labels = (await chart.getAttribute('data-labels'))!.split(',');
+    expect(labels).toHaveLength(240);
+    expect(labels.join(',')).not.toContain('undefined');
+    await expect(page.locator('[data-test="invoices-chart-cut"]')).toHaveText('Entries before October 2006 are not drawn.');
+    for (const id of ['stat-clients-range', 'stat-income-range', 'stat-invoices-range']) {
+      await expect(page.locator(`[data-test="${id}"]`)).not.toContainText('undefined');
+    }
+  });
+
   test('income and clients follow the service month, invoices the issue month, all on one axis', async ({ page }) => {
     const fake = newFake();
     fake.issued = [

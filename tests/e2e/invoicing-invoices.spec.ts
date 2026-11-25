@@ -186,6 +186,42 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     for (const key of ['issue_date', 'invoice_number', 'number', 'status']) expect(put).not.toHaveProperty(key);
   });
 
+  // system_3 #12312 (ruling 3, the review's point 1): a draft's two service
+  // dates have the floor on every save, Save draft and issue alike, and the
+  // ceiling on none; the server holds the same floor. Nothing is sent.
+  test('a service date before 2000 is refused on Save draft and on issue, and a date after today saves', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await createFromTwo(page);
+    const from = page.locator('[data-test="draft-from"]');
+    const until = page.locator('[data-test="draft-to"]');
+    await expect(from).toHaveAttribute('min', '2000-01-01');
+    await expect(until).toHaveAttribute('min', '2000-01-01');
+    await expect(from).not.toHaveAttribute('max', /./);
+    const sent = () => fake.requests.filter((r) => r.method === 'PUT' || r.path.endsWith('/issue')).length;
+
+    await from.fill('0026-11-03');
+    await page.locator('[data-test="draft-save"]').click();
+    await expect(page.locator('[data-test="invoice-error"]')).toHaveText('Check the year. The date must be 2000 or later.');
+    await page.locator('[data-test="draft-issue"]').click();
+    await page.locator('[data-test="issue-confirm-button"]').click();
+    await expect(page.locator('[data-test="invoice-error"]')).toHaveText('Check the year. The date must be 2000 or later.');
+    await expect(page.locator('[data-test="invoice-editor"][data-status="draft"]')).toBeVisible();
+
+    await from.fill('2026-07-14');
+    await until.fill('0026-12-01');
+    await page.locator('[data-test="draft-save"]').click();
+    await expect(page.locator('[data-test="invoice-error"]')).toHaveText('Check the year. The date must be 2000 or later.');
+    expect(sent(), 'nothing sent while a date is before 2000').toBe(0);
+
+    // Work paid in advance keeps its day: no ceiling on Save draft.
+    await until.fill('');
+    await from.fill('2099-01-04');
+    await page.locator('[data-test="draft-save"]').click();
+    await expect.poll(() => fake.requests.filter((r) => r.method === 'PUT').length).toBe(1);
+    expect(JSON.parse(fake.requests.find((r) => r.method === 'PUT')!.body).service_date_from).toBe('2099-01-04');
+  });
+
   // #9934-B1 (operator c61373): Save draft closes the modal.
   test('saving a draft closes the editor modal', async ({ page }) => {
     const fake = newFake();

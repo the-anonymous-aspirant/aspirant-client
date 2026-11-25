@@ -123,7 +123,34 @@ async function pickCategory(page: Page, dialog: ReturnType<Page['getByRole']>, n
   await page.getByRole('option', { name, exact: true }).click();
 }
 
+// Tomorrow in Berlin, "YYYY-MM-DD": the first day the fields refuse
+// (system_3 #12312).
+const berlinTomorrow = () =>
+  new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + 86400000));
+
 test.describe('#10695 Edit an expense, and name who was paid', () => {
+  // system_3 #12312 ruling 1: as "Date received", with the expense's own
+  // second sentence.
+  test('"Date paid" refuses the year 0026 and tomorrow with their lines, and sends nothing', async ({ page }) => {
+    const fake = newFake();
+    await open(page, fake);
+    await openWaysIn(page);
+    await page.locator('[data-test="expense-new"]').click();
+    const dialog = page.getByRole('dialog', { name: 'Enter expense by hand' });
+    const date = dialog.locator('[data-test="expense-date"]');
+    await expect(date).toHaveAttribute('min', '2000-01-01');
+    await dialog.locator('[data-test="expense-amount"]').fill('19,99');
+    for (const [value, line] of [
+      ['0026-11-03', 'Check the year. The date must be 2000 or later.'],
+      [berlinTomorrow(), 'This date is in the future. Enter the day the expense was paid.'],
+    ]) {
+      await date.fill(value);
+      await dialog.getByRole('button', { name: 'Save expense' }).click();
+      await expect(dialog.locator('[data-test="expense-error"]'), value).toHaveText(line);
+    }
+    expect(writes(fake, 'POST')).toEqual([]);
+  });
+
   test('"Paid to" is offered on create, after the date and amount, and Save sends it as payee', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);

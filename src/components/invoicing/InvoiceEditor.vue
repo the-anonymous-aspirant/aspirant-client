@@ -110,14 +110,14 @@
               <label for="draft-service-from">Service date (from)</label>
               <AspLabelHint label="Service date (from)" :content="hints.serviceFrom" />
             </div>
-            <input id="draft-service-from" v-model="form.service_date_from" type="date" data-test="draft-from" />
+            <input id="draft-service-from" v-model="form.service_date_from" type="date" :min="earliestDay" data-test="draft-from" />
           </div>
           <div class="date-field">
             <div class="label-row">
               <label for="draft-service-until">Service until (optional)</label>
               <AspLabelHint label="Service until (optional)" :content="hints.serviceUntil" />
             </div>
-            <input id="draft-service-until" v-model="form.service_date_to" type="date" data-test="draft-to" />
+            <input id="draft-service-until" v-model="form.service_date_to" type="date" :min="earliestDay" data-test="draft-to" />
           </div>
           <AspInput v-if="!kleinunternehmer" v-model="form.vat_percent" label="VAT rate (%)" :label-hint="hints.vatRate" class="row__vat" data-test="draft-vat" />
         </div>
@@ -249,6 +249,7 @@
   import UnsentAsk from './UnsentAsk.vue';
   import { unsentGuard } from './unsentGuard.js';
   import { FIELD_HINTS } from './fieldHints.js';
+  import { EARLIEST_DAY, floorLine } from './dateChecks.js';
   import {
     KLEINBETRAG_LIMIT_CENTS,
     STATUS_LABELS,
@@ -327,6 +328,10 @@
       if (this.narrowQuery) this.narrowQuery.removeEventListener('change', this.onNarrowChange);
     },
     computed: {
+      // 2000-01-01: the floor of every date field (system_3 #12312).
+      earliestDay() {
+        return EARLIEST_DAY;
+      },
       invoice() {
         return this.detail ? this.detail.invoice : {};
       },
@@ -601,6 +606,12 @@
           : w;
       },
       buildPatch() {
+        // The floor on every save, Save draft and Later too; a typed date
+        // ignores min (system_3 #12312, the review's point 1). A date after
+        // today is checked only on issue, by the server.
+        for (const day of [this.form.service_date_from, this.form.service_date_to]) {
+          if (floorLine(day)) throw new Error(floorLine(day));
+        }
         const lines = [];
         for (const [i, line] of this.form.lines.entries()) {
           const q = milliFromDecimal(line.quantity);

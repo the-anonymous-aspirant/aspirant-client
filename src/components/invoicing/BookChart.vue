@@ -19,6 +19,7 @@
         aria-label="Income and expenses per month in euros"
       />
       <p class="stat__range muted" data-test="book-chart-range">by the day paid; this month so far</p>
+      <p v-if="cutCaption" class="stat__range muted" data-test="book-chart-cut">{{ cutCaption }}</p>
     </template>
   </figure>
 </template>
@@ -26,8 +27,7 @@
 <script>
   import { AspChart } from '@aspirant/design-system';
   import { formatMoney } from './api.js';
-
-  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  import { cutLine, monthAxis, shortMonthLabel } from './monthAxis.js';
   const Y_AXIS_WIDTH = 56;
 
   const moneyTick = (v) => (Math.abs(v) >= 1000 ? `€${(v / 1000).toFixed(1)}k` : `€${Math.round(v)}`);
@@ -77,28 +77,20 @@
       expenseMonths() {
         return this.expenses.map((e) => monthOf(e.paid_on));
       },
+      // The Invoices chart's axis function (system_3 #12312, D5): it ends at
+      // this month in Berlin or the newest month, whichever is later, so
+      // "this month so far" is always on it.
+      axis() {
+        return monthAxis([...this.incomeMonths, ...this.expenseMonths], this.now || new Date());
+      },
       months() {
-        const seen = [...this.incomeMonths, ...this.expenseMonths].filter(Boolean);
-        if (!seen.length) return [];
-        const today = this.now || new Date();
-        const last = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
-        let [y, m] = seen.reduce((a, b) => (a < b ? a : b)).split('-').map(Number);
-        const end = seen.reduce((a, b) => (a > b ? a : b), last);
-        const out = [];
-        for (let guard = 0; guard < 240; guard++) {
-          const key = `${y}-${String(m).padStart(2, '0')}`;
-          out.push(key);
-          if (key >= end) break;
-          m += 1;
-          if (m > 12) {
-            m = 1;
-            y += 1;
-          }
-        }
-        return out;
+        return this.axis.months;
+      },
+      cutCaption() {
+        return cutLine(this.axis);
       },
       labels() {
-        return this.months.map((k) => `${MONTHS[Number(k.slice(5)) - 1]} ${k.slice(0, 4)}`);
+        return this.months.map(shortMonthLabel);
       },
       incomeEuros() {
         return this.months.map(

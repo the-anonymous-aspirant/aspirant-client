@@ -9,6 +9,7 @@
   >
     <h3>Statistics</h3>
     <p v-if="!labels.length" class="muted" data-test="invoices-chart-empty">No issued invoices yet.</p>
+    <p v-if="cutCaption" class="stat__range muted" data-test="invoices-chart-cut">{{ cutCaption }}</p>
     <!-- Three charts on one month axis, so a month lines up across all three
          (operator c61586: "# of clients by date (cumulative). EUR income.
          # invoices"; system_3 #9972). -->
@@ -35,8 +36,7 @@
 <script>
   import { AspChart } from '@aspirant/design-system';
   import { formatMoney, listInvoices } from './api.js';
-
-  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  import { berlinMonthKey, cutLine, monthAxis, shortMonthLabel } from './monthAxis.js';
   // The y-axis labels of all three charts take the same width, so the plot
   // areas start at the same x and one month sits at one x in every chart
   // (design_agent on #10005).
@@ -132,31 +132,24 @@
         });
         return [...first.values()];
       },
-      // Today's month key, the same shape as every other month in `months`.
+      // This month in Berlin, the same shape as every other month in `months`.
       currentKey() {
-        const today = this.now || new Date();
-        return `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
+        return berlinMonthKey(this.now || new Date());
+      },
+      // One axis function for both charts (system_3 #12312, D5): it ends at
+      // this month or the newest month, whichever is later, so a mistyped
+      // year far back cannot take the real months off it.
+      axis() {
+        return monthAxis([...this.issued.map((i) => monthOf(i.issue_date)), ...this.serviceMonths], this.now || new Date());
       },
       months() {
-        const seen = [...this.issued.map((i) => monthOf(i.issue_date)), ...this.serviceMonths].filter(Boolean);
-        if (!seen.length) return [];
-        let [y, m] = seen.reduce((a, b) => (a < b ? a : b)).split('-').map(Number);
-        const end = seen.reduce((a, b) => (a > b ? a : b), this.currentKey);
-        const out = [];
-        for (let guard = 0; guard < 240; guard++) {
-          const key = `${y}-${String(m).padStart(2, '0')}`;
-          out.push(key);
-          if (key >= end) break;
-          m += 1;
-          if (m > 12) {
-            m = 1;
-            y += 1;
-          }
-        }
-        return out;
+        return this.axis.months;
+      },
+      cutCaption() {
+        return cutLine(this.axis);
       },
       labels() {
-        return this.months.map((k) => `${MONTHS[Number(k.slice(5)) - 1]} ${k.slice(0, 4)}`);
+        return this.months.map(shortMonthLabel);
       },
       counts() {
         return this.months.map((k) => this.issued.filter((i) => monthOf(i.issue_date) === k).length);
