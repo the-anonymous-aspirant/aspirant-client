@@ -348,8 +348,8 @@ test.describe('#11567 an expense row\'s category is a select on its row', () => 
     await select(page, 'M-hand-e').click();
     const rowList = await optionTexts(page);
     await page.keyboard.press('Escape');
-    await page.getByRole('checkbox', { name: 'Select M-hand-e' }).check();
-    await page.getByRole('checkbox', { name: 'Select N26-imp-e' }).check();
+    await page.locator('[data-row-key="e21"]').getByRole('checkbox', { name: /^Select / }).check();
+    await page.locator('[data-row-key="e22"]').getByRole('checkbox', { name: /^Select / }).check();
     await page.locator('[data-test="bulk-category"]').click();
     expect(await optionTexts(page)).toEqual(rowList);
   });

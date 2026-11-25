@@ -518,7 +518,10 @@ async function openTransactions(page: Page, fake: Fake): Promise<void> {
   await expect(page.locator('[data-row-key="p1"]')).toBeVisible();
 }
 
-const tick = (page: Page, id: number) => page.getByRole('checkbox', { name: `Select M-${id}`, exact: true }).check();
+// A row's tick, found by its row: a hand entry's tick is named by its date
+// and "who · what", never by its made-up M-… id (#11567, #12257).
+const tickBox = (page: Page, id: number) => txnRow(page, id).getByRole('checkbox', { name: /^Select / });
+const tick = (page: Page, id: number) => tickBox(page, id).check();
 const generateSelected = (page: Page) => page.locator('[data-test="generate-selected"]');
 const createInvoice = (page: Page) => page.locator('[data-test="create-invoice"]');
 const generateHint = (page: Page) => page.locator('[data-test="generate-hint"]');
@@ -562,8 +565,8 @@ test.describe('#11506 Generate invoices for the ticked Transactions rows', () =>
     await tick(page, 6);
     await expect(pairCaption(page)).toHaveText('2 of the 3 selected are not Paid work. Untick them to create or generate invoices.');
     // Unticked, the one Paid work row left is enough and the caption goes.
-    await page.getByRole('checkbox', { name: 'Select M-5', exact: true }).uncheck();
-    await page.getByRole('checkbox', { name: 'Select M-6', exact: true }).uncheck();
+    await tickBox(page, 5).uncheck();
+    await tickBox(page, 6).uncheck();
     await expect(generateSelected(page)).toBeEnabled();
     await expect(pairCaption(page)).toHaveCount(0);
     await expect(generateHint(page)).toHaveCount(0);
@@ -625,7 +628,7 @@ test.describe('#11506 Generate invoices for the ticked Transactions rows', () =>
     await expect(dialog(page)).toBeHidden();
 
     await expect(summary(page)).toHaveText('2 invoices: 1 issued, 1 left as a draft.');
-    await expect(page.getByRole('checkbox', { name: 'Select M-3', exact: true })).not.toBeChecked();
+    await expect(tickBox(page, 3)).not.toBeChecked();
     await expect(generateSelected(page)).toHaveText('Generate invoices');
     // The line is about the last review: the next tick clears it.
     await tick(page, 2);
@@ -659,7 +662,7 @@ test.describe('#11506 Generate invoices for the ticked Transactions rows', () =>
     await generateSelected(page).click();
     await expect(page.locator('[data-test="generate-error"]')).toContainText('The invoices could not be generated');
     await expect(dialog(page)).toBeHidden();
-    await expect(page.getByRole('checkbox', { name: 'Select M-1', exact: true })).toBeChecked();
+    await expect(tickBox(page, 1)).toBeChecked();
     await expect(generateSelected(page)).toBeEnabled();
   });
 });
@@ -705,7 +708,7 @@ test.describe('#11506 Generate invoice on a Transactions row', () => {
     await expect(rowGenerate(page, 2)).toHaveCount(0);
     await expect(txnRow(page, 2).locator('[data-test="row-invoice"]')).toContainText('2026-002');
     // The row ze had ticked for something else is still ticked.
-    await expect(page.getByRole('checkbox', { name: 'Select M-3', exact: true })).toBeChecked();
+    await expect(tickBox(page, 3)).toBeChecked();
   });
 
   test('rejected, the payment is free again and its row offers the button again', async ({ page }) => {
@@ -808,7 +811,7 @@ test.describe('#11371 the phone\'s selection bar', () => {
       expect(Math.abs(b.y + b.height - height)).toBeLessThanOrEqual(1);
       expect(Math.abs(b.width - width)).toBeLessThanOrEqual(1);
       // Unticked, it goes.
-      await page.getByRole('checkbox', { name: 'Select M-3', exact: true }).uncheck();
+      await tickBox(page, 3).uncheck();
       await expect(bar(page)).toHaveCount(0);
     });
 
@@ -862,7 +865,7 @@ test.describe('#11371 the phone\'s selection bar', () => {
       expect(armed.width).toBeGreaterThan((await barBox(page)).width - 40);
       expect((await barBox(page)).height, 'Remove armed').toBeLessThanOrEqual(cap(height));
       // A change of selection disarms it, and Set category is back.
-      await page.getByRole('checkbox', { name: 'Select M-32', exact: true }).uncheck();
+      await tickBox(page, 32).uncheck();
       await expect(remove(page)).toHaveText('Remove (11)');
       await expect(page.locator('[data-test="bulk-category"]')).toHaveCount(1);
 
@@ -905,7 +908,7 @@ test.describe('#11371 the phone\'s selection bar', () => {
     await expect(error).toBeInViewport();
     // It leads the bar: above the controls.
     expect((await error.boundingBox())!.y).toBeLessThan((await remove(page).boundingBox())!.y);
-    await expect(page.getByRole('checkbox', { name: 'Select M-1', exact: true })).toBeChecked();
+    await expect(tickBox(page, 1)).toBeChecked();
     // No second copy of the line outside the bar.
     await expect(page.locator('[data-test="generate-error"]')).toHaveCount(1);
 
