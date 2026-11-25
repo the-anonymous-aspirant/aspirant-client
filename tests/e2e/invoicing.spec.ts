@@ -198,8 +198,8 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     { name: 'no profile saved', saved: false, profile: {}, text: 'No profile yet. Add who issues your invoices', badge: 'Missing: needed to issue', label: 'Edit profile: no profile yet. Missing: needed to issue' },
     { name: 'no Steuernummer', saved: true, profile: { steuernummer: '' }, text: 'Flower Example', badge: 'Missing: Steuernummer, needed to issue', label: 'Edit profile: Flower Example. Missing: Steuernummer, needed to issue' },
     { name: 'no address', saved: true, profile: { address: ' ' }, text: 'Flower Example', badge: 'Missing: address, needed to issue', label: 'Edit profile: Flower Example. Missing: address, needed to issue' },
-    { name: 'an empty name', saved: true, profile: { full_name: '' }, text: 'No name yet', badge: 'Missing: name, needed to issue', label: 'Edit profile: no name. Missing: name, needed to issue' },
-    { name: 'all three', saved: true, profile: { full_name: '', address: '', steuernummer: '' }, text: 'No name yet', badge: 'Missing: name, address and Steuernummer, needed to issue', label: 'Edit profile: no name. Missing: name, address and Steuernummer, needed to issue' },
+    { name: 'an empty name', saved: true, profile: { full_name: '' }, text: 'No name yet', badge: 'Missing: full name, needed to issue', label: 'Edit profile: no name yet. Missing: full name, needed to issue' },
+    { name: 'all three', saved: true, profile: { full_name: '', address: '', steuernummer: '' }, text: 'No name yet', badge: 'Missing: full name, address and Steuernummer, needed to issue', label: 'Edit profile: no name yet. Missing: full name, address and Steuernummer, needed to issue' },
   ]) {
     test(`an incomplete profile keeps the card: ${c.name}`, async ({ page }) => {
       const fake = newFake({ saved: c.saved });

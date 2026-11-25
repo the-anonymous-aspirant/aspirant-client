@@ -214,7 +214,7 @@
         const p = this.profile;
         const blank = (v) => !String(v || '').trim();
         return [
-          blank(p.full_name) && 'name',
+          blank(p.full_name) && 'full name',
           blank(p.address) && 'address',
           blank(p.steuernummer) && 'Steuernummer',
         ].filter(Boolean);
@@ -234,7 +234,7 @@
       },
       // c69874 item 3: "Edit profile: {name}", and the blocker when present.
       issuerLabel() {
-        const who = this.profileSaved ? this.profile.full_name || 'no name' : 'no profile yet';
+        const who = this.profileSaved ? this.profile.full_name || 'no name yet' : 'no profile yet';
         const missing = this.profileComplete ? '' : `. ${this.missingLine}`;
         return `Edit profile: ${who}${missing}`;
       },
