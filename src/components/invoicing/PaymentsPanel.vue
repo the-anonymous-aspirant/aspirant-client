@@ -667,7 +667,7 @@
     </template>
     <!-- Absent at zero (§3.133 Decision 5). -->
     <AspButton v-if="removedCount" variant="ghost" class="removed-show" data-test="removed-show" @click="openRemoved('all')">
-      Show {{ removedCount }} removed row{{ removedCount === 1 ? '' : 's' }}
+      {{ showRemovedLabel(removedCount) }}
     </AspButton>
     </template>
     <p v-if="rowError" class="error" role="alert" data-test="payment-error">{{ rowError }}</p>
@@ -748,6 +748,7 @@
     removePayments,
     createDraft,
   } from './api.js';
+  import { showRemovedLabel } from './removedLabel.js';
   import { invoiceState, receiptButtonLabel, transactionRows } from './ledgerRows.js';
   import { groupByMonth, landedRows, monthKey, monthSpanLabel, openGroupKeys } from './listGroups.js';
   import { countsInBook } from './bookSelection.js';
@@ -1437,6 +1438,7 @@
       formatDay,
       formatMoney,
       payersSavedLine,
+      showRemovedLabel,
       // The Book counts this row (bookSelection.js). Unread, no row is flagged.
       inBook(row) {
         const source = row.payment || row.expense;

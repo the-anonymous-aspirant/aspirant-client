@@ -170,10 +170,29 @@
         <!-- What the draft covers, by amount, payer and day (ruling 5; W2-15):
              the importer's ids say nothing to zir. Each payment is its own line
              and wraps, so nothing scrolls sideways at 360 (§3.122 P3). -->
-        <div class="covers" data-test="draft-covers">
+        <!-- A draft that covers no payment says so, and names the way out
+             that exists (system_3 #12318 ruling 4, review point 4). -->
+        <p v-if="!coveredPayments.length" class="warnings" role="status" data-test="draft-no-payment">{{ noPaymentLine }}</p>
+        <div v-else class="covers" data-test="draft-covers">
           <p class="covers__head" data-test="draft-covers-head">{{ coversHead }}</p>
-          <ul v-if="detail.payments.length > 1" class="covers__list">
-            <li v-for="p in detail.payments" :key="p.id" class="covers__item" data-test="draft-covers-item">{{ paymentLine(p) }}</li>
+          <!-- While it covers more than one, each can be taken off; Save
+               draft sends it, and the lines stay as they are (#12318
+               review point 8). -->
+          <ul v-if="coveredPayments.length > 1" class="covers__list">
+            <li v-for="p in coveredPayments" :key="p.id" class="covers__item" data-test="draft-covers-item">
+              <span>{{ paymentLine(p) }}</span>
+              <AspButton
+                variant="ghost"
+                size="sm"
+                class="covers__take-off"
+                :aria-label="`Take off ${paymentLine(p)}`"
+                :disabled="busy"
+                data-test="draft-take-off"
+                @click="takeOff(p.id)"
+              >
+                Take off
+              </AspButton>
+            </li>
           </ul>
           <p v-if="mixedPaymentCurrencies" class="muted" data-test="draft-covers-currencies">The payments are in different currencies.</p>
         </div>
@@ -258,7 +277,7 @@
         </template>
         <AspButton variant="secondary" :loading="busy && !confirmingIssue" data-test="draft-save" @click="save">Save draft</AspButton>
         <!-- Not drawn for a draft that covers no payment (system_3 #12318). -->
-        <AspButton v-if="!confirmingIssue && detail.payments.length" :disabled="busy" data-test="draft-issue" @click="armIssue">Issue invoice…</AspButton>
+        <AspButton v-if="!confirmingIssue && coveredPayments.length" :disabled="busy" data-test="draft-issue" @click="armIssue">Issue invoice…</AspButton>
         <AspButton v-else-if="confirmingIssue" :loading="busy" data-test="issue-confirm-button" @click="issue">Issue now</AspButton>
       </ModalActions>
       <ModalActions v-else-if="detail && invoice.status === 'issued'">
@@ -302,11 +321,14 @@
     getInvoice,
     invoicePdfUrl,
     listAuditEvents,
+    listRemovedExpenses,
+    listRemovedPayments,
     issueInvoice,
     milliFromDecimal,
     updateDraft,
   } from './api.js';
   import { issueRefusalText, saveRefusalText } from './issueRefusals.js';
+  import { showRemovedLabel } from './removedLabel.js';
 
   let lineKey = 0;
 
@@ -352,6 +374,9 @@
         hints: FIELD_HINTS,
         limitCents: KLEINBETRAG_LIMIT_CENTS,
         loadError: false,
+        // How many rows Transactions' removed view holds, for the empty
+        // draft's line; null until read (system_3 #12318).
+        removedRowCount: null,
         form: { client_id: 0, service_date_from: '', service_date_to: '', vat_percent: '19', lines: [] },
         busy: false,
         // True while a review loads its next draft over the one just decided.
@@ -523,21 +548,39 @@
       },
       // A sum and a comparison only when every covered payment is in the
       // draft's currency (review point 6).
+      // The payments the draft covers once saved: the server's, less those
+      // ze took off (system_3 #12318 review point 8).
+      coveredPayments() {
+        const off = new Set((this.form && this.form.taken_off) || []);
+        return this.detail.payments.filter((p) => !off.has(p.id));
+      },
       mixedPaymentCurrencies() {
-        return this.detail.payments.some((p) => p.currency !== this.draftCurrency);
+        return this.coveredPayments.some((p) => p.currency !== this.draftCurrency);
       },
       paymentsSumCents() {
-        return this.detail.payments.reduce((n, p) => n + (p.gross_cents || 0), 0);
+        return this.coveredPayments.reduce((n, p) => n + (p.gross_cents || 0), 0);
+      },
+      // Ruling 4: what an empty draft can do. "Restore" is named only when a
+      // removed payment would go back on it (the server's
+      // restorable_payment_ids), with the button as Transactions shows it.
+      noPaymentLine() {
+        const first = 'This draft covers no payment, so it cannot be issued.';
+        const back = (this.detail && this.detail.restorable_payment_ids) || [];
+        if (back.length && this.removedRowCount) {
+          const what = back.length === 1 ? 'its payment' : 'its payments';
+          return `${first} Restore ${what} under Transactions, “${showRemovedLabel(this.removedRowCount)}”, or delete the draft.`;
+        }
+        return `${first} Delete the draft.`;
       },
       coversHead() {
-        const ps = this.detail.payments;
+        const ps = this.coveredPayments;
         if (!ps.length) return 'Covers no payment.';
         if (ps.length === 1) return `Covers 1 payment: ${this.paymentLine(ps[0])}`;
         if (this.mixedPaymentCurrencies) return `Covers ${ps.length} payments:`;
         return `Covers ${ps.length} payments, ${formatMoney(this.paymentsSumCents, this.draftCurrency)} in all:`;
       },
       difference() {
-        if (!this.draftTotals || !this.detail.payments.length || this.mixedPaymentCurrencies) return '';
+        if (!this.draftTotals || !this.coveredPayments.length || this.mixedPaymentCurrencies) return '';
         if (this.draftTotals.gross === this.paymentsSumCents) return '';
         return `The total (${formatMoney(this.draftTotals.gross, this.draftCurrency)}) differs from the payments it covers (${formatMoney(this.paymentsSumCents, this.draftCurrency)}).`;
       },
@@ -659,7 +702,10 @@
             quantity: decimalFromMinor(it.quantity_milli, 3),
             price: decimalFromMinor(it.unit_price_cents, 2),
           })),
+          taken_off: [],
         };
+        this.removedRowCount = null;
+        if (inv.status === 'draft' && !detail.payments.length && (detail.restorable_payment_ids || []).length) this.loadRemovedRowCount(inv.id);
         // What is on screen now is what the server holds: after a load, a
         // save, an issue, a cancel, and for each draft of a review.
         this.takeUnsentBaseline();
@@ -732,7 +778,23 @@
           to: String(f.service_date_to || '').trim(),
           vat: this.kleinunternehmer ? '' : String(f.vat_percent || '').trim(),
           lines: f.lines.map((l) => [String(l.description || '').trim(), String(l.quantity || '').trim(), String(l.price || '').trim()]),
+          taken_off: [...(f.taken_off || [])].sort((a, b) => a - b),
         };
+      },
+      // Staged, like every other change in the dialog (§3.128 Decision 4).
+      takeOff(id) {
+        if (this.coveredPayments.length < 2) return;
+        this.form.taken_off = [...this.form.taken_off, id];
+        this.$nextTick(() => this.settleFooter());
+      },
+      // The count Transactions' "Show N removed rows" names: removed
+      // payments and expenses, read as that page reads them. A failed read
+      // leaves the line without the way back.
+      async loadRemovedRowCount(id) {
+        const [p, e] = await Promise.allSettled([listRemovedPayments(), listRemovedExpenses()]);
+        if (!this.detail || this.detail.invoice.id !== id) return;
+        if (p.status !== 'fulfilled' || e.status !== 'fulfilled') return;
+        this.removedRowCount = p.value.filter((r) => r.removed_at).length + e.value.filter((r) => r.removed_at).length;
       },
       // Esc, the scrim, the corner ✕, Close and Back: each asks first when
       // something is unsent (§3.166).
@@ -818,6 +880,7 @@
           service_date_to: this.form.service_date_to || null,
           line_items: lines,
         };
+        if (this.form.taken_off && this.form.taken_off.length) patch.payment_ids = this.coveredPayments.map((p) => p.id);
         if (!this.kleinunternehmer) {
           const bp = centsFromEuros(this.form.vat_percent);
           if (bp === null) throw new Error('Enter the VAT rate as a number, for example 19.');
@@ -1176,6 +1239,16 @@
   .covers__list {
     margin: 0;
     padding-left: var(--space-lg);
+  }
+
+  .covers__take-off {
+    margin-left: var(--space-xs);
+  }
+
+  @media (max-width: 640px) {
+    .covers__item .covers__take-off {
+      min-height: 44px;
+    }
   }
 
   /* A mark at a field (#12274 ruling 1): caution, not error. Nothing has

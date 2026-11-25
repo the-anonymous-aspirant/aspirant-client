@@ -23,6 +23,10 @@ interface Fake {
   issueRefusal?: Json;
   saveRefusal?: Json;
   clients?: Json[];
+  // system_3 #12318: the removed payments Transactions lists, and per draft
+  // the ones a restore would put back on it.
+  removed?: Json[];
+  restorable?: Record<number, number[]>;
 }
 
 const draft = (id: number, paymentIds: number[], over: Json = {}) => ({
@@ -48,6 +52,7 @@ function detailOf(fake: Fake, inv: Json): Json {
     payments,
     warnings: [],
     client_name: inv.client_name,
+    restorable_payment_ids: (fake.restorable && fake.restorable[inv.id]) || [],
   };
 }
 
@@ -61,7 +66,7 @@ async function mock(page: Page, fake: Fake, opts: { kleinunternehmer?: boolean }
     if (method !== 'GET') fake.requests.push({ method, path, body: req.postData() || '' });
     if (path === '/invoicing/profile') return json(route, 200, { saved: true, profile: { full_name: 'Flower Example', address: 'Weg 1', steuernummer: '12/345/67890', email: '', is_kleinunternehmer: opts.kleinunternehmer !== false, invoice_number_prefix: '2026', next_invoice_number: fake.next } });
     if (path === '/invoicing/clients') return json(route, 200, { clients: fake.clients || [{ id: 1, name: 'Dragan Petrovic', address: 'Nordweg 2\n13353 Berlin', email: '', paypal_email: '' }, { id: 2, name: 'Galerie Nord', address: 'Südweg 1', email: '', paypal_email: '' }] });
-    if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: fake.payments });
+    if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: url.searchParams.get('removed') ? fake.removed || [] : fake.payments });
     if (path === '/invoicing/expenses') return json(route, 200, { expenses: [] });
     if (path === '/invoicing/audit-events') return json(route, 200, { events: [] });
     if (path === '/invoicing/book/selection') return json(route, 200, { selection: { preset: 'work_only', changed: false, income: ['paid_work'], expense_all: true, expense: [] }, presets: [] });
@@ -85,6 +90,7 @@ async function mock(page: Page, fake: Fake, opts: { kleinunternehmer?: boolean }
       if (method === 'PUT') {
         if (fake.saveRefusal) return json(route, 400, fake.saveRefusal);
         const body = JSON.parse(req.postData() || '{}');
+        if (body.payment_ids) inv.payment_ids = body.payment_ids;
         if (body.line_items) {
           inv.line_items = body.line_items.map((l: Json, i: number) => ({ id: inv.id * 100 + i, position: i + 1, ...l, line_total_cents: Math.round((l.quantity_milli * l.unit_price_cents) / 1000) }));
           inv.total_cents = inv.line_items.reduce((n: number, l: Json) => n + l.line_total_cents, 0);
@@ -301,13 +307,20 @@ test.describe('#12274 the total, what the draft covers, and a difference', () =>
     await expect(page.locator('[data-test="issue-confirm"]')).toContainText('The total (€35.00) differs from the payments it covers (€350.00).');
   });
 
-  test('a draft that covers no payment has no "Issue invoice…"', async ({ page }) => {
+  // system_3 #12318 ruling 4: said in place of the covers line, and no
+  // "Issue invoice…", since nothing in the dialog could enable it (§3.22).
+  test('a draft that covers no payment says it cannot be issued, and has no "Issue invoice…"', async ({ page }) => {
     const fake = newFake([payment(1)], [draft(10, [])]);
     await open(page, fake);
     await openFromList(page);
-    await expect(page.locator('[data-test="draft-covers-head"]')).toHaveText('Covers no payment.');
+    const line = page.locator('[data-test="draft-no-payment"]');
+    await expect(line).toHaveText('This draft covers no payment, so it cannot be issued. Delete the draft.');
+    await expect(line).toHaveAttribute('role', 'status');
+    await expect(page.locator('[data-test="draft-covers-head"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="draft-difference"]')).toHaveCount(0);
     await expect(page.locator('[data-test="draft-issue"]')).toHaveCount(0);
     await expect(page.locator('[data-test="draft-save"]')).toBeVisible();
+    await expect(page.locator('[data-test="draft-delete"]')).toBeVisible();
   });
 });
 
@@ -385,5 +398,76 @@ test.describe('#12274 at 390, nothing scrolls sideways', () => {
       [...document.querySelectorAll('[role="dialog"] *')].filter((el) => el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX !== 'visible').map((el) => `${el.tagName}.${el.className}`),
     );
     expect(over).toEqual([]);
+  });
+});
+
+test.describe('#12318 a draft whose payment was removed, and taking one off', () => {
+  // Review point 4: "Restore" is named only when a removed payment's latest
+  // removal names this draft, with the button as Transactions shows it.
+  test('the empty draft names the way back when a restore would put its payment back', async ({ page }) => {
+    const removed = [payment(7, { removed_at: '2026-11-15T09:00:00Z' }), payment(8, { removed_at: '2026-11-15T09:05:00Z', category: 'gift' })];
+    const fake = newFake([payment(1)], [draft(10, [])]);
+    fake.removed = removed;
+    fake.restorable = { 10: [7] };
+    await open(page, fake);
+    await openFromList(page);
+    await expect(page.locator('[data-test="draft-no-payment"]')).toHaveText(
+      'This draft covers no payment, so it cannot be issued. Restore its payment under Transactions, “Show 2 removed rows”, or delete the draft.',
+    );
+    await expect(page.locator('[data-test="draft-issue"]')).toHaveCount(0);
+    // The button reads as the line names it.
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toBeHidden();
+    await page.getByRole('tab', { name: 'Transactions' }).click();
+    await expect(page.locator('[data-test="removed-show"]')).toHaveText('Show 2 removed rows');
+  });
+
+  test('"Take off" is staged into Save draft, keeps the lines, and shows the difference', async ({ page }) => {
+    const fake = newFake([payment(1), payment(2, { sender_name: 'Galerie Nord', paid_on: '2026-10-05T00:00:00Z' })], [draft(10, [1, 2], { total_cents: 60000 })]);
+    await open(page, fake);
+    await openFromList(page);
+    const items = page.locator('[data-test="draft-covers-item"]');
+    await expect(items).toHaveCount(2);
+    await expect(page.locator('[data-test="draft-take-off"]')).toHaveCount(2);
+    await expect(page.getByRole('button', { name: /^Take off €300\.00 from Dragan Petrovic/ })).toBeVisible();
+    fake.requests.length = 0;
+
+    await page.getByRole('button', { name: /^Take off €300\.00 from Dragan Petrovic/ }).click();
+    // One left: no list, so no Take off; the head names the one.
+    await expect(items).toHaveCount(0);
+    await expect(page.locator('[data-test="draft-take-off"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="draft-covers-head"]')).toContainText('Covers 1 payment: €300.00 from Galerie Nord');
+    await expect(page.locator('[data-test="draft-difference"]')).toHaveText('The total (€600.00) differs from the payments it covers (€300.00).');
+    expect(fake.requests).toHaveLength(0);
+
+    // Unsent until saved: closing asks.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('[data-test="unsent-ask"]')).toBeVisible();
+    await page.locator('[data-test="unsent-keep"]').click();
+
+    await page.locator('[data-test="draft-save"]').click();
+    await expect.poll(() => fake.requests.filter((r) => r.method === 'PUT').length).toBe(1);
+    const body = JSON.parse(fake.requests.find((r) => r.method === 'PUT')!.body);
+    expect(body.payment_ids).toEqual([2]);
+    expect(body.line_items).toHaveLength(2);
+    expect(fake.invoices[0].payment_ids).toEqual([2]);
+  });
+
+  test('a draft over one payment offers no Take off', async ({ page }) => {
+    const fake = newFake([payment(1)], [draft(10, [1])]);
+    await open(page, fake);
+    await openFromList(page);
+    await expect(page.locator('[data-test="draft-covers-head"]')).toContainText('Covers 1 payment');
+    await expect(page.locator('[data-test="draft-take-off"]')).toHaveCount(0);
+  });
+
+  test('at 390px each Take off is 44px tall', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const fake = newFake([payment(1), payment(2, { sender_name: 'Galerie Nord' })], [draft(10, [1, 2], { total_cents: 60000 })]);
+    await open(page, fake);
+    await openFromList(page);
+    for (const box of await page.locator('[data-test="draft-take-off"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height))) {
+      expect(box).toBeGreaterThanOrEqual(44);
+    }
   });
 });
