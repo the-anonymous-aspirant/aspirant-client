@@ -207,7 +207,7 @@ test.describe('#10550 Add payers to your client book', () => {
     await rows(page).nth(0).locator('[data-test="payers-row-name"]').fill('Luca B.');
     await save(page).click();
 
-    await expect(page.locator('[data-test="payers-error"]')).toHaveText('Nothing was saved: a payment changed since the list was read; reopen it');
+    await expect(page.locator('[data-test="payers-error"]')).toHaveText('Nothing was saved. This was changed since the page loaded. Reload the page to see it as it is now.');
     await expect(page.locator('[data-test="payers-dialog"]')).toBeVisible();
     await expect(check(page, 0)).toBeChecked();
     await expect(rows(page).nth(0).locator('[data-test="payers-row-name"]')).toHaveValue('Luca B.');

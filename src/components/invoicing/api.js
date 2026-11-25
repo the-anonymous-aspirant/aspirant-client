@@ -109,6 +109,7 @@ export const N26_FILE_ERROR_LABELS = {
   // The CSV's header row matched no known language table (system_3 #10543);
   // never guessed by column position (design_agent c65204 on #10534).
   csv_headers_unrecognised: 'column names not recognised',
+  empty_file: 'empty',
 };
 // `fileError` is the parse response's per-file `{ code, message }`: the
 // server's own prose, never an axios error.
@@ -200,14 +201,26 @@ export const SOURCE_LABELS = {
 };
 
 // The server's error envelope is { error: { code, message } }; fall back to
-// a generic line so a network failure still reads as a sentence.
+// a generic line so a network failure still reads as a sentence. A refusal
+// also names its field and the figures its sentence prints (system_3
+// #12300); refusalOf (refusals.js) turns these into the line.
 export function errorOf(err) {
   const data = (err && err.response && err.response.data) || {};
-  const envelope = data.error || {};
+  const envelope = (data && data.error) || {};
   return {
     status: err && err.response ? err.response.status : 0,
     code: envelope.code || '',
     message: envelope.message || 'The server could not be reached. Try again.',
+    field: envelope.field || '',
+    limit: envelope.limit || 0,
+    lines: envelope.lines || 0,
+    item: envelope.item || 0,
+    width: envelope.width || 0,
+    height: envelope.height || 0,
+    line: envelope.line || 0,
+    value: envelope.value || '',
+    // client_exists names the client already in the book.
+    clientName: (data && data.client && data.client.name) || '',
     // Set by a failed import only when the server kept a copy (#10567).
     copyExpiresAt: data.copy_expires_at || '',
   };
@@ -307,19 +320,6 @@ export function groupIban(iban) {
   const compact = String(iban || '').replace(/\s+/g, '').toUpperCase();
   return compact.replace(/(.{4})(?=.)/g, '$1 ');
 }
-
-// The server's field refusals for a phone, the two links (#10002) and an IBAN
-// (#12086), in zir words.
-export const FIELD_REFUSALS = {
-  invalid_phone: { field: 'phone', text: 'Use digits, spaces and + - ( ) / . only, at most 40 characters.' },
-  invalid_instagram: { field: 'instagram_url', text: 'Use an Instagram name (@name) or a link to an Instagram profile.' },
-  invalid_telegram: { field: 'telegram_url', text: 'Use a Telegram name (@name) or a t.me link.' },
-  invalid_iban: { field: 'iban', text: 'Not a valid IBAN. Check each character against the original.' },
-  // The prefix's hyphens (system_3 #12272): the app prints <prefix>-<number>.
-  prefix_ends_with_hyphen: { field: 'invoice_number_prefix', text: 'The prefix cannot end with a hyphen: the app adds one before the number.' },
-  prefix_starts_with_hyphen: { field: 'invoice_number_prefix', text: 'The prefix cannot start with a hyphen.' },
-  prefix_double_hyphen: { field: 'invoice_number_prefix', text: 'The prefix cannot hold two hyphens in a row.' },
-};
 
 export const CATEGORY_LABELS = {
   uncategorised: 'Uncategorised',

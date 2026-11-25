@@ -65,7 +65,7 @@ async function open(page: Page, fake: Fake): Promise<void> {
       const stored: Json = { ...body, updated_at: '2026-11-23T09:30:00Z' };
       if ('iban' in body) {
         const iban = normaliseIban(body.iban);
-        if (iban !== '' && !validIban(iban)) return json(route, 400, { error: { code: 'invalid_iban', message: 'iban must be a valid IBAN when given' } });
+        if (iban !== '' && !validIban(iban)) return json(route, 400, { error: { code: 'invalid_iban', field: 'iban', message: 'iban must be a valid IBAN when given' } });
         stored.iban = iban;
       }
       if (method === 'POST') {

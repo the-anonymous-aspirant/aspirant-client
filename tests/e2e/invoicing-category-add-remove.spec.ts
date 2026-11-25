@@ -72,7 +72,7 @@ function resolveCategory(fake: Fake, body: Json, current: string): { refusal?: J
   }
   const chosen = fake.categories.find((c) => c.name === body.category);
   if (chosen && chosen.removed_at && chosen.name !== current) {
-    return { refusal: { code: 'removed_category', message: `category "${chosen.name}" has been removed; restore it to choose it again` } };
+    return { refusal: { code: 'removed_category', field: 'category', message: `category: "${chosen.name}" has been removed; restore it to choose it again` } };
   }
   return {};
 }

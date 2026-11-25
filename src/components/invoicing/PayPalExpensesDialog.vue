@@ -43,6 +43,7 @@
   import { unsentGuard } from './unsentGuard.js';
   import { confirmPayPalExpenses, errorOf, listExpenseCategories } from './api.js';
   import { liveNames } from './expenseCategories.js';
+  import { refusalOf, reviewRowName } from './refusals.js';
 
   // Every book has this category (the server seeds it): the default, and the
   // fallback when the list cannot be read.
@@ -162,7 +163,9 @@
           this.$emit('done', result);
           this.$emit('update:open', false);
         } catch (err) {
-          this.error = errorOf(err).message;
+          // A refused row is named by its payee and day (system_3 #12300).
+          const answer = errorOf(err);
+          this.error = refusalOf(answer, { form: 'paypal', rowName: reviewRowName(rows, answer.item, (row) => row.payee_name) }).text;
           this.confirming = false;
         }
       },

@@ -88,6 +88,7 @@
   import { looksLikeCardPaymentOrService, matchPayer, normalizeName } from './payerMatch.js';
   import { addPayers, errorOf, formatDay, formatMoney } from './api.js';
   import { focusAfterRefusal } from './refusalFocus.js';
+  import { refusalOf } from './refusals.js';
 
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
@@ -309,7 +310,9 @@
           this.$emit('update:open', false);
         } catch (err) {
           // Every tick and name stays as ze left it (D13).
-          this.error = `Nothing was saved: ${errorOf(err).message}`;
+          // The add is all or nothing on the server (system_3 #12300 review
+          // point 3: the second sentence only where nothing was written).
+          this.error = `Nothing was saved. ${refusalOf(errorOf(err), { form: 'payers' }).text}`;
           this.saving = false;
           focusAfterRefusal(this, 'saveButton');
         }

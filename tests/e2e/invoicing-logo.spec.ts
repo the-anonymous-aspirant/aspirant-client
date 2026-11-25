@@ -13,6 +13,7 @@ type Json = Record<string, any>;
 interface Fake {
   hasLogo: boolean;
   logo: Buffer | null;
+  // The code the server refuses the next logo with (system_3 #12300).
   refuseUpload?: string;
   profilePuts: number;
   lastPut?: Record<string, any>;
@@ -80,11 +81,11 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
       const body = JSON.parse(req.postData() || '{}');
       // The server's phone rule (aspirant-server #9992): letters are refused.
       if (/[a-z]/i.test(body.phone || '')) {
-        return json(route, 400, { error: { code: 'invalid_phone', message: 'phone may hold digits, spaces and + - ( ) / . only, at most 40 characters' } });
+        return json(route, 400, { error: { code: 'invalid_phone', field: 'phone', message: 'phone may hold digits, spaces and + - ( ) / . only, at most 40 characters' } });
       }
       fake.lastPut = body;
       if (body.invoice_number_prefix === 'bad/prefix') {
-        return json(route, 400, { error: { code: 'bad_request', message: 'invoice_number_prefix must be 1-20 letters, digits or hyphens' } });
+        return json(route, 400, { error: { code: 'invalid_prefix', field: 'invoice_number_prefix', limit: 20, message: 'invoice_number_prefix: must be 1-20 letters, digits or hyphens' } });
       }
       fake.profilePuts += 1;
       return json(route, 200, { profile: body, saved: true });
@@ -94,7 +95,7 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
       return route.fulfill({ status: 200, contentType: 'image/png', body: fake.logo });
     }
     if (path === '/invoicing/profile/logo' && method === 'PUT') {
-      if (fake.refuseUpload) return json(route, 400, { error: { code: 'bad_request', message: fake.refuseUpload } });
+      if (fake.refuseUpload) return json(route, 400, { error: { code: fake.refuseUpload, field: 'logo', message: `logo refused: ${fake.refuseUpload}` } });
       fake.logo = blackPng(60, 30);
       fake.hasLogo = true;
       return json(route, 200, { logo: { sha256: 'x', width: 60, height: 30 }, saved: true });
@@ -224,7 +225,7 @@ test.describe('#9858 Invoices: the issuer logo in the profile editor', () => {
   });
 
   test("a refused logo saves nothing and keeps the dialog as it was", async ({ page }) => {
-    const fake = newFake({ refuseUpload: 'the logo must be a PNG or JPEG image' });
+    const fake = newFake({ refuseUpload: 'unsupported_type' });
     await mockInvoicing(page, fake);
     await seedTrustedSessionAs(page, 'vinoly');
     await openEditor(page);
@@ -232,7 +233,7 @@ test.describe('#9858 Invoices: the issuer logo in the profile editor', () => {
     await form(page).getByLabel(/^Steuernummer \(Tax number\)/).fill('98/765/43210');
     await chooseLogo(page, Buffer.from('GIF89a not a png'), 'logo.png');
     await save(page);
-    await expect(page.locator('[data-test="profile-logo-error"]')).toHaveText('the logo must be a PNG or JPEG image');
+    await expect(page.locator('[data-test="profile-logo-error"]')).toHaveText('The logo must be a PNG or JPEG image.');
     await expect(form(page)).toBeVisible();
     await expect(form(page).getByLabel(/^Steuernummer \(Tax number\)/)).toHaveValue('98/765/43210');
     expect(fake.profilePuts).toBe(0);
@@ -247,9 +248,10 @@ test.describe('#9858 Invoices: the issuer logo in the profile editor', () => {
     await chooseLogo(page, blackPng(400, 200));
     await form(page).getByLabel(/^Invoice number prefix/).fill('bad/prefix');
     await save(page);
-    await expect(page.locator('[data-test="profile-error"]')).toHaveText(
-      'The logo was saved; the profile was not: invoice_number_prefix must be 1-20 letters, digits or hyphens',
-    );
+    // The half that was saved is said above the buttons, the reason at the
+    // field it is about (system_3 #12300).
+    await expect(page.locator('[data-test="profile-error"]')).toHaveText('The logo was saved; the profile was not.');
+    await expect(form(page).locator('.field').filter({ has: page.getByLabel(/^Invoice number prefix/) })).toContainText('Use 1 to 20 letters, digits or hyphens.');
     await expect(form(page)).toBeVisible();
 
     // Retrying sends only the profile: the logo is already saved.

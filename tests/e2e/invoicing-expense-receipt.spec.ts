@@ -290,12 +290,12 @@ test.describe('#10603 Invoices: a receipt on a work expense', () => {
     expect(fake.receipts.has(101)).toBe(false);
   });
 
-  test('a refused upload (oversize or unsupported type) shows the server message and keeps the dialog as it was', async ({ page }) => {
-    const fake = newFake({ refuseNextUpload: { code: 'bad_request', message: 'the receipt is larger than 5 MB' } });
+  test('a refused upload (oversize or unsupported type) says why and keeps the dialog as it was', async ({ page }) => {
+    const fake = newFake({ refuseNextUpload: { code: 'too_large', field: 'receipt', limit: 5, message: 'the receipt is larger than 5 MB' } });
     await open(page, fake);
     await openReceiptFor(page);
     await page.locator('[data-test="receipt-file-input"]').setInputFiles({ name: 'big.pdf', mimeType: 'application/pdf', buffer: Buffer.from('x') });
-    await expect(page.locator('[data-test="receipt-error"]')).toHaveText('the receipt is larger than 5 MB');
+    await expect(page.locator('[data-test="receipt-error"]')).toHaveText('The receipt is larger than 5 MB.');
     await expect(page.locator('[data-test="receipt-none"]')).toBeVisible();
   });
 
@@ -397,11 +397,11 @@ test.describe('#11510 a receipt while entering an expense by hand', () => {
     await expect(picked(page)).toContainText('max.png');
 
     await input(page).setInputFiles({ name: 'leer.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(0) });
-    await expect(refusal(page)).toHaveText('Receipt is empty.');
+    await expect(refusal(page)).toHaveText('The receipt is empty.');
 
     // By the bytes, not the name or the reported type: text called a PNG.
     await input(page).setInputFiles({ name: 'notiz.png', mimeType: 'image/png', buffer: Buffer.from('just text') });
-    await expect(refusal(page)).toHaveText('Unsupported file type (allowed: PDF, JPEG, PNG).');
+    await expect(refusal(page)).toHaveText('The receipt must be a PDF, JPEG or PNG file.');
     await expect(refusal(page)).toHaveAttribute('role', 'alert');
 
     // And a real PNG with a wrong name and no reported type is accepted.
@@ -443,12 +443,13 @@ test.describe('#11510 a receipt while entering an expense by hand', () => {
 
   test('a refused create keeps the form, its error and the picked file, and uploads nothing', async ({ page }) => {
     const fake = newFake();
-    fake.refuseNextCreate = { code: 'invalid_field', message: 'category is not one of your expense categories' };
+    fake.refuseNextCreate = { code: 'invalid_category', field: 'category', message: 'category: is not one of your expense categories' };
     const dialog = await openEntry(page, fake);
     await input(page).setInputFiles(PNG);
     await fillRequired(page);
     await page.locator('[data-test="expense-save"]').click();
-    await expect(page.locator('[data-test="expense-error"]')).toHaveText('category is not one of your expense categories');
+    // At the category, which went stale (system_3 #12300).
+    await expect(page.locator('[data-test="expense-category-error"]')).toHaveText('This was changed since the page loaded. Reload the page to see it as it is now.');
     await expect(dialog).toBeVisible();
     await expect(picked(page)).toContainText('kassenbon.png');
     expect(receiptCalls(fake)).toHaveLength(0);
@@ -456,14 +457,14 @@ test.describe('#11510 a receipt while entering an expense by hand', () => {
 
   test('when the expense saves and the upload fails, the dialog closes and the tab says so, with where to add it', async ({ page }) => {
     const fake = newFake();
-    fake.refuseNextUpload = { code: 'invalid_field', message: 'Unsupported file type (allowed: PDF, JPEG, PNG)' };
+    fake.refuseNextUpload = { code: 'unsupported_type', field: 'receipt', message: 'Unsupported file type (allowed: PDF, JPEG, PNG)' };
     const dialog = await openEntry(page, fake);
     await input(page).setInputFiles(PNG);
     await fillRequired(page);
     await page.locator('[data-test="expense-save"]').click();
     await expect(dialog).toBeHidden();
     await expect(summary(page)).toHaveText(
-      "By hand: 1 expense added to your book. Its receipt was not attached: Unsupported file type (allowed: PDF, JPEG, PNG). Add it with Receipt on the expense's row."
+      "By hand: 1 expense added to your book. Its receipt was not attached. The receipt must be a PDF, JPEG or PNG file. Add it with Receipt on the expense's row."
     );
     // One expense, kept; no second create and no retry from the form.
     expect(creates(fake)).toHaveLength(1);
@@ -597,10 +598,10 @@ test.describe('#11791 an expense says whether its receipt is attached', () => {
     await open(page, fake);
     const button = page.locator('[data-test="book-expense-receipt"]').first();
     await expect(button).toHaveText('Add receipt');
-    fake.refuseNextUpload = { code: 'invalid_receipt', message: 'That file is not a receipt we can keep' };
+    fake.refuseNextUpload = { code: 'unsupported_type', field: 'receipt', message: 'Unsupported file type (allowed: PDF, JPEG, PNG)' };
     await openReceiptFor(page);
     await page.locator('[data-test="receipt-file-input"]').setInputFiles({ name: 'kvitto.png', mimeType: 'image/png', buffer: blackPng(10, 10) });
-    await expect(page.locator('[data-test="receipt-error"]')).toHaveText('That file is not a receipt we can keep');
+    await expect(page.locator('[data-test="receipt-error"]')).toHaveText('The receipt must be a PDF, JPEG or PNG file.');
     await page.keyboard.press('Escape');
     await expect(button).toHaveText('Add receipt');
 
@@ -610,12 +611,13 @@ test.describe('#11791 an expense says whether its receipt is attached', () => {
     await expect(page.locator('[data-test="receipt-remove"]')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(button).toHaveText('Receipt');
-    fake.refuseNextDelete = { code: 'internal', message: 'The receipt could not be removed' };
+    fake.refuseNextDelete = { code: 'internal_error', message: 'Error removing the receipt' };
     await openReceiptFor(page);
     const removeBtn = page.locator('[data-test="receipt-remove"]');
     await removeBtn.click();
     await removeBtn.click();
-    await expect(page.locator('[data-test="receipt-error"]')).toHaveText('The receipt could not be removed');
+    // No sentence of its own: the fallback (system_3 #12300 review point 3).
+    await expect(page.locator('[data-test="receipt-error"]')).toHaveText('This could not be saved.');
     await page.keyboard.press('Escape');
     await expect(button).toHaveText('Receipt');
   });

@@ -164,10 +164,12 @@ for (const size of [
       await page.locator('[data-test="client-name-input"]').fill('Anna Example');
       await expect(nameLine).toHaveCount(0);
 
-      fake.clientFailure = { status: 409, body: { error: { code: 'conflict', message: 'This changed since the page was loaded. Reload the page and try again.' } } };
+      // A refusal with no field of the form; the client has no sentence for
+      // this one, so it says its fallback (system_3 #12300 review point 3).
+      fake.clientFailure = { status: 500, body: { error: { code: 'internal_error', message: 'Error creating client' } } };
       await save.click();
       const footer = page.locator('[data-test="client-error"]');
-      await expect(footer).toHaveText('This changed since the page was loaded. Reload the page and try again.');
+      await expect(footer).toHaveText('This could not be saved.');
       await expect(footer).toHaveAttribute('role', 'alert');
       await expectInView(footer);
       await expect(save).toBeFocused();

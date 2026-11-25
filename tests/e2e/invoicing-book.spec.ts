@@ -94,7 +94,7 @@ async function mock(page: Page, fake: Fake): Promise<void> {
       // server's expenseCategoryNameRefusal does.
       if (body.create_category) {
         if ([...String(body.category)].length > 100) {
-          return json(route, 400, { error: { code: 'invalid_category', message: 'category must be one line of 1-100 characters' } });
+          return json(route, 400, { error: { code: 'too_long', field: 'category', limit: 100, message: 'category: must be one line of at most 100 characters' } });
         }
         if (!fake.categories.some((c) => c.name.toLowerCase() === String(body.category).toLowerCase())) {
           fake.categories.push({ id: fake.nextCategoryId, name: body.category, counts_as: 'other', created_at: '2026-07-20T00:00:00Z', removed_at: null });
@@ -103,7 +103,7 @@ async function mock(page: Page, fake: Fake): Promise<void> {
         delete body.create_category;
       }
       if (!fake.categories.some((c) => c.name === body.category)) {
-        return json(route, 400, { error: { code: 'invalid_field', message: 'category is not one of your expense categories' } });
+        return json(route, 400, { error: { code: 'invalid_category', field: 'category', message: 'category: is not one of your expense categories' } });
       }
       const expense = expenseRow(fake.nextExpenseId, body);
       fake.nextExpenseId += 1;
@@ -287,7 +287,7 @@ test.describe('#10414-C Invoices app — the income-and-expenses book', () => {
     await page.keyboard.type(long);
     await page.getByRole('option', { name: `Add “${long}”` }).click();
     await page.locator('[data-test="expense-save"]').click();
-    await expect(page.locator('[data-test="expense-category-error"]')).toHaveText('category must be one line of 1-100 characters');
+    await expect(page.locator('[data-test="expense-category-error"]')).toHaveText('Keep the category to one line of at most 100 characters.');
     await expect(page.getByRole('dialog')).toBeVisible();
     await expect(page.getByRole('combobox', { name: 'Category' })).toContainText(long);
     expect(fake.expenses).toHaveLength(0);

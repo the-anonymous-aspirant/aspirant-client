@@ -74,11 +74,12 @@ const json = (route: Route, status: number, body: Json) =>
   route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
 // The server's refusals, in its order (checkBookCounting, workOnlyRule).
-function refuse(c: Counting, preset: boolean): string {
-  if (c.expense.some((e) => e.toLowerCase() === 'private')) return 'Private expenses never count';
-  if (c.expense_all && (preset || !same(c, WORK_ONLY))) return 'only Work only counts every expense category; list the categories that count';
-  if (c.expense_all && c.expense.length) return 'expense must be empty when expense_all is true';
-  return '';
+// The server's refusal of a counting, by its code (system_3 #12300).
+function refuse(c: Counting, preset: boolean): { code: string; message: string } | null {
+  if (c.expense.some((e) => e.toLowerCase() === 'private')) return { code: 'private_never_counts', message: 'Private expenses never count' };
+  if (c.expense_all && (preset || !same(c, WORK_ONLY))) return { code: 'invalid_field', message: 'only Work only counts every expense category; list the categories that count' };
+  if (c.expense_all && c.expense.length) return { code: 'invalid_field', message: 'expense must be empty when expense_all is true' };
+  return null;
 }
 
 async function mock(page: Page, fake: Fake): Promise<void> {
@@ -112,17 +113,20 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/book/selection' && method === 'PUT') {
       const b = JSON.parse(body);
       const why = refuse(b, false);
-      if (why) return json(route, 400, { error: { code: 'invalid_field', message: why } });
+      if (why) return json(route, 400, { error: why });
       fake.selection = { preset: b.preset || '', income: b.income, expense_all: b.expense_all, expense: b.expense };
       return json(route, 200, view(fake));
     }
     if (path === '/invoicing/book/presets' && method === 'POST') {
       const b = JSON.parse(body);
       const why = refuse(b, true);
-      if (why) return json(route, 400, { error: { code: 'invalid_field', message: why } });
+      if (why) return json(route, 400, { error: why });
       const name = String(b.name).trim();
-      if ([WORK_ONLY, ...fake.presets].some((p) => p.name.toLowerCase() === name.toLowerCase())) {
-        return json(route, 409, { error: { code: 'duplicate_preset', message: `a preset named "${name}" already exists` } });
+      if (name.toLowerCase() === WORK_ONLY.name.toLowerCase()) {
+        return json(route, 409, { error: { code: 'builtin_preset_name', field: 'name', message: `"${WORK_ONLY.name}" is the built-in preset's name` } });
+      }
+      if (fake.presets.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+        return json(route, 409, { error: { code: 'duplicate_preset', field: 'name', message: `a preset named "${name}" already exists` } });
       }
       const preset: Preset = { id: String(fake.nextPresetId), name, builtin: false, income: b.income, expense_all: false, expense: b.expense };
       fake.nextPresetId += 1;
@@ -134,7 +138,7 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     if (one && method === 'PUT') {
       const b = JSON.parse(body);
       const why = refuse(b, true);
-      if (why) return json(route, 400, { error: { code: 'invalid_field', message: why } });
+      if (why) return json(route, 400, { error: why });
       const preset = fake.presets.find((p) => p.id === one[1])!;
       Object.assign(preset, { income: b.income, expense_all: false, expense: b.expense });
       return json(route, 200, { ...view(fake), preset });

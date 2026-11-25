@@ -269,7 +269,9 @@ test.describe('#10694 Edit a payment', () => {
     const dialog = await openEdit(page, 'M-hand');
     await dialog.locator('[data-test="edit-remove"]').click();
     await dialog.locator('[data-test="edit-remove"]').click();
-    await expect(dialog.locator('[data-test="manual-error"]')).toHaveText('payment is on issued invoice 2026-014; cancel it first');
+    // A payment the page showed as free is on an invoice: the page is stale
+    // (system_3 #12300, c77188 group 7).
+    await expect(dialog.locator('[data-test="manual-error"]')).toHaveText('This was changed since the page loaded. Reload the page to see it as it is now.');
     await expect(dialog).toBeVisible();
   });
 

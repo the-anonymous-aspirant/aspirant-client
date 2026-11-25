@@ -39,9 +39,9 @@ const normalise = (kind: 'instagram' | 'telegram', raw: string): string | null =
 };
 
 const refuse = (body: Json): Json | null => {
-  if (!/^[0-9+()/. -]{0,40}$/.test(String(body.phone || '').trim())) return { code: 'invalid_phone', message: 'phone may hold digits, spaces and + - ( ) / . only, at most 40 characters' };
-  if (normalise('instagram', body.instagram_url) === null) return { code: 'invalid_instagram', message: 'instagram_url takes a handle (@name) or a link to a profile on instagram.com' };
-  if (normalise('telegram', body.telegram_url) === null) return { code: 'invalid_telegram', message: 'telegram_url takes a handle (@name) or a link to a profile on t.me' };
+  if (!/^[0-9+()/. -]{0,40}$/.test(String(body.phone || '').trim())) return { code: 'invalid_phone', field: 'phone', message: 'phone may hold digits, spaces and + - ( ) / . only, at most 40 characters' };
+  if (normalise('instagram', body.instagram_url) === null) return { code: 'invalid_instagram', field: 'instagram_url', message: 'instagram_url takes a handle (@name) or a link to a profile on instagram.com' };
+  if (normalise('telegram', body.telegram_url) === null) return { code: 'invalid_telegram', field: 'telegram_url', message: 'telegram_url takes a handle (@name) or a link to a profile on t.me' };
   return null;
 };
 

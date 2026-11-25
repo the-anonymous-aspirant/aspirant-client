@@ -44,7 +44,7 @@ async function open(page: Page, fake: Fake): Promise<void> {
     // The server's own rule (aspirant-server b47fe1c): trimmed, at most 5000.
     if ((path === '/invoicing/clients' && method === 'POST') || (/^\/invoicing\/clients\/\d+$/.test(path) && method === 'PUT')) {
       const notes = String(body.notes ?? '').trim();
-      if ([...notes].length > 5000) return json(route, 400, { error: { code: 'bad_request', message: 'notes must be at most 5000 characters' } });
+      if ([...notes].length > 5000) return json(route, 400, { error: { code: 'too_long', field: 'notes', limit: 5000, message: 'notes: must be at most 5000 characters' } });
       if (method === 'POST') {
         const client = { id: 100 + fake.clients.length, ...body, notes };
         fake.clients.push(client);
@@ -133,7 +133,7 @@ test.describe('#9987 Clients — notes', () => {
     await expect(row(page, 'Anna Example').locator('[data-test="client-notes"]')).toHaveText('Now kept.');
   });
 
-  test('more than 5000 characters shows the server refusal and keeps the text in the field', async ({ page }) => {
+  test('more than 5000 characters shows the refusal at the notes and keeps the text in the field', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);
     await openClientEdit(page, 3);
@@ -142,7 +142,9 @@ test.describe('#9987 Clients — notes', () => {
     // No maxlength: the field holds all 5001 characters.
     await expect(notesField(page)).toHaveValue(tooLong);
     await page.locator('[data-test="client-save"]').click();
-    await expect(page.locator('[data-test="client-error"]')).toHaveText('notes must be at most 5000 characters');
+    // At the field, in the client's words (system_3 #12300).
+    await expect(form(page).locator('.field').filter({ has: page.getByLabel('Notes', { exact: true }) })).toContainText('Keep the notes to 5,000 characters at most.');
+    await expect(page.locator('[data-test="client-error"]')).toHaveCount(0);
     await expect(form(page)).toBeVisible();
     await expect(notesField(page)).toHaveValue(tooLong);
   });

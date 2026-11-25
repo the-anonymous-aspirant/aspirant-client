@@ -72,7 +72,7 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/profile' && method === 'PUT') {
       const body = JSON.parse(req.postData() || '{}');
       if (body.invoice_number_prefix === 'bad/prefix') {
-        return json(route, 400, { error: { code: 'bad_request', message: 'invoice_number_prefix must be 1-20 letters, digits or hyphens' } });
+        return json(route, 400, { error: { code: 'invalid_prefix', field: 'invoice_number_prefix', limit: 20, message: 'invoice_number_prefix: must be 1-20 letters, digits or hyphens' } });
       }
       fake.profile = body;
       fake.saved = true;
@@ -260,7 +260,8 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     const form = page.locator('[data-test="profile-form"]');
     await form.getByLabel(/^Invoice number prefix/).fill('bad/prefix');
     await page.locator('[data-test="profile-save"]').click();
-    await expect(page.locator('[data-test="profile-error"]')).toContainText('1-20 letters');
+    // At the prefix it is about, in zir words (system_3 #12300).
+    await expect(form.locator('.field').filter({ has: page.getByLabel(/^Invoice number prefix/) })).toContainText('Use 1 to 20 letters, digits or hyphens.');
     await expect(form).toBeVisible();
 
     await form.getByLabel(/^Invoice number prefix/).fill('2026');
@@ -342,8 +343,11 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
   test('a failed file with a kept copy says until when; without one, the error alone', async ({ page }) => {
     const fake = newFake({
       importResponses: [
-        { status: 400, body: { error: { code: 'invalid_csv', message: 'not a PayPal activity export' }, copy_expires_at: '2026-11-18T23:30:00Z' } },
-        { status: 413, body: { error: { code: 'payload_too_large', message: 'The file is larger than 5 MB' } } },
+        { status: 400, body: { error: { code: 'not_paypal_export', message: 'not a PayPal activity export: missing column(s) gross', field: 'file' }, copy_expires_at: '2026-11-18T23:30:00Z' } },
+        // The server's own 413 keeps its sentence; the proxy's, with no code,
+        // says the file is too large to send (system_3 #12300 review point 1).
+        { status: 413, body: { error: { code: 'too_large', message: 'This file is larger than 5 MB.' } } },
+        { status: 413, body: {} },
         { status: 200, body: { summary: { rows_read: 0, imported: 0, duplicates: 0, skipped: 0, withdrawals: 0, skipped_reasons: {}, format: 'csv' } } },
         { status: 200, body: { summary: { rows_read: 0, imported: 0, duplicates: 0, skipped: 0, withdrawals: 0, skipped_reasons: {}, format: 'csv', copy_expires_at: '2026-11-18T10:00:00Z' } } },
       ],
@@ -355,10 +359,15 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     const input = page.locator('[data-test="payments-file"]');
     const error = page.locator('[data-test="import-error"]');
     await input.setInputFiles(csvFile);
-    await expect(error).toHaveText('PayPal CSV: not a PayPal activity export. A copy is kept until 2026-11-19 so this can be fixed; only the administrator can open it.');
+    await expect(error).toHaveText(
+      "PayPal file: this is not PayPal's activity export. Choose the CSV or Excel export from PayPal's activity download. A copy is kept until 2026-11-19 so this can be fixed; only the administrator can open it.",
+    );
 
     await input.setInputFiles(csvFile);
-    await expect(error).toHaveText('PayPal CSV: The file is larger than 5 MB');
+    await expect(error).toHaveText('This file is larger than 5 MB.');
+
+    await input.setInputFiles(csvFile);
+    await expect(error).toHaveText('This file is too large to send.');
 
     const copyLine = page.locator('[data-test="paypal-summary-copy-kept"]');
     await input.setInputFiles(csvFile);
@@ -414,7 +423,8 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     fake.patchFailure = { status: 409, body: { error: { code: 'payment_on_issued_invoice', message: 'payment is on issued invoice 3; cancel that invoice before changing its category' } } };
     await category.click();
     await page.getByRole('option', { name: 'Gift' }).click();
-    await expect(page.locator('[data-test="payment-error"]')).toContainText('cancel that invoice');
+    // The page showed the payment as free: it is stale (c77188 group 7).
+    await expect(page.locator('[data-test="payment-error"]')).toHaveText('This was changed since the page loaded. Reload the page to see it as it is now.');
     await expect(category).toContainText('Paid work');
   });
 
@@ -582,7 +592,9 @@ test.describe('#9873 Payments: PayPal Excel, set the category of several at once
     expect(upload.body).toContain('filename="activity.xlsx"');
 
     await input.setInputFiles(xlsxFile);
-    await expect(page.locator('[data-test="import-error"]')).toHaveText('PayPal Excel file: not an Excel workbook (.xlsx)');
+    await expect(page.locator('[data-test="import-error"]')).toHaveText(
+      'PayPal file: this file could not be read as a CSV or Excel file. Download the export again and choose that file.',
+    );
   });
 
   // design_agent c60973: the button says "file", and ze holds PayPal's PDF
@@ -859,11 +871,12 @@ test.describe('#10438 PayPal import — outgoing payments reviewed as work expen
 
   test('a refused confirm is shown in the dialog, which stays open', async ({ page }) => {
     const fake = importWithOutgoing([paypalOutgoing(1)]);
-    fake.expenseConfirmFailure = { status: 400, body: { error: { code: 'invalid_row', message: 'row 0: category is not one of your expense categories' } } };
+    fake.expenseConfirmFailure = { status: 400, body: { error: { code: 'invalid_row', field: 'rows', item: 1, message: 'row 0: category is not one of your expense categories' } } };
     await importPayPal(page, fake);
     await ppxRows(page).nth(0).locator('input[type="checkbox"]').check();
     await page.locator('[data-test="paypal-expenses-confirm"]').click();
-    await expect(page.locator('[data-test="paypal-expenses-error"]')).toHaveText('row 0: category is not one of your expense categories');
+    // The refused row named by its payee and day (system_3 #12300 ruling 3).
+    await expect(page.locator('[data-test="paypal-expenses-error"]')).toHaveText('Some Shop, 2026-07-21: this could not be imported.');
     await expect(ppxReview(page)).toBeVisible();
   });
 });
