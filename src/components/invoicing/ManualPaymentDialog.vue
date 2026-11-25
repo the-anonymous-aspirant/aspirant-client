@@ -74,6 +74,7 @@
             :match="payerMatch"
             :name="form.sender_name"
             test-prefix="manual-payer"
+            :as-new="resolvedAsNew"
             @use="useClient"
             @add-new="resolveAsNew"
           />

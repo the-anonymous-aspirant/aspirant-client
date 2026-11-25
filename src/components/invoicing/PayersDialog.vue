@@ -35,15 +35,19 @@
                 :options="optionsFor(stateOf(row).name)"
                 maxlength="200"
                 data-test="payers-row-name"
-                @update:model-value="setState(row, { name: $event, resolvedAsNew: false })"
+                @update:model-value="setState(row, { name: $event, resolvedAsNew: false, second: false })"
               >
                 <PayerBookLine
                   :match="matchOf(row)"
                   :name="stateOf(row).name"
                   new-line="Not in your client book yet: it will be added."
                   test-prefix="payers-row-book"
-                  @use="(c) => setState(row, { name: c.name, resolvedAsNew: false })"
+                  :as-new="stateOf(row).resolvedAsNew"
+                  :repeat="plan.repeat[row.key] || ''"
+                  :keeps-first-email="!!plan.keepsFirstEmail[row.key]"
+                  @use="(c) => setState(row, { name: c.name, resolvedAsNew: false, second: false })"
                   @add-new="setState(row, { resolvedAsNew: true })"
+                  @add-second="setState(row, { second: true })"
                 />
               </SuggestField>
               <p v-if="paypalEmailNote(row)" class="payer-row__muted" data-test="payers-row-paypal">{{ paypalEmailNote(row) }}</p>
@@ -63,7 +67,7 @@
         <ModalActions v-else>
           <AspButton variant="secondary" :disabled="saving" data-test="payers-cancel" @click="onOpenChange(false)">Cancel</AspButton>
           <AspButton :loading="saving" :disabled="!!blockedCaption" data-test="payers-save" @click="save">
-            Add to client book ({{ tickedRows.length }})
+            Add to client book ({{ plan.clients }})
           </AspButton>
         </ModalActions>
         <!-- States what enables the primary (§3.114). -->
@@ -122,9 +126,46 @@
           const s = this.stateOf(row);
           const m = this.matchOf(row);
           if (m.state === 'empty') return `Enter a client name for ${row.payer}`;
-          if (m.state === 'close' && !s.resolvedAsNew) return `Choose Use or Add for ${s.name.trim()}`;
+          if (m.state === 'close' && !s.resolvedAsNew && !this.plan.repeat[row.key]) return `Choose Use or Add for ${s.name.trim()}`;
         }
         return '';
+      },
+      // What Save does with the ticked rows (system_3 #12319, §3.142 Decision
+      // 4): rows whose new names are the same are one client, unless ze chose
+      // "Add as a second …" on a later one. `repeat` marks each such later
+      // row ('joined' or 'second'); `clients` counts the different clients
+      // the ticked rows end at, new or in the book, for the button.
+      plan() {
+        const repeat = {};
+        const keepsFirstEmail = {};
+        const ends = new Set();
+        const groups = {}; // normalised new name -> the PayPal email the client keeps
+        for (const row of this.tickedRows) {
+          const s = this.stateOf(row);
+          const m = this.matchOf(row);
+          if (m.state === 'empty') continue;
+          if (m.state === 'same') {
+            ends.add(`client:${m.client.id}`);
+            continue;
+          }
+          const key = normalizeName(s.name);
+          if (!(key in groups)) {
+            // The first row of the name, whatever its own state: a close name
+            // still to be chosen is counted as the client it will add.
+            groups[key] = row.paypal_email || '';
+            ends.add(`new:${key}`);
+            continue;
+          }
+          if (s.second) {
+            repeat[row.key] = 'second';
+            ends.add(`second:${row.key}`);
+            continue;
+          }
+          repeat[row.key] = 'joined';
+          if (!groups[key]) groups[key] = row.paypal_email || '';
+          else if (row.paypal_email && row.paypal_email.toLowerCase() !== groups[key].toLowerCase()) keepsFirstEmail[row.key] = true;
+        }
+        return { repeat, keepsFirstEmail, clients: ends.size };
       },
       notListedLine() {
         const l = this.leftOut || {};
@@ -159,7 +200,7 @@
           // prefilled with that client's name, so the line reads "In your
           // client book."; any other with the server's tidied name (Decision 6).
           const name = row.same_client ? row.same_client.name : row.tidied_name || row.payer;
-          defaults[row.key] = { checked: false, name, resolvedAsNew: false };
+          defaults[row.key] = { checked: false, name, resolvedAsNew: false, second: false };
           rowState[row.key] = keepTyped && this.rowState[row.key] ? this.rowState[row.key] : defaults[row.key];
         }
         this.rowState = rowState;
@@ -172,7 +213,7 @@
         return Object.fromEntries(
           this.candidates.map((row) => {
             const s = state[row.key] || {};
-            return [row.key, [!!s.checked, String(s.name || '').trim(), !!s.resolvedAsNew]];
+            return [row.key, [!!s.checked, String(s.name || '').trim(), !!s.resolvedAsNew, !!s.second]];
           }),
         );
       },
@@ -189,7 +230,7 @@
         return this.payersValue(this.rowState);
       },
       stateOf(row) {
-        return this.rowState[row.key] || { checked: false, name: '', resolvedAsNew: false };
+        return this.rowState[row.key] || { checked: false, name: '', resolvedAsNew: false, second: false };
       },
       setState(row, change) {
         this.rowState = { ...this.rowState, [row.key]: { ...this.stateOf(row), ...change } };
@@ -243,7 +284,11 @@
         const payers = this.tickedRows.map((row) => {
           const m = this.matchOf(row);
           if (m.state === 'same') return { payment_ids: row.payment_ids, client_id: m.client.id };
-          return { payment_ids: row.payment_ids, new_client_name: this.stateOf(row).name.trim() };
+          const payer = { payment_ids: row.payment_ids, new_client_name: this.stateOf(row).name.trim() };
+          // The server makes one client of rows of one new name; a row ze
+          // marked as a second person says so.
+          if (this.plan.repeat[row.key] === 'second') payer.second_client = true;
+          return payer;
         });
         this.saving = true;
         this.error = '';
