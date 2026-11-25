@@ -336,7 +336,7 @@ test.describe("#12272 Issuer profile — the prefix's hyphens", () => {
     await page.getByRole('button', { name: 'Edit profile' }).click();
   };
   const pform = (page: Page) => page.locator('[data-test="profile-form"]');
-  const prefixField = (page: Page) => pform(page).locator('.field').filter({ has: page.getByLabel('Invoice number prefix', { exact: true }) });
+  const prefixField = (page: Page) => pform(page).locator('.field').filter({ has: page.getByLabel(/^Invoice number prefix/) });
 
   for (const [value, text] of [
     ['2026-', 'The prefix cannot end with a hyphen: the app adds one before the number.'],
@@ -346,7 +346,7 @@ test.describe("#12272 Issuer profile — the prefix's hyphens", () => {
     test(`"${value}" is refused at the prefix field, keeps the text and takes focus`, async ({ page }) => {
       const fake = newFake();
       await openProfile(page, fake);
-      const input = pform(page).getByLabel('Invoice number prefix', { exact: true });
+      const input = pform(page).getByLabel(/^Invoice number prefix/);
       await input.fill(value);
       await page.locator('[data-test="profile-save"]').click();
       await expect(prefixField(page)).toContainText(text);
@@ -368,7 +368,7 @@ test.describe("#12272 Issuer profile — the prefix's hyphens", () => {
     const fake = newFake();
     fake.profile.invoice_number_prefix = '2026-';
     await openProfile(page, fake);
-    await expect(pform(page).getByLabel('Invoice number prefix', { exact: true })).toHaveValue('2026-');
+    await expect(pform(page).getByLabel(/^Invoice number prefix/)).toHaveValue('2026-');
     await pform(page).getByLabel('Telegram').fill('@flower_studio');
     await page.locator('[data-test="profile-save"]').click();
     await expect(pform(page)).toBeHidden();
