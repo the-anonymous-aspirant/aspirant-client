@@ -312,6 +312,7 @@
   import { paymentParts, paymentSummary, shownReference } from './ledgerRows.js';
   import {
     KLEINBETRAG_LIMIT_CENTS,
+    SOURCE_LABELS,
     STATUS_LABELS,
     cancelInvoice,
     centsFromEuros,
@@ -758,10 +759,12 @@
         const amount = formatMoney(p.gross_cents, p.currency);
         const payer = paymentParts(p).who;
         // A payment keeps the reference it is named by elsewhere (system_3
-        // #12257): PayPal's own id, which ze can look up there, or an N26
-        // confirmation. An id the server made up is never shown.
+        // #12257), labelled with where ze can look it up: "PayPal 9AB…" or
+        // "N26 a1b2…" (design_agent c77367). A source with no label shows
+        // the reference bare. An id the server made up is never shown.
         const ref = shownReference(p);
-        const named = ref ? ` (${p.source === 'paypal' ? `PayPal ${ref}` : ref})` : '';
+        const where = SOURCE_LABELS[p.source];
+        const named = ref ? ` (${where ? `${where} ${ref}` : ref})` : '';
         return `${payer ? `${amount} from ${payer}` : amount}${named}, ${formatDay(p.paid_on)}`;
       },
       // The save before an issue, with the quantity bound in its own words.
