@@ -157,6 +157,7 @@
         <div v-if="reviewing" class="confirm" data-test="review-accept-note">
           <p>
             Accept issues it as {{ nextNumber }} with today's date.
+            <template v-if="yearLine"><span data-test="issue-year-line">{{ yearLine }}</span></template>
             It can't be changed or deleted afterwards.
             Reject deletes this draft: the payment stays without an invoice and is offered again next time.
           </p>
@@ -164,6 +165,7 @@
         <div v-else-if="confirmingIssue" ref="confirm" class="confirm" role="alertdialog" aria-labelledby="issue-confirm-text" data-test="issue-confirm">
           <p id="issue-confirm-text">
             Issuing gives it number {{ nextNumber }} and today's date.
+            <template v-if="yearLine"><span data-test="issue-year-line">{{ yearLine }}</span></template>
             It can't be changed or deleted afterwards.
           </p>
         </div>
@@ -282,6 +284,9 @@
       clients: { type: Array, default: () => [] },
       kleinunternehmer: { type: Boolean, default: true },
       nextNumber: { type: String, default: '' },
+      // "Your numbers still start with 2026. …" from 1 January while the
+      // prefix is an earlier year, else '' (system_3 #12306 ruling 2).
+      yearLine: { type: String, default: '' },
       // The issuer profile has no Steuernummer, so the server will refuse to
       // issue (§10); the editor says so before the attempt.
       steuernummerMissing: { type: Boolean, default: false },

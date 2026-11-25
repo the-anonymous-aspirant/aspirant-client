@@ -116,6 +116,7 @@
         :clients="clients"
         :kleinunternehmer="profile.is_kleinunternehmer !== false"
         :next-number="nextNumberLabel"
+        :year-line="issueYearLine"
         :steuernummer-missing="!profile.steuernummer"
         :review="review ? { index: review.index + 1, total: review.ids.length } : null"
         @changed="fetchAll"
@@ -125,6 +126,7 @@
       <ProfileEditor
         v-model:open="profileOpen"
         :profile="profile"
+        :next-numbers="nextNumbers"
         :has-logo="hasLogo"
         @saved="onProfileSaved"
         @logo-changed="hasLogo = $event"
@@ -142,6 +144,7 @@
   import BookPanel from '../../../components/invoicing/BookPanel.vue';
   import InvoiceEditor from '../../../components/invoicing/InvoiceEditor.vue';
   import ProfileEditor from '../../../components/invoicing/ProfileEditor.vue';
+  import { issueYearSentence, stalePrefixYear } from '../../../components/invoicing/yearPrefix.js';
   import { errorOf, generateInvoices, getBookSelection, getProfile, listClients, listExpenses, listInvoices, listPayments, listRemovedExpenses, listRemovedPayments } from '../../../components/invoicing/api.js';
   import { monthLabel, workMonth } from '../../../components/invoicing/listGroups.js';
 
@@ -171,6 +174,9 @@
         forbidden: false,
         profile: {},
         profileSaved: false,
+        // Prefix -> its next invoice number, for every prefix in use
+        // (system_3 #12306).
+        nextNumbers: {},
         hasLogo: false,
         clients: [],
         payments: [],
@@ -220,6 +226,14 @@
         const n = String(this.profile.next_invoice_number || 1).padStart(3, '0');
         return this.profile.invoice_number_prefix ? `${this.profile.invoice_number_prefix}-${n}` : n;
       },
+      // From 1 January in Berlin, while the prefix is an earlier year
+      // (system_3 #12306 ruling 2): the sentence before issuing.
+      stalePrefix() {
+        return stalePrefixYear(this.profile.invoice_number_prefix);
+      },
+      issueYearLine() {
+        return issueYearSentence(this.stalePrefix);
+      },
     },
     watch: {
       tab(next) {
@@ -258,6 +272,7 @@
           this.profile = p.profile || {};
           this.profileSaved = !!p.saved;
           this.hasLogo = !!p.has_logo;
+          this.nextNumbers = p.next_numbers || {};
           this.clients = clients;
           this.payments = payments;
           this.refreshKey += 1;
@@ -384,9 +399,10 @@
         else if (n === 1) this.reviewSummary = `1 invoice: ${r.accepted ? 'issued' : r.rejected ? 'rejected' : 'left as a draft'}.`;
         else this.reviewSummary = `${n} invoices: ${parts.join(', ')}.`;
       },
-      onProfileSaved(profile) {
+      onProfileSaved(profile, nextNumbers) {
         this.profile = profile;
         this.profileSaved = true;
+        if (nextNumbers) this.nextNumbers = nextNumbers;
       },
     },
   };

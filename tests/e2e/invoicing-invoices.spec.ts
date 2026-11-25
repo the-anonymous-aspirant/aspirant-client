@@ -21,6 +21,8 @@ interface Fake {
   kleinunternehmer?: boolean;
   currency?: string;
   steuernummer?: string;
+  // The profile's prefix (system_3 #12306); '2026' when unset.
+  prefix?: string;
 }
 
 function newFake(): Fake {
@@ -55,7 +57,7 @@ async function mockAll(page: Page, fake: Fake): Promise<void> {
     fake.requests.push({ method, path, body });
 
     if (path === '/invoicing/profile') {
-      return json(route, 200, { saved: true, profile: { full_name: 'Flower Example', address: 'Weg 1', steuernummer: fake.steuernummer ?? '12/345/67890', email: '', is_kleinunternehmer: fake.kleinunternehmer !== false, invoice_number_prefix: '2026', next_invoice_number: 1 } });
+      return json(route, 200, { saved: true, profile: { full_name: 'Flower Example', address: 'Weg 1', steuernummer: fake.steuernummer ?? '12/345/67890', email: '', is_kleinunternehmer: fake.kleinunternehmer !== false, invoice_number_prefix: fake.prefix ?? '2026', next_invoice_number: 1 } });
     }
     if (path === '/invoicing/clients') return json(route, 200, { clients: fake.clients || [{ id: 1, name: 'Galerie Nord', address: 'Nordweg 2', email: '', paypal_email: '' }] });
     if (path === '/invoicing/payments') return json(route, 200, { payments: fake.payments });
@@ -185,6 +187,36 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     expect(put.line_items[0]).toEqual({ description: 'Portrait, Öl auf Leinwand', quantity_milli: 2500, unit_price_cents: 1999 });
     for (const key of ['issue_date', 'invoice_number', 'number', 'status']) expect(put).not.toHaveProperty(key);
   });
+
+  // system_3 #12306 ruling 2, with the review's points 1 and 6: from
+  // 1 January in Berlin, while the prefix is an earlier four-digit year,
+  // the confirmation before issuing says so. Berlin's year, not the
+  // browser's: 23:30 UTC on 31 December is already 2027 there.
+  for (const c of [
+    { when: '2027-01-01T10:00:00Z', prefix: '2026', shows: true },
+    { when: '2026-12-31T23:30:00Z', prefix: '2026', shows: true },
+    { when: '2026-12-31T22:30:00Z', prefix: '2026', shows: false },
+    { when: '2027-01-01T10:00:00Z', prefix: '2027', shows: false },
+    { when: '2027-01-01T10:00:00Z', prefix: '2028', shows: false },
+    { when: '2027-01-01T10:00:00Z', prefix: 'R', shows: false },
+  ]) {
+    test(`the issue confirmation's year line at ${c.when} with prefix ${c.prefix}: ${c.shows ? 'shown' : 'none'}`, async ({ page }) => {
+      const fake = newFake();
+      fake.prefix = c.prefix;
+      await page.clock.setFixedTime(new Date(c.when));
+      await open(page, fake);
+      await createFromTwo(page);
+      await page.locator('[data-test="draft-issue"]').click();
+      const confirm = page.locator('[data-test="issue-confirm"]');
+      await expect(confirm).toContainText(`Issuing gives it number ${c.prefix}-001 and today's date.`);
+      if (c.shows) {
+        await expect(confirm.locator('[data-test="issue-year-line"]')).toHaveText("Your numbers still start with 2026. To start 2027's with 2027, change the prefix in the Issuer profile first.");
+        await expect(confirm).toContainText("today's date. Your numbers still start with 2026. To start 2027's with 2027, change the prefix in the Issuer profile first. It can't be changed");
+      } else {
+        await expect(confirm.locator('[data-test="issue-year-line"]')).toHaveCount(0);
+      }
+    });
+  }
 
   // #9934-B1 (operator c61373): Save draft closes the modal.
   test('saving a draft closes the editor modal', async ({ page }) => {

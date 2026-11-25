@@ -279,6 +279,22 @@ test.describe('#11505 the month view on Invoices', () => {
 });
 
 test.describe('#11505 generate, then review one at a time', () => {
+  // system_3 #12306 review point 2: in a review the confirmation box is not
+  // drawn; the Accept note says the same year sentence instead.
+  test('from 1 January the Accept note says the numbers still start with last year', async ({ page }) => {
+    const fake = newFake();
+    await mock(page, fake);
+    await page.clock.setFixedTime(new Date('2027-01-05T12:00:00Z'));
+    await seedTrustedSessionAs(page, 'vinoly');
+    await page.goto('/member/personal/invoicing');
+    await dismissMobileSidebarIfPresent(page);
+    await page.getByRole('tab', { name: 'Invoices' }).click();
+    await chooseMonth(page, 'October 2026');
+    await generateButton(page).click();
+    const note = page.locator('[data-test="review-accept-note"]');
+    await expect(note).toContainText("Accept issues it as 2026-002 with today's date. Your numbers still start with 2026. To start 2027's with 2027, change the prefix in the Issuer profile first. It can't be changed or deleted afterwards.");
+  });
+
   test('Accept issues, Reject deletes, Later keeps the draft; the counter moves and the line says what happened', async ({ page }) => {
     const fake = newFake();
     await open(page, fake);

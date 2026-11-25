@@ -24,6 +24,9 @@
            never printed. Refusals show on their own field, as the phone's. -->
       <fieldset class="social" data-test="profile-social-group">
         <legend class="social__legend">Social media</legend>
+        <!-- Under the heading, before both fields: it covers both (system_3
+             #12306 ruling 5). -->
+        <p class="social__note" data-test="profile-social-note">Not printed on invoices.</p>
         <AspInput
           ref="instagram_url"
           v-model="form.instagram_url"
@@ -37,21 +40,37 @@
           v-model="form.telegram_url"
           label="Telegram"
           placeholder="@name or a link"
-          hint="Not printed on invoices."
           :error="fieldErrors.telegram_url"
           data-test="profile-telegram"
         />
       </fieldset>
       <AspCheckbox v-model="form.is_kleinunternehmer" label="Kleinunternehmerin under § 19 UStG (no VAT charged)" />
       <div class="profile-form__numbers">
-        <AspInput v-model="form.invoice_number_prefix" label="Invoice number prefix" :label-hint="hints.prefix" hint="For example 2026." required />
+        <AspInput :model-value="form.invoice_number_prefix" label="Invoice number prefix" :label-hint="hints.prefix" hint="For example 2026." required data-test="profile-prefix" @update:model-value="onPrefixInput" />
+        <!-- While invoices exist under the prefix in the field the app sets
+             the number: the field is disabled with its reason (§3.114),
+             showing the app's number. An unused prefix opens it (system_3
+             #12306 rulings 3 and 4). -->
         <AspInput
-          v-model="form.next_invoice_number"
+          v-if="appNextNumber"
+          :model-value="String(appNextNumber)"
           type="number"
           label="Next invoice number"
           :label-hint="hints.nextNumber"
-          hint="Locked once an invoice uses this prefix."
+          :hint="`Set by the app: invoices are already issued under “${prefixTyped}”.`"
+          disabled
+          data-test="profile-next-number-locked"
+        />
+        <AspInput
+          v-else
+          :model-value="form.next_invoice_number"
+          type="number"
+          label="Next invoice number"
+          :label-hint="hints.nextNumber"
+          hint="The first invoice with this prefix gets this number."
           required
+          data-test="profile-next-number"
+          @update:model-value="onNextNumberInput"
         />
       </div>
       <!-- The logo is staged like every other field and sent by Save: Cancel
@@ -137,6 +156,9 @@
     props: {
       open: { type: Boolean, default: false },
       profile: { type: Object, required: true },
+      // Prefix -> the number its next invoice gets, for every prefix with a
+      // numbered invoice (the profile answer's next_numbers, system_3 #12306).
+      nextNumbers: { type: Object, default: () => ({}) },
       hasLogo: { type: Boolean, default: false },
     },
     emits: ['update:open', 'saved', 'logo-changed'],
@@ -154,12 +176,27 @@
         logoStaged: null,
         logoSrc: '',
         logoError: '',
+        // A number ze typed for an unused prefix, kept when the prefix
+        // changes again (the review's point 4).
+        ownNextNumber: null,
       };
     },
     computed: {
       // While a save runs, no exit closes and none asks.
       unsentBusy() {
         return this.saving;
+      },
+      prefixTyped() {
+        return String(this.form.invoice_number_prefix || '').trim();
+      },
+      // The app's next number while the prefix in the field is in use, else 0.
+      appNextNumber() {
+        return Number(this.nextNumbers[this.prefixTyped]) || 0;
+      },
+      // What Save sends: the app's number while the prefix is in use (the
+      // server sets it anyway), else the field's.
+      sentNextNumber() {
+        return this.appNextNumber || Number(this.form.next_invoice_number);
       },
       logoShown() {
         if (this.logoStaged) return this.logoStaged.action === 'upload';
@@ -185,6 +222,7 @@
           this.logoSet = this.hasLogo;
           this.logoStaged = null;
           this.logoError = '';
+          this.ownNextNumber = null;
           this.takeUnsentBaseline();
           this.loadLogo();
         } else {
@@ -259,6 +297,20 @@
           return false;
         }
       },
+      // Typing in the prefix. When it leaves the prefixes in use the number
+      // field opens, filled with 1 once, or with the number ze typed earlier
+      // this visit; the next letter of the prefix never resets it (the
+      // review's point 4). Only typing does this: reopening the dialog
+      // restores the stored profile as it is.
+      onPrefixInput(value) {
+        const wasInUse = !!this.appNextNumber;
+        this.form.invoice_number_prefix = value;
+        if (wasInUse && !this.appNextNumber) this.form.next_invoice_number = this.ownNextNumber || 1;
+      },
+      onNextNumberInput(value) {
+        this.form.next_invoice_number = value;
+        this.ownNextNumber = value;
+      },
       // Esc, the scrim, the corner ✕, Cancel and Back: each asks first when
       // something is unsent (§3.166).
       onOpenChange(value) {
@@ -273,7 +325,7 @@
       unsentValue() {
         const f = this.form;
         const fields = Object.fromEntries(Object.keys(f).map((k) => [k, typeof f[k] === 'string' ? f[k].trim() : f[k]]));
-        fields.next_invoice_number = Number(f.next_invoice_number);
+        fields.next_invoice_number = this.sentNextNumber;
         const staged = this.logoStaged;
         return { fields, logo: staged ? (staged.action === 'upload' ? `upload:${staged.file.name}:${staged.file.size}` : 'delete') : null };
       },
@@ -305,9 +357,9 @@
         const logoChanged = !!this.logoStaged;
         try {
           if (!(await this.saveLogo())) return;
-          const body = { ...this.form, next_invoice_number: Number(this.form.next_invoice_number) };
+          const body = { ...this.form, next_invoice_number: this.sentNextNumber };
           const res = await saveProfile(body);
-          this.$emit('saved', res.profile);
+          this.$emit('saved', res.profile, res.next_numbers);
           this.$emit('update:open', false);
         } catch (err) {
           const { code, message } = errorOf(err);
@@ -350,6 +402,13 @@
     margin-bottom: var(--space-2xs);
     font-size: var(--text-sm);
     font-weight: var(--font-weight-medium, 500);
+  }
+
+  /* The group's own note, in a field hint's ink and size (system_3 #12306). */
+  .social__note {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--text-xs);
   }
 
   .profile-form__numbers {

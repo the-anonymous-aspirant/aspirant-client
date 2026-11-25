@@ -29,6 +29,8 @@ interface Fake {
   /** #10438: the expense book behind /invoicing/expenses/import-paypal/confirm. */
   expenses?: Json[];
   expenseConfirmFailure?: { status: number; body: Json };
+  /** system_3 #12306: prefix -> its next number, for every prefix in use. */
+  nextNumbers?: Record<string, number>;
 }
 
 function newFake(over: Partial<Fake> = {}): Fake {
@@ -68,15 +70,19 @@ async function mockInvoicing(page: Page, fake: Fake): Promise<void> {
     fake.requests.push({ method, path, body: req.postData() || '', contentType: req.headers()['content-type'] || '' });
     if (fake.forbidden) return json(route, 403, { error: { code: 'forbidden', message: 'Insufficient permissions' } });
 
-    if (path === '/invoicing/profile' && method === 'GET') return json(route, 200, { profile: fake.profile, saved: fake.saved });
+    if (path === '/invoicing/profile' && method === 'GET') return json(route, 200, { profile: fake.profile, saved: fake.saved, next_numbers: fake.nextNumbers || {} });
     if (path === '/invoicing/profile' && method === 'PUT') {
       const body = JSON.parse(req.postData() || '{}');
       if (body.invoice_number_prefix === 'bad/prefix') {
         return json(route, 400, { error: { code: 'bad_request', message: 'invoice_number_prefix must be 1-20 letters, digits or hyphens' } });
       }
+      // As the server does (system_3 #12306): under a prefix in use the
+      // app's number is stored, whatever was sent.
+      const inUse = (fake.nextNumbers || {})[body.invoice_number_prefix];
+      if (inUse) body.next_invoice_number = inUse;
       fake.profile = body;
       fake.saved = true;
-      return json(route, 200, { profile: body, saved: true });
+      return json(route, 200, { profile: body, saved: true, next_numbers: fake.nextNumbers || {} });
     }
     if (path === '/invoicing/clients' && method === 'GET') return json(route, 200, { clients: fake.clients });
     if (path === '/invoicing/clients' && method === 'POST') {
@@ -275,6 +281,83 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await expect(form.getByLabel(/^Steuernummer \(Tax number\)/)).toHaveValue('98/765/43210');
     const put = fake.requests.filter((r) => r.method === 'PUT' && r.path === '/invoicing/profile').pop()!;
     expect(JSON.parse(put.body)).toMatchObject({ steuernummer: '98/765/43210', invoice_number_prefix: '2026', next_invoice_number: 1, is_kleinunternehmer: true });
+  });
+
+  // system_3 #12306 rulings 3 and 4, with the review's point 4: while
+  // invoices exist under the prefix in the field, the app sets the next
+  // number and the field says so; an unused prefix opens it.
+  test('the next number is the app\'s under a prefix in use, and ze sets it for a new prefix', async ({ page }) => {
+    const fake = newFake({ nextNumbers: { '2026': 8, R: 3 } });
+    fake.profile.next_invoice_number = 8;
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+    await page.locator('[data-test="profile-edit"]').click();
+    const form = page.locator('[data-test="profile-form"]');
+    const prefix = form.getByLabel(/^Invoice number prefix/);
+    // data-test sits on the input; its hint is on the field around it.
+    const locked = form.locator('[data-test="profile-next-number-locked"]');
+    const own = form.locator('[data-test="profile-next-number"]');
+    const fieldOf = (input: ReturnType<Page['locator']>) => form.locator('.field').filter({ has: input });
+
+    await expect(locked).toBeDisabled();
+    await expect(locked).toHaveValue('8');
+    await expect(fieldOf(locked)).toContainText('Set by the app: invoices are already issued under “2026”.');
+    await expect(own).toHaveCount(0);
+
+    // Leaving the prefixes in use opens the field at 1, once: the next
+    // letter of the prefix does not reset what ze typed.
+    await prefix.press('End');
+    await prefix.press('Backspace');
+    await expect(own).toHaveValue('1');
+    await expect(fieldOf(own)).toContainText('The first invoice with this prefix gets this number.');
+    await prefix.press('7');
+    await expect(prefix).toHaveValue('2027');
+    await own.fill('5');
+    await prefix.press('Backspace');
+    await expect(own).toHaveValue('5');
+    // Back to a prefix in use: the app's number; away again: zirs.
+    await prefix.press('6');
+    await expect(locked).toHaveValue('8');
+    await prefix.press('Backspace');
+    await prefix.press('8');
+    await expect(own).toHaveValue('5');
+    // Another prefix in use shows its own number.
+    await prefix.fill('R');
+    await expect(locked).toHaveValue('3');
+    await expect(fieldOf(locked)).toContainText('“R”');
+
+    // Saving under a prefix in use sends the app's number.
+    await prefix.fill('2026');
+    await page.locator('[data-test="profile-save"]').click();
+    await expect(form).toBeHidden();
+    let put = fake.requests.filter((r) => r.method === 'PUT' && r.path === '/invoicing/profile').pop()!;
+    expect(JSON.parse(put.body)).toMatchObject({ invoice_number_prefix: '2026', next_invoice_number: 8 });
+
+    // Saving a new prefix sends zir number.
+    await page.locator('[data-test="profile-edit"]').click();
+    await prefix.fill('2027');
+    await own.fill('4');
+    await page.locator('[data-test="profile-save"]').click();
+    await expect(form).toBeHidden();
+    put = fake.requests.filter((r) => r.method === 'PUT' && r.path === '/invoicing/profile').pop()!;
+    expect(JSON.parse(put.body)).toMatchObject({ invoice_number_prefix: '2027', next_invoice_number: 4 });
+  });
+
+  // system_3 #12306 ruling 5: one note for the group, under its heading.
+  test('"Not printed on invoices." stands under Social media, before both fields', async ({ page }) => {
+    const fake = newFake();
+    await mockInvoicing(page, fake);
+    await seedTrustedSessionAs(page, 'vinoly');
+    await openInvoicing(page);
+    await page.locator('[data-test="profile-edit"]').click();
+    const group = page.locator('[data-test="profile-social-group"]');
+    const note = group.locator('[data-test="profile-social-note"]');
+    await expect(note).toHaveText('Not printed on invoices.');
+    const order = await group.evaluate((g) => [...g.querySelectorAll('legend, [data-test="profile-social-note"], [data-test="profile-instagram"], [data-test="profile-telegram"]')].map((e) => e.getAttribute('data-test') || e.tagName));
+    expect(order).toEqual(['LEGEND', 'profile-social-note', 'profile-instagram', 'profile-telegram']);
+    const telegramField = group.locator('.field').filter({ has: group.locator('[data-test="profile-telegram"]') });
+    await expect(telegramField).not.toContainText('Not printed on invoices.');
   });
 
   test('adding a client POSTs it; the name is required, the address is not', async ({ page }) => {
