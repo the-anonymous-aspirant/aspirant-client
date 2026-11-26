@@ -429,6 +429,20 @@ test.describe('#10414-D Invoices app — the Book chart', () => {
     await expect(caption).toHaveCSS('text-align', 'left');
   });
 
+  // system_3 #12269: "this month" is Berlin's. At 23:30 UTC on 30 September
+  // it is 1 October in Berlin, so the bars run to October.
+  test('the bars run to the Berlin month at 23:30 UTC on its last day', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-09-30T23:30:00Z'));
+    await open(page, newFake({ payments: [incomeRow()], expenses: [expenseRow(101)] }));
+    const chart = page.locator('[data-test="book-chart"]');
+    await expect(chart).toHaveAttribute('data-labels', 'Jul 2026,Aug 2026,Sep 2026,Oct 2026');
+    await expect(chart).toHaveAttribute('data-income', '350,0,0,0');
+    // The caption's "so far" reads the same month (system_3 #12282).
+    await expect(page.locator('[data-test="book-chart-range"]')).toHaveText(
+      'Income and expenses by the month they were paid. Oct so far: income €0.00, expenses €0.00.'
+    );
+  });
+
   test('a withdrawal does not count as income on the chart either', async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-07-15T12:00:00Z'));
     const fake = newFake({

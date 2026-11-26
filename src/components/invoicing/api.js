@@ -271,6 +271,14 @@ export function formatBerlinDay(iso) {
   return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 }
 
+// The month a moment falls in, in zir calendar (Berlin): "2026-07". The
+// charts' current month, the one they call "so far", is this month, not the
+// UTC one, which is still the previous month for the first hour or two of a
+// month (system_3 #12269).
+export function berlinMonthKey(when) {
+  return formatBerlinDay(when).slice(0, 7);
+}
+
 // The "@name" a stored profile link shows as. The link itself is used as
 // stored (the server only stores https://www.instagram.com/<name>/ or
 // https://t.me/<name>, system_3 #10002); this is only its visible text.
