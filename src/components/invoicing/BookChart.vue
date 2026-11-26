@@ -16,9 +16,10 @@
         :data="chartData"
         :options="options"
         :height="180"
+        :plugins="[axisProbe]"
         aria-label="Income and expenses per month in euros"
       />
-      <p class="stat__range muted" data-test="book-chart-range">by the day paid; this month so far</p>
+      <p class="stat__range muted" data-test="book-chart-range">{{ caption }}</p>
     </template>
   </figure>
 </template>
@@ -26,11 +27,10 @@
 <script>
   import { AspChart } from '@aspirant/design-system';
   import { formatMoney } from './api.js';
+  import { axisProbe, monthAxis, moneyTick } from './chartAxis.js';
 
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const Y_AXIS_WIDTH = 56;
-
-  const moneyTick = (v) => (Math.abs(v) >= 1000 ? `€${(v / 1000).toFixed(1)}k` : `€${Math.round(v)}`);
 
   const monthOf = (d) => {
     const m = String(d || '').slice(0, 7);
@@ -65,7 +65,7 @@
       now: { type: Date, default: null },
     },
     data() {
-      return { themeTick: 0 };
+      return { themeTick: 0, axisProbe };
     },
     computed: {
       income() {
@@ -77,11 +77,14 @@
       expenseMonths() {
         return this.expenses.map((e) => monthOf(e.paid_on));
       },
+      currentKey() {
+        const today = this.now || new Date();
+        return `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
+      },
       months() {
         const seen = [...this.incomeMonths, ...this.expenseMonths].filter(Boolean);
         if (!seen.length) return [];
-        const today = this.now || new Date();
-        const last = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
+        const last = this.currentKey;
         let [y, m] = seen.reduce((a, b) => (a < b ? a : b)).split('-').map(Number);
         const end = seen.reduce((a, b) => (a > b ? a : b), last);
         const out = [];
@@ -110,6 +113,15 @@
           (k) => this.expenses.reduce((s, e, n) => (this.expenseMonths[n] === k ? s + (Number(e.amount_cents) || 0) : s), 0) / 100
         );
       },
+      // A sentence, with the current month "so far" (system_3 #12282, the
+      // review's point 2).
+      caption() {
+        const i = this.months.indexOf(this.currentKey);
+        const head = 'Income and expenses by the month they were paid.';
+        if (i < 0) return head;
+        const money = (v) => formatMoney(Math.round(v * 100));
+        return `${head} ${MONTHS[Number(this.currentKey.slice(5)) - 1]} so far: income ${money(this.incomeEuros[i])}, expenses ${money(this.expenseEuros[i])}.`;
+      },
       seriesColors() {
         // eslint-disable-next-line no-unused-expressions
         this.themeTick; // tracked so a theme flip recomputes these
@@ -136,7 +148,7 @@
             tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatMoney(Math.round(ctx.parsed.y * 100))}` } },
           },
           scales: {
-            x: { offset: true },
+            x: monthAxis(),
             y: {
               afterFit: (axis) => {
                 axis.width = Y_AXIS_WIDTH;
@@ -171,10 +183,11 @@
     font-size: var(--text-sm);
   }
 
+  /* A sentence, left-aligned under the chart (#12282 ruling 4). */
   .stat__range {
     margin: var(--space-2xs) 0 0;
     font-size: var(--text-xs, 0.75rem);
-    text-align: center;
+    text-align: left;
   }
 
   .muted {

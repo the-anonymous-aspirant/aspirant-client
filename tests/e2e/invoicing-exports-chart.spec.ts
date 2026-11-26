@@ -120,10 +120,10 @@ test.describe('#9972 Invoices app: the statistics', () => {
       await expect(page.locator(`[data-test="${id}"] .asp-chart[data-rendered="true"]`)).toHaveCount(1);
     }
     await expect(page.locator('[data-test="stat-clients-range"]')).toHaveText(
-      'running total; each client counts from the month of the work on their first issued invoice; low 1 client in Jun · high 2 clients in Aug · Sep so far 2 clients',
+      'Clients you have invoiced, counted from the month of their first invoice. 2 so far.',
     );
     await expect(page.locator('[data-test="stat-income-range"]')).toHaveText(
-      'issued invoices, by the month the work was done, cancelled invoices left out; low €0.00 in Sep so far · high €350.00 in Jun',
+      'Issued invoices by the month the work was done. Cancelled invoices are left out. Lowest €0.00 in Sep so far, highest €350.00 in Jun.',
     );
   });
 
@@ -176,7 +176,7 @@ test.describe('#11024 UX walk AM7: chart captions state real figures and give he
   // `open` fixes the clock at 2026-09-15 (set inside the helper, after any
   // clock call a test makes first), so September is "the current month" in
   // every fixture below.
-  test('a caption names the low and high month, the current month so far, and that cancelled invoices are left out', async ({ page }) => {
+  test('a caption names the lowest and highest month, the current month so far, and that cancelled invoices are left out', async ({ page }) => {
     const fake = newFake();
     fake.issued = [
       inv(1, '2026-07-05'),
@@ -193,7 +193,7 @@ test.describe('#11024 UX walk AM7: chart captions state real figures and give he
     // issued ones (the cancelled one left out), which the caption explains.
     await expect(chart).toHaveAttribute('data-counts', '1,0,4');
     await expect(page.locator('[data-test="stat-invoices-range"]')).toHaveText(
-      'per month, by issue date, cancelled invoices left out; low 0 in Aug · high 4 in Sep so far',
+      'Issued invoices by the month of issue. Cancelled invoices are left out. Lowest 0 invoices in Aug, highest 4 invoices in Sep so far.',
     );
   });
 
@@ -299,7 +299,7 @@ test.describe('#12258 Income per month counts euro invoices', () => {
     await expect(chart).toHaveAttribute('data-counts', '2,0,1');
     await expect(chart).toHaveAttribute('data-clients', '2,2,2');
     await expect(page.locator('[data-test="stat-income-range"]')).toHaveText(
-      'issued invoices, by the month the work was done, cancelled invoices left out; low €0.00 in Aug · high €350.00 in Jul · Sep so far €90.00; 1 invoice in another currency (USD) is not counted',
+      'Issued invoices by the month the work was done. Cancelled invoices are left out. 1 invoice in another currency (USD) is not counted. Lowest €0.00 in Aug, highest €350.00 in Jul. Sep so far: €90.00.',
     );
   });
 
@@ -312,6 +312,112 @@ test.describe('#12258 Income per month counts euro invoices', () => {
       { ...served(4, 2, '2026-08-13', '2026-08-30', 10000), currency: 'USD' },
     ];
     await open(page, fake);
-    await expect(page.locator('[data-test="stat-income-range"]')).toContainText('; 3 invoices in other currencies (GBP, USD) are not counted');
+    await expect(page.locator('[data-test="stat-income-range"]')).toContainText('. 3 invoices in other currencies (GBP, USD) are not counted.');
+  });
+});
+
+// system_3 #12282 (design_agent's spec, with its review's addendum): a month
+// label never rotates (§3.122 P10). It wraps, "Jun" over "2026", and only
+// wrapped labels that still collide leave some out. Money ticks are compact,
+// written one way ("€1k" beside "€800"). Captions are sentences, left-aligned,
+// each with its "so far". The three charts stay open (addendum point 3).
+test.describe('#12282 chart labels wrap, never rotate; captions are sentences', () => {
+  // A month of invoices from `first` to September 2026 (the fixed clock),
+  // with totals that give the money axis a thousand.
+  const monthly = (first: string, n: number): Json[] =>
+    Array.from({ length: n }, (_, k) => {
+      const d = new Date(`${first}-05T00:00:00Z`);
+      d.setUTCMonth(d.getUTCMonth() + k);
+      const day = d.toISOString().slice(0, 10);
+      return served(k + 1, (k % 3) + 1, day, day, 40000 + 20000 * (k % 4));
+    });
+
+  const axes = async (page: Page, id: string) => {
+    const el = page.locator(`[data-test="${id}"] .asp-chart`);
+    await expect(el).toHaveAttribute('data-shown-months', /\d/);
+    return {
+      rotation: Number(await el.getAttribute('data-label-rotation')),
+      shown: (await el.getAttribute('data-shown-months'))!.split(','),
+      yTicks: (await el.getAttribute('data-y-ticks'))!.split(','),
+    };
+  };
+
+  for (const [width, months, first] of [
+    [390, 6, '2026-04'],
+    [360, 12, '2025-10'],
+    [1440, 12, '2025-10'],
+  ] as const) {
+    test(`at ${width}px, ${months} months: no label rotates, each prints month over year, and the charts are open`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const fake = newFake();
+      fake.issued = monthly(first, months);
+      await open(page, fake);
+      const labels = (await page.locator('[data-test="invoices-chart"]').getAttribute('data-labels'))!.split(',');
+      expect(labels).toHaveLength(months);
+      for (const id of ['stat-clients', 'stat-income', 'stat-invoices']) {
+        await expect(page.locator(`[data-test="${id}"] .asp-chart[data-rendered="true"]`)).toBeVisible();
+        const { rotation, shown } = await axes(page, id);
+        expect(rotation, `${id}: label rotation`).toBe(0);
+        // Each printed label is a month of the axis, in its order; some
+        // may be left out, never all but one.
+        expect(shown.length, `${id}: months printed`).toBeGreaterThan(1);
+        const at = shown.map((m) => labels.indexOf(m));
+        expect(at.every((i) => i >= 0), `${id}: ${shown}`).toBe(true);
+        expect([...at].sort((a, b) => a - b)).toEqual(at);
+      }
+      if (months === 6) {
+        // Six fit at 390 once wrapped: none is left out.
+        expect((await axes(page, 'stat-income')).shown).toEqual(labels);
+      }
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(0);
+    });
+  }
+
+  test('money ticks are compact and written one way: €1k, never €1.0k', async ({ page }) => {
+    const fake = newFake();
+    fake.issued = [served(1, 1, '2026-07-05', '2026-07-05', 170000), served(2, 2, '2026-08-05', '2026-08-05', 90000)];
+    await open(page, fake);
+    const { yTicks } = await axes(page, 'stat-income');
+    // The step is Chart.js's. Whatever it picks, a whole thousand has no
+    // ".0" and a tick under a thousand stays whole euros.
+    expect(yTicks.some((t) => t.endsWith('k')), `${yTicks}`).toBe(true);
+    for (const t of yTicks) expect(t).not.toMatch(/\.0k$/);
+    for (const t of yTicks) expect(t).toMatch(/^€(\d+|\d+(\.[1-9])?k)$/);
+  });
+
+  test('the captions are sentences, left-aligned; a running total names no low or high', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    const fake = newFake();
+    fake.issued = [
+      served(1, 1, '2026-06-20', '2026-07-03', 35000),
+      served(2, 2, '2026-07-10', '2026-07-28', 12000),
+      served(3, 3, '2026-09-01', '2026-09-02', 9000),
+    ];
+    await open(page, fake);
+    await expect(page.locator('[data-test="stat-clients-range"]')).toHaveText('Clients you have invoiced, counted from the month of their first invoice. 3 so far.');
+    await expect(page.locator('[data-test="stat-income-range"]')).toHaveText(
+      'Issued invoices by the month the work was done. Cancelled invoices are left out. Lowest €0.00 in Aug, highest €350.00 in Jun. Sep so far: €90.00.',
+    );
+    await expect(page.locator('[data-test="stat-invoices-range"]')).toHaveText(
+      'Issued invoices by the month of issue. Cancelled invoices are left out. Lowest 0 invoices in Jun, highest 2 invoices in Jul. Sep so far: 1 invoice.',
+    );
+    for (const id of ['stat-clients-range', 'stat-income-range', 'stat-invoices-range']) {
+      const caption = page.locator(`[data-test="${id}"]`);
+      await expect(caption).toHaveCSS('text-align', 'left');
+      await expect(caption).not.toContainText(';');
+      await expect(caption).not.toContainText('·');
+      await expect(caption).toHaveText(/^[A-Z].*\.$/);
+    }
+  });
+
+  test('one month, the current one, reads as its "so far" alone', async ({ page }) => {
+    const fake = newFake();
+    fake.issued = [served(1, 1, '2026-09-01', '2026-09-02', 9000)];
+    await open(page, fake);
+    await expect(page.locator('[data-test="stat-income-range"]')).toHaveText(
+      'Issued invoices by the month the work was done. Cancelled invoices are left out. Sep so far: €90.00.',
+    );
+    await expect(page.locator('[data-test="stat-clients-range"]')).toHaveText('Clients you have invoiced, counted from the month of their first invoice. 1 so far.');
   });
 });

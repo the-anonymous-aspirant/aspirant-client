@@ -401,6 +401,34 @@ test.describe('#10414-D Invoices app — the Book chart', () => {
     await expect(page.locator('.asp-chart[data-rendered="true"]')).toHaveCount(1);
   });
 
+  // system_3 #12282: the month labels wrap and never rotate, the money ticks
+  // are written one way, and the caption is a sentence with its "so far".
+  test('at 390 no month label rotates, the ticks are written one way, and the caption is a sentence', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.clock.setFixedTime(new Date('2026-09-15T12:00:00Z'));
+    const fake = newFake({
+      payments: [
+        incomeRow(),
+        incomeRow({ id: 12, paid_on: '2026-04-10T00:00:00Z', gross_cents: 100000 }),
+        incomeRow({ id: 13, paid_on: '2026-09-10T00:00:00Z', gross_cents: 12000 }),
+      ],
+      expenses: [expenseRow(101)],
+    });
+    await open(page, fake);
+    const el = page.locator('[data-test="book-chart"] .asp-chart');
+    await expect(el).toHaveAttribute('data-shown-months', /\d/);
+    await expect(el).toHaveAttribute('data-label-rotation', '0');
+    await expect(page.locator('[data-test="book-chart"]')).toHaveAttribute('data-labels', 'Apr 2026,May 2026,Jun 2026,Jul 2026,Aug 2026,Sep 2026');
+    expect((await el.getAttribute('data-shown-months'))!.split(',')).toEqual(['Apr 2026', 'May 2026', 'Jun 2026', 'Jul 2026', 'Aug 2026', 'Sep 2026']);
+    const ticks = (await el.getAttribute('data-y-ticks'))!.split(',');
+    expect(ticks.some((t) => t.endsWith('k')), `${ticks}`).toBe(true);
+    for (const t of ticks) expect(t).not.toMatch(/\.0k$/);
+    for (const t of ticks) expect(t).toMatch(/^€(\d+|\d+(\.[1-9])?k)$/);
+    const caption = page.locator('[data-test="book-chart-range"]');
+    await expect(caption).toHaveText('Income and expenses by the month they were paid. Sep so far: income €120.00, expenses €0.00.');
+    await expect(caption).toHaveCSS('text-align', 'left');
+  });
+
   test('a withdrawal does not count as income on the chart either', async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-07-15T12:00:00Z'));
     const fake = newFake({
