@@ -205,6 +205,10 @@ for (const size of [
     test('Enter payment: no date at the date, focused; the line goes when a date is typed', async ({ page }) => {
       const fake = newFake();
       await open(page, fake);
+      // Below 640px the ways in sit behind the "Add or import" fold, which
+      // opens by itself only while the list is empty; this fake has payments.
+      const summary = page.locator('[data-test="ways-in-summary"]');
+      if (await summary.count()) await summary.click();
       await page.locator('[data-test="manual-new"]').click();
       await page.locator('[data-test="manual-save"]').click();
 
