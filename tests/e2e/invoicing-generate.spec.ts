@@ -1241,7 +1241,7 @@ test.describe('#12263 Create invoice is held for a payment already on a draft', 
     expect(writes(fake)).toEqual([]);
 
     // Unticked, Create acts again and the pair's line is back.
-    await page.getByRole('checkbox', { name: 'Select M-2', exact: true }).uncheck();
+    await tickBox(page, 2).uncheck();
     await expect(createInvoice(page)).toBeEnabled();
     await expect(pairCaption(page)).toHaveCount(0);
     await expect(page.locator('[data-test="generate-pair-hint"]')).toHaveText('Generate makes one invoice per payment. Create invoice puts all 2 on one.');
@@ -1265,7 +1265,7 @@ test.describe('#12263 Create invoice is held for a payment already on a draft', 
     await expect(createInvoice(page)).toBeDisabled();
     await expect(pairCaption(page)).toHaveText(
       '2 of the 3 selected are already on a draft. To put them on one invoice, delete that draft first: open it from one of their “Draft” links.');
-    await page.getByRole('checkbox', { name: 'Select M-1', exact: true }).uncheck();
+    await tickBox(page, 1).uncheck();
     await expect(pairCaption(page)).toHaveText('The 2 selected are already on one draft. Open it from its “Draft” link.');
     await expect(createInvoice(page)).toBeDisabled();
     await expect(generateSelected(page)).toBeEnabled();
@@ -1277,7 +1277,7 @@ test.describe('#12263 Create invoice is held for a payment already on a draft', 
     await expect(pairCaption(page)).toHaveText('1 of the 3 selected is not Paid work. Untick it to create or generate invoices.');
     await expect(generateSelected(page)).toBeDisabled();
     await expect(generateSelected(page)).toHaveAttribute('aria-describedby', 'create-invoice-hint');
-    await page.getByRole('checkbox', { name: 'Select M-5', exact: true }).uncheck();
+    await tickBox(page, 5).uncheck();
     await expect(pairCaption(page)).toHaveText(
       "1 of the 2 selected is already on a draft. To put them on one invoice, delete that draft first: open it from that payment's “Draft” link.");
     await expect(generateSelected(page)).toBeEnabled();
@@ -1293,7 +1293,7 @@ test.describe('#12263 Create invoice is held for a payment already on a draft', 
     await expect(createInvoice(page)).toBeDisabled();
     await expect(pairCaption(page)).toHaveText(ONE_OF_THREE);
     await expect(page.locator('[data-test="create-currency-hint"]')).toHaveCount(0);
-    await page.getByRole('checkbox', { name: 'Select M-2', exact: true }).uncheck();
+    await tickBox(page, 2).uncheck();
     await expect(createInvoice(page)).toBeDisabled();
     await expect(pairCaption(page)).toHaveCount(0);
     await expect(page.locator('[data-test="create-currency-hint"]')).toHaveText(
@@ -1361,7 +1361,7 @@ test.describe('#12263 on a phone, the draft line stands under "As 1 invoice"', (
       await expect(createInvoice(page)).not.toHaveAttribute('aria-describedby', 'create-invoice-hint');
       await fits(page, height, 'three ticked, one on a draft, Remove armed');
       // Disarmed by a change of selection, the caption is back.
-      await page.getByRole('checkbox', { name: 'Select M-3', exact: true }).uncheck();
+      await tickBox(page, 3).uncheck();
       await expect(barCaption(page)).toHaveText('1 of the 2 is on a draft. For 1 invoice, delete that draft from its “Draft” link.');
     });
 
@@ -1384,7 +1384,7 @@ test.describe('#12263 on a phone, the draft line stands under "As 1 invoice"', (
       for (const id of [1, 2, 3]) await tick(page, id);
       await expect(barCaption(page)).toHaveText('2 of the 3 are on a draft. For 1 invoice, delete that draft from its “Draft” link.');
       await fits(page, height, 'two of three on one draft');
-      await page.getByRole('checkbox', { name: 'Select M-1', exact: true }).uncheck();
+      await tickBox(page, 1).uncheck();
       await expect(barCaption(page)).toHaveText('The 2 selected are already on one draft. Open it from its “Draft” link.');
       await fits(page, height, 'all ticked on one draft');
     });
