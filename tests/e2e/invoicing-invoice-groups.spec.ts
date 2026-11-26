@@ -91,7 +91,15 @@ async function open(page: Page, fake: Fake): Promise<void> {
       const row = fake.invoices.find((i) => i.id === Number(m[1]))!;
       if (m[2] && method === 'POST') Object.assign(row, { status: 'issued', invoice_number: '2026-008', number: 8, issue_date: `${fake.issueDate}T00:00:00Z` });
       const items = [{ id: 1, position: 1, description: 'Wandbild', quantity_milli: 1000, unit_price_cents: row.total_cents, line_total_cents: row.total_cents }];
-      return json(route, 200, { invoice: row, line_items: items, payments: [], warnings: [] });
+      // Each invoice covers one payment of its total: a draft that covers no
+      // payment has no "Issue invoice…" (system_3 #12274).
+      const covered = {
+        id: row.id, kind: 'incoming', entry: 'manual', source: 'manual', transaction_id: `M-${row.id}`, method: 'bank_transfer',
+        reference: '', paid_on: '2026-09-01T00:00:00Z', currency: 'EUR', gross_cents: row.total_cents, sender_name: row.client_name,
+        sender_email: '', note: 'Wandbild', category: 'paid_work', client_id: 1, on_invoice: true, on_issued_invoice: row.status !== 'draft',
+        invoice: null,
+      };
+      return json(route, 200, { invoice: row, line_items: items, payments: [covered], warnings: [] });
     }
     return json(route, 404, { error: { code: 'not_found', message: `unmocked ${method} ${path}` } });
   });

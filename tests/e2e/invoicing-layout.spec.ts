@@ -15,6 +15,7 @@ const json = (route: Route, status: number, body: Json) =>
 
 const issued = { id: 100, status: 'issued', client_id: 1, client_name: 'Galerie Nord', invoice_number: '2026-001', issue_date: '2026-10-21T00:00:00Z', service_date_from: '2026-07-14T00:00:00Z', service_date_to: '2026-07-14T00:00:00Z', total_cents: 35000, currency: 'EUR', vat_rate_bp: 0 };
 const draft = { ...issued, id: 102, status: 'draft', invoice_number: null, issue_date: null, total_cents: 5000 };
+const covered = { id: 10, kind: 'incoming', entry: 'manual', source: 'manual', transaction_id: 'TX1', method: 'bank_transfer', reference: '', paid_on: '2026-07-14T00:00:00Z', currency: 'EUR', gross_cents: 35000, sender_name: 'Galerie Nord', sender_email: 'pay@galerie.test', note: 'Wandbild Juli', category: 'paid_work', client_id: 1, on_invoice: true, on_issued_invoice: false, invoice: null };
 const item = { id: 1, position: 1, description: 'Wandbild Juli, Acryl auf Leinwand, 120 × 80 cm', quantity_milli: 1000, unit_price_cents: 35000, line_total_cents: 35000 };
 
 async function mock(page: Page, { steuernummer = '12/345/67890', payments = null as Json[] | null } = {}): Promise<void> {
@@ -34,7 +35,9 @@ async function mock(page: Page, { steuernummer = '12/345/67890', payments = null
     }
     if (path === '/invoicing/invoices') return json(route, 200, { invoices: [issued, draft] });
     if (path === '/invoicing/invoices/100') return json(route, 200, { invoice: issued, client_name: 'Galerie Nord', line_items: [item], payments: [], warnings: [] });
-    if (path === '/invoicing/invoices/102') return json(route, 200, { invoice: draft, client_name: 'Galerie Nord', line_items: [{ ...item, id: 2 }], payments: [], warnings: [] });
+    // The draft covers TX1, whose amount is its line's total: a draft that
+    // covers no payment has no "Issue invoice…" (system_3 #12274).
+    if (path === '/invoicing/invoices/102') return json(route, 200, { invoice: draft, client_name: 'Galerie Nord', line_items: [{ ...item, id: 2 }], payments: [covered], warnings: [] });
     if (path === '/invoicing/invoices/100/pdf') return route.fulfill({ status: 200, contentType: 'application/pdf', body: '%PDF-1.4\n%%EOF' });
     if (path === '/invoicing/audit-events') return json(route, 200, { events: [] });
     return json(route, 404, { error: { code: 'not_found', message: `unmocked ${path}` } });

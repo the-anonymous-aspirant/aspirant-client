@@ -993,8 +993,15 @@ test.describe('#11670 the invoice editor asks before an exit throws away what wa
     await expect(page).toHaveURL(/\/member\/personal\/invoicing/);
     await page.locator('[data-test="unsent-keep"]').click();
     await expect(quantity(page)).toHaveValue('2');
-    // Accept saves what is on screen, then moves on without asking.
-    await page.locator('[data-test="review-accept"]').click();
+    // Accept saves what is on screen, then moves on without asking. A
+    // quantity of 2 makes a difference from the payment, so Accept takes a
+    // second press after the first has settled (system_3 #12274).
+    const accept = page.locator('[data-test="review-accept"]');
+    await expect(accept).toHaveText('Accept with this difference');
+    await accept.click();
+    await expect(accept).toHaveText('Issue now');
+    await page.waitForTimeout(700);
+    await accept.click();
     await expect(dialog(page)).toContainText('Invoice 3 / 3');
     await expect(ask(page)).toHaveCount(0);
     // Typed and put back: Esc closes at once.
