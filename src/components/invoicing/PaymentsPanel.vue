@@ -838,7 +838,7 @@
       generateError: { type: String, default: '' },
       reviewSummary: { type: String, default: '' },
     },
-    emits: ['changed', 'open-invoice', 'generate', 'status-seen'],
+    emits: ['changed', 'open-invoice', 'generate', 'status-seen', 'clear-generate-error'],
     data() {
       return {
         importing: false,
@@ -1960,11 +1960,13 @@
       // selected (system_3 #12298 ruling 4). Called from zir own ticks and
       // filters only, never from a watcher: a refused bulk action sets the
       // selection and its line together, and must keep the line.
+      // `generateError` is a prop the view owns, so the panel asks the view
+      // to clear it: a write to a prop throws, and the tick would be lost.
       clearListLines() {
         this.rowError = '';
         this.bulkError = '';
         this.createError = '';
-        this.generateError = '';
+        if (this.generateError) this.$emit('clear-generate-error');
       },
       toggle(key, on) {
         this.clearListLines();

@@ -107,6 +107,7 @@
         @changed="fetchAll"
         @open-invoice="openInvoice"
         @generate="generate({ paymentIds: $event })"
+        @clear-generate-error="generateError = ''"
         @status-seen="reviewSummary = ''"
       />
 
