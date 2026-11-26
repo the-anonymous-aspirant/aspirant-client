@@ -874,7 +874,9 @@ test.describe('#11371 the phone\'s selection bar', () => {
       await expect(page.locator('[data-test="selection-bar"] [data-test="create-invoice-hint"]')).toHaveText('1 of the 12 selected is not Paid work. Untick it to create or generate invoices.');
       await expect(generateSelected(page)).toBeDisabled();
       await expect(createInvoice(page)).toBeDisabled();
-      expect((await barBox(page)).height, 'with the two-line caption').toBeLessThanOrEqual(cap(height));
+      const notPaidWork = (await barBox(page)).height;
+      test.info().annotations.push({ type: 'bar-height', description: `not Paid work caption: ${Math.round(notPaidWork)}px` });
+      expect(notPaidWork, 'with the two-line caption').toBeLessThanOrEqual(cap(height));
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     });
   }
@@ -1196,4 +1198,195 @@ test.describe('#12258 a selection in two currencies', () => {
     await expect(dialog(page)).toContainText('Invoice 1 / 2');
     expect(fake.invoices.filter((i) => i.status === 'draft')).toHaveLength(2);
   });
+});
+
+// --- #12263: a payment is on at most one draft, so Create invoice is held ---
+
+/** Puts each group of payments on one draft of its own (ids from 7). */
+function onDrafts(fake: Fake, ...groups: number[][]): Fake {
+  groups.forEach((pids, i) => {
+    const ps = pids.map((pid) => fake.payments.find((x) => x.id === pid)!);
+    const inv = {
+      id: 7 + i, status: 'draft', client_id: 1, client_name: 'Galerie Nord', invoice_number: null, number: null, issue_date: null,
+      service_date_from: ps[0].paid_on, service_date_to: ps[ps.length - 1].paid_on, vat_rate_bp: 1900,
+      total_cents: ps.reduce((t, p) => t + p.gross_cents, 0), currency: 'EUR', payment_ids: pids,
+    };
+    fake.invoices.push(inv);
+    for (const p of ps) Object.assign(p, { on_invoice: true, invoice: { id: inv.id, status: 'draft', invoice_number: null } });
+  });
+  return fake;
+}
+
+/** The fake with the given payments on drafts of their own. */
+const withDrafts = (...ids: number[]): Fake => onDrafts(newFake(), ...ids.map((id) => [id]));
+
+const ONE_OF_THREE = "1 of the 3 selected is already on a draft. To put them on one invoice, delete that draft first: open it from that payment's “Draft” link.";
+
+test.describe('#12263 Create invoice is held for a payment already on a draft', () => {
+  test.skip(({ isMobile }) => isMobile, 'the desktop toolbar; the phone bar is the test below');
+
+  test('one of three ticked is on a draft: Create is held, the line says the way, Generate still acts', async ({ page }) => {
+    const fake = withDrafts(2);
+    await openTransactions(page, fake);
+    await expect(txnRow(page, 2).locator('[data-test="row-invoice"]')).toHaveText('Draft');
+    for (const id of [1, 2, 3]) await tick(page, id);
+    await expect(createInvoice(page)).toBeDisabled();
+    await expect(pairCaption(page)).toHaveText(ONE_OF_THREE);
+    await expect(createInvoice(page)).toHaveAttribute('aria-describedby', 'create-invoice-hint');
+    // Generate still acts, and the draft's line is not its reason.
+    await expect(generateSelected(page)).toBeEnabled();
+    await expect(generateSelected(page)).toHaveText('Generate 3 invoices');
+    await expect(generateSelected(page)).not.toHaveAttribute('aria-describedby', 'create-invoice-hint');
+    await expect(page.locator('[data-test="generate-pair-hint"]')).toHaveCount(0);
+    expect(writes(fake)).toEqual([]);
+
+    // Unticked, Create acts again and the pair's line is back.
+    await tickBox(page, 2).uncheck();
+    await expect(createInvoice(page)).toBeEnabled();
+    await expect(pairCaption(page)).toHaveCount(0);
+    await expect(page.locator('[data-test="generate-pair-hint"]')).toHaveText('Generate makes one invoice per payment. Create invoice puts all 2 on one.');
+  });
+
+  test('one ticked payment on a draft, and two of three on drafts', async ({ page }) => {
+    await openTransactions(page, withDrafts(1, 2));
+    await tick(page, 2);
+    await expect(createInvoice(page)).toBeDisabled();
+    await expect(pairCaption(page)).toHaveText('This payment is already on a draft. Open it from its “Draft” link.');
+    await expect(generateSelected(page)).toBeEnabled();
+    await tick(page, 1);
+    await tick(page, 3);
+    await expect(pairCaption(page)).toHaveText(
+      "2 of the 3 selected are already on drafts. To put them on one invoice, delete those drafts first: open each from its payment's “Draft” link.");
+  });
+
+  test('the noun follows the drafts: two payments on one draft, and all ticked on that one draft', async ({ page }) => {
+    await openTransactions(page, onDrafts(newFake(), [2, 3]));
+    for (const id of [1, 2, 3]) await tick(page, id);
+    await expect(createInvoice(page)).toBeDisabled();
+    await expect(pairCaption(page)).toHaveText(
+      '2 of the 3 selected are already on a draft. To put them on one invoice, delete that draft first: open it from one of their “Draft” links.');
+    await tickBox(page, 1).uncheck();
+    await expect(pairCaption(page)).toHaveText('The 2 selected are already on one draft. Open it from its “Draft” link.');
+    await expect(createInvoice(page)).toBeDisabled();
+    await expect(generateSelected(page)).toBeEnabled();
+  });
+
+  test('a row that is not Paid work is the reason first; the draft line shows once that is resolved', async ({ page }) => {
+    await openTransactions(page, withDrafts(2));
+    for (const id of [1, 2, 5]) await tick(page, id);
+    await expect(pairCaption(page)).toHaveText('1 of the 3 selected is not Paid work. Untick it to create or generate invoices.');
+    await expect(generateSelected(page)).toBeDisabled();
+    await expect(generateSelected(page)).toHaveAttribute('aria-describedby', 'create-invoice-hint');
+    await tickBox(page, 5).uncheck();
+    await expect(pairCaption(page)).toHaveText(
+      "1 of the 2 selected is already on a draft. To put them on one invoice, delete that draft first: open it from that payment's “Draft” link.");
+    await expect(generateSelected(page)).toBeEnabled();
+  });
+
+  // With #12258's currency hold too, one reason at a time: the draft's line
+  // first, then the currency line once the draft's payment is unticked.
+  test('a draft and two currencies: the draft line first, then the currency line', async ({ page }) => {
+    const fake = withDrafts(2);
+    fake.payments.find((p) => p.id === 3)!.currency = 'USD';
+    await openTransactions(page, fake);
+    for (const id of [1, 2, 3]) await tick(page, id);
+    await expect(createInvoice(page)).toBeDisabled();
+    await expect(pairCaption(page)).toHaveText(ONE_OF_THREE);
+    await expect(page.locator('[data-test="create-currency-hint"]')).toHaveCount(0);
+    await tickBox(page, 2).uncheck();
+    await expect(createInvoice(page)).toBeDisabled();
+    await expect(pairCaption(page)).toHaveCount(0);
+    await expect(page.locator('[data-test="create-currency-hint"]')).toHaveText(
+      'The 2 selected are in different currencies (€ and US$), so they cannot go on one invoice.',
+    );
+    await expect(createInvoice(page)).toHaveAttribute('aria-describedby', 'create-currency-hint');
+    await expect(page.locator('[data-test="generate-pair-hint"]')).toHaveCount(0);
+  });
+
+  test('when the list lags the server, its refusal is shown and nothing opens', async ({ page }) => {
+    const fake = newFake();
+    await openTransactions(page, fake);
+    await page.route(/\/api\/invoicing\/invoices$/, (route) => route.request().method() === 'POST'
+      ? json(route, 422, { error: { code: 'payment_on_draft', message: 'payment M-2 is already on draft 7' } })
+      : route.fallback());
+    await tick(page, 1);
+    await tick(page, 2);
+    await createInvoice(page).click();
+    await expect(page.locator('[data-test="create-error"]').first()).toHaveText('payment M-2 is already on draft 7');
+    await expect(dialog(page)).toBeHidden();
+  });
+});
+
+test.describe('#12263 on a phone, the draft line stands under "As 1 invoice"', () => {
+  // The bar's shorter form (design_agent c76454 items 1-4), pinned at the
+  // bar alone against a quarter of the screen, as #11371 measures it.
+  const bar = (page: Page) => page.locator('[data-test="selection-bar"]');
+  const barCaption = (page: Page) => bar(page).locator('[data-test="create-invoice-hint"]');
+  const fits = async (page: Page, height: number, what: string) => {
+    const h = (await bar(page).boundingBox())!.height;
+    // Recorded, so a run reports the heights it measured (c76454).
+    test.info().annotations.push({ type: 'bar-height', description: `${what}: ${Math.round(h)}px` });
+    expect(h, `${what}: a quarter of the screen at most (§3.122 P6)`).toBeLessThanOrEqual(Math.floor(height / 4));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), what).toBe(true);
+  };
+  const describedOnlyByCaption = async (page: Page) => {
+    await expect(createInvoice(page)).toHaveAttribute('aria-describedby', 'create-invoice-hint');
+    await expect(generateSelected(page)).not.toHaveAttribute('aria-describedby', 'create-invoice-hint');
+  };
+
+  for (const [width, height] of [[390, 844], [360, 740]] as const) {
+    test(`at ${width}×${height}: one of three on a draft, then Remove armed`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await openTransactions(page, withDrafts(2));
+      // One ticked: "As 1 invoice" is not drawn, so neither is its line;
+      // Generate opens the waiting draft.
+      await tick(page, 2);
+      await expect(createInvoice(page)).toHaveCount(0);
+      await expect(pairCaption(page)).toHaveCount(0);
+      await expect(generateSelected(page)).toBeEnabled();
+
+      for (const id of [1, 3]) await tick(page, id);
+      await expect(createInvoice(page)).toHaveText('As 1 invoice');
+      await expect(createInvoice(page)).toBeDisabled();
+      await expect(barCaption(page)).toHaveText('1 of the 3 is on a draft. For 1 invoice, delete that draft from its “Draft” link.');
+      await expect(generateSelected(page)).toHaveText('As 3 invoices');
+      await expect(generateSelected(page)).toBeEnabled();
+      await describedOnlyByCaption(page);
+      await fits(page, height, 'three ticked, one on a draft');
+
+      // Remove armed: its line shows alone, and the caption's reference goes.
+      await page.locator('[data-test="bulk-remove"]').click();
+      await expect(page.locator('[data-test="bulk-remove-consequence"]')).toHaveText('1 of them is also taken off its draft invoice.');
+      await expect(pairCaption(page)).toHaveCount(0);
+      await expect(createInvoice(page)).not.toHaveAttribute('aria-describedby', 'create-invoice-hint');
+      await fits(page, height, 'three ticked, one on a draft, Remove armed');
+      // Disarmed by a change of selection, the caption is back.
+      await tickBox(page, 3).uncheck();
+      await expect(barCaption(page)).toHaveText('1 of the 2 is on a draft. For 1 invoice, delete that draft from its “Draft” link.');
+    });
+
+    test(`at ${width}×${height}: eleven of twelve on drafts, and two on one draft`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      const fake = newFake();
+      for (let i = 21; i <= 29; i += 1) fake.payments.push(payment(i, `2026-10-${String(i - 10).padStart(2, '0')}`));
+      const ids = [1, 2, 3, 21, 22, 23, 24, 25, 26, 27, 28, 29];
+      onDrafts(fake, ...ids.slice(1).map((id) => [id]));
+      await openTransactions(page, fake);
+      for (const id of ids) await tick(page, id);
+      await expect(barCaption(page)).toHaveText('11 of the 12 are on drafts. For 1 invoice, delete those drafts from their “Draft” links.');
+      await describedOnlyByCaption(page);
+      await fits(page, height, 'twelve ticked, eleven on drafts');
+    });
+
+    test(`at ${width}×${height}: two of three on one draft, and all ticked on it`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await openTransactions(page, onDrafts(newFake(), [2, 3]));
+      for (const id of [1, 2, 3]) await tick(page, id);
+      await expect(barCaption(page)).toHaveText('2 of the 3 are on a draft. For 1 invoice, delete that draft from its “Draft” link.');
+      await fits(page, height, 'two of three on one draft');
+      await tickBox(page, 1).uncheck();
+      await expect(barCaption(page)).toHaveText('The 2 selected are already on one draft. Open it from its “Draft” link.');
+      await fits(page, height, 'all ticked on one draft');
+    });
+  }
 });

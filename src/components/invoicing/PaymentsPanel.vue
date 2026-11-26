@@ -1204,10 +1204,12 @@
         return [...new Set(this.selectedPayments.map((r) => r.payment.currency || 'EUR'))].sort();
       },
       canCreateOne() {
-        return this.canCreate && this.selectedCurrencies.length === 1;
+        return this.canCreate && this.selectedCurrencies.length === 1 && this.onDraft === 0;
       },
       currencyCaption() {
-        if (!this.canCreate || this.selectedCurrencies.length < 2) return '';
+        // One reason at a time: a payment on a draft is said first
+        // (system_3 #12263), and this line follows once that is resolved.
+        if (!this.canCreate || this.selectedCurrencies.length < 2 || this.onDraft) return '';
         const symbols = this.selectedCurrencies.map(currencySymbol);
         const list = `${symbols.slice(0, -1).join(', ')} and ${symbols[symbols.length - 1]}`;
         return `The ${this.selected.length} selected are in different currencies (${list}), so they cannot go on one invoice.`;
@@ -1215,6 +1217,23 @@
       createDescribedBy() {
         if (this.createCaption) return 'create-invoice-hint';
         return this.currencyCaption ? 'create-currency-hint' : undefined;
+      },
+      // Ticked payments a draft already covers. A payment is on at most one
+      // draft (system_3 #12263; the server answers payment_on_draft), so
+      // Create invoice cannot act on them; Generate still opens the waiting
+      // draft, so only Create is held.
+      onDraft() {
+        return this.selectedPayments.filter((r) => r.payment.invoice && r.payment.invoice.status === 'draft').length;
+      },
+      // How many drafts those are: the caption's noun follows the drafts, not
+      // the payments (design_agent c76454 item 3).
+      draftsInTheWay() {
+        return new Set(this.selectedPayments.filter((r) => r.payment.invoice && r.payment.invoice.status === 'draft').map((r) => r.payment.invoice.id)).size;
+      },
+      // Create invoice is drawn: always on a desktop, and in the phone's bar
+      // only as "As 1 invoice", with two or more ticked.
+      createShown() {
+        return !this.narrow || this.barPair;
       },
       // Why Create invoice and Generate invoices cannot act, in terms the
       // owner can fix from the panel (§3.114); neither quietly invoices the
@@ -1224,8 +1243,35 @@
         const n = this.selected.length;
         if (n === 0) return 'Select rows to set their category or remove them, or paid-work payments to invoice them.';
         const k = this.notPaidWork;
-        if (k === 0) return '';
-        return `${k} of the ${n} selected ${k === 1 ? 'is' : 'are'} not Paid work. Untick ${k === 1 ? 'it' : 'them'} to create or generate invoices.`;
+        if (k) {
+          return `${k} of the ${n} selected ${k === 1 ? 'is' : 'are'} not Paid work. Untick ${k === 1 ? 'it' : 'them'} to create or generate invoices.`;
+        }
+        // One reason at a time: the draft's comes once every ticked row is
+        // Paid work, and only where Create invoice is drawn. It says the way
+        // through the row's own "Draft" link, since a draft cannot gain a
+        // payment (system_3 #12263; #12288: a "transaction", not a "row").
+        const d = this.onDraft;
+        if (!d || !this.createShown) return '';
+        // In the phone's bar an armed Remove's line shows alone: both
+        // together are three lines, past the bar's cap (c76454 item 4).
+        if (this.narrow && this.confirmingRemove) return '';
+        if (n === 1) return 'This payment is already on a draft. Open it from its “Draft” link.';
+        const drafts = this.draftsInTheWay;
+        // All on one draft: they are on one invoice already (c76454 item 3).
+        if (d === n && drafts === 1) return `The ${n} selected are already on one draft. Open it from its “Draft” link.`;
+        const are = d === 1 ? 'is' : 'are';
+        // The bar's shorter form, in two lines at 360px; "For 1 invoice" is
+        // the held button's own words (c76454 items 1 and 2).
+        if (this.narrow) {
+          return drafts === 1
+            ? `${d} of the ${n} ${are} on a draft. For 1 invoice, delete that draft from its “Draft” link.`
+            : `${d} of the ${n} are on drafts. For 1 invoice, delete those drafts from their “Draft” links.`;
+        }
+        if (drafts === 1) {
+          const from = d === 1 ? "that payment's “Draft” link" : 'one of their “Draft” links';
+          return `${d} of the ${n} selected ${are} already on a draft. To put them on one invoice, delete that draft first: open it from ${from}.`;
+        }
+        return `${d} of the ${n} selected are already on drafts. To put them on one invoice, delete those drafts first: open each from its payment's “Draft” link.`;
       },
       // Below 640px the selection's actions are a bar at the bottom of the
       // screen, there only while a row is ticked (§3.157 Decision 2).
@@ -1265,13 +1311,14 @@
       pairHint() {
         const n = this.selected.length;
         // On a phone the bar's lead line and labels already say it.
-        // With two currencies ticked, Create invoice's own line says why it
-        // cannot put them on one.
-        if (this.narrow || !this.generatable || n < 2 || this.currencyCaption) return '';
+        // Not while Create invoice is held, by two currencies or a draft:
+        // its own line says why.
+        if (this.narrow || !this.generatable || n < 2 || this.currencyCaption || this.onDraft) return '';
         return `Generate makes one invoice per payment. Create invoice puts all ${n} on one.`;
       },
       generateDescribedBy() {
-        if (this.createCaption) return 'create-invoice-hint';
+        // The draft line is Create's alone: Generate still acts then.
+        if (this.createCaption && !this.canCreate) return 'create-invoice-hint';
         if (this.generateCaption) return 'generate-hint';
         return this.pairHint ? 'generate-pair-hint' : undefined;
       },
