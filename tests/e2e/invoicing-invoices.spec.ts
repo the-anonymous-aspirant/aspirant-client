@@ -480,8 +480,13 @@ test.describe('#8367 Invoices app — draft, issue, Storno', () => {
     await open(page, fake);
     await createFromOne(page, isMobile, 'TX2');
     await expect(page.locator('[data-test="draft-no-address"]')).toHaveAttribute('data-level', 'caution');
+    // Below 640px one ticked row opens a review, which has Later, not Save
+    // draft, so the note names the button that is on screen (ruling 4).
+    const step = isMobile
+      ? 'Press Later to keep this draft, then add the address under Clients.'
+      : 'Save the draft, then add it under Clients.';
     await expect(page.locator('[data-test="draft-no-address-text"]')).toHaveText(
-      "An invoice in USD must name Galerie Nord's postal address. Save the draft, then add it under Clients.",
+      `An invoice in USD must name Galerie Nord's postal address. ${step}`,
     );
   });
 
