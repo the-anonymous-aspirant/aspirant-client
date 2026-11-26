@@ -136,7 +136,7 @@ test.describe('#10694 Edit a payment', () => {
     // leaving the field closes it.
     await dialog.locator('[data-test="manual-payer-line"]').click();
     await dialog.getByRole('button', { name: 'Save changes' }).click();
-    await expect(dialog.locator('[data-test="manual-error"]')).toHaveText('Choose a client from your book, or add “Mara E.” as a new client.');
+    await expect(dialog.locator('[data-test="manual-payer-error"]')).toHaveText('Choose a client from your book, or add “Mara E.” as a new client.');
     expect(patches(fake)).toEqual([]);
     await dialog.locator('[data-test="manual-payer-use-2"]').click();
     await dialog.getByRole('button', { name: 'Save changes' }).click();

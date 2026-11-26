@@ -59,14 +59,15 @@
       <!-- What the list leaves out is said, never hidden (§3.142 Decision 5,
            D2): one muted line naming only the kinds present. -->
       <p v-if="notListedLine" class="payers__muted" data-test="payers-not-listed">{{ notListedLine }}</p>
-      <p v-if="error" class="payers__error" role="alert" data-test="payers-error">{{ error }}</p>
     </div>
     <template #footer>
       <div class="payers-footer">
         <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
-        <ModalActions v-else>
+        <!-- The refusal is said above the buttons (system_3 #12298 ruling
+             2); every tick and name stays as ze left it (D13). -->
+        <ModalActions v-else :refusal="error" refusal-test="payers-error">
           <AspButton variant="secondary" :disabled="saving" data-test="payers-cancel" @click="onOpenChange(false)">Cancel</AspButton>
-          <AspButton :loading="saving" :disabled="!!blockedCaption" data-test="payers-save" @click="save">
+          <AspButton ref="saveButton" :loading="saving" :disabled="!!blockedCaption" data-test="payers-save" @click="save">
             Add to client book ({{ plan.clients }})
           </AspButton>
         </ModalActions>
@@ -86,6 +87,7 @@
   import SuggestField from './SuggestField.vue';
   import { looksLikeCardPaymentOrService, matchPayer, normalizeName } from './payerMatch.js';
   import { addPayers, errorOf, formatDay, formatMoney } from './api.js';
+  import { focusAfterRefusal } from './refusalFocus.js';
 
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
@@ -179,6 +181,14 @@
     watch: {
       open(isOpen) {
         if (isOpen) this.reset();
+      },
+      // Any change to a tick or a name clears the refusal (system_3 #12298
+      // ruling 4).
+      rowState: {
+        deep: true,
+        handler() {
+          if (!this.saving) this.error = '';
+        },
       },
       // A refetch can land while the dialog is open: a client saved just
       // before it opened refreshes the page's clients, and with them this
@@ -301,6 +311,7 @@
           // Every tick and name stays as ze left it (D13).
           this.error = `Nothing was saved: ${errorOf(err).message}`;
           this.saving = false;
+          focusAfterRefusal(this, 'saveButton');
         }
       },
     },

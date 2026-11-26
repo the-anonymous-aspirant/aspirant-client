@@ -41,11 +41,23 @@
 
       <template v-if="!editing || (!imported && !issued)">
         <div class="manual-form__pair manual-form__pair--top">
-          <label class="date-field">
-            <span>Date received</span>
-            <input v-model="form.paid_on" type="date" :max="today" data-test="manual-date" />
-          </label>
-          <AspInput v-model="form.amount" label="Amount (€)" inputmode="decimal" placeholder="350,00" data-test="manual-amount" />
+          <!-- Its refusal sits under the input, outside the label, so it is
+               not read as part of the field's name (system_3 #12298). -->
+          <div class="date-field">
+            <label for="manual-date-input">Date received</label>
+            <input
+              id="manual-date-input"
+              ref="paid_on"
+              v-model="form.paid_on"
+              type="date"
+              :max="today"
+              :aria-invalid="fieldErrors.paid_on ? 'true' : undefined"
+              :aria-describedby="fieldErrors.paid_on ? 'manual-date-error' : undefined"
+              data-test="manual-date"
+            />
+            <span v-if="fieldErrors.paid_on" id="manual-date-error" class="manual-form__error" role="alert" data-test="manual-date-error">{{ fieldErrors.paid_on }}</span>
+          </div>
+          <AspInput ref="amount" v-model="form.amount" label="Amount (€)" inputmode="decimal" placeholder="350,00" :error="fieldErrors.amount" data-test="manual-amount" />
         </div>
         <div class="manual-form__pair manual-form__pair--method">
           <div class="full-select">
@@ -58,6 +70,7 @@
              Optional: left empty, the payment is saved with no client, like an
              imported one. -->
         <SuggestField
+          ref="sender_name"
           :model-value="form.sender_name"
           label="Paid by"
           placeholder="Choose or type a name"
@@ -69,7 +82,10 @@
           <!-- Decision 3: before Save, the field says what Save will do, in
                both modes (§3.143 Decision 5; design_agent c66539 on system_3
                #10694): the PATCH takes new_client_name as create does
-               (server #10696). -->
+               (server #10696). A refusal is said above the choice line,
+               whose buttons are what it asks for (system_3 #12298 review
+               point 1). -->
+          <p v-if="fieldErrors.sender_name" class="manual-form__error" role="alert" data-test="manual-payer-error">{{ fieldErrors.sender_name }}</p>
           <PayerBookLine
             :match="payerMatch"
             :name="form.sender_name"
@@ -133,15 +149,17 @@
         <p v-else class="manual-form__hint">{{ historyLoaded ? 'No changes recorded yet.' : 'Loading…' }}</p>
       </details>
 
-      <p v-if="error" class="manual-form__error" role="alert" data-test="manual-error">{{ error }}</p>
     </form>
     <template #footer>
       <UnsentAsk v-if="unsentAsking" @keep="keepEditing" @discard="discardUnsent" />
-      <ModalActions v-else>
+      <!-- A refusal that names no field is said above the buttons
+           (system_3 #12298 ruling 2). -->
+      <ModalActions v-else :refusal="error" refusal-test="manual-error">
         <!-- Remove arms first and says what else happens (§3.143 Decision 6).
              A payment on an issued invoice cannot be removed. -->
         <template v-if="editing && !issued" #destructive>
           <AspButton
+            ref="removeButton"
             :variant="confirmingRemove ? 'destructive' : 'ghost'"
             :loading="removing"
             data-test="edit-remove"
@@ -158,7 +176,7 @@
         </template>
         <template v-else>
           <AspButton variant="secondary" :disabled="unsentBusy" data-test="manual-cancel" @click="onOpenChange(false)">Cancel</AspButton>
-          <AspButton :loading="saving" data-test="manual-save" @click="save">
+          <AspButton ref="saveButton" :loading="saving" data-test="manual-save" @click="save">
             {{ editing ? 'Save changes' : 'Save payment' }}
           </AspButton>
         </template>
@@ -192,6 +210,9 @@
     patchPayment,
     removePayment,
   } from './api.js';
+  import { focusAfterRefusal } from './refusalFocus.js';
+
+  const noFieldErrors = () => ({ paid_on: '', amount: '', sender_name: '' });
 
   const blankForm = () => ({ paid_on: '', amount: '', method: 'bank_transfer', reference: '', sender_name: '', note: '', category: 'paid_work', client_id: 0 });
 
@@ -229,6 +250,8 @@
         form: blankForm(),
         saving: false,
         error: '',
+        // A refusal about one field, said at that field (system_3 #12298).
+        fieldErrors: noFieldErrors(),
         hints: FIELD_HINTS,
         resolvedAsNew: false,
         // The address and email typed for a client this save will add.
@@ -324,10 +347,31 @@
       },
     },
     watch: {
+      // A line goes when what it speaks about changes (system_3 #12298
+      // ruling 4): a field's at that field's change, the footer's at any.
+      'form.paid_on'() {
+        this.fieldErrors.paid_on = '';
+      },
+      'form.amount'() {
+        this.fieldErrors.amount = '';
+      },
+      'form.sender_name'() {
+        this.fieldErrors.sender_name = '';
+      },
+      resolvedAsNew() {
+        this.fieldErrors.sender_name = '';
+      },
+      form: {
+        deep: true,
+        handler() {
+          this.error = '';
+        },
+      },
       open(isOpen) {
         if (!isOpen) return;
         this.form = this.payment ? formFrom(this.payment) : blankForm();
         this.error = '';
+        this.fieldErrors = noFieldErrors();
         this.resolvedAsNew = false;
         this.newClient = { address: '', email: '' };
         this.confirmingRemove = false;
@@ -407,16 +451,29 @@
         if (email) out.new_client_email = email;
         return out;
       },
+      // The client's own checks, each about one field: { field, text }, or
+      // null when Save may go ahead.
       check() {
-        if (this.editing && this.imported) return '';
-        if (!this.form.paid_on) return 'Enter the date the money was received.';
+        if (this.editing && this.imported) return null;
+        if (!this.form.paid_on) return { field: 'paid_on', text: 'Enter the date the money was received.' };
         const cents = centsFromEuros(this.form.amount);
-        if (!cents) return 'Enter the amount received, for example 350,00.';
+        if (!cents) return { field: 'amount', text: 'Enter the amount received, for example 350,00.' };
         if (this.payerMatch.state === 'close' && !this.resolvedAsNew && (!this.editing || this.form.sender_name.trim() !== this.payment.sender_name)) {
           const typed = this.form.sender_name.trim();
-          return `Choose a client from your book, or add “${typed}” as a new client.`;
+          return { field: 'sender_name', text: `Choose a client from your book, or add “${typed}” as a new client.` };
         }
-        return '';
+        return null;
+      },
+      // A refused Save: at its field, focused, or above the buttons with
+      // focus back on the button pressed (system_3 #12298 rulings 1-3).
+      refuse(refusal, button = 'saveButton') {
+        if (refusal.field) {
+          this.fieldErrors[refusal.field] = refusal.text;
+          focusAfterRefusal(this, refusal.field);
+        } else {
+          this.error = refusal.text;
+          focusAfterRefusal(this, button);
+        }
       },
       // Only the fields ze changed, and only those the server lets this row
       // change (aspirant-server invoicing_edit.go's editable sets).
@@ -454,8 +511,13 @@
         return patch;
       },
       async save() {
-        this.error = this.check();
-        if (this.error) return;
+        this.error = '';
+        this.fieldErrors = noFieldErrors();
+        const refused = this.check();
+        if (refused) {
+          this.refuse(refused);
+          return;
+        }
         if (this.editing) return this.saveEdit();
         this.saving = true;
         const payload = {
@@ -480,7 +542,7 @@
           this.$emit('saved', { payment, client: client || null });
           this.$emit('changed');
         } catch (err) {
-          this.error = errorOf(err).message;
+          this.refuse({ text: errorOf(err).message });
         } finally {
           this.saving = false;
         }
@@ -497,7 +559,7 @@
           this.$emit('update:open', false);
           this.$emit('changed');
         } catch (err) {
-          this.error = errorOf(err).message;
+          this.refuse({ text: errorOf(err).message });
         } finally {
           this.saving = false;
         }
@@ -515,7 +577,7 @@
           this.$emit('update:open', false);
           this.$emit('changed');
         } catch (err) {
-          this.error = errorOf(err).message;
+          this.refuse({ text: errorOf(err).message }, 'removeButton');
         } finally {
           this.removing = false;
           this.confirmingRemove = false;
@@ -610,6 +672,10 @@
     gap: var(--space-2xs);
     font-size: var(--text-sm);
     min-width: 0;
+  }
+
+  .date-field input[aria-invalid='true'] {
+    border-color: var(--feedback-error);
   }
 
   .date-field input {
