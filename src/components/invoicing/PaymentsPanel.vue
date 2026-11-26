@@ -1922,8 +1922,9 @@
         this.n26Summary = null;
         this.payersSummary = null;
         const receipt = (outcome && outcome.receipt) || 'none';
-        // The sentence supplies its own full stop after the reason.
-        const reason = String((outcome && outcome.reason) || 'the server gave no reason').replace(/\.+$/, '');
+        // The reason is a sentence of its own, full stop included
+        // (system_3 #12300), so it is shown as it comes.
+        const reason = String((outcome && outcome.reason) || 'The server gave no reason.');
         this.manualSummary = { expense: true, receipt, reason };
         this.changed();
       },
