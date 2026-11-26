@@ -1,0 +1,96 @@
+# Browser tests on GitHub-hosted runners (system_3 #12456, #12455-A1;
+# operator c77400 on #11564). Both playwright.config.ts projects, chromium and
+# mobile-safari, run in four shards each: 8 jobs, inside the free plan's 20
+# concurrent jobs. Locally the whole suite took about 175 min per PR.
+#
+# This workflow only runs the tests. Whether a PR is `verified-locally` is
+# still decided by system_3's verify verb, which reads this run's job results
+# for the PR head (A2, #12457). The job names below are what it requires, so
+# keep them stable: `e2e (<project>, <i>/4)` and `changelog`.
+#
+# Trust: `pull_request` only, never `pull_request_target`, with read-only
+# contents and no `secrets.*`, so a fork's PR runs with nothing to leak. The
+# tests mock every /api call and read only API_PORT, ASPIRANT_E2E, CI and
+# E2E_PORT (system_3 #11564 c74487).
+
+name: E2E
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to the same PR cancels the run for the older head; the verdict
+# is only ever read for the head SHA.
+concurrency:
+  group: e2e-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # `npm run test:e2e` runs `test:changelog` first (`pretest:e2e`). The shards
+  # call `npx playwright test` directly, so that check runs here instead.
+  changelog:
+    name: changelog
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v4
+    - name: Changelog script unit test
+      run: npm run test:changelog
+
+  e2e:
+    name: e2e (${{ matrix.project }}, ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      # Every shard reports, so one red shard does not hide the others.
+      fail-fast: false
+      matrix:
+        project: [chromium, mobile-safari]
+        shard: [1, 2, 3, 4]
+    steps:
+    # Sibling checkouts, as build-image.yml does, so the client's
+    # `file:../aspirant-design-system` dependency resolves unchanged. The
+    # design system is public and tracked at main, as the image build does.
+    - name: Check out aspirant-client
+      uses: actions/checkout@v4
+      with:
+        path: aspirant-client
+    - name: Check out aspirant-design-system
+      uses: actions/checkout@v4
+      with:
+        repository: the-anonymous-aspirant/aspirant-design-system
+        ref: main
+        path: aspirant-design-system
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+    # Install without scripts, then build, as Dockerfile-Client does: the
+    # package's `prepare` would otherwise build it a second time.
+    - name: Build the design system
+      working-directory: aspirant-design-system
+      run: |
+        npm ci --ignore-scripts --no-audit --no-fund
+        npm run build
+    - name: Install the client
+      working-directory: aspirant-client
+      run: npm ci --no-audit --no-fund
+    - name: Install the browser
+      working-directory: aspirant-client
+      run: npx playwright install --with-deps ${{ matrix.project == 'chromium' && 'chromium' || 'webkit' }}
+    # CI=true (set by Actions) turns on the config's retries, forbidOnly and
+    # the github and html reporters. The webServer builds the client and
+    # serves it on 4173, the port for a checkout named aspirant-client.
+    - name: Run shard ${{ matrix.shard }}/4 of ${{ matrix.project }}
+      working-directory: aspirant-client
+      run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/4
+    - name: Keep the report of a red shard
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-${{ matrix.project }}-${{ matrix.shard }}
+        path: |
+          aspirant-client/playwright-report/
+          aspirant-client/test-results/
+        retention-days: 7

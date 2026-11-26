@@ -1,6 +1,8 @@
 # Build and push the aspirant-client image to GHCR on every push to main.
-# Test/validation is local-only (per #107 strip of ci.yml); this workflow
-# carries ONLY the build+push half so the deploy pipeline isn't blocked.
+# It carries only the build+push half. The browser tests, local-only since
+# the #107 strip of ci.yml, now run on Actions in e2e.yml on every PR
+# (system_3 #12456); system_3's verify verb reads those results and decides
+# `verified-locally` (#12457).
 
 name: Build Image
 
@@ -37,7 +39,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         path: aspirant-client
-    # Build-integrity backstop (not a test suite — those stay local per #107):
+    # Build-integrity backstop (not a test suite — those run in e2e.yml):
     # fail loudly if a node_modules path or a symlink targeting node_modules was
     # committed, which breaks every fresh checkout / npm ci / vite build / this
     # image build. See the #191/#4288 incident and scripts/ header.
