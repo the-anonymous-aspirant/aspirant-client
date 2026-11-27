@@ -6,7 +6,7 @@
   <AspModal :open="open" :title="title" size="lg" :dismissible="!(reviewing && busy)" @update:open="onOpenChange">
     <ReadState v-if="!detail" :state="loadError ? 'failed' : 'loading'" heading="The invoice could not be loaded" message="We could not reach the server. Try again." loading-label="Loading" retry-label="Try again" @retry="load" />
 
-    <div v-else ref="editor" class="editor" data-test="invoice-editor" :data-status="invoice.status" :inert="unsentAsking || undefined">
+    <div v-else ref="editor" class="editor" data-test="invoice-editor" :data-status="invoice.status" :inert="unsentAsking || undefined" @focusout="settleFooter">
       <!-- Issued or cancelled: the record, read-only. -->
       <template v-if="!isDraft">
         <dl class="facts">
@@ -86,9 +86,13 @@
       <!-- Draft: editable. -->
       <template v-else>
         <div class="row">
-          <div class="row__client full-select">
+          <div class="row__client full-select" :data-needed="needed.client ? '' : undefined">
             <AspSelect v-model="form.client_id" searchable :options="clientOptions" label="Client" :label-hint="hints.client" data-test="draft-client" />
           </div>
+          <!-- What issuing still needs is marked at its field from the moment
+               the draft opens (system_3 #12274 ruling 1). Like the address, in
+               its own grid row under the select, so the dates do not move. -->
+          <p v-if="needed.client" class="row__address needed" data-test="draft-needed-client">{{ needed.client }}</p>
           <!-- The address this invoice will print, read before Accept
                (system_3 #11554, #11497 item 14; operator c71213 on #10985;
                design ack on #11554). It is the client's record as the PDF's
@@ -106,7 +110,7 @@
           </div>
           <!-- The hint sits beside the label, never inside it: inside a
                <label>, a tap on it would focus the date (#10033). -->
-          <div class="date-field">
+          <div class="date-field" :data-needed="needed.date ? '' : undefined">
             <div class="label-row">
               <label for="draft-service-from">Service date (from)</label>
               <AspLabelHint label="Service date (from)" :content="hints.serviceFrom" />
@@ -122,6 +126,9 @@
           </div>
           <AspInput v-if="!kleinunternehmer" ref="vat" v-model="form.vat_percent" label="VAT rate (%)" :label-hint="hints.vatRate" :error="fieldErrors.vat" class="row__vat" data-test="draft-vat" />
         </div>
+        <!-- Under the two dates rather than inside one: the row aligns its
+             fields to their lower edge. -->
+        <p v-if="needed.date" class="needed" :data-level="needed.dateBlocks ? 'needed' : 'note'" data-test="draft-needed-date">{{ needed.date }}</p>
 
         <div class="lines" data-test="draft-lines">
           <div v-for="(line, i) in form.lines" :key="line.key" class="line" :class="{ 'line--captioned': captioned(i) }" data-test="draft-line">
@@ -129,10 +136,11 @@
                  phone's stacked blocks are not: there every line is captioned. -->
             <!-- AspInput forwards class to its <input>, not its root, so each
                  grid cell is a wrapper. -->
-            <div class="line__desc">
+            <div class="line__desc" :data-needed="needed.lines[i].description ? '' : undefined">
               <LineDescriptionInput v-model="line.description" :label="captioned(i) ? 'Description' : ''" :label-hint="captioned(i) ? hints.description : null" :aria-label="`Description, line ${i + 1}`" />
+              <p v-if="needed.lines[i].description" class="needed" data-test="draft-needed-description">Needed to issue: say what the work was.</p>
             </div>
-            <div class="line__num">
+            <div class="line__num" :data-needed="needed.lines[i].quantity ? '' : undefined">
               <AspInput
                 :ref="`line-${line.key}-quantity`"
                 v-model="line.quantity"
@@ -140,8 +148,9 @@
                 :aria-label="`Quantity, line ${i + 1}`"
                 :error="lineRefused(line, 'quantity')"
               />
+              <p v-if="needed.lines[i].quantity" class="needed" data-test="draft-needed-quantity">Needed to issue: a quantity above zero.</p>
             </div>
-            <div class="line__num">
+            <div class="line__num" :data-needed="needed.lines[i].price ? '' : undefined">
               <AspInput
                 :ref="`line-${line.key}-price`"
                 v-model="line.price"
@@ -150,6 +159,7 @@
                 :aria-label="`Unit price, line ${i + 1}`"
                 :error="lineRefused(line, 'price')"
               />
+              <p v-if="needed.lines[i].price" class="needed" data-test="draft-needed-price">Needed to issue: a price above zero.</p>
             </div>
             <span class="line__total">{{ lineTotalLabel(line) }}</span>
             <AspButton variant="ghost" size="sm" class="line__remove" :aria-label="`Remove line ${i + 1}`" @click="form.lines.splice(i, 1)">Remove</AspButton>
@@ -157,15 +167,38 @@
                  (system_3 #12298 ruling 1). The field it names is marked. -->
             <p v-if="lineErrors[line.key]" class="error line__error" role="alert" data-test="draft-line-error">{{ lineErrors[line.key].text }}</p>
           </div>
-          <AspButton variant="secondary" size="sm" class="line__add" data-test="draft-add-line" @click="addLine()">Add line</AspButton>
+          <p v-if="!form.lines.length" class="needed" data-test="draft-needed-lines">Needed to issue: at least one line.</p>
+          <span :data-needed="form.lines.length ? undefined : ''" class="line__add-wrap">
+            <AspButton variant="secondary" size="sm" class="line__add" data-test="draft-add-line" @click="addLine()">Add line</AspButton>
+          </span>
         </div>
 
-        <p class="covers">
-          Covers {{ detail.payments.length }} payment(s):
-          <span v-for="p in detail.payments" :key="p.id" class="covers__item">{{ paymentName(p) }} ({{ formatMoney(p.gross_cents, p.currency) }})</span>
-        </p>
-        <ul v-if="detail.warnings.length" class="warnings" data-test="draft-warnings">
-          <li v-for="w in detail.warnings" :key="w">{{ warningText(w) }}</li>
+        <!-- The invoice's own total, from the form as ze types (ruling 5):
+             with VAT, the net, the VAT inside the gross, and the gross. No
+             total while a line or the rate is not a number. -->
+        <dl v-if="draftTotals" class="totals" data-test="draft-total">
+          <template v-if="!kleinunternehmer">
+            <div><dt>Net</dt><dd data-test="draft-total-net">{{ formatMoney(draftTotals.net, draftCurrency) }}</dd></div>
+            <div><dt>VAT {{ draftTotals.ratePercent }} %</dt><dd data-test="draft-total-vat">{{ formatMoney(draftTotals.vat, draftCurrency) }}</dd></div>
+          </template>
+          <div class="totals__gross"><dt>Total</dt><dd data-test="draft-total-gross">{{ formatMoney(draftTotals.gross, draftCurrency) }}</dd></div>
+        </dl>
+
+        <!-- What the draft covers, by amount, payer and day (ruling 5; W2-15):
+             the importer's ids say nothing to zir. Each payment is its own line
+             and wraps, so nothing scrolls sideways at 360 (§3.122 P3). -->
+        <div class="covers" data-test="draft-covers">
+          <p class="covers__head" data-test="draft-covers-head">{{ coversHead }}</p>
+          <ul v-if="detail.payments.length > 1" class="covers__list">
+            <li v-for="p in detail.payments" :key="p.id" class="covers__item" data-test="draft-covers-item">{{ paymentLine(p) }}</li>
+          </ul>
+          <p v-if="mixedPaymentCurrencies" class="muted" data-test="draft-covers-currencies">The payments are in different currencies.</p>
+        </div>
+        <!-- Said at once, from the form (ruling 6): the server's warning came
+             only with a load or a save, and a press issued before it showed. -->
+        <p v-if="difference" class="warnings" role="status" data-test="draft-difference">{{ difference }}</p>
+        <ul v-if="otherWarnings.length" class="warnings" data-test="draft-warnings">
+          <li v-for="w in otherWarnings" :key="w">{{ w }}</li>
         </ul>
 
         <!-- In a review (system_3 #11505) Accept is one press, so what it does
@@ -177,10 +210,15 @@
             It can't be changed or deleted afterwards.
             Reject deletes this draft: the payment stays without an invoice and is offered again next time.
           </p>
+          <!-- Ruling 7: with a difference showing, Accept takes two presses
+               and the note names what it would issue. -->
+          <p v-if="footerDifference" data-test="review-accept-difference">{{ footerDifference }}</p>
+          <p v-if="acceptArmed" class="confirm__armed" role="status" data-test="issue-confirm">Press Issue now to issue it with this difference.</p>
         </div>
         <div v-else-if="confirmingIssue" ref="confirm" class="confirm" role="alertdialog" aria-labelledby="issue-confirm-text" data-test="issue-confirm">
           <p id="issue-confirm-text">
             Issuing gives it number {{ nextNumber }} and today's date.
+            <template v-if="difference">{{ difference }}</template>
             It can't be changed or deleted afterwards.
           </p>
         </div>
@@ -199,10 +237,10 @@
         <div v-if="addressNeeded" class="issue-blocked" data-test="draft-no-address" data-level="caution">
           <AspBadge status="caution">Address needed to issue</AspBadge>
           <span v-if="draftCurrency === 'EUR'" class="muted" data-test="draft-no-address-text">
-            This invoice totals {{ formatMoney(draftGrossCents, draftCurrency) }} gross. Above {{ formatMoney(limitCents, 'EUR') }} it must name {{ chosenClientName }}'s postal address. Save the draft, then add it under Clients.
+            This invoice totals {{ formatMoney(draftGrossCents, draftCurrency) }} gross. Above {{ formatMoney(limitCents, 'EUR') }} it must name {{ chosenClientName }}'s postal address. {{ addressStep }}
           </span>
           <span v-else class="muted" data-test="draft-no-address-text">
-            An invoice in {{ draftCurrency }} must name {{ chosenClientName }}'s postal address. Save the draft, then add it under Clients.
+            An invoice in {{ draftCurrency }} must name {{ chosenClientName }}'s postal address. {{ addressStep }}
           </span>
         </div>
         <div v-else-if="chosenClientHasNoAddress" class="issue-blocked" data-test="draft-no-address" data-level="neutral">
@@ -232,7 +270,7 @@
             <AspButton variant="ghost" :disabled="busy || switching" data-test="review-reject" @click="reject">Reject</AspButton>
           </span>
           <AspButton variant="secondary" :disabled="busy || switching" data-test="review-later" @click="later">Later</AspButton>
-          <AspButton :loading="busy || switching" data-test="review-accept" @click="accept">Accept</AspButton>
+          <AspButton :loading="busy || switching" data-test="review-accept" :data-armed="acceptArmed || undefined" @click="accept">{{ acceptLabel }}</AspButton>
         </div>
       </div>
       <ModalActions v-else-if="detail && isDraft" :refusal="error" refusal-test="invoice-error">
@@ -240,8 +278,9 @@
           <AspButton ref="deleteButton" variant="destructive" :disabled="busy" data-test="draft-delete" @click="remove">Delete draft</AspButton>
         </template>
         <AspButton ref="saveButton" variant="secondary" :loading="busy && !confirmingIssue" data-test="draft-save" @click="save">Save draft</AspButton>
-        <AspButton v-if="!confirmingIssue" :disabled="busy" data-test="draft-issue" @click="confirmingIssue = true">Issue invoice…</AspButton>
-        <AspButton v-else ref="issueButton" :loading="busy" data-test="issue-confirm-button" @click="issue">Issue now</AspButton>
+        <!-- Not drawn for a draft that covers no payment (system_3 #12318). -->
+        <AspButton v-if="!confirmingIssue && detail.payments.length" :disabled="busy" data-test="draft-issue" @click="armIssue">Issue invoice…</AspButton>
+        <AspButton v-else-if="confirmingIssue" ref="issueButton" :loading="busy" data-test="issue-confirm-button" @click="issue">Issue now</AspButton>
       </ModalActions>
       <ModalActions v-else-if="detail && invoice.status === 'issued'" :refusal="error" refusal-test="invoice-error">
         <template #destructive>
@@ -270,9 +309,10 @@
   import UnsentAsk from './UnsentAsk.vue';
   import { unsentGuard } from './unsentGuard.js';
   import { FIELD_HINTS } from './fieldHints.js';
-  import { paymentName, paymentSummary } from './ledgerRows.js';
+  import { paymentParts, paymentSummary, shownReference } from './ledgerRows.js';
   import {
     KLEINBETRAG_LIMIT_CENTS,
+    SOURCE_LABELS,
     STATUS_LABELS,
     cancelInvoice,
     centsFromEuros,
@@ -289,6 +329,7 @@
     milliFromDecimal,
     updateDraft,
   } from './api.js';
+  import { issueRefusalText, saveRefusalText } from './issueRefusals.js';
   import { focusAfterRefusal } from './refusalFocus.js';
   import { ownEntry, refusalOf } from './refusals.js';
 
@@ -305,6 +346,19 @@
     const m = /filename="([^"]+)"/.exec((headers && headers['content-disposition']) || '');
     return m ? m[1] : '';
   };
+
+  // A press that begins sooner than this after Accept armed is the second
+  // half of a double tap, not a decision (system_3 #12313 ruling 1).
+  const ARM_SETTLE_MS = 600;
+
+  // The VAT inside a gross at bp basis points, gross × bp / (10000 + bp)
+  // rounded half away from zero, as aspirant-server's vatShareOfGross
+  // (system_3 #12261), so the dialog's figures are the invoice's.
+  function vatShareOfGross(gross, bp) {
+    const d = 10000 + bp;
+    const p = gross * bp;
+    return p >= 0 ? Math.floor((2 * p + d) / (2 * d)) : -Math.floor((-2 * p + d) / (2 * d));
+  }
 
   // One invoice (spec §4.5–4.6). A draft is edited here; issuing hands the
   // number and the date to the server, after which the invoice is a
@@ -356,6 +410,12 @@
         // Where an exit that asked goes once it is discarded: 'close', or
         // 'next' for a review's Next (system_3 #11670).
         unsentExit: 'close',
+        // The difference the footer was last laid out for. It follows the
+        // form only when ze leaves a field, never while ze types (#12274
+        // review point 5), so Accept does not change under the pointer.
+        footerDifference: '',
+        // When Accept was armed by a press over a difference; 0 unarmed.
+        acceptArmedAt: 0,
         narrow: typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches,
       };
     },
@@ -466,6 +526,82 @@
         if (this.draftCurrency !== 'EUR') return true;
         return this.draftGrossCents !== null && this.draftGrossCents > KLEINBETRAG_LIMIT_CENTS;
       },
+      // What issuing still needs, per field of this dialog (system_3 #12274
+      // rulings 1 to 4, review point 3). Only these stop a press before it
+      // is sent; the profile and the client's address come from lists loaded
+      // with the page, and the server's refusal words those.
+      needed() {
+        const f = this.form;
+        let client = '';
+        if (!f.client_id) {
+          client = 'Needed to issue: choose the client.';
+          const named = new Set(((this.detail && this.detail.payments) || []).map((p) => p.client_id).filter(Boolean));
+          if (named.size > 1) client += ` The ${this.detail.payments.length} payments name different clients.`;
+        }
+        const from = String(f.service_date_from || '').trim();
+        const to = String(f.service_date_to || '').trim();
+        let date = '';
+        if (!from) date = 'Needed to issue: the day the work was done.';
+        else if (to && to < from) date = '“Service until” is before “Service date (from)”.';
+        else if ((to || from) > formatBerlinDay(new Date().toISOString())) date = 'After today: it can be issued from that day.';
+        const lines = f.lines.map((line) => {
+          const q = milliFromDecimal(line.quantity);
+          const p = centsFromEuros(line.price);
+          return { description: !String(line.description || '').trim(), quantity: !(q > 0), price: !(p > 0) };
+        });
+        const any = !!client || !!date || !lines.length || lines.some((l) => l.description || l.quantity || l.price);
+        return { client, date, dateBlocks: !!date, lines, any };
+      },
+      // Every line, and the rate, read as numbers: only then is a total or a
+      // difference drawn (review point 5).
+      figuresReadable() {
+        const lines = this.form.lines.every((l) => milliFromDecimal(l.quantity) !== null && centsFromEuros(l.price) !== null);
+        return lines && (this.kleinunternehmer || centsFromEuros(this.form.vat_percent) !== null);
+      },
+      draftTotals() {
+        if (!this.figuresReadable || !this.form.lines.length) return null;
+        const gross = this.draftGrossCents;
+        if (this.kleinunternehmer) return { gross, net: gross, vat: 0 };
+        const vat = vatShareOfGross(gross, centsFromEuros(this.form.vat_percent));
+        return { gross, net: gross - vat, vat, ratePercent: String(this.form.vat_percent).trim() };
+      },
+      // A sum and a comparison only when every covered payment is in the
+      // draft's currency (review point 6).
+      mixedPaymentCurrencies() {
+        return this.detail.payments.some((p) => p.currency !== this.draftCurrency);
+      },
+      paymentsSumCents() {
+        return this.detail.payments.reduce((n, p) => n + (p.gross_cents || 0), 0);
+      },
+      coversHead() {
+        const ps = this.detail.payments;
+        if (!ps.length) return 'Covers no payment.';
+        if (ps.length === 1) return `Covers 1 payment: ${this.paymentLine(ps[0])}`;
+        if (this.mixedPaymentCurrencies) return `Covers ${ps.length} payments:`;
+        return `Covers ${ps.length} payments, ${formatMoney(this.paymentsSumCents, this.draftCurrency)} in all:`;
+      },
+      difference() {
+        if (!this.draftTotals || !this.detail.payments.length || this.mixedPaymentCurrencies) return '';
+        if (this.draftTotals.gross === this.paymentsSumCents) return '';
+        return `The total (${formatMoney(this.draftTotals.gross, this.draftCurrency)}) differs from the payments it covers (${formatMoney(this.paymentsSumCents, this.draftCurrency)}).`;
+      },
+      // The server's own mismatch warning gives way to the line above, which
+      // follows the form; any other warning still shows.
+      otherWarnings() {
+        return this.detail.warnings.filter((w) => !String(w).startsWith('total_mismatch'));
+      },
+      // The address note follows the buttons on screen (ruling 4): a review
+      // has no Save draft.
+      addressStep() {
+        return this.reviewing ? 'Press Later to keep this draft, then add the address under Clients.' : 'Save the draft, then add it under Clients.';
+      },
+      acceptArmed() {
+        return this.acceptArmedAt > 0;
+      },
+      acceptLabel() {
+        if (this.acceptArmed) return 'Issue now';
+        return this.footerDifference ? 'Accept with this difference' : 'Accept';
+      },
       serviceLabel() {
         const from = formatDay(this.invoice.service_date_from);
         const to = formatDay(this.invoice.service_date_to);
@@ -483,11 +619,14 @@
     watch: {
       // A line goes when what it speaks about changes (system_3 #12298
       // ruling 4): a line's when its refused field does or it is removed,
-      // the footer's at any change.
+      // the footer's at any change. Any change also disarms Accept: the
+      // press confirmed what was on screen then (system_3 #12313 review
+      // point 3).
       form: {
         deep: true,
         handler(form) {
           this.error = '';
+          this.acceptArmedAt = 0;
           const lines = new Map(form.lines.map((l) => [l.key, l]));
           for (const [key, e] of Object.entries(this.lineErrors)) {
             const line = lines.get(Number(key)) || lines.get(key);
@@ -536,7 +675,6 @@
       formatBerlinDay,
       formatDay,
       formatMoney,
-      paymentName,
       paymentSummary,
       decimalFromMinor,
       async load() {
@@ -553,6 +691,7 @@
         this.fieldErrors = { vat: '', cancelReason: '' };
         this.lineErrors = {};
         this.confirmingIssue = false;
+        this.acceptArmedAt = 0;
         this.cancelling = false;
         this.cancelReason = '';
         const id = this.invoiceId;
@@ -594,6 +733,64 @@
         // What is on screen now is what the server holds: after a load, a
         // save, an issue, a cancel, and for each draft of a review.
         this.takeUnsentBaseline();
+        this.$nextTick(() => this.settleFooter());
+      },
+      // The footer takes the difference as it stands once ze leaves a field.
+      settleFooter() {
+        if (!this.detail || !this.isDraft) return;
+        const now = this.difference;
+        if (now !== this.footerDifference) {
+          this.footerDifference = now;
+          this.acceptArmedAt = 0;
+        }
+      },
+      // A press over a draft that misses something it needs sends nothing and
+      // takes focus to the first such field (ruling 2), the client, the date,
+      // a line's field, or Add line, in the order they stand.
+      focusNeeded() {
+        if (!this.needed.any) return false;
+        const root = this.$refs.editor;
+        // The field itself, never the "?" beside its label, which is a button
+        // too: an input, the select's trigger, or Add line.
+        const el = root && root.querySelector('[data-needed] input, [data-needed] [role="combobox"], [data-needed] [data-test="draft-add-line"]');
+        if (el) {
+          el.focus();
+          el.scrollIntoView({ block: 'nearest' });
+        }
+        return true;
+      },
+      paymentLine(p) {
+        const amount = formatMoney(p.gross_cents, p.currency);
+        const payer = paymentParts(p).who;
+        // A payment keeps the reference it is named by elsewhere (system_3
+        // #12257), labelled with where ze can look it up: "PayPal 9AB…" or
+        // "N26 a1b2…" (design_agent c77367). A source with no label shows
+        // the reference bare. An id the server made up is never shown.
+        const ref = shownReference(p);
+        const where = SOURCE_LABELS[p.source];
+        const named = ref ? ` (${where ? `${where} ${ref}` : ref})` : '';
+        return `${payer ? `${amount} from ${payer}` : amount}${named}, ${formatDay(p.paid_on)}`;
+      },
+      // The save before an issue, with the quantity bound in its own words.
+      async saveDraft(id) {
+        try {
+          return await updateDraft(id, this.buildPatch());
+        } catch (err) {
+          const text = saveRefusalText(err);
+          throw text ? new Error(text) : err;
+        }
+      },
+      // The issue call, its refusal in the app's words (never the server's).
+      async issueDraft(id) {
+        try {
+          return await issueInvoice(id);
+        } catch (err) {
+          throw new Error(issueRefusalText(err));
+        }
+      },
+      armIssue() {
+        if (this.focusNeeded()) return;
+        this.confirmingIssue = true;
       },
       // What Save or Cancel would send that the server does not hold,
       // normalised: a field typed and put back is equal again. A draft's
@@ -702,11 +899,6 @@
         if (q === null || p === null) return '—';
         return formatMoney(Math.round((q * p) / 1000), this.invoice.currency);
       },
-      warningText(w) {
-        return w.startsWith('total_mismatch')
-          ? 'The invoice total differs from the payments it covers. Check the amounts before issuing.'
-          : w;
-      },
       buildPatch() {
         const lines = [];
         for (const [i, line] of this.form.lines.entries()) {
@@ -798,15 +990,16 @@
       },
       save() {
         return this.run(async () => {
-          this.setDetail(await updateDraft(this.invoice.id, this.buildPatch()));
+          this.setDetail(await this.saveDraft(this.invoice.id));
           this.close(false);
         }, 'saveButton');
       },
       issue() {
+        if (this.focusNeeded()) return;
         return this.run(async () => {
           // Save first so the server issues exactly what is on screen.
-          this.setDetail(await updateDraft(this.invoice.id, this.buildPatch()));
-          this.setDetail(await issueInvoice(this.invoice.id));
+          this.setDetail(await this.saveDraft(this.invoice.id));
+          this.setDetail(await this.issueDraft(this.invoice.id));
           this.confirmingIssue = false;
         }, 'issueButton');
       },
@@ -828,11 +1021,26 @@
       // The three review outcomes. Each saves or removes exactly what is on
       // screen, then tells the page, which opens the next draft. A refusal
       // (run shows it) leaves this draft open to be fixed.
-      accept() {
+      accept(event) {
+        if (this.focusNeeded()) return;
+        // With a difference showing, Accept takes two presses (ruling 7):
+        // the first arms it, and a second that comes as part of a double tap
+        // is not taken. The press's own time stamp, not the wall clock,
+        // which a frozen test clock would stop.
+        this.settleFooter();
+        if (this.footerDifference) {
+          const at = (event && event.timeStamp) || performance.now();
+          if (!this.acceptArmedAt) {
+            this.acceptArmedAt = at;
+            return;
+          }
+          if (at - this.acceptArmedAt < ARM_SETTLE_MS) return;
+        }
+        this.acceptArmedAt = 0;
         return this.run(async () => {
           const id = this.invoice.id;
-          await updateDraft(id, this.buildPatch());
-          await issueInvoice(id);
+          await this.saveDraft(id);
+          await this.issueDraft(id);
           // Decided: the draft stays on screen while the next one loads, and
           // must not ask (system_3 #11670).
           this.takeUnsentBaseline();
@@ -848,7 +1056,7 @@
       },
       later() {
         return this.run(async () => {
-          await updateDraft(this.invoice.id, this.buildPatch());
+          await this.saveDraft(this.invoice.id);
           this.takeUnsentBaseline();
           this.$emit('reviewed', 'later');
         });
@@ -1112,9 +1320,64 @@
     }
   }
 
-  .covers__item {
-    margin-right: var(--space-sm);
-    white-space: nowrap;
+  /* The wrapper only carries the mark for focus; the button keeps its own
+     place in the lines' layout. */
+  .line__add-wrap {
+    display: contents;
+  }
+
+  .covers {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+    overflow-wrap: anywhere;
+  }
+
+  .covers p {
+    margin: 0;
+  }
+
+  .covers__list {
+    margin: 0;
+    padding-left: var(--space-lg);
+  }
+
+  /* A mark at a field (#12274 ruling 1): caution, not error. Nothing has
+     been refused yet. */
+  .needed {
+    margin: var(--space-2xs) 0 0;
+    font-size: var(--text-sm);
+    color: var(--feedback-warning-text);
+  }
+
+  .totals {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-xs) var(--space-lg);
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .totals div {
+    display: flex;
+    gap: var(--space-xs);
+  }
+
+  .totals dt {
+    color: var(--text-muted);
+  }
+
+  .totals dd {
+    margin: 0;
+  }
+
+  .totals__gross {
+    font-weight: var(--font-weight-bold);
+  }
+
+  .totals__gross dt {
+    color: inherit;
   }
 
   .warnings,

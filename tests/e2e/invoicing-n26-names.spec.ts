@@ -156,8 +156,10 @@ for (const [label, size] of [['1440', { width: 1440, height: 900 }], ['390', { w
       await page.getByRole('button', { name: 'Open draft for 2026-10-01 · Galerie Nord Esempio · Mural' }).filter({ visible: true }).click();
       const editor = page.locator('[data-test="invoice-editor"]');
       await expect(editor).toHaveAttribute('data-status', 'draft');
+      // In #12274's form: amount, payer, the shown reference when there is
+      // one, and the day. The derived csv-… id is never shown.
       const covers = editor.locator('.covers__item');
-      await expect(covers).toHaveText([/^2026-10-01 · Galerie Nord Esempio · Mural \(€150\.00\)$/, new RegExp(`^${CONFIRMATION} \\(€80\\.00\\)$`)]);
+      await expect(covers).toHaveText(['€150.00 from Galerie Nord Esempio, 2026-10-01', `€80.00 from Atelier Fittizio (N26 ${CONFIRMATION}), 2026-10-02`]);
       await expectNoDerivedID(page, 'the draft dialog');
     });
   });
