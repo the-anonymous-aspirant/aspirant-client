@@ -235,7 +235,7 @@ test.describe('#8409 Invoices app — a payment entered by hand', () => {
     await page.locator('[data-test="manual-date"]').fill('2026-07-14');
     await page.locator('[data-test="manual-amount"]').fill('90');
     await page.locator('[data-test="manual-save"]').click();
-    await expect(page.locator('[data-test="manual-error"]')).toHaveText('Mara Esempio is already in your client book');
+    await expect(page.locator('[data-test="manual-error"]')).toHaveText('“Mara Esempio” is already in your client book. Pick it from the list, or use another name.');
   });
 
   // §3.142 Decision 1: when the save also added a client, the region's line

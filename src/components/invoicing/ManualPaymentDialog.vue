@@ -63,7 +63,14 @@
           <div class="full-select">
             <AspSelect v-model="form.method" :options="methodOptions" label="Method" data-test="manual-method" />
           </div>
-          <AspInput v-model="form.reference" label="Reference (optional)" :label-hint="hints.reference" data-test="manual-reference" />
+          <AspInput
+            ref="reference"
+            v-model="form.reference"
+            label="Reference (optional)"
+            :label-hint="hints.reference"
+            :error="fieldErrors.reference"
+            data-test="manual-reference"
+          />
         </div>
         <!-- §3.142 Decision 2: one "Paid by" field replaces the Client select
              and the "Payer (optional)" field, both naming the person who paid.
@@ -101,8 +108,22 @@
              client; both are optional. No maxlength: the server's refusal is
              the limit and the typed text stays in the field (D13). -->
         <template v-if="addsNewClient">
-          <AspTextarea v-model="newClient.address" label="Address (optional)" :rows="2" data-test="manual-new-client-address" />
-          <AspInput v-model="newClient.email" type="email" label="Email (optional)" data-test="manual-new-client-email" />
+          <AspTextarea
+            ref="new_client_address"
+            v-model="newClient.address"
+            label="Address (optional)"
+            :rows="2"
+            :error="fieldErrors.new_client_address"
+            data-test="manual-new-client-address"
+          />
+          <AspInput
+            ref="new_client_email"
+            v-model="newClient.email"
+            type="email"
+            label="Email (optional)"
+            :error="fieldErrors.new_client_email"
+            data-test="manual-new-client-email"
+          />
         </template>
       </template>
 
@@ -133,10 +154,12 @@
       <LineDescriptionInput
         v-if="!issued"
         v-model="form.note"
+        ref="note"
         label="What it was for (optional)"
         :label-hint="hints.whatFor"
         data-test="manual-note"
       />
+      <p v-if="fieldErrors.note && !issued" class="manual-form__error" role="alert" data-test="manual-note-error">{{ fieldErrors.note }}</p>
 
       <!-- §3.143 Decision 5: the correction is one tap away and never in the
            way (S4). Events come newest first. -->
@@ -211,8 +234,22 @@
     removePayment,
   } from './api.js';
   import { focusAfterRefusal } from './refusalFocus.js';
+  import { ownEntry, refusalOf } from './refusals.js';
 
-  const noFieldErrors = () => ({ paid_on: '', amount: '', sender_name: '' });
+  const noFieldErrors = () => ({ paid_on: '', amount: '', sender_name: '', reference: '', note: '', new_client_address: '', new_client_email: '' });
+
+  // The server's field, as this dialog's (system_3 #12300): the name in "Paid
+  // by" is sent as sender_name, and as new_client_name when Save adds it.
+  const SERVER_FIELDS = {
+    paid_on: 'paid_on',
+    gross_cents: 'amount',
+    sender_name: 'sender_name',
+    new_client_name: 'sender_name',
+    reference: 'reference',
+    note: 'note',
+    new_client_address: 'new_client_address',
+    new_client_email: 'new_client_email',
+  };
 
   const blankForm = () => ({ paid_on: '', amount: '', method: 'bank_transfer', reference: '', sender_name: '', note: '', category: 'paid_work', client_id: 0 });
 
@@ -358,6 +395,18 @@
       'form.sender_name'() {
         this.fieldErrors.sender_name = '';
       },
+      'form.reference'() {
+        this.fieldErrors.reference = '';
+      },
+      'form.note'() {
+        this.fieldErrors.note = '';
+      },
+      'newClient.address'() {
+        this.fieldErrors.new_client_address = '';
+      },
+      'newClient.email'() {
+        this.fieldErrors.new_client_email = '';
+      },
       resolvedAsNew() {
         this.fieldErrors.sender_name = '';
       },
@@ -466,6 +515,11 @@
       },
       // A refused Save: at its field, focused, or above the buttons with
       // focus back on the button pressed (system_3 #12298 rulings 1-3).
+      // The server's refusal, in this dialog's words and at its field.
+      refuseAnswer(err, button = 'saveButton') {
+        const r = refusalOf(errorOf(err), { form: 'payment' });
+        this.refuse({ field: ownEntry(SERVER_FIELDS, r.field) || '', text: r.text }, button);
+      },
       refuse(refusal, button = 'saveButton') {
         if (refusal.field) {
           this.fieldErrors[refusal.field] = refusal.text;
@@ -542,7 +596,7 @@
           this.$emit('saved', { payment, client: client || null });
           this.$emit('changed');
         } catch (err) {
-          this.refuse({ text: errorOf(err).message });
+          this.refuseAnswer(err);
         } finally {
           this.saving = false;
         }
@@ -559,7 +613,7 @@
           this.$emit('update:open', false);
           this.$emit('changed');
         } catch (err) {
-          this.refuse({ text: errorOf(err).message });
+          this.refuseAnswer(err);
         } finally {
           this.saving = false;
         }
@@ -577,7 +631,7 @@
           this.$emit('update:open', false);
           this.$emit('changed');
         } catch (err) {
-          this.refuse({ text: errorOf(err).message }, 'removeButton');
+          this.refuseAnswer(err, 'removeButton');
         } finally {
           this.removing = false;
           this.confirmingRemove = false;

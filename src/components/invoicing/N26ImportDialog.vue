@@ -21,7 +21,7 @@
             <span class="n26-file__kind"> · {{ kindLabel(file.document_kind) }}</span></template>
         </h3>
         <p v-if="file.error" class="n26-file__error" role="alert" data-test="n26-file-error">
-          This file could not be read: {{ fileErrorReason(file.error) }}.<template v-if="copyKept(file)">
+          {{ fileLine(file.error) }}<template v-if="copyKept(file)">
             {{ ' ' }}<span data-test="n26-file-copy-kept">{{ copyKept(file) }}</span></template>
         </p>
         <!-- A transfer from PayPal is zir own money; its payments come in through the
@@ -159,6 +159,7 @@
     priorFlag,
   } from './api.js';
   import { liveNames } from './expenseCategories.js';
+  import { n26FileLine, refusalOf, reviewRowName } from './refusals.js';
 
   // Two payment-confirm answers as one: every count added.
   function addResults(a, b) {
@@ -312,8 +313,9 @@
       kindLabel(kind) {
         return N26_KIND_LABELS[kind] || kind;
       },
-      fileErrorReason(fileError) {
-        return n26FileErrorReason(fileError);
+      // The file's own line, in zir words (system_3 #12300, c77188 group 5).
+      fileLine(fileError) {
+        return n26FileLine(fileError);
       },
       // Present only on a file the server failed and kept a copy of (#10567).
       copyKept(file) {
@@ -486,10 +488,17 @@
           this.finish(this.paymentsResult || { confirmed: 0, duplicates: 0 }, this.sentRows, expenseResult);
         } catch (err) {
           // When this press's payments went through and its expenses did
-          // not, say so: the next press sends only what is still ticked.
-          const message = errorOf(err).message;
-          if (paymentsSent) this.error = `The payments were imported, but the expenses were not: ${message}`;
-          else if (!rows.length) this.error = `The expenses were not imported: ${message}`;
+          // not, say so: the next press sends only what is still ticked. The
+          // refused row is among what failed, named by its payer and day
+          // (system_3 #12300 ruling 3): this press's expenses once its
+          // payments went through or when it sent none, else its payments.
+          const answer = errorOf(err);
+          const expensesFailed = paymentsSent || !rows.length;
+          const failedRows = expensesFailed ? expenses : rows;
+          const payerOf = expensesFailed ? (row) => row.payee_name : (row) => row.sender_name;
+          const message = refusalOf(answer, { form: 'n26', rowName: reviewRowName(failedRows, answer.item, payerOf) }).text;
+          if (paymentsSent) this.error = `The payments were imported, but the expenses were not. ${message}`;
+          else if (!rows.length) this.error = `The expenses were not imported. ${message}`;
           else this.error = message;
           this.confirming = false;
         }

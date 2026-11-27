@@ -290,6 +290,10 @@
     updateDraft,
   } from './api.js';
   import { focusAfterRefusal } from './refusalFocus.js';
+  import { ownEntry, refusalOf } from './refusals.js';
+
+  // A line's server field, as the editor's part of that line.
+  const LINE_PARTS = { quantity_milli: 'quantity', unit_price_cents: 'price' };
 
   // A refusal the editor makes itself, carrying where it belongs.
   const refusalAt = (at) => Object.assign(new Error(at.text), { refusal: at });
@@ -760,7 +764,31 @@
           focusAfterRefusal(this, at.field === 'vat' ? 'vat' : 'cancelReasonInput');
           return;
         }
-        this.error = err && err.response ? errorOf(err).message : (err && err.toString().replace(/^Error: /, '')) || '';
+        if (err && err.response) {
+          // The server's refusal of a save, in zir words, at the line and
+          // field it names (system_3 #12300): `item` is the 1-based line, in
+          // the order buildPatch sent them.
+          const answer = errorOf(err);
+          const r = refusalOf(answer, { form: 'draft' });
+          const line = answer.item ? this.form.lines[answer.item - 1] : null;
+          const part = ownEntry(LINE_PARTS, answer.field);
+          if (line && part) {
+            const value = part === 'quantity' ? line.quantity : line.price;
+            this.lineErrors = { ...this.lineErrors, [line.key]: { text: r.text, part, value } };
+            focusAfterRefusal(this, `line-${line.key}-${part}`);
+            return;
+          }
+          if (answer.field === 'vat_rate_bp' && !this.kleinunternehmer) {
+            this.fieldErrors.vat = r.text;
+            focusAfterRefusal(this, 'vat');
+            return;
+          }
+          // The issue and cancel refusals are worded by #12274; until a
+          // code has a line here, its own sentence stays.
+          this.error = r.known ? r.text : answer.message;
+        } else {
+          this.error = (err && err.toString().replace(/^Error: /, '')) || '';
+        }
         if (!this.reviewing && pressed) focusAfterRefusal(this, pressed);
       },
       // Whether a line's field carries its line's refusal: marks the field.

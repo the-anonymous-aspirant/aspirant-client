@@ -79,6 +79,7 @@
   import ModalActions from './ModalActions.vue';
   import { unsentGuard } from './unsentGuard.js';
   import { deleteExpenseReceipt, downloadBlob, errorOf, expenseReceiptUrl, getExpenseReceiptBlob, uploadExpenseReceipt } from './api.js';
+  import { refusalOf } from './refusals.js';
 
   // Only these exact types are ever previewed, and the blob is rebuilt with
   // that type (security review c65957 on #10623): a blob: document runs in
@@ -171,7 +172,7 @@
           this.$emit('changed');
           await this.load();
         } catch (err) {
-          this.errorMsg = errorOf(err).message;
+          this.errorMsg = refusalOf(errorOf(err), { form: 'receipt' }).text;
         } finally {
           this.attaching = false;
         }
@@ -189,7 +190,7 @@
           this.state = 'none';
           this.clearPreview();
         } catch (err) {
-          this.errorMsg = errorOf(err).message;
+          this.errorMsg = refusalOf(errorOf(err), { form: 'receipt' }).text;
         } finally {
           this.removing = false;
           this.confirmingRemove = false;

@@ -65,6 +65,7 @@
   import { AspButton, AspCheckbox } from '@aspirant/design-system';
   import { errorOf, formatDay, formatMoney, rowAction } from './api.js';
   import { rowName, transactionRows } from './ledgerRows.js';
+  import { refusalOf } from './refusals.js';
 
   // The removed view of Transactions (§3.143 Decision 6, system_3 #10633): the
   // rows ze removed, in the list's own row format, with Restore and an armed
@@ -132,7 +133,7 @@
           for (const [kind, ids] of calls) await rowAction(kind, action, ids);
           this.selected = [];
         } catch (err) {
-          this.error = errorOf(err).message;
+          this.error = refusalOf(errorOf(err), { form: 'removed' }).text;
         } finally {
           this.busy = '';
           this.armed = false;

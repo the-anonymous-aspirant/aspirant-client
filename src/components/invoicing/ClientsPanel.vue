@@ -248,8 +248,15 @@
           :error="fieldErrors.address"
           data-test="client-address-input"
         />
-        <AspInput v-model="form.email" type="email" label="Email" />
-        <AspInput v-model="form.paypal_email" type="email" label="PayPal email" hint="Imported payments from this address are linked to the client." />
+        <AspInput ref="email" v-model="form.email" type="email" label="Email" :error="fieldErrors.email" />
+        <AspInput
+          ref="paypal_email"
+          v-model="form.paypal_email"
+          type="email"
+          label="PayPal email"
+          hint="Imported payments from this address are linked to the client."
+          :error="fieldErrors.paypal_email"
+        />
         <!-- Matching only: never on an invoice, the draft editor, the export
              or the client list (#12084, #12086). What is loaded shows in groups
              of four; what ze types is kept exactly as typed (c75345 2). -->
@@ -331,13 +338,14 @@
   import { groupByLetter, letterKey } from './listGroups.js';
   import { loadDismissed, pairKey, reviewOf, reviewSentences, saveDismissed } from './clientReview.js';
   import { focusAfterRefusal } from './refusalFocus.js';
-  import { FIELD_REFUSALS, clientsCsvUrl, createClient, downloadBlob, errorOf, formatBerlinDay, formatDay, formatMoney, groupIban, listInvoices, listPayerCandidates, payersSavedLine, safeSocialUrl, socialHandle, updateClient } from './api.js';
+  import { refusalOf } from './refusals.js';
+  import { clientsCsvUrl, createClient, downloadBlob, errorOf, formatBerlinDay, formatDay, formatMoney, groupIban, listInvoices, listPayerCandidates, payersSavedLine, safeSocialUrl, socialHandle, updateClient } from './api.js';
 
   // The longest book shown flat (§3.145 Decision 3, amended 2026-11-14).
   const FLAT_MAX = 10;
 
   const blank = () => ({ name: '', address: '', email: '', paypal_email: '', iban: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
-  const noErrors = () => ({ name: '', address: '', iban: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
+  const noErrors = () => ({ name: '', address: '', email: '', paypal_email: '', notes: '', iban: '', phone: '', instagram_url: '', telegram_url: '' });
   // The server's refusals of these fields print its own sentence at the field
   // (system_3 #12264): the sentence says which bound was passed.
   const OWN_SENTENCE = { invalid_name: 'name', invalid_address: 'address', invalid_notes: 'notes' };
@@ -524,6 +532,18 @@
       },
       'form.iban'() {
         this.fieldErrors.iban = '';
+      },
+      'form.address'() {
+        this.fieldErrors.address = '';
+      },
+      'form.email'() {
+        this.fieldErrors.email = '';
+      },
+      'form.paypal_email'() {
+        this.fieldErrors.paypal_email = '';
+      },
+      'form.notes'() {
+        this.fieldErrors.notes = '';
       },
       'form.phone'() {
         this.fieldErrors.phone = '';
@@ -782,25 +802,31 @@
           this.$emit('changed');
         } catch (err) {
           this.revealFrom = null;
-          const { code, message } = errorOf(err);
-          const namesake = code === 'client_exists' && err.response && err.response.data && err.response.data.client;
+          const answer = errorOf(err);
+          const namesake = answer.code === 'client_exists' && err.response && err.response.data && err.response.data.client;
           if (namesake && namesake.id) {
             this.askAboutNamesake(namesake, byKey);
             return;
           }
-          if (OWN_SENTENCE[code]) {
-            const field = OWN_SENTENCE[code];
-            this.fieldErrors[field] = message;
+          // #12264's bounds on the name, the address and the notes: the
+          // served server words them itself, with no details a sentence of
+          // this client's could use, so its sentence stays at the field until
+          // it answers them with #12300's codes (server PR 256).
+          if (Object.hasOwn(OWN_SENTENCE, answer.code)) {
+            const field = OWN_SENTENCE[answer.code];
+            this.fieldErrors[field] = answer.message;
             focusAfterRefusal(this, field);
             return;
           }
-          const refusal = FIELD_REFUSALS[code];
-          if (refusal) {
-            this.fieldErrors[refusal.field] = refusal.text;
-            focusAfterRefusal(this, refusal.field);
+          // Each refusal in zir words, at the field it is about (system_3
+          // #12300); one with no field of this form under the buttons.
+          const { field, text } = refusalOf(answer, { form: 'client' });
+          if (Object.hasOwn(this.fieldErrors, field)) {
+            this.fieldErrors[field] = text;
+            focusAfterRefusal(this, field);
             return;
           }
-          this.error = message;
+          this.error = text;
           focusAfterRefusal(this, 'saveButton');
         } finally {
           this.saving = false;

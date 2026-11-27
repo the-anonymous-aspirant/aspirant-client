@@ -872,7 +872,7 @@ test.describe('#11019-A2 on a phone the ways in fold behind "Add or import"', ()
     await page.locator('[data-test="n26-file-input"]').setInputFiles(Array.from({ length: 11 }, (_, i) => pdf(`f${i}.pdf`)));
     await expect(fold).not.toHaveAttribute('open', '');
     await expect(page.locator('[data-test="import-error"]')).toBeVisible();
-    await expect(page.locator('[data-test="import-error"]')).toHaveText('N26: choose at most 10 files at a time.');
+    await expect(page.locator('[data-test="import-error"]')).toHaveText('Choose at most 10 files at a time.');
     await expect(fold.locator('[data-test="import-error"]')).toHaveCount(0);
   });
 });

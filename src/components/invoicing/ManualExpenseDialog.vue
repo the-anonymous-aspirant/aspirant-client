@@ -41,7 +41,7 @@
         </div>
         <!-- Who ze paid, the row's who (§3.143 Decision 3): stored as the
              expense's payee, next to when and how much. -->
-        <AspInput v-model="form.payee" label="Paid to (optional)" data-test="expense-payee" />
+        <AspInput ref="payee" v-model="form.payee" label="Paid to (optional)" :error="fieldErrors.payee" data-test="expense-payee" />
       </template>
 
       <!-- A new category is typed in the list and saved with the expense;
@@ -79,8 +79,16 @@
         <p v-if="categoryError" class="manual-form__error" role="alert" data-test="expense-category-error">{{ categoryError }}</p>
       </div>
 
-      <AspInput v-if="!imported" v-model="form.reference" label="Reference (optional)" data-test="expense-reference" />
-      <LineDescriptionInput v-model="form.note" label="What it was for (optional)" data-test="expense-note" />
+      <AspInput
+        v-if="!imported"
+        ref="reference"
+        v-model="form.reference"
+        label="Reference (optional)"
+        :error="fieldErrors.reference"
+        data-test="expense-reference"
+      />
+      <LineDescriptionInput ref="note" v-model="form.note" label="What it was for (optional)" data-test="expense-note" />
+      <p v-if="fieldErrors.note" class="manual-form__error" role="alert" data-test="expense-note-error">{{ fieldErrors.note }}</p>
 
       <!-- The receipt, from the start (system_3 #11510, operator c70883 on
            #10985; design ack on #11510). An upload needs the expense's id,
@@ -177,14 +185,21 @@
     uploadExpenseReceipt,
   } from './api.js';
   import { focusAfterRefusal } from './refusalFocus.js';
+  import { ownEntry, refusalOf } from './refusals.js';
 
-  const noFieldErrors = () => ({ paid_on: '', amount: '' });
+  const noFieldErrors = () => ({ paid_on: '', amount: '', payee: '', reference: '', note: '' });
+
+  // The server's field, as this dialog's (system_3 #12300). The category's
+  // line is said under its own field.
+  const SERVER_FIELDS = { paid_on: 'paid_on', amount_cents: 'amount', payee: 'payee', reference: 'reference', note: 'note' };
 
   // A refusal about the category itself shows under the field; any other
   // under the form (§3.161 Decision 2). invalid_category: a typed name that
   // cannot be a category; removed_category: a category removed since the list
   // was loaded (aspirant-server invoicing_expense_categories.go).
   const CATEGORY_REFUSALS = ['invalid_category', 'removed_category'];
+  // A refusal at the server's category field is said there, whatever its code
+  // (system_3 #12300: too_long and hidden_characters too).
 
   // A receipt picked on a new entry is checked at the pick, from the file
   // itself, so a refusal comes before the expense is created (system_3
@@ -200,10 +215,10 @@
   ];
   async function receiptRefusal(file) {
     if (file.size > RECEIPT_MAX_BYTES) return 'The receipt is larger than 5 MB.';
-    if (file.size === 0) return 'Receipt is empty.';
+    if (file.size === 0) return 'The receipt is empty.';
     const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
     const known = RECEIPT_SIGNATURES.some((sig) => sig.every((byte, i) => head[i] === byte));
-    return known ? '' : 'Unsupported file type (allowed: PDF, JPEG, PNG).';
+    return known ? '' : 'The receipt must be a PDF, JPEG or PNG file.';
   }
 
   const blankForm = () => ({ paid_on: '', amount: '', payee: '', category: 'other', reference: '', note: '' });
@@ -342,6 +357,15 @@
       'form.amount'() {
         this.fieldErrors.amount = '';
       },
+      'form.payee'() {
+        this.fieldErrors.payee = '';
+      },
+      'form.reference'() {
+        this.fieldErrors.reference = '';
+      },
+      'form.note'() {
+        this.fieldErrors.note = '';
+      },
       form: {
         deep: true,
         handler() {
@@ -428,12 +452,17 @@
       // A refusal of the category goes under its field, the rest under the
       // form.
       showRefusal(err, button = 'saveButton') {
-        const { code, message } = errorOf(err);
-        if (CATEGORY_REFUSALS.includes(code)) {
-          this.categoryError = message;
+        const answer = errorOf(err);
+        const { field, text } = refusalOf(answer, { form: 'expense' });
+        if (CATEGORY_REFUSALS.includes(answer.code) || field === 'category') {
+          this.categoryError = text;
           focusAfterRefusal(this, 'category');
+        } else if (ownEntry(SERVER_FIELDS, field)) {
+          const own = ownEntry(SERVER_FIELDS, field);
+          this.fieldErrors[own] = text;
+          focusAfterRefusal(this, own);
         } else {
-          this.error = message;
+          this.error = text;
           focusAfterRefusal(this, button);
         }
       },
@@ -556,7 +585,7 @@
               outcome.receipt = 'attached';
             } catch (err) {
               outcome.receipt = 'failed';
-              outcome.reason = errorOf(err).message;
+              outcome.reason = refusalOf(errorOf(err), { form: 'expense' }).text;
             }
           }
           this.saving = false;

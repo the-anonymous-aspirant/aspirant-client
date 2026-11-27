@@ -329,7 +329,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     await upload(page, ['conferma.pdf', 'holiday-photo.pdf']);
 
     await expect(page.locator('[data-test="n26-file"]').nth(1).locator('[data-test="n26-file-error"]')).toHaveText(
-      'This file could not be read: not an N26 document.',
+      'This is not an N26 transfer confirmation or account statement.',
     );
     await page.locator('[data-test="n26-confirm"]').click();
     await expect(summary(page)).toHaveText(
@@ -509,12 +509,13 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
   });
 
   test('a server refusal on confirm stays in the dialog and stores nothing', async ({ page }) => {
-    const fake = newFake({ confirmFailure: { status: 400, body: { error: { code: 'invalid_row', message: 'row 0: paid_on is in the future' } } } });
+    const fake = newFake({ confirmFailure: { status: 400, body: { error: { code: 'invalid_row', message: 'row 0: paid_on is in the future', field: 'rows', item: 1 } } } });
     await open(page, fake);
     await upload(page, ['conferma.pdf']);
 
     await page.locator('[data-test="n26-confirm"]').click();
-    await expect(page.locator('[data-test="n26-error"]')).toHaveText('row 0: paid_on is in the future');
+    // The refused row named by its payer and day (system_3 #12300 ruling 3).
+    await expect(page.locator('[data-test="n26-error"]')).toHaveText('Mara Esempio, 2026-07-14: this could not be imported.');
     await expect(page.locator('[data-test="n26-review"]')).toBeVisible();
     await expect(summary(page)).toHaveCount(0);
     await expect(page.locator('[data-test="payment-row"][data-txn="a1b2c3d4-0e15-4a6f-9bd0-000000000001"]')).toHaveCount(0);
@@ -524,7 +525,7 @@ test.describe('#9760-B1 Invoices app — N26 PDF import, confirm each row', () =
     const fake = newFake();
     await open(page, fake);
     await page.locator('[data-test="n26-file-input"]').setInputFiles(Array.from({ length: 11 }, (_, i) => pdf(`f${i}.pdf`)));
-    await expect(page.locator('[data-test="import-error"]')).toHaveText('N26: choose at most 10 files at a time.');
+    await expect(page.locator('[data-test="import-error"]')).toHaveText('Choose at most 10 files at a time.');
     expect(fake.requests.filter((r) => r.path.includes('import-n26'))).toHaveLength(0);
   });
 
@@ -597,7 +598,7 @@ test.describe('#10534-C2 N26 button takes the CSV export too', () => {
     await expect(page.locator('[data-test="n26-review"]')).toBeVisible();
 
     await expect(page.locator('[data-test="n26-file-error"]')).toHaveText(
-      'This file could not be read: column names not recognised.',
+      "The columns of this CSV are not N26's.",
     );
     await page.locator('[data-test="n26-close"]').click();
     await expect(summary(page)).toHaveText(
@@ -630,7 +631,7 @@ test.describe('#10534-C2 N26 button takes the CSV export too', () => {
     await page.locator('[data-test="n26-file-input"]').setInputFiles([{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') }]);
     await expect(page.locator('[data-test="n26-review"]')).toBeVisible();
     await expect(page.locator('[data-test="n26-file-error"]')).toHaveText(
-      'This file could not be read: neither a PDF nor an N26 CSV export.',
+      'This is not a PDF or an N26 CSV export.',
     );
   });
 });
@@ -818,7 +819,7 @@ test.describe('#10432-A1 N26 import — outgoing rows as work expenses', () => {
 
   test('a failed expense confirm after the payments went through says so, and Import again posts only the expenses', async ({ page }) => {
     const fake = withOutgoing([outgoingRow(1)], {
-      expenseConfirmFailure: { status: 400, body: { error: { code: 'invalid_row', message: 'row 0: category is not one of your expense categories' } } },
+      expenseConfirmFailure: { status: 400, body: { error: { code: 'invalid_row', message: 'row 0: category is not one of your expense categories', field: 'rows', item: 1 } } },
     });
     await open(page, fake);
     await upload(page, ['statement.pdf']);
@@ -826,7 +827,7 @@ test.describe('#10432-A1 N26 import — outgoing rows as work expenses', () => {
     await page.locator('[data-test="n26-confirm"]').click();
 
     await expect(page.locator('[data-test="n26-error"]')).toHaveText(
-      'The payments were imported, but the expenses were not: row 0: category is not one of your expense categories');
+      'The payments were imported, but the expenses were not. Colorificio Esempio, 2026-08-11: this could not be imported.');
     await expect(page.locator('[data-test="n26-review"]')).toBeVisible();
     expect(confirmRequests(fake)).toHaveLength(1);
 
@@ -1100,7 +1101,9 @@ test.describe('#11671 the N26 review asks before an exit throws away a changed t
 
 // --- #12321: a second press after a half-failed import sends every ticked row ---
 
-const EXPENSE_FAILURE = { status: 400, body: { error: { code: 'invalid_row', message: 'row 0: category is not one of your expense categories' } } };
+// As aspirant-server answers it since #12300 (server PR 256): the refused
+// row's 1-based position, which the line turns into its payer and day.
+const EXPENSE_FAILURE = { status: 400, body: { error: { code: 'invalid_row', message: 'row 0: category is not one of your expense categories', field: 'rows', item: 1 } } };
 const sentIds = (fake: Fake, i: number) => (JSON.parse(confirmRequests(fake)[i].body).rows as Json[]).map((r) => r.transaction_id);
 const rowSent = (page: Page, i: number) => page.locator('[data-test="n26-row"]').nth(i).locator('[data-test="n26-row-sent"]');
 
@@ -1116,7 +1119,7 @@ test.describe('#12321 N26 import — a second press sends what the button names'
 
     // No payment was ticked, so the line names only the expenses.
     await expect(page.locator('[data-test="n26-error"]')).toHaveText(
-      'The expenses were not imported: row 0: category is not one of your expense categories');
+      'The expenses were not imported. Colorificio Esempio, 2026-08-11: this could not be imported.');
     expect(confirmRequests(fake)).toHaveLength(0);
 
     // A changed tick clears the first press's line.
@@ -1144,7 +1147,7 @@ test.describe('#12321 N26 import — a second press sends what the button names'
     await page.locator('[data-test="n26-confirm"]').click();
 
     await expect(page.locator('[data-test="n26-error"]')).toHaveText(
-      'The payments were imported, but the expenses were not: row 0: category is not one of your expense categories');
+      'The payments were imported, but the expenses were not. Colorificio Esempio, 2026-08-11: this could not be imported.');
     await expect(rowSent(page, 0)).toHaveText('Imported.');
     await expect(checkbox(page, 0)).toHaveCount(0);
     await expect(rowSent(page, 1)).toHaveCount(0);

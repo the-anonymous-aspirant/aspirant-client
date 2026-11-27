@@ -170,7 +170,7 @@
            what became of it. The expense is kept either way. -->
       <p v-if="manualSummary.expense" class="summary__line" data-test="manual-summary-expense">
         <template v-if="manualSummary.receipt === 'attached'">By hand: 1 expense added to your book, with its receipt.</template>
-        <template v-else-if="manualSummary.receipt === 'failed'">By hand: 1 expense added to your book. Its receipt was not attached: {{ manualSummary.reason }}. Add it with Receipt on the expense's row.</template>
+        <template v-else-if="manualSummary.receipt === 'failed'">By hand: 1 expense added to your book. Its receipt was not attached. {{ manualSummary.reason }} Add it with Receipt on the expense's row.</template>
         <template v-else>By hand: 1 expense added to your book.</template>
       </p>
       <p v-else class="summary__line">
@@ -784,6 +784,7 @@
   import { groupByMonth, landedRows, monthKey, monthSpanLabel, openGroupKeys } from './listGroups.js';
   import { countsInBook } from './bookSelection.js';
   import { liveNames, withCategory } from './expenseCategories.js';
+  import { PROXY_MAX_BYTES, refusalOf } from './refusals.js';
 
   // "2 of 5 kept their category: 2026-08-12 €40.00, 2026-08-14 €25.00 (on an
   // issued invoice; cancel it first)." One shared reason closes the line;
@@ -1710,7 +1711,7 @@
         try {
           await patchExpense(expense.id, { category });
         } catch (err) {
-          this.rowError = errorOf(err).message;
+          this.rowError = refusalOf(errorOf(err), { form: 'expense' }).text;
         } finally {
           const next = new Set(this.saving);
           next.delete(key);
@@ -1830,7 +1831,14 @@
         if (files.length > N26_MAX_FILES) {
           // The server's per-request cap counts CSVs the same as PDFs
           // (aspirant-server invoicing_n26.go maxN26FilesPerRequest).
-          this.importError = `N26: choose at most ${N26_MAX_FILES} files at a time.`;
+          this.importError = `Choose at most ${N26_MAX_FILES} files at a time.`;
+          return;
+        }
+        // The proxy cuts a request over 25 MB, which reads as no answer at
+        // all; a set that large is refused before it is sent (system_3
+        // #12300 ruling 5).
+        if (files.reduce((sum, f) => sum + f.size, 0) > PROXY_MAX_BYTES) {
+          this.importError = refusalOf({ status: 413, code: '' }, { files: files.length }).text;
           return;
         }
         this.n26Parsing = true;
@@ -1838,7 +1846,7 @@
           this.n26Files = await parseN26PDFs(files);
           this.n26Open = true;
         } catch (err) {
-          this.importError = `N26: ${errorOf(err).message}`;
+          this.importError = refusalOf(errorOf(err), { form: 'n26', files: files.length }).text;
         } finally {
           this.n26Parsing = false;
         }
@@ -1914,8 +1922,9 @@
         this.n26Summary = null;
         this.payersSummary = null;
         const receipt = (outcome && outcome.receipt) || 'none';
-        // The sentence supplies its own full stop after the reason.
-        const reason = String((outcome && outcome.reason) || 'the server gave no reason').replace(/\.+$/, '');
+        // The reason is a sentence of its own, full stop included
+        // (system_3 #12300), so it is shown as it comes.
+        const reason = String((outcome && outcome.reason) || 'The server gave no reason.');
         this.manualSummary = { expense: true, receipt, reason };
         this.changed();
       },
@@ -1960,11 +1969,11 @@
           if (failure.code === 'date_order_ambiguous') {
             this.needsDateOrder = true;
           } else {
-            // The server's messages mostly end unpunctuated; the sentence
-            // that follows needs its own full stop before it (#10567).
+            // In zir words, by the server's code (system_3 #12300 c77188
+            // group 4); the kept copy's sentence follows (#10567).
             const kept = copyKeptSentence(failure.copyExpiresAt);
-            const line = `PayPal ${this.paypalNoun}: ${failure.message}`;
-            this.importError = kept ? `${line}${/[.!?]$/.test(line) ? '' : '.'} ${kept}` : line;
+            const line = refusalOf(failure, { form: 'paypal' }).text;
+            this.importError = kept ? `${line} ${kept}` : line;
           }
         } finally {
           this.importing = false;
@@ -2167,7 +2176,7 @@
         } catch (err) {
           // The server refused (for example a payment already on an issued
           // invoice); the parent's reload puts the select back to the truth.
-          this.rowError = errorOf(err).message;
+          this.rowError = refusalOf(errorOf(err), { form: 'payment' }).text;
           this.changed();
         } finally {
           const next = new Set(this.saving);

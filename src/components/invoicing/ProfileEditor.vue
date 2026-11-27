@@ -5,8 +5,15 @@
     <form class="profile-form" data-test="profile-form" :inert="unsentAsking || undefined" @submit.prevent="save">
       <AspInput ref="full_name" v-model="form.full_name" label="Full name" required :error="fieldErrors.full_name" data-test="profile-full-name" />
       <AspTextarea ref="address" v-model="form.address" label="Address" hint="One line per address line." :rows="3" required :error="fieldErrors.address" data-test="profile-address" />
-      <AspInput v-model="form.steuernummer" label="Steuernummer (Tax number)" :label-hint="hints.steuernummer" hint="Invoices cannot be issued while this is empty." />
-      <AspInput v-model="form.email" type="email" label="Email" />
+      <AspInput
+        ref="steuernummer"
+        v-model="form.steuernummer"
+        label="Steuernummer (Tax number)"
+        :label-hint="hints.steuernummer"
+        hint="Invoices cannot be issued while this is empty."
+        :error="fieldErrors.steuernummer"
+      />
+      <AspInput ref="email" v-model="form.email" type="email" label="Email" :error="fieldErrors.email" />
       <!-- Optional; printed under the email on new invoices only when set
            (operator c61727, system_3 #9967). The server is the only gate on
            its characters. A refusal shows on this field, in place of its
@@ -61,7 +68,9 @@
           data-test="profile-prefix"
         />
         <AspInput
+          ref="next_invoice_number"
           v-model="form.next_invoice_number"
+          :error="fieldErrors.next_invoice_number"
           type="number"
           label="Next invoice number"
           :label-hint="hints.nextNumber"
@@ -137,8 +146,9 @@
   import UnsentAsk from './UnsentAsk.vue';
   import { unsentGuard } from './unsentGuard.js';
   import { FIELD_HINTS } from './fieldHints.js';
-  import { FIELD_REFUSALS, deleteLogo, errorOf, getLogoBlob, getProfile, saveProfile, uploadLogo } from './api.js';
+  import { deleteLogo, errorOf, getLogoBlob, getProfile, saveProfile, uploadLogo } from './api.js';
   import { focusAfterRefusal } from './refusalFocus.js';
+  import { refusalOf } from './refusals.js';
 
   const PARTIAL_SAVE = 'The logo was saved; the profile was not.';
   // The two fields every invoice prints, checked before anything is sent.
@@ -150,10 +160,19 @@
   // Edits the issuer header printed on every invoice (spec §4.1). The admin
   // seeds it and the owner edits it; issued invoices keep the snapshot taken
   // when they were issued, so nothing here changes an issued invoice.
-  // aspirant-server answers a refused phone, link or prefix with its own code
-  // (system_3 #9967, #10002, #12272); FIELD_REFUSALS maps each to its field
-  // and words.
-  const noErrors = () => ({ full_name: '', address: '', phone: '', instagram_url: '', telegram_url: '', invoice_number_prefix: '' });
+  // aspirant-server answers each refusal with its own code and field
+  // (system_3 #9967, #10002, #12300); refusals.js says it in zir words.
+  const noErrors = () => ({
+    full_name: '',
+    address: '',
+    steuernummer: '',
+    email: '',
+    phone: '',
+    instagram_url: '',
+    telegram_url: '',
+    invoice_number_prefix: '',
+    next_invoice_number: '',
+  });
 
   export default {
     name: 'ProfileEditor',
@@ -226,6 +245,18 @@
       },
       'form.phone'() {
         this.fieldErrors.phone = '';
+      },
+      'form.steuernummer'() {
+        this.fieldErrors.steuernummer = '';
+      },
+      'form.email'() {
+        this.fieldErrors.email = '';
+      },
+      'form.invoice_number_prefix'() {
+        this.fieldErrors.invoice_number_prefix = '';
+      },
+      'form.next_invoice_number'() {
+        this.fieldErrors.next_invoice_number = '';
       },
       'form.instagram_url'() {
         this.fieldErrors.instagram_url = '';
@@ -324,7 +355,7 @@
           this.logoStaged = null;
           return true;
         } catch (err) {
-          this.logoError = errorOf(err).message;
+          this.logoError = refusalOf(errorOf(err), { form: 'logo' }).text;
           return false;
         }
       },
@@ -388,17 +419,16 @@
           this.$emit('saved', res.profile);
           this.$emit('update:open', false);
         } catch (err) {
-          const { code, message } = errorOf(err);
-          const refusal = FIELD_REFUSALS[code];
-          if (refusal) {
-            // On the field, in plain words; the rule stays the server's.
-            this.fieldErrors[refusal.field] = refusal.text;
-            if (logoChanged) this.partialSave = PARTIAL_SAVE;
-            focusAfterRefusal(this, refusal.field);
+          // On the field, in zir words (system_3 #12300); the rule stays
+          // the server's.
+          const { field, text } = refusalOf(errorOf(err), { form: 'profile' });
+          if (logoChanged) this.partialSave = PARTIAL_SAVE;
+          if (Object.hasOwn(this.fieldErrors, field)) {
+            this.fieldErrors[field] = text;
+            focusAfterRefusal(this, field);
             return;
           }
-          if (logoChanged) this.partialSave = PARTIAL_SAVE;
-          this.error = message;
+          this.error = text;
           focusAfterRefusal(this, 'saveButton');
         } finally {
           this.saving = false;

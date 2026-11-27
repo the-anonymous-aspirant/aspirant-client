@@ -81,7 +81,7 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     }
     let m = path.match(/^\/invoicing\/expenses\/(\d+)$/);
     if (m && method === 'PATCH') {
-      if (fake.patchRefusal) return json(route, 400, { error: { code: 'bad_request', message: fake.patchRefusal } });
+      if (fake.patchRefusal) return json(route, 400, { error: { code: 'invalid_category', field: 'category', message: fake.patchRefusal } });
       const e = fake.expenses.find((x) => x.id === Number(m![1]))!;
       Object.assign(e, JSON.parse(req.postData() || '{}'));
       return json(route, 200, { expense: e });
@@ -328,11 +328,13 @@ test.describe('#11567 an expense row\'s category is a select on its row', () => 
 
   test('a refused save says why, and the select returns to what is stored', async ({ page }) => {
     const fake = newFake();
-    fake.patchRefusal = 'that category is not one of yours';
+    fake.patchRefusal = 'category: is not one of your expense categories';
     await open(page, fake);
     await select(page, 'M-hand-e').click();
     await page.getByRole('option', { name: 'travel', exact: true }).click();
-    await expect(page.locator('[data-test="payment-error"]')).toHaveText('that category is not one of yours');
+    // A category the page offered that the server no longer has: the page
+    // is stale (system_3 #12300, c77188 group 7).
+    await expect(page.locator('[data-test="payment-error"]')).toHaveText('This was changed since the page loaded. Reload the page to see it as it is now.');
     await expect(select(page, 'M-hand-e')).toContainText('other');
   });
 

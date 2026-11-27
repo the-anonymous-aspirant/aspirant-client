@@ -355,6 +355,7 @@
     updateBookPreset,
   } from './api.js';
   import { focusAfterRefusal } from './refusalFocus.js';
+  import { refusalOf } from './refusals.js';
   import { bookInvoice, expenseParts, newestFirst, paymentParts, receiptButtonLabel, rowName } from './ledgerRows.js';
   import { fillEmptyMonths, groupByMonth, landedRows, monthKey, monthLabel, openGroupKeys } from './listGroups.js';
   import { BOOK_PDF_BUTTON, NOT_COUNTED_ROW, bookPdfCaption, bookPdfDoc, bookPdfFileName } from './bookPdf.js';
@@ -924,7 +925,7 @@
           this.$emit('book-changed', { selection: book.selection, presets: book.presets });
           return true;
         } catch (err) {
-          this.selectionError = errorOf(err).message;
+          this.selectionError = refusalOf(errorOf(err), { form: 'book' }).text;
           return false;
         } finally {
           this.saving = false;
@@ -968,12 +969,15 @@
           this.$emit('book-changed', { selection: book.selection, presets: book.presets });
           this.presetDialogOpen = false;
         } catch (err) {
-          const { code, message } = errorOf(err);
-          if (code === 'duplicate_preset' || (code === 'invalid_field' && /^name\b/.test(message))) {
-            this.presetNameError = message;
+          // At the name when it is about the name, in zir words (system_3
+          // #12300).
+          const answer = errorOf(err);
+          const { field, text } = refusalOf(answer, { form: 'preset', name });
+          if (field === 'name' || answer.code === 'duplicate_preset') {
+            this.presetNameError = text;
             focusAfterRefusal(this, 'presetNameInput');
           } else {
-            this.presetError = message;
+            this.presetError = text;
             focusAfterRefusal(this, 'presetSaveButton');
           }
         } finally {
