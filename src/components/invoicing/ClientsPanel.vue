@@ -346,9 +346,6 @@
 
   const blank = () => ({ name: '', address: '', email: '', paypal_email: '', iban: '', phone: '', instagram_url: '', telegram_url: '', notes: '' });
   const noErrors = () => ({ name: '', address: '', email: '', paypal_email: '', notes: '', iban: '', phone: '', instagram_url: '', telegram_url: '' });
-  // The server's refusals of these fields print its own sentence at the field
-  // (system_3 #12264): the sentence says which bound was passed.
-  const OWN_SENTENCE = { invalid_name: 'name', invalid_address: 'address', invalid_notes: 'notes' };
   // The press that confirms a second client of one name must begin at least
   // this long after the question appeared, and after the key that raised it
   // was released (system_3 #12313's rule, which #12264 adopts). The time is
@@ -806,16 +803,6 @@
           const namesake = answer.code === 'client_exists' && err.response && err.response.data && err.response.data.client;
           if (namesake && namesake.id) {
             this.askAboutNamesake(namesake, byKey);
-            return;
-          }
-          // #12264's bounds on the name, the address and the notes: the
-          // served server words them itself, with no details a sentence of
-          // this client's could use, so its sentence stays at the field until
-          // it answers them with #12300's codes (server PR 256).
-          if (Object.hasOwn(OWN_SENTENCE, answer.code)) {
-            const field = OWN_SENTENCE[answer.code];
-            this.fieldErrors[field] = answer.message;
-            focusAfterRefusal(this, field);
             return;
           }
           // Each refusal in zir words, at the field it is about (system_3

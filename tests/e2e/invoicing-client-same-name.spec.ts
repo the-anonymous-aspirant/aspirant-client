@@ -60,7 +60,7 @@ async function open(page: Page, fake: Fake): Promise<void> {
       const name = String(body.name || '').trim();
       const address = String(body.address || '');
       if (address.split('\n').length > 10 && (!before || address !== before.address)) {
-        return json(route, 400, { error: { code: 'invalid_address', message: 'The address is at most 10 lines.' } });
+        return json(route, 400, { error: { code: 'too_long', field: 'address', message: 'The address is at most 10 lines.', limit: 200, lines: 10 } });
       }
       if (!body.confirm_second_client && (!before || name !== before.name)) {
         const other = fake.clients.find((c) => c.id !== id && sameName(c.name) === sameName(name));
@@ -234,11 +234,11 @@ test.describe('#12264 a second client of one name is asked about', () => {
     await save(page).click();
     const field = form(page).locator('[data-test="client-address-input"]');
     const described = await field.getAttribute('aria-describedby');
-    await expect(page.locator(`[id="${described}"]`)).toHaveText('The address is at most 10 lines.');
+    await expect(page.locator(`[id="${described}"]`)).toHaveText('Keep the address to 10 lines of at most 200 characters each.');
     await expect(field).toBeFocused();
     await expect(page.locator('[data-test="client-error"]')).toHaveCount(0);
     await address.fill('Weg 1');
-    await expect(form(page)).not.toContainText('The address is at most 10 lines.');
+    await expect(form(page)).not.toContainText('Keep the address to 10 lines');
 
     await nameInput(page).fill('  ');
     await save(page).click();
