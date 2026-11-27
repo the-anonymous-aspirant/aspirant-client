@@ -112,6 +112,14 @@
       icon: 'default',
     },
     {
+      // The Christmas cards (system_3 #12582): admin-only; the server gates
+      // every /christmas route too.
+      title: 'Christmas cards',
+      description: 'Seven picture cards; each word opens the next',
+      route: '/admin/christmas',
+      icon: 'default',
+    },
+    {
       title: 'Penpot Design',
       description: 'Design tool: mockups, tokens and components',
       route: '/admin/penpot/',

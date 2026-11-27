@@ -61,6 +61,7 @@ const PappasSitups = () => import('../views/member/personal/PappasSitups.vue');
 const FlowDetail = () => import('../views/admin/browser-flows/FlowDetail.vue');
 const KvittoMaker = () => import('../views/admin/tools/KvittoMaker.vue');
 const CardgenApp = () => import('../views/admin/cardgen/CardgenApp.vue');
+const ChristmasApp = () => import('../views/admin/christmas/ChristmasApp.vue');
 
 // Access-tier gates (epic #5113-A2/A3). The guard below reads user_role and
 // admits when its tier clears the route's minTier. tierOf accepts both the tier
@@ -117,6 +118,9 @@ const routes = [
   // :id (#8753, §3.52) addresses one template or card inside the templates /
   // cards sections, so an editor survives a reload and a link can land on it.
   { path: '/admin/cardgen/:tab?/:id?', component: CardgenApp, meta: ADMIN },
+  // The Christmas cards (system_3 #12582): admin-only, "so only I can see it".
+  // :tab is Play (absent) or control; the server gates every /christmas route.
+  { path: '/admin/christmas/:tab(control)?', component: ChristmasApp, meta: ADMIN },
 
   // /about was the starter template's swatch board; retired (system_3 #9254,
   // operator ruling c57325). Old links land on the home page, not the 404.
