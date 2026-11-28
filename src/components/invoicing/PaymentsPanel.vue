@@ -709,6 +709,7 @@
       :clients="clients"
       @changed="changed"
       @saved="onManualSaved"
+      @open-payment="openLookAlike"
     />
     <!-- The same dialog edits a payment (§3.143 Decision 5, system_3 #10694). -->
     <ManualPaymentDialog v-model:open="editOpen" :payment="editPayment" :clients="clients" @changed="changed" />
@@ -718,6 +719,7 @@
       @changed="onExpenseSaved"
       @category-updated="onCategoryUpdated"
       @categories-changed="loadExpenseCategories"
+      @open-expense="openExpenseLookAlike"
     />
     <!-- The same dialog edits an expense (§3.143 Decision 5, system_3 #10695). -->
     <ManualExpenseDialog
@@ -1758,6 +1760,15 @@
         this.editExpense = expense;
         this.expenseEditOpen = true;
         await this.loadExpenseCategories();
+      },
+      // "Open" on a hand entry's look-alike question (system_3 #12295): the
+      // row as this list holds it, which carries its invoice, else as the
+      // server sent it.
+      openLookAlike(payment) {
+        this.openEdit(this.payments.find((p) => p.id === payment.id) || payment);
+      },
+      openExpenseLookAlike(expense) {
+        this.openExpenseEdit(this.expenses.find((e) => e.id === expense.id) || expense);
       },
       // "Receipt" or "Add receipt", from the list's has_receipt (system_3
       // #11791, design spec on #11630). The dialog's `changed` refetches the

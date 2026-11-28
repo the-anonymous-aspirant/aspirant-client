@@ -17,6 +17,9 @@ interface Fake {
   payments: Json[];
   requests: Array<{ method: string; path: string; body: string }>;
   deleteFailure?: { status: number; body: Json };
+  /** system_3 #12295: the row a create looks like; answered 409
+   *  possible_duplicate until the request confirms. */
+  twin?: Json;
 }
 
 const manualRow = (over: Json = {}) => ({
@@ -50,6 +53,9 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/payments' && method === 'GET') return json(route, 200, { payments: fake.payments });
     if (path === '/invoicing/payments/manual' && method === 'POST') {
       const posted = JSON.parse(req.postData() || '{}');
+      if (fake.twin && posted.confirm_duplicate !== true) {
+        return json(route, 409, { error: { code: 'possible_duplicate', message: 'a payment with the same day, amount and payer is already in your book; send confirm_duplicate to save this one as well' }, duplicate_of: fake.twin.id, payment: fake.twin });
+      }
       const payment = manualRow({ ...posted, id: 41 });
       fake.payments.push(payment);
       const body: Json = { payment };
@@ -449,4 +455,155 @@ test.describe('#11586 the hand-entry date field follows the page theme, not the 
       expect(await date.evaluate((el) => getComputedStyle(el).colorScheme)).toBe(theme);
     });
   }
+});
+
+// system_3 #12295: a look-alike is asked about once and never refused. The
+// server finds it (PR 252); the dialog asks, offers the row, and the second
+// press saves. That press follows #12313's rule: deaf for 600 ms after the
+// question appears, so a double tap on Save does not also answer it.
+test.describe('#12295 the same payment typed twice', () => {
+  const lena = () => manualRow({ id: 40, method: 'cash', reference: '', paid_on: '2026-08-03T00:00:00Z', gross_cents: 7000, sender_name: 'Lena Maier', client_id: null, note: 'Skizze' });
+  const QUESTION = 'A payment of €70.00 from Lena Maier on that day is already in your book.';
+
+  async function typeLena(page: Page, amount = '70,00') {
+    await openWaysIn(page);
+    await page.locator('[data-test="manual-new"]').click();
+    await page.locator('[data-test="manual-date"]').fill('2026-08-03');
+    await page.locator('[data-test="manual-amount"]').fill(amount);
+    await page.locator('[data-test="manual-payer"]').fill('Lena Maier');
+  }
+  const posts = (fake: Fake) => fake.requests.filter((r) => r.method === 'POST' && r.path === '/invoicing/payments/manual');
+
+  test('Save asks, saves nothing, and "Save as a second payment" saves it after a moment', async ({ page }) => {
+    const twin = lena();
+    const fake = newFake({ payments: [twin], twin });
+    await open(page, fake);
+    await typeLena(page);
+    // A fixed clock from here: the second press stays too soon until the test
+    // moves it. It is set only once the dialog is open, because a frozen clock
+    // stops AspModal's open from finishing.
+    await page.clock.setFixedTime(new Date('2026-08-10T10:00:00Z'));
+    const save = page.locator('[data-test="manual-save"]');
+    await expect(save).toHaveText('Save payment');
+    await save.click();
+
+    const question = page.locator('[data-test="manual-twin"]');
+    await expect(question).toHaveAttribute('role', 'status');
+    await expect(page.locator('[data-test="manual-twin-line"]')).toHaveText(QUESTION);
+    await expect(page.locator('[data-test="manual-twin-open"]')).toHaveText('Open');
+    await expect(save).toHaveText('Save as a second payment');
+    await expect(page.locator('[data-test="manual-error"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="manual-form"]')).toBeVisible();
+    expect(posts(fake)).toHaveLength(1);
+    expect(JSON.parse(posts(fake)[0].body)).not.toHaveProperty('confirm_duplicate');
+
+    // The press of a double tap, within 600 ms of the question: not taken.
+    await save.click();
+    await page.waitForTimeout(300);
+    expect(posts(fake)).toHaveLength(1);
+    await expect(page.locator('[data-test="manual-form"]')).toBeVisible();
+
+    // A moment later the press saves, with the confirmation.
+    await page.clock.setFixedTime(new Date('2026-08-10T10:00:00.700Z'));
+    await save.click();
+    await expect(page.locator('[data-test="manual-form"]')).toHaveCount(0);
+    expect(posts(fake)).toHaveLength(2);
+    expect(JSON.parse(posts(fake)[1].body)).toMatchObject({ paid_on: '2026-08-03', gross_cents: 7000, sender_name: 'Lena Maier', confirm_duplicate: true });
+  });
+
+  // design c78412 on system_3 #12295 (§3.173 Decision 1): the footer reads
+  // the refusal line, then the question, then the buttons. The two show
+  // together only when the second press is refused.
+  test('a refused second press: the refusal line, then the question, then the buttons', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const twin = lena();
+    const fake = newFake({ payments: [twin], twin });
+    await open(page, fake);
+    await typeLena(page);
+    await page.clock.setFixedTime(new Date('2026-08-10T10:00:00Z'));
+    const save = page.locator('[data-test="manual-save"]');
+    await save.click();
+    await expect(save).toHaveText('Save as a second payment');
+
+    await page.route(/\/api\/invoicing\/payments\/manual$/, (route) =>
+      json(route, 500, { error: { code: 'internal', message: 'The payment could not be saved. Try again.' } }));
+    await page.clock.setFixedTime(new Date('2026-08-10T10:00:00.700Z'));
+    await save.click();
+
+    const refusal = page.locator('[data-test="manual-error"]');
+    const question = page.locator('[data-test="manual-twin"]');
+    // A code without a sentence of its own reads the fallback (#12300).
+    await expect(refusal).toHaveText('This could not be saved.');
+    await expect(question).toBeVisible();
+    await expect(save).toHaveText('Save as a second payment');
+    const [r, q, s] = await Promise.all([refusal, question, save].map((l) => l.boundingBox()));
+    expect(r!.y + r!.height).toBeLessThanOrEqual(q!.y + 1);
+    expect(q!.y + q!.height).toBeLessThanOrEqual(s!.y + 1);
+    for (const l of [refusal, question, save]) await expect(l).toBeInViewport();
+  });
+
+  test('changing the day, the amount or the payer clears the question', async ({ page }) => {
+    const twin = lena();
+    const fake = newFake({ payments: [twin], twin });
+    await open(page, fake);
+    const save = page.locator('[data-test="manual-save"]');
+    const question = page.locator('[data-test="manual-twin"]');
+    await typeLena(page);
+    for (const [field, other, back] of [
+      ['manual-amount', '71,00', '70,00'],
+      ['manual-date', '2026-08-04', '2026-08-03'],
+      ['manual-payer', 'Lena Meier', 'Lena Maier'],
+    ]) {
+      await save.click();
+      await expect(question).toBeVisible();
+      await page.locator(`[data-test="${field}"]`).fill(other);
+      await expect(question).toHaveCount(0);
+      await expect(save).toHaveText('Save payment');
+      await page.locator(`[data-test="${field}"]`).fill(back);
+      await expect(question).toHaveCount(0);
+    }
+    // The note is not part of the question: changing it keeps it.
+    await save.click();
+    await expect(question).toBeVisible();
+    await page.locator('[data-test="manual-note"]').fill('Skizze 2');
+    await expect(question).toBeVisible();
+    // No press ever confirmed.
+    expect(posts(fake).every((r) => !('confirm_duplicate' in JSON.parse(r.body)))).toBe(true);
+  });
+
+  test('"Open" asks first about what was typed, then opens that payment', async ({ page }) => {
+    const twin = lena();
+    const fake = newFake({ payments: [twin], twin });
+    await open(page, fake);
+    await typeLena(page);
+    await page.locator('[data-test="manual-save"]').click();
+    await page.locator('[data-test="manual-twin-open"]').click();
+    // Something is typed, so the exit asks (§3.166); Keep editing stays.
+    await expect(page.locator('[data-test="unsent-ask"]')).toBeVisible();
+    await page.locator('[data-test="unsent-keep"]').click();
+    await expect(page.getByRole('dialog', { name: 'Enter payment by hand' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Edit payment' })).toHaveCount(0);
+    // Asked again, and discarded: that payment opens.
+    await page.locator('[data-test="manual-twin-open"]').click();
+    await page.locator('[data-test="unsent-discard"]').click();
+    await expect(page.getByRole('dialog', { name: 'Enter payment by hand' })).toHaveCount(0);
+    const edit = page.getByRole('dialog', { name: 'Edit payment' });
+    await expect(edit).toBeVisible();
+    await expect(edit.locator('[data-test="manual-amount"]')).toHaveValue('70');
+    await expect(edit.locator('[data-test="manual-note"]')).toHaveValue('Skizze');
+  });
+
+  // The door is a touch control on a phone: the house's 44px.
+  test('at 390px the question wraps before its door, and the door is 44px tall', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const twin = lena();
+    const fake = newFake({ payments: [twin], twin });
+    await open(page, fake);
+    await typeLena(page);
+    await page.locator('[data-test="manual-save"]').click();
+    const line = await page.locator('[data-test="manual-twin-line"]').boundingBox();
+    const door = await page.locator('[data-test="manual-twin-open"]').boundingBox();
+    expect(door!.height).toBeGreaterThanOrEqual(44);
+    expect(door!.y).toBeGreaterThanOrEqual(line!.y + line!.height - 1);
+  });
 });

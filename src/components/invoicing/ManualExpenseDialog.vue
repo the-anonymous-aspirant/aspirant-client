@@ -147,6 +147,17 @@
       <!-- A refusal that names no field is said above the buttons
            (system_3 #12298 ruling 2). -->
       <ModalActions v-else :refusal="error" refusal-test="expense-error">
+        <!-- A look-alike is asked about once, never refused (system_3 #12295):
+             two expenses of one amount on one day can both be real. It is the
+             answer to the Save press, so it sits above the buttons as a
+             refused Save does (#12298 ruling 2). "Open" goes to that expense,
+             asking first when something is typed (§3.166). -->
+        <template v-if="twin" #notice>
+          <div class="manual-form__twin" role="status" data-test="expense-twin">
+            <p class="manual-form__twin-line" data-test="expense-twin-line">{{ twinLine }}</p>
+            <AspButton variant="secondary" size="sm" class="manual-form__twin-open" data-test="expense-twin-open" @click="openTwin">Open</AspButton>
+          </div>
+        </template>
         <!-- Remove arms first (§3.143 Decision 6). An expense is never on an
              invoice, so removing it changes nothing else. -->
         <template v-if="editing" #destructive>
@@ -155,7 +166,7 @@
           </AspButton>
         </template>
         <AspButton variant="secondary" :disabled="unsentBusy" data-test="expense-cancel" @click="onOpenChange(false)">Cancel</AspButton>
-        <AspButton ref="saveButton" :loading="saving" data-test="expense-save" @click="save">{{ editing ? 'Save changes' : 'Save expense' }}</AspButton>
+        <AspButton ref="saveButton" :loading="saving" data-test="expense-save" @click="save">{{ editing ? 'Save changes' : twin ? 'Save as a second expense' : 'Save expense' }}</AspButton>
       </ModalActions>
     </template>
   </AspModal>
@@ -168,6 +179,7 @@
   import UnsentAsk from './UnsentAsk.vue';
   import { unsentGuard } from './unsentGuard.js';
   import { historyLines } from './auditHistory.js';
+  import { armedNow, pressTooSoon } from './armedPress.js';
   import { categoryState, findCategory, namesWithOwn } from './expenseCategories.js';
   import {
     SOURCE_LABELS,
@@ -178,6 +190,7 @@
     formatDay,
     formatMoney,
     listAuditEvents,
+    lookAlikeOf,
     patchExpense,
     removeExpense,
     removeExpenseCategory,
@@ -252,7 +265,7 @@
     // category-updated: a category Remove or Restore changed, as the server
     // now has it, for the page's list. categories-changed: a Save added or
     // restored a category, so the page reloads its list.
-    emits: ['update:open', 'changed', 'category-updated', 'categories-changed'],
+    emits: ['update:open', 'changed', 'category-updated', 'categories-changed', 'open-expense'],
     data() {
       return {
         form: blankForm(),
@@ -278,9 +291,27 @@
         // A receipt picked for a new entry, held in the browser until Save.
         receiptFile: null,
         receiptError: '',
+        // The expense the server found that this one looks like, when the
+        // question appeared, and the one "Open" opens once this closes
+        // (system_3 #12295).
+        twin: null,
+        twinArmedAt: null,
+        openAfterClose: null,
       };
     },
     computed: {
+      // The day, the amount and the payee as Save would send them.
+      twinKey() {
+        return [this.form.paid_on, centsFromEuros(this.form.amount), this.form.payee.trim()].join('|');
+      },
+      // "An expense of €12.99 paid to Boesner on that day is already in your
+      // book." An import's payee is its reference, as its row reads it.
+      twinLine() {
+        const t = this.twin;
+        if (!t) return '';
+        const payee = (t.entry === 'manual' ? t.payee : t.reference) || '';
+        return `An expense of ${formatMoney(t.amount_cents, t.currency)}${payee ? ` paid to ${payee}` : ''} on that day is already in your book.`;
+      },
       editing() {
         return !!this.expense;
       },
@@ -346,6 +377,11 @@
       },
     },
     watch: {
+      // Changing the day, the amount or the payee clears the question.
+      twinKey() {
+        this.twin = null;
+        this.twinArmedAt = null;
+      },
       // Choosing another category drops a name added here, and ends the
       // offer to restore one just removed; a reason under the field was
       // about the value it held.
@@ -379,6 +415,9 @@
       },
       open(isOpen) {
         if (isOpen) {
+          this.twin = null;
+          this.twinArmedAt = null;
+          this.openAfterClose = null;
           this.form = this.expense ? formFrom(this.expense) : blankForm();
           this.error = '';
           this.fieldErrors = noFieldErrors();
@@ -500,6 +539,14 @@
       },
       closeNow() {
         this.$emit('update:open', false);
+        const open = this.openAfterClose;
+        this.openAfterClose = null;
+        if (open) this.$emit('open-expense', open);
+      },
+      // "Open" is an exit like any other: with something typed it asks first.
+      openTwin() {
+        this.openAfterClose = this.twin;
+        if (!this.requestClose() && !this.unsentAsking) this.openAfterClose = null;
       },
       // What Save would send that the server does not hold, normalised as
       // Save does it, so a field typed and put back is equal again. A new
@@ -523,6 +570,7 @@
       // "Keep editing" after an armed Remove disarms it (§3.166).
       unsentKeptEditing() {
         this.confirmingRemove = false;
+        this.openAfterClose = null;
       },
       async onReceiptPicked(event) {
         const file = event.target.files[0];
@@ -543,6 +591,9 @@
         this.receiptError = '';
       },
       async save() {
+        // An armed press (#12313 ruling 1): a double tap on Save does not
+        // also answer the question.
+        if (this.twin && pressTooSoon(this.twinArmedAt)) return;
         this.error = '';
         this.fieldErrors = noFieldErrors();
         const refused = this.check();
@@ -566,10 +617,17 @@
               payee: this.form.payee.trim(),
               reference: this.form.reference.trim(),
               note: this.form.note.trim(),
+              ...(this.twin ? { confirm_duplicate: true } : {}),
             });
           } catch (err) {
             // Nothing was created, the category neither (the server saves
             // both or neither); the picked file stays picked.
+            const twin = lookAlikeOf(err);
+            if (twin) {
+              this.twin = twin;
+              this.twinArmedAt = armedNow();
+              return;
+            }
             this.showRefusal(err);
             return;
           }
@@ -773,6 +831,29 @@
     margin: 0;
     padding-left: var(--space-lg);
     font-size: var(--text-sm);
+  }
+
+  /* The look-alike question (system_3 #12295), as in the payment dialog. */
+  .manual-form__twin {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs) var(--space-sm);
+  }
+
+  .manual-form__twin-line {
+    margin: 0;
+    flex: 1 1 16rem;
+  }
+
+  @media (max-width: 640px) {
+    .manual-form__twin .manual-form__twin-line {
+      flex-basis: 100%;
+    }
+
+    .manual-form__twin .manual-form__twin-open {
+      min-height: 44px;
+    }
   }
 
   .manual-form__error {

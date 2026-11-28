@@ -178,6 +178,17 @@
       <!-- A refusal that names no field is said above the buttons
            (system_3 #12298 ruling 2). -->
       <ModalActions v-else :refusal="error" refusal-test="manual-error">
+        <!-- A look-alike is asked about once, never refused (system_3 #12295):
+             two payments of one amount on one day can both be real. It is the
+             answer to the Save press, so it sits above the buttons as a
+             refused Save does (#12298 ruling 2). "Open" goes to that payment,
+             asking first when something is typed (§3.166). -->
+        <template v-if="twin" #notice>
+          <div class="manual-form__twin" role="status" data-test="manual-twin">
+            <p class="manual-form__twin-line" data-test="manual-twin-line">{{ twinLine }}</p>
+            <AspButton variant="secondary" size="sm" class="manual-form__twin-open" data-test="manual-twin-open" @click="openTwin">Open</AspButton>
+          </div>
+        </template>
         <!-- Remove arms first and says what else happens (§3.143 Decision 6).
              A payment on an issued invoice cannot be removed. -->
         <template v-if="editing && !issued" #destructive>
@@ -200,7 +211,7 @@
         <template v-else>
           <AspButton variant="secondary" :disabled="unsentBusy" data-test="manual-cancel" @click="onOpenChange(false)">Cancel</AspButton>
           <AspButton ref="saveButton" :loading="saving" data-test="manual-save" @click="save">
-            {{ editing ? 'Save changes' : 'Save payment' }}
+            {{ editing ? 'Save changes' : twin ? 'Save as a second payment' : 'Save payment' }}
           </AspButton>
         </template>
       </ModalActions>
@@ -219,6 +230,7 @@
   import { FIELD_HINTS } from './fieldHints.js';
   import { matchPayer, normalizeName, tidyName } from './payerMatch.js';
   import { historyLines } from './auditHistory.js';
+  import { armedNow, pressTooSoon } from './armedPress.js';
   import {
     CATEGORY_LABELS,
     METHOD_LABELS,
@@ -230,6 +242,7 @@
     formatDay,
     formatMoney,
     listAuditEvents,
+    lookAlikeOf,
     patchPayment,
     removePayment,
   } from './api.js';
@@ -281,7 +294,7 @@
       clients: { type: Array, default: () => [] },
       payment: { type: Object, default: null },
     },
-    emits: ['update:open', 'saved', 'changed'],
+    emits: ['update:open', 'saved', 'changed', 'open-payment'],
     data() {
       return {
         form: blankForm(),
@@ -298,9 +311,30 @@
         historyError: '',
         confirmingRemove: false,
         removing: false,
+        // The payment the server found that this one looks like, and when
+        // the question appeared (system_3 #12295).
+        twin: null,
+        twinArmedAt: null,
+        // "Open" was pressed: the payment to open once this dialog closes.
+        openAfterClose: null,
       };
     },
     computed: {
+      // What the look-alike question is about: the day, the amount and the
+      // payer as Save would send them.
+      twinKey() {
+        return [this.form.paid_on, centsFromEuros(this.form.amount), this.form.sender_name.trim()].join('|');
+      },
+      // "A payment of €70.00 from Lena Maier on that day is already in your
+      // book." The payer as the list names it: its client, else the name
+      // the payment holds; with neither, no "from".
+      twinLine() {
+        const t = this.twin;
+        if (!t) return '';
+        const client = t.client_id ? this.clients.find((c) => c.id === t.client_id) : null;
+        const payer = (client && client.name) || t.sender_name || '';
+        return `A payment of ${formatMoney(t.gross_cents, t.currency)}${payer ? ` from ${payer}` : ''} on that day is already in your book.`;
+      },
       // While a write runs, no exit closes and none asks (system_3 #11632).
       unsentBusy() {
         return this.saving || this.removing;
@@ -416,8 +450,17 @@
           this.error = '';
         },
       },
+      // Changing the day, the amount or the payer clears the question
+      // (system_3 #12295 ruling 2).
+      twinKey() {
+        this.twin = null;
+        this.twinArmedAt = null;
+      },
       open(isOpen) {
         if (!isOpen) return;
+        this.twin = null;
+        this.twinArmedAt = null;
+        this.openAfterClose = null;
         this.form = this.payment ? formFrom(this.payment) : blankForm();
         this.error = '';
         this.fieldErrors = noFieldErrors();
@@ -440,6 +483,16 @@
       },
       closeNow() {
         this.$emit('update:open', false);
+        const open = this.openAfterClose;
+        this.openAfterClose = null;
+        if (open) this.$emit('open-payment', open);
+      },
+      // "Open" is an exit like any other (system_3 #12295 review point 4):
+      // with something typed it asks first, and opens the payment only once
+      // this dialog has closed.
+      openTwin() {
+        this.openAfterClose = this.twin;
+        if (!this.requestClose() && !this.unsentAsking) this.openAfterClose = null;
       },
       // What Save would send that the server does not hold, normalised as
       // Save does it. A new payment compares with the blank form, the new
@@ -462,6 +515,7 @@
       // "Keep editing" after an armed Remove disarms it (§3.166).
       unsentKeptEditing() {
         this.confirmingRemove = false;
+        this.openAfterClose = null;
       },
       formatDay,
       formatMoney,
@@ -565,6 +619,9 @@
         return patch;
       },
       async save() {
+        // "Save as a second payment" is an armed press (#12313 ruling 1): a
+        // double tap on Save does not also answer the question.
+        if (this.twin && pressTooSoon(this.twinArmedAt)) return;
         this.error = '';
         this.fieldErrors = noFieldErrors();
         const refused = this.check();
@@ -590,13 +647,20 @@
             Object.assign(payload, this.newClientDetails());
           }
         }
+        if (this.twin) payload.confirm_duplicate = true;
         try {
           const { payment, client } = await createManualPayment(payload);
           this.$emit('update:open', false);
           this.$emit('saved', { payment, client: client || null });
           this.$emit('changed');
         } catch (err) {
-          this.refuseAnswer(err);
+          const twin = lookAlikeOf(err);
+          if (twin) {
+            this.twin = twin;
+            this.twinArmedAt = armedNow();
+          } else {
+            this.refuseAnswer(err);
+          }
         } finally {
           this.saving = false;
         }
@@ -747,6 +811,32 @@
   .manual-form__error {
     margin: 0;
     color: var(--feedback-error);
+  }
+
+  /* The look-alike question: a line and its door, wrapping before the door
+     on a phone (system_3 #12295). Not an error: nothing was refused. */
+  .manual-form__twin {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-xs) var(--space-sm);
+  }
+
+  .manual-form__twin-line {
+    margin: 0;
+    flex: 1 1 16rem;
+  }
+
+  /* The door is a standalone touch control on a phone: the 44px house
+     target (§3.99 tier 2), as the Issuer line's Edit (#12276). */
+  @media (max-width: 640px) {
+    .manual-form__twin .manual-form__twin-line {
+      flex-basis: 100%;
+    }
+
+    .manual-form__twin .manual-form__twin-open {
+      min-height: 44px;
+    }
   }
 
   @media (max-width: 640px) {

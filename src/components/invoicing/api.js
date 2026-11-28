@@ -226,6 +226,15 @@ export function errorOf(err) {
   };
 }
 
+// The row a hand entry looks like, when the create answered 409
+// possible_duplicate (system_3 #12295, server PR 252): the payment or
+// expense already in the book, or null for any other answer.
+export function lookAlikeOf(err) {
+  const data = (err && err.response && err.response.data) || {};
+  if (!data.error || data.error.code !== 'possible_duplicate') return null;
+  return data.payment || data.expense || null;
+}
+
 // A review row the server matched to a record ze removed, or deleted for
 // good (server PR 196, §3.143 Decision 6). Both come with already_imported,
 // so the row has no checkbox; this is the flag that says why. A removed row
