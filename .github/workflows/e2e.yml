@@ -63,9 +63,16 @@ jobs:
         repository: the-anonymous-aspirant/aspirant-design-system
         ref: main
         path: aspirant-design-system
+    # Keep npm's download cache between runs, keyed on both lock files, so
+    # each of the nine jobs does not fetch every package again (system_3
+    # #12539). `npm ci` still installs from the lock files as before.
     - uses: actions/setup-node@v4
       with:
         node-version: 22
+        cache: npm
+        cache-dependency-path: |
+          aspirant-client/package-lock.json
+          aspirant-design-system/package-lock.json
     # Install without scripts, then build, as Dockerfile-Client does: the
     # package's `prepare` would otherwise build it a second time.
     - name: Build the design system
