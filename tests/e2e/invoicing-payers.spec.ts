@@ -16,6 +16,8 @@ interface Fake {
   leftOut: Json;
   addFailure?: { status: number; body: Json };
   candidatesFailure?: boolean;
+  // What an import stores: payments confirmed (N26) or imported (PayPal).
+  imported?: number;
   requests: Array<{ method: string; path: string; body: string }>;
 }
 
@@ -75,9 +77,10 @@ async function mock(page: Page, fake: Fake): Promise<void> {
     if (path === '/invoicing/payments/import-n26/parse' && method === 'POST') {
       return json(route, 200, { files: [{ filename: 'conferma.pdf', document_kind: 'n26_transfer_confirmation', candidates: [{ document_kind: 'n26_transfer_confirmation', transaction_id: 't-1', paid_on: '2026-10-03', currency: 'EUR', gross_cents: 12000, fee_cents: 0, net_cents: 12000, sender_name: 'Mara E.', note: '', already_imported: false }] }] });
     }
-    if (path === '/invoicing/payments/import-n26/confirm' && method === 'POST') return json(route, 200, { summary: { confirmed: 1, duplicates: 0 } });
+    if (path === '/invoicing/payments/import-n26/confirm' && method === 'POST') return json(route, 200, { summary: { confirmed: fake.imported ?? 1, duplicates: 0 } });
     if (path === '/invoicing/payments/import' && method === 'POST') {
-      return json(route, 200, { summary: { rows_read: 3, imported: 3, duplicates: 0, skipped: 0, skipped_reasons: {}, format: 'csv' }, expense_candidates: [] });
+      const imported = fake.imported ?? 3;
+      return json(route, 200, { summary: { rows_read: 3, imported, duplicates: 3 - imported, skipped: 0, skipped_reasons: {}, format: 'csv' }, expense_candidates: [] });
     }
     return json(route, 404, { error: { code: 'not_found', message: `unmocked ${method} ${path}` } });
   });
@@ -113,7 +116,7 @@ test.describe('#10550 Add payers to your client book', () => {
   test('after an N26 import the summary names the payers not in the book and opens the dialog', async ({ page }) => {
     await open(page, newFake());
     await importN26(page);
-    await expect(page.locator('[data-test="payers-clause"]')).toHaveText('3 payers are not in your client book.');
+    await expect(page.locator('[data-test="payers-clause"]')).toHaveText('3 payers in your book have no client yet: none matches a client in your client book.');
     await expect(page.locator('[data-test="payers-open"]')).toHaveText('Add payers…');
     await page.locator('[data-test="payers-open"]').click();
 
@@ -131,7 +134,7 @@ test.describe('#10550 Add payers to your client book', () => {
     const fake = newFake();
     await open(page, fake);
     await page.locator('[data-test="payments-file"]').setInputFiles([{ name: 'paypal.csv', mimeType: 'text/csv', buffer: Buffer.from('a,b\n') }]);
-    await expect(page.locator('[data-test="import-summary"] [data-test="payers-clause"]')).toHaveText('3 payers are not in your client book.');
+    await expect(page.locator('[data-test="import-summary"] [data-test="payers-clause"]')).toHaveText('3 payers in your book have no client yet: none matches a client in your client book.');
 
     fake.payers = [];
     await page.locator('[data-test="payments-file"]').setInputFiles([{ name: 'paypal.csv', mimeType: 'text/csv', buffer: Buffer.from('a,b\n') }]);
@@ -334,7 +337,7 @@ test.describe('#11507 payers and clients worth a second look', () => {
     await importN26(page);
     const clause = page.locator('[data-test="payers-clause"]');
     const button = page.locator('[data-test="payers-open"]');
-    await expect(clause).toHaveText('3 payers are not in your client book.');
+    await expect(clause).toHaveText('3 payers in your book have no client yet: none matches a client in your client book.');
     await expect(button).toHaveText('Add payers…');
     await expect(button).toHaveClass(/btn--secondary/);
     const c = (await clause.boundingBox())!;
@@ -545,5 +548,56 @@ test.describe('#11671 the payers review asks before an exit throws away a tick o
     await expect(name).toHaveValue('Luca B.');
     await page.locator('[data-test="payers-cancel"]').click();
     await expect(ask(page)).toBeVisible();
+  });
+});
+
+// system_3 #12294 (amending §3.142 Decision 5 and §3.160 Decision 2): the
+// sentence counts every payer in the book with no client, and says how many
+// already match a client, by `same_client` or by a name that fits several
+// (#12393, design_agent c76723). An import that stored no payment offers none.
+test.describe('#12294 the import sentence says what is true of the payers', () => {
+  const match = { same_client: { id: 1, name: 'Mara Esempio', paypal_email: '' } };
+  const p = (i: number, over: Json = {}) => payer({ key: `name:payer ${i}`, payer: `Payer ${i}`, tidied_name: `Payer ${i}`, payment_ids: [200 + i], payment_count: 1, ...over });
+  const importPayPal = (page: Page) =>
+    page.locator('[data-test="payments-file"]').setInputFiles([{ name: 'paypal.csv', mimeType: 'text/csv', buffer: Buffer.from('a,b\n') }]);
+
+  for (const [what, payers, line] of [
+    ['both kinds', [p(1, match), p(2, match), p(3, { matches_several: true }), p(4), p(5)],
+      '5 payers in your book have no client yet: 3 match a client in your client book, 2 do not.'],
+    ['both kinds, one each', [p(1, match), p(2)],
+      '2 payers in your book have no client yet: 1 matches a client in your client book, 1 does not.'],
+    ['only matches', [p(1, match), p(2, { matches_several: true })],
+      '2 payers in your book have no client yet: each matches a client in your client book.'],
+    ['no match', [p(1), p(2), p(3), p(4)],
+      '4 payers in your book have no client yet: none matches a client in your client book.'],
+    ['one payer that matches', [p(1, match)],
+      '1 payer in your book has no client yet: it matches a client in your client book.'],
+    ['one payer that does not', [p(1)],
+      '1 payer in your book has no client yet: it matches none.'],
+  ] as Array<[string, Json[], string]>) {
+    test(`${what}: "${line}"`, async ({ page }) => {
+      await open(page, newFake({ payers }));
+      await importPayPal(page);
+      await expect(page.locator('[data-test="import-summary"] [data-test="payers-clause"]')).toHaveText(line);
+      await expect(page.locator('[data-test="payers-open"]')).toHaveText('Add payers…');
+    });
+  }
+
+  test('an import that stored no payment offers no payers, and does not read them', async ({ page }) => {
+    const fake = newFake({ imported: 0 });
+    await open(page, fake);
+    const reads = () => fake.requests.filter((r) => r.path === '/invoicing/payers/candidates').length;
+    const before = reads();
+    await importPayPal(page);
+    await expect(page.locator('[data-test="import-summary"]')).toContainText('0 imported');
+    await importN26(page);
+    await expect(page.locator('[data-test="payers-clause"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="payers-open"]')).toHaveCount(0);
+    expect(reads()).toBe(before);
+    // The next import that stores one offers them again.
+    fake.imported = 1;
+    await importN26(page);
+    await expect(page.locator('[data-test="payers-clause"]')).toHaveText(
+      '3 payers in your book have no client yet: none matches a client in your client book.');
   });
 });
