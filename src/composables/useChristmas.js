@@ -51,6 +51,9 @@ export function useChristmas() {
     },
     saveSentence: (sentence) => call(() => axios.put(`${API_BASE}/control/sentence`, { sentence })),
     goBack: (to) => call(() => axios.post(`${API_BASE}/control/reset`, { to })),
+    // #12780: all seven opening times at once, card 1 first, each a UTC ISO
+    // time or null for open now.
+    saveOpens: (opensAt) => call(() => axios.put(`${API_BASE}/control/opens`, { opens_at: opensAt })),
   };
 }
 
@@ -70,6 +73,8 @@ export function refusalText(error) {
       return 'Choose a picture under 8 MB.';
     case 'unreadable_file':
       return 'That picture could not be read.';
+    case 'invalid_time':
+      return 'A time could not be read.';
     default:
       return 'This could not be saved.';
   }

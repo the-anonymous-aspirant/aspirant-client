@@ -28,7 +28,13 @@
         Card {{ state.current }} of {{ state.total }}
       </h2>
 
-      <p v-if="!state.card.ready" class="muted" data-test="christmas-not-ready">
+      <!-- #12780: before its opening time the card shows when it opens and a
+           countdown on the server's clock, never its picture. -->
+      <div v-if="!state.card.open" class="opens" data-test="christmas-opens">
+        <p class="opens-line" data-test="christmas-opens-at">Opens on {{ opensLabel }}</p>
+        <p class="countdown" role="timer" aria-live="off" data-test="christmas-countdown">{{ countdown }}</p>
+      </div>
+      <p v-else-if="!state.card.ready" class="muted" data-test="christmas-not-ready">
         This card isn't set up yet. Add its picture and its word on Control.
       </p>
       <template v-else>
@@ -76,6 +82,7 @@
 // wrong word; the picture fits the first screen with its Try button.
 import { AspButton, AspInput } from '@aspirant/design-system';
 import { useChristmas } from '@/composables/useChristmas.js';
+import { berlinLabel, countdownText } from '@/utils/christmasTime.js';
 
 const WRONG = 'Not this one. Try again.';
 const FAILED = "Couldn't check that. Try again.";
@@ -98,9 +105,22 @@ export default {
       pictureFailed: false,
       pictureMax: null,
       thumbs: {},
+      // The server's clock minus this browser's, from the last load: the
+      // countdown runs on the server's time, which alone opens a card.
+      skew: 0,
+      remaining: 0,
+      ticker: null,
+      lastLoad: 0,
     };
   },
   computed: {
+    opensLabel() {
+      const at = this.state?.card?.opens_at;
+      return at ? berlinLabel(at) : '';
+    },
+    countdown() {
+      return countdownText(this.remaining);
+    },
     aspect() {
       const c = this.state?.card;
       return c && c.width && c.height ? `${c.width} / ${c.height}` : '4 / 3';
@@ -119,6 +139,7 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.fit);
+    this.stopTicker();
     this.releasePictures();
   },
   methods: {
@@ -128,9 +149,31 @@ export default {
       this.picture = null;
       this.thumbs = {};
     },
+    stopTicker() {
+      if (this.ticker) clearInterval(this.ticker);
+      this.ticker = null;
+    },
+    // Counts down to the current card's opening each second; at zero it asks
+    // the server again, which decides whether the card is open.
+    startTicker() {
+      this.stopTicker();
+      const opensAt = Date.parse(this.state.card.opens_at);
+      const tick = () => {
+        this.remaining = opensAt - (Date.now() + this.skew);
+        // At most one reload every 2s, should the server not agree yet.
+        if (this.remaining <= 0 && Date.now() - this.lastLoad >= 2000) {
+          this.stopTicker();
+          this.load();
+        }
+      };
+      this.ticker = setInterval(tick, 1000);
+      tick();
+    },
     async load() {
       this.loading = !this.state;
       this.loadFailed = false;
+      this.stopTicker();
+      this.lastLoad = Date.now();
       const { data, error } = await this.api.play();
       this.loading = false;
       if (error) {
@@ -138,6 +181,7 @@ export default {
         return false;
       }
       this.releasePictures();
+      if (data.now) this.skew = Date.parse(data.now) - Date.now();
       this.state = data;
       this.pictureFailed = false;
       if (data.done) {
@@ -149,6 +193,8 @@ export default {
           }),
         );
         this.thumbs = urls;
+      } else if (!data.card.open) {
+        this.startTicker();
       } else if (data.card.ready) {
         const url = await this.api.playPicture(data.current);
         this.picture = url;
@@ -238,6 +284,19 @@ export default {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+.opens {
+  text-align: center;
+  padding: var(--space-6, 32px) 0;
+}
+.opens-line {
+  margin: 0 0 var(--space-2, 8px);
+}
+.countdown {
+  margin: 0;
+  font-size: clamp(2rem, 9vw, 3.5rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
 }
 .answer-row {
   display: flex;

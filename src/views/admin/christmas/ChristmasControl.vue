@@ -17,6 +17,7 @@
             <th scope="col">Card</th>
             <th scope="col">Picture</th>
             <th scope="col">Word</th>
+            <th scope="col">Opens</th>
             <th scope="col">State</th>
           </tr>
         </thead>
@@ -72,12 +73,49 @@
                 </AspButton>
               </template>
             </td>
+            <td class="opens" data-test="christmas-row-opens">
+              <span class="cell-label">Opens: </span>{{ opensText(card) }}
+            </td>
             <td class="state" data-test="christmas-row-state">
               <span class="cell-label">State: </span>{{ stateText(card) }}
             </td>
           </tr>
         </tbody>
       </table>
+
+      <!-- #12780: when each card opens, in Berlin time. The server stores UTC
+           and decides on its own clock; an empty field is open now. -->
+      <section class="opens-edit" aria-labelledby="christmas-opens-h">
+        <h2 id="christmas-opens-h">Opening times</h2>
+        <form v-if="editingOpens" novalidate @submit.prevent="saveOpens">
+          <p class="muted hint">Berlin time. Leave a card empty to open it now.</p>
+          <div class="fill-row">
+            <label class="native-field">
+              <span class="native-label">One a day from</span>
+              <input v-model="fillFrom" type="date" data-test="christmas-opens-fill-from" />
+            </label>
+            <AspButton variant="secondary" size="sm" data-test="christmas-opens-fill" @click="fillOneADay">Fill all seven</AspButton>
+          </div>
+          <ol class="opens-list">
+            <li v-for="(value, i) in opensDraft" :key="i">
+              <label class="native-field">
+                <span class="native-label">Card {{ i + 1 }} opens</span>
+                <input
+                  v-model="opensDraft[i]"
+                  type="datetime-local"
+                  :data-test="`christmas-opens-input-${i + 1}`"
+                />
+              </label>
+            </li>
+          </ol>
+          <p v-if="opensError" class="error" role="alert" data-test="christmas-opens-error">{{ opensError }}</p>
+          <div class="edit-actions">
+            <AspButton type="submit" size="sm" :loading="savingOpens" data-test="christmas-opens-save">Save</AspButton>
+            <AspButton variant="ghost" size="sm" :disabled="savingOpens" @click="editingOpens = false">Cancel</AspButton>
+          </div>
+        </form>
+        <AspButton v-else variant="link" size="sm" data-test="christmas-opens-edit" @click="editOpens">Edit opening times</AspButton>
+      </section>
 
       <section class="go-back" aria-labelledby="christmas-go-back-h">
         <h2 id="christmas-go-back-h">Go back</h2>
@@ -145,6 +183,7 @@
 // the draft (§3.69). A replaced picture shows only once the server stored it.
 import { AspButton, AspCheckbox, AspInput, AspModal, AspSelect, AspTextarea } from '@aspirant/design-system';
 import { refusalText, useChristmas } from '@/composables/useChristmas.js';
+import { berlinInputToIso, berlinInputValue, berlinLabel, oneADay } from '@/utils/christmasTime.js';
 
 const WHEN = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -178,6 +217,11 @@ export default {
       confirming: false,
       resetting: false,
       goBackError: '',
+      editingOpens: false,
+      opensDraft: [],
+      fillFrom: '',
+      opensError: '',
+      savingOpens: false,
     };
   },
   computed: {
@@ -200,6 +244,42 @@ export default {
     Object.values(this.thumbs).forEach((u) => URL.revokeObjectURL(u));
   },
   methods: {
+    opensText(card) {
+      return card.opens_at ? berlinLabel(card.opens_at) : 'Now';
+    },
+    editOpens() {
+      this.opensDraft = this.cards.map((c) => berlinInputValue(c.opens_at));
+      this.fillFrom = this.opensDraft[0] ? this.opensDraft[0].slice(0, 10) : '';
+      this.opensError = '';
+      this.editingOpens = true;
+    },
+    fillOneADay() {
+      const days = oneADay(this.fillFrom, this.opensDraft.length);
+      if (!days) {
+        this.opensError = 'Choose the first day first.';
+        return;
+      }
+      this.opensError = '';
+      this.opensDraft = days.map((iso) => berlinInputValue(iso));
+    },
+    async saveOpens() {
+      const times = this.opensDraft.map((v) => (v ? berlinInputToIso(v) : null));
+      const bad = this.opensDraft.findIndex((v, i) => v && !times[i]);
+      if (bad >= 0) {
+        this.opensError = `Card ${bad + 1}'s time could not be read.`;
+        return;
+      }
+      this.savingOpens = true;
+      this.opensError = '';
+      const { data, error } = await this.api.saveOpens(times);
+      this.savingOpens = false;
+      if (error) {
+        this.opensError = refusalText(error);
+        return;
+      }
+      this.editingOpens = false;
+      await this.apply(data, false);
+    },
     stateText(card) {
       if (card.state === 'solved' && card.solved_at) return `Solved ${WHEN.format(new Date(card.solved_at))}`;
       if (card.state === 'current') return 'Current';
@@ -381,11 +461,13 @@ export default {
   display: none;
 }
 .go-back,
-.sentence-edit {
+.sentence-edit,
+.opens-edit {
   margin-top: var(--space-lg, 24px);
 }
 .go-back h2,
-.sentence-edit h2 {
+.sentence-edit h2,
+.opens-edit h2 {
   font-size: var(--font-size-md, 1rem);
   margin: 0 0 var(--space-xs, 8px);
 }
@@ -394,6 +476,49 @@ export default {
   gap: var(--space-xs, 8px);
   align-items: flex-end;
   flex-wrap: wrap;
+}
+.hint {
+  margin: 0 0 var(--space-xs, 8px);
+}
+.fill-row {
+  display: flex;
+  gap: var(--space-xs, 8px);
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: var(--space-sm, 12px);
+}
+.opens-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: var(--space-xs, 8px);
+}
+/* The design system has no date field (AspInput admits text types only,
+   §3.85), so the browser's own date and date-time fields are boxed here to
+   match a field. */
+.native-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs, 4px);
+}
+.native-label {
+  font-size: var(--font-size-sm, 0.875rem);
+}
+.native-field input {
+  height: var(--asp-input-height, 44px);
+  padding: 0 var(--space-sm, 12px);
+  font: inherit;
+  color: inherit;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md, 8px);
+  color-scheme: light dark;
+}
+.native-field input:focus-visible {
+  outline: 2px solid var(--focus-ring-color, currentColor);
+  outline-offset: 2px;
 }
 .sentence-preview {
   margin: 0 0 var(--space-2xs, 4px);
