@@ -22,7 +22,19 @@ const PNG = Buffer.from(
 );
 const norm = (s: string) => s.trim().split(/\s+/).join(' ').toLowerCase();
 
-type Fake = { words: string[]; solved: number; solvedAt: string[]; sentence: string; answerStatus: number; posts: number };
+type Fake = {
+  words: string[];
+  solved: number;
+  solvedAt: string[];
+  sentence: string;
+  answerStatus: number;
+  posts: number;
+  // #12780: each card's opening time (null is open now), the server's clock,
+  // and the bodies Control's opening-times saves sent.
+  opensAt: (string | null)[];
+  now: string;
+  opensPuts: unknown[];
+};
 
 function newFake(solved = 0): Fake {
   return {
@@ -32,8 +44,13 @@ function newFake(solved = 0): Fake {
     sentence: SENTENCE,
     answerStatus: 200,
     posts: 0,
+    opensAt: Array.from({ length: 7 }, () => null),
+    now: '2026-12-01T12:00:00Z',
+    opensPuts: [],
   };
 }
+
+const isOpen = (f: Fake, n: number) => !f.opensAt[n - 1] || Date.parse(f.now) >= Date.parse(f.opensAt[n - 1] as string);
 
 function json(route: Route, status: number, body: unknown) {
   return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -52,7 +69,9 @@ function control(f: Fake) {
       height: 300,
       state: i < f.solved ? 'solved' : i === f.solved ? 'current' : 'locked',
       solved_at: i < f.solved ? f.solvedAt[i] : null,
+      opens_at: f.opensAt[i],
     })),
+    now: f.now,
   };
 }
 
@@ -69,24 +88,30 @@ async function install(page: Page, f: Fake): Promise<void> {
           total: 7,
           done: true,
           sentence: f.sentence,
-          cards: f.words.map((_, i) => ({ number: i + 1, ready: true, width: 400, height: 300 })),
+          cards: f.words.map((_, i) => ({ number: i + 1, ready: true, open: true, opens_at: f.opensAt[i], width: 400, height: 300 })),
+          now: f.now,
         });
       }
+      const c = f.solved + 1;
       return json(route, 200, {
         total: 7,
         done: false,
-        current: f.solved + 1,
-        card: { number: f.solved + 1, ready: true, width: 400, height: 300 },
+        current: c,
+        card: { number: c, ready: true, open: isOpen(f, c), opens_at: f.opensAt[c - 1], width: 400, height: 300 },
+        now: f.now,
       });
     }
     if (req.method() === 'GET' && /^\/(control\/)?cards\/\d+\/picture$/.test(path)) {
-      if (!path.startsWith('/control') && n > f.solved + 1) return json(route, 404, { error: { code: 'not_found' } });
+      if (!path.startsWith('/control') && (n > f.solved + 1 || (n === f.solved + 1 && !isOpen(f, n)))) {
+        return json(route, 404, { error: { code: 'not_found' } });
+      }
       return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
     }
     if (req.method() === 'POST' && path.endsWith('/answer')) {
       f.posts += 1;
       if (f.answerStatus !== 200) return json(route, f.answerStatus, { error: { code: 'internal' } });
       if (n !== f.solved + 1) return json(route, 409, { error: { code: 'not_current' } });
+      if (!isOpen(f, n)) return json(route, 409, { error: { code: 'not_open' } });
       const { answer } = req.postDataJSON();
       if (norm(answer) !== norm(f.words[n - 1])) return json(route, 200, { correct: false });
       f.solved = n;
@@ -102,6 +127,12 @@ async function install(page: Page, f: Fake): Promise<void> {
     }
     if (req.method() === 'PUT' && path === '/control/sentence') {
       f.sentence = req.postDataJSON().sentence;
+      return json(route, 200, control(f));
+    }
+    if (req.method() === 'PUT' && path === '/control/opens') {
+      const body = req.postDataJSON();
+      f.opensPuts.push(body);
+      f.opensAt = body.opens_at;
       return json(route, 200, control(f));
     }
     if (req.method() === 'POST' && path === '/control/reset') {
@@ -285,5 +316,77 @@ test.describe('/admin/christmas/control', () => {
     await expect(page.locator('[data-test="christmas-row-3"] [data-test="christmas-row-state"]')).toContainText('Current');
     await expect(page.locator('[data-test="christmas-row-4"] [data-test="christmas-row-state"]')).toContainText('Locked');
     expect(fake.solved).toBe(2);
+  });
+});
+
+test.describe('#12780 the cards open one at a time', () => {
+  test('a card before its time shows when it opens and counts down on the server\'s clock, then opens', async ({ page }) => {
+    // The browser's clock is a day off: the countdown must run on the server's.
+    await page.clock.install({ time: new Date('2026-12-18T09:00:00Z') });
+    await seedAdminSession(page);
+    const f = newFake(1);
+    f.opensAt[1] = '2026-12-19T23:00:00Z';
+    f.now = '2026-12-19T22:58:55Z';
+    await install(page, f);
+    await page.goto('/admin/christmas');
+
+    await expect(cardLine(page)).toHaveText('Card 2 of 7');
+    await expect(page.locator('[data-test="christmas-opens-at"]')).toHaveText('Opens on Sun 20 Dec, 00:00');
+    const countdown = page.locator('[data-test="christmas-countdown"]');
+    await expect(countdown).toHaveText('00:01:05');
+    await expect(countdown).toHaveAttribute('role', 'timer');
+    await expect(page.locator('[data-test="christmas-picture"]')).toHaveCount(0);
+    await expect(field(page)).toHaveCount(0);
+
+    await page.clock.fastForward(5000);
+    await expect(countdown).toHaveText('00:01:00');
+
+    // At the time the page asks the server again, and the server opens it.
+    f.now = '2026-12-19T23:00:00Z';
+    await page.clock.fastForward(61000);
+    await expect(page.locator('[data-test="christmas-picture"]')).toBeVisible();
+    await expect(field(page)).toBeVisible();
+    await expect(page.locator('[data-test="christmas-opens"]')).toHaveCount(0);
+  });
+
+  test('card 1 can wait too, days away', async ({ page }) => {
+    await seedAdminSession(page);
+    const f = newFake();
+    f.opensAt[0] = '2026-12-18T23:00:00Z';
+    f.now = '2026-12-16T18:47:51Z';
+    await install(page, f);
+    await page.goto('/admin/christmas');
+    await expect(cardLine(page)).toHaveText('Card 1 of 7');
+    await expect(page.locator('[data-test="christmas-opens-at"]')).toHaveText('Opens on Sat 19 Dec, 00:00');
+    await expect(page.locator('[data-test="christmas-countdown"]')).toHaveText(/^2 days 04:12:0\d$/);
+  });
+
+  test('Control shows each card\'s time, fills one a day from a date, and saves all seven at once', async ({ page }) => {
+    await seedAdminSession(page);
+    const f = newFake();
+    f.opensAt[1] = '2026-12-19T23:00:00Z';
+    await install(page, f);
+    await page.goto('/admin/christmas/control');
+
+    const opens = page.locator('[data-test="christmas-row-opens"]');
+    await expect(opens.nth(0)).toContainText('Now');
+    await expect(opens.nth(1)).toContainText('Sun 20 Dec, 00:00');
+
+    await page.locator('[data-test="christmas-opens-edit"]').click();
+    await expect(page.locator('[data-test="christmas-opens-input-2"]')).toHaveValue('2026-12-20T00:00');
+    await page.locator('[data-test="christmas-opens-fill-from"]').fill('2026-12-19');
+    await page.locator('[data-test="christmas-opens-fill"]').click();
+    for (let n = 1; n <= 7; n++) {
+      await expect(page.locator(`[data-test="christmas-opens-input-${n}"]`)).toHaveValue(`2026-12-${18 + n}T00:00`);
+    }
+    await page.locator('[data-test="christmas-opens-input-1"]').fill('');
+    await page.locator('[data-test="christmas-opens-save"]').click();
+
+    await expect(page.locator('[data-test="christmas-opens-save"]')).toHaveCount(0);
+    expect(f.opensPuts).toEqual([
+      { opens_at: [null, ...[19, 20, 21, 22, 23, 24].map((d) => `2026-12-${d}T23:00:00Z`)] },
+    ]);
+    await expect(opens.nth(0)).toContainText('Now');
+    await expect(opens.nth(6)).toContainText('Fri 25 Dec, 00:00');
   });
 });
