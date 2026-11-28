@@ -18,11 +18,11 @@ const INVOICE = (id: number, n: string) => ({
   service_date: '2026-09-05', issue_date: '2026-11-14', total_cents: 15000, currency: 'EUR', lines: [],
 });
 
-async function openInvoicing(page: Page, tab = 'Invoices') {
+async function openInvoicing(page: Page, tab = 'Invoices', profile: unknown = PROFILE) {
   await base(page);
   await page.route(/\/api\/invoicing\//, (route) => {
     const path = new URL(route.request().url()).pathname.replace(/^\/api/, '');
-    if (path === '/invoicing/profile') return json(route, 200, PROFILE);
+    if (path === '/invoicing/profile') return json(route, 200, profile);
     if (path === '/invoicing/invoices') return json(route, 200, { invoices: [INVOICE(1, '2026-001'), INVOICE(2, '2026-002')] });
     if (path === '/invoicing/payments') return json(route, 200, { payments: [] });
     if (path === '/invoicing/expenses') return json(route, 200, { expenses: [] });
@@ -79,7 +79,15 @@ test.describe('#11027 the Invoices app', () => {
 
   test('at 390px no Issuer line starts with the separator', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
+    // A complete profile is one quiet line with no separator (system_3 #12276).
     await openInvoicing(page);
+    await expect(page.locator('[data-test="profile-line"]')).toBeVisible();
+    await expect(page.locator('[data-test="profile-line"]')).not.toContainText('·');
+    // The separator is in the card, shown while something is missing: here the
+    // Steuernummer, under a name long enough to wrap at 390px.
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    const incomplete = { ...PROFILE, profile: { ...PROFILE.profile, full_name: 'Flora Testperson-Beispielhausen', steuernummer: '' } };
+    await openInvoicing(page, 'Invoices', incomplete);
     // The Issuer is one line since system_3 #11019-A1; the rule is the same.
     const line = page.locator('.issuer-line__items');
     await expect(line).toBeVisible();
