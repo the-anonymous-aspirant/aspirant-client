@@ -1136,9 +1136,22 @@
         const n = files.length;
         return `${n} file${n === 1 ? '' : 's'} read no transaction: ${files.join(', ')}.`;
       },
+      // system_3 #12294 (amending §3.142 Decision 5 and §3.160 Decision 2):
+      // the count is every payer in the book with no client, not this
+      // import's, and it says how many already match a client. A match is
+      // the server's `same_client` (by name or PayPal email), or a name that
+      // fits several clients (#12393, design_agent c76723).
       payersClause() {
         const n = this.payerCandidates.length;
-        return n === 1 ? '1 payer is not in your client book.' : `${n} payers are not in your client book.`;
+        const matching = this.payerCandidates.filter((p) => p.same_client || p.matches_several).length;
+        const rest = n - matching;
+        if (n === 1) {
+          return `1 payer in your book has no client yet: ${matching ? 'it matches a client in your client book' : 'it matches none'}.`;
+        }
+        const head = `${n} payers in your book have no client yet`;
+        if (!rest) return `${head}: each matches a client in your client book.`;
+        if (!matching) return `${head}: none matches a client in your client book.`;
+        return `${head}: ${matching} ${matching === 1 ? 'matches' : 'match'} a client in your client book, ${rest} ${rest === 1 ? 'does' : 'do'} not.`;
       },
       n26FailureLine() {
         const failures = (this.n26Summary && this.n26Summary.failures) || [];
@@ -1877,7 +1890,11 @@
         this.n26Summary = summary;
         this.manualSummary = null;
         this.payersSummary = null;
-        this.refreshPayerCandidates();
+        // The summary is about this import: one that stored no payment
+        // offers no payers (system_3 #12294). Clients' "Add from payments"
+        // stays the standing way in (§3.160 Decision 2).
+        if (summary.imported) this.refreshPayerCandidates();
+        else this.payerCandidates = [];
         if (summary.imported || summary.expenses_added) this.importChanged();
       },
       // The offer is optional: a failed read shows no clause and no button,
@@ -1966,7 +1983,8 @@
           this.summary = summary;
           this.paypalUndone = undone;
           this.needsDateOrder = false;
-          this.refreshPayerCandidates();
+          // As for N26: an import that stored no payment offers no payers.
+          if (summary.imported) this.refreshPayerCandidates();
           this.importChanged();
           // Offer the outgoing payments only when one is new to the book. A
           // refund or reversal of a stored payment is left out, as an outgoing
