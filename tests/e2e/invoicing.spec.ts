@@ -158,32 +158,70 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await openInvoicing(page);
 
     await expect(page.locator('[data-test="profile-name"]')).toHaveText('Flower Example');
-    await expect(page.locator('[data-test="steuernummer-missing"]')).toContainText('Missing: needed to issue');
+    // system_3 #12276 review point 2: the badge names what issuing still needs.
+    await expect(page.locator('[data-test="profile-missing"]')).toHaveText('Missing: Steuernummer, needed to issue');
     // The invoice-number sequence lives in the profile editor (§3.114
     // decision 5; Design ack c69874 item 3), not on the Issuer line.
     await expect(page.locator('[data-test="profile-next-number"]')).toHaveCount(0);
   });
 
-  // system_3 #11019-A1 (UX walk AM2): the Issuer is one line, and the line is
-  // the door to the profile editor. It names itself as that door.
-  test('the Issuer is one line that opens the profile editor', async ({ page }) => {
+  // system_3 #12276 (S2): with the profile complete, the Issuer is one muted
+  // line under the title with no card, and its one control is a bordered
+  // "Edit" that keeps c69874's accessible name (review point 1).
+  test('a complete profile is one quiet line whose Edit opens the editor', async ({ page }) => {
     const fake = newFake();
     await mockInvoicing(page, fake);
     await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
 
-    // c69874 item 3's accessible name, and a visible trailing "Edit".
-    const line = page.getByRole('button', { name: 'Edit profile: Flower Example', exact: true });
-    await expect(line).toHaveCount(1);
-    await expect(line).toContainText('Flower Example');
-    await expect(line).toContainText('Edit');
-    // One line on a phone: the whole card is the line's 44px plus its padding.
+    await expect(page.locator('[data-test="profile-card"]')).toHaveCount(0);
+    const line = page.locator('[data-test="profile-line"]');
+    await expect(line).toHaveText(/^Invoices are issued as Flower Example\s*Edit$/);
+    const edit = page.getByRole('button', { name: 'Edit profile: Flower Example', exact: true });
+    await expect(edit).toHaveCount(1);
+    await expect(edit).toHaveText('Edit');
+    await expect(edit).toHaveClass(/btn--secondary/);
+    await expect(edit).toHaveClass(/btn--size-sm/);
+    // The name is text, not part of the control.
+    await expect(line.getByRole('button')).toHaveCount(1);
+    // On a phone Edit is a 44px target.
     await page.setViewportSize({ width: 390, height: 844 });
-    const h = await page.locator('[data-test="profile-card"]').evaluate((el) => el.getBoundingClientRect().height);
-    expect(h, 'one-line Issuer card').toBeLessThanOrEqual(82);
-    await line.click();
+    expect(Math.round((await edit.boundingBox())!.height), 'Edit on a phone').toBeGreaterThanOrEqual(44);
+    await edit.click();
     await expect(page.locator('[data-test="profile-form"]')).toBeVisible();
   });
+
+  // #12276 review point 2: "complete" is what issuing needs, a name, an
+  // address and a Steuernummer; anything less keeps the card, which says
+  // what is missing, with the same bordered door (review point 1).
+  for (const c of [
+    { name: 'no profile saved', saved: false, profile: {}, text: 'No profile yet. Add who issues your invoices', badge: 'Missing: needed to issue', label: 'Edit profile: no profile yet. Missing: needed to issue' },
+    { name: 'no Steuernummer', saved: true, profile: { steuernummer: '' }, text: 'Flower Example', badge: 'Missing: Steuernummer, needed to issue', label: 'Edit profile: Flower Example. Missing: Steuernummer, needed to issue' },
+    { name: 'no address', saved: true, profile: { address: ' ' }, text: 'Flower Example', badge: 'Missing: address, needed to issue', label: 'Edit profile: Flower Example. Missing: address, needed to issue' },
+    { name: 'an empty name', saved: true, profile: { full_name: '' }, text: 'No name yet', badge: 'Missing: full name, needed to issue', label: 'Edit profile: no name yet. Missing: full name, needed to issue' },
+    { name: 'all three', saved: true, profile: { full_name: '', address: '', steuernummer: '' }, text: 'No name yet', badge: 'Missing: full name, address and Steuernummer, needed to issue', label: 'Edit profile: no name yet. Missing: full name, address and Steuernummer, needed to issue' },
+  ]) {
+    test(`an incomplete profile keeps the card: ${c.name}`, async ({ page }) => {
+      const fake = newFake({ saved: c.saved });
+      fake.profile = c.saved ? { ...fake.profile, ...c.profile } : {};
+      await mockInvoicing(page, fake);
+      await seedTrustedSessionAs(page, 'vinoly');
+      await openInvoicing(page);
+
+      const card = page.locator('[data-test="profile-card"]');
+      await expect(card).toBeVisible();
+      await expect(page.locator('[data-test="profile-line"]')).toHaveCount(0);
+      await expect(card).toContainText(c.text);
+      await expect(card.locator('[data-test="profile-missing"]')).toHaveText(c.badge);
+      const edit = card.getByRole('button');
+      await expect(edit).toHaveCount(1);
+      await expect(edit).toHaveText('Edit');
+      await expect(edit).toHaveAccessibleName(c.label);
+      await expect(edit).toHaveClass(/btn--secondary/);
+      await edit.click();
+      await expect(page.locator('[data-test="profile-form"]')).toBeVisible();
+    });
+  }
 
   // system_3 #11019-A1 (Design ack c69874 item 4): the intro shows only when
   // every read answered and nothing is recorded, removed rows included.
@@ -201,7 +239,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await mockInvoicing(used, newFake());
     await seedTrustedSessionAs(used, 'vinoly');
     await openInvoicing(used);
-    await expect(used.locator('[data-test="profile-card"]')).toBeVisible();
+    await expect(used.locator('[data-test="profile-line"]')).toBeVisible();
     await expect(used.locator('[data-test="invoicing-intro"]')).toHaveCount(0);
   });
 
@@ -212,7 +250,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
       json(route, 200, { payments: [{ id: 9, transaction_id: 'R1', removed_at: '2026-11-01T00:00:00Z', gross_cents: 100, currency: 'EUR' }] }));
     await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
-    await expect(page.locator('[data-test="profile-card"]')).toBeVisible();
+    await expect(page.locator('[data-test="profile-line"]')).toBeVisible();
     await expect(page.locator('[data-test="payments-empty"]')).toBeVisible();
     await expect(page.locator('[data-test="invoicing-intro"]')).toHaveCount(0);
   });
@@ -223,7 +261,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
       json(route, 500, { error: { code: 'internal', message: 'x' } }));
     await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
-    await expect(page.locator('[data-test="profile-card"]')).toBeVisible();
+    await expect(page.locator('[data-test="profile-line"]')).toBeVisible();
     await expect(page.locator('[data-test="invoicing-intro"]')).toHaveCount(0);
   });
 
@@ -232,6 +270,8 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
   // by the 2px border plus 16px, at this project's width, in both themes.
   test('the profile card insets its body by the padding prop alone', async ({ page }) => {
     const fake = newFake();
+    // The card is drawn only while something is missing (system_3 #12276).
+    fake.profile.steuernummer = '';
     await mockInvoicing(page, fake);
     await seedTrustedSessionAs(page, 'vinoly');
     for (const theme of ['light', 'dark'] as const) {
@@ -254,7 +294,7 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     await mockInvoicing(page, fake);
     await seedTrustedSessionAs(page, 'vinoly');
     await openInvoicing(page);
-    await expect(page.locator('[data-test="steuernummer-missing"]')).toBeVisible();
+    await expect(page.locator('[data-test="profile-missing"]')).toBeVisible();
 
     await page.locator('[data-test="profile-edit"]').click();
     const form = page.locator('[data-test="profile-form"]');
@@ -271,7 +311,9 @@ test.describe('#8367 Invoices app — profile, clients, import, categorisation',
     // The value lives in the editor since the Issuer became one line (system_3
     // #11019-A1); the line shows only whether it is missing. Saving it clears
     // the badge, and the editor shows the value saved.
-    await expect(page.locator('[data-test="steuernummer-missing"]')).toHaveCount(0);
+    // Complete now: the card gives way to the quiet line (system_3 #12276).
+    await expect(page.locator('[data-test="profile-missing"]')).toHaveCount(0);
+    await expect(page.locator('[data-test="profile-line"]')).toBeVisible();
     await page.locator('[data-test="profile-edit"]').click();
     await expect(form.getByLabel(/^Steuernummer \(Tax number\)/)).toHaveValue('98/765/43210');
     const put = fake.requests.filter((r) => r.method === 'PUT' && r.path === '/invoicing/profile').pop()!;
